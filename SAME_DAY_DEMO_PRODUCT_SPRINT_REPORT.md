@@ -362,9 +362,9 @@ cleanup — not test-run churn — and is included in the commit as such.
 
 ## T. Git Commit
 
-Not yet committed as of this report's writing — see the final message for
-confirmation once the commit is made. Planned scope: every file in
-Section L and M, explicitly staged by name (never `git add -A`), no push.
+Committed as `988e326` ("Build full same-day betting intelligence demo"),
+15 files changed, staged explicitly by name (never `git add -A`). Not
+pushed. `git status` after the commit is clean.
 
 ## U. Known Limitations / Deferred This Sprint
 
