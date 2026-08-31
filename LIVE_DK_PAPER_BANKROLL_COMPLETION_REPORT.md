@@ -525,10 +525,10 @@ sprint, including Section F.5's fixture fix. Net new tests this sprint:
 - Was a real bet placed? **NO.**
 - Was scheduler installed? **NO.**
 - Current test result? **2,351 / 2,351.**
-- Commit hash? **[filled in after the commit — see the final chat
-  message]**
-- Working tree clean? **[verified before committing — see the final
-  chat message]**
+- Commit hash? **`d8f568a`** ("Add live DK verification and paper
+  betting bankroll").
+- Working tree clean? **YES** (`git status --porcelain` returns 0 lines
+  after the commit).
 
 ---
 
