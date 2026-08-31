@@ -57,6 +57,7 @@ pg = st.navigation({
         _p("31_Team_Intelligence.py", "Team Intelligence", "🏟️"),
         _p("25_Player_Intelligence.py", "Player Intelligence", "🧠"),
         _p("22_Model_Health.py", "Model Health", "🩺"),
+        _p("32_Model_Learning.py", "Model Learning", "🔄"),
         _p("23_Ledger.py", "Ledger", "📒"),
         _p("9_Data_Status.py", "Data Status", "🗂️"),
         _p("13_Play_By_Play_Status.py", "Play-by-Play Status", "🧩"),

@@ -49,15 +49,21 @@ See `PRESEASON_FREEZE_MANIFEST.md`'s full table — every local-only artifact cl
 
 ## J. Reproducibility Status
 
-A fresh clone plus `pip install -r requirements.txt` reproduces: all source code, all tests (2,105/2,105 should pass immediately — no data files are required for the test suite itself, which uses synthetic fixtures throughout), and the dashboard in DEMO mode. Reproducing full RESEARCH mode (real historical corpora) requires either re-running the real ingestion pipeline against the official NHL API and a manually-sourced MoneyPuck archive (see manifest), or restoring the gitignored `.db`/`.jsonl` files from a backup taken on this machine. **No such backup currently exists** — seePart 9's instruction and the manifest's honest statement that `operational/prospective_observations.db` has no backup because it does not exist yet, and the large research DBs/JSONLs have not been separately backed up outside this git checkpoint (which correctly excludes them as regenerable).
+A fresh clone plus `pip install -r requirements.txt` reproduces: all source code, all tests (2,105/2,105 should pass immediately — no data files are required for the test suite itself, which uses synthetic fixtures throughout), and the dashboard in DEMO mode. Reproducing full RESEARCH mode (real historical corpora) requires either re-running the real ingestion pipeline against the official NHL API and a manually-sourced MoneyPuck archive (see manifest), or restoring the gitignored `.db`/`.jsonl` files from a backup taken on this machine. **No such backup currently exists** — see Part 9's instruction and the manifest's honest statement that `operational/prospective_observations.db` has no backup because it does not exist yet, and the large research DBs/JSONLs have not been separately backed up outside this git checkpoint (which correctly excludes them as regenerable).
 
 ## K. Git Commit Hash
 
-**(filled in immediately after the commit below)**
+**`6335ce3`** — "Preseason engine freeze: operational readiness closure", on top of the original snapshot commit `e4652a9`. Local commit only; nothing was pushed, no remote was added, no history was rewritten, squashed, or force-anything. 462 files changed, 202,533 insertions, 1 deletion (a trailing-content fix in `requirements.txt`).
+
+Verified directly after committing:
+- `git show --name-only HEAD` contains no `.env`/secret/credential-pattern filename.
+- `git ls-tree -r --name-only HEAD | grep '\.db$'` returns exactly one file: `nhl.db` (13.8M) — no `prospective_observations.db`, `special_teams_history.db`, `research_pbp.db`, or `research_moneypuck.db` was committed.
+- `git diff --stat e4652a9 HEAD -- nhl.db` is empty — `nhl.db` is byte-identical to the parent commit, not modified or newly added by this task.
+- `git ls-tree -r -l HEAD | sort -k4 -nr` shows `nhl.db` (pre-existing) as the single largest blob; every other file is under 1.4MB, consistent with the SHOULD_COMMIT classification in Part E.
 
 ## L. Post-Commit Git Status
 
-**(filled in immediately after the commit below)**
+**Clean.** `git status --short` returns nothing — no modified files, no untracked files. `git status --ignored --short` lists 551 correctly-ignored paths: `.env`, every `__pycache__/`, the MoneyPuck raw CSV/ZIP staging directories, and the 8 derived research corpora/databases classified `SHOULD_IGNORE` in Part E. Everything remaining untracked-and-ignored is accounted for in `PRESEASON_FREEZE_MANIFEST.md`'s data-artifact table.
 
 ## M. Current Authoritative Engine Facts
 
@@ -106,9 +112,9 @@ Every remaining path to a real operational decision (Goals/Assists/Points/Saves 
 
 **WAS THE PROSPECTIVE OPERATIONAL DB COMMITTED?** NO — it does not exist yet, and is gitignored for when it does.
 
-**WAS A LOCAL PRESEASON FREEZE COMMIT CREATED?** **(filled in below)**
+**WAS A LOCAL PRESEASON FREEZE COMMIT CREATED?** YES.
 
-**COMMIT HASH?** **(filled in below)**
+**COMMIT HASH?** `6335ce3`
 
 **CURRENT TEST RESULT?** 2,105 / 2,105.
 
