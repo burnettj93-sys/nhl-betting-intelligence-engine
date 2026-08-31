@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/9de33ce1013f2a3375dbded2c9fbc7d6/odds",
+    "event_id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+    "http_status": 200,
+    "market_filter": "h2h,spreads,totals,player_shots_on_goal,player_shots_on_goal_alternate,player_points,player_points_alternate,player_goals,player_goal_scorer_anytime,player_assists,player_assists_alternate,player_total_saves,player_total_saves_alternate,team_totals,alternate_team_totals",
+    "requests_last_header": "3",
+    "requests_remaining_header": "487",
+    "requests_used_header": "13",
+    "response_checksum_sha256": "47de648275c77260d2c985f045eb94513c6a9c8881d9fc0f62e8c6bbadc9238d",
+    "retrieved_at_utc": "2026-08-31T12:38:09Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Carolina Hurricanes",
+                "price": -130
+              },
+              {
+                "name": "Florida Panthers",
+                "price": 110
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Carolina Hurricanes",
+                "point": -1.5,
+                "price": 190
+              },
+              {
+                "name": "Florida Panthers",
+                "point": 1.5,
+                "price": -230
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "point": 6.5,
+                "price": 100
+              },
+              {
+                "name": "Under",
+                "point": 6.5,
+                "price": -120
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-29T21:10:00Z",
+    "home_team": "Carolina Hurricanes",
+    "id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

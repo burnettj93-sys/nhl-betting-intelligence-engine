@@ -35,3 +35,26 @@ class NormalizedPropMarket:
 
     def has_two_sided_market(self) -> bool:
         return self.opposing_side_price is not None
+
+
+@dataclass(frozen=True)
+class NormalizedMoneylineMarket:
+    """Live DK / Paper Bankroll completion sprint, Part 15: MONEYLINE has
+    no threshold/side (OVER/UNDER) shape -- it's a two-way team-vs-team
+    price -- so it does NOT fit NormalizedPropMarket above. A distinct,
+    equally-thin representation, built only after a real DraftKings h2h
+    payload was actually observed and archived (see
+    research/generic_prop_pricing/provider_adapter.py's
+    VERIFIED_CONTRACTS and tests/test_generic_prop_pricing.py's real-
+    fixture regression test)."""
+    event_id: str
+    sportsbook: str
+    home_team_abbrev: str
+    away_team_abbrev: str
+    home_price: float
+    away_price: float
+    captured_at_utc: str
+    provenance: str
+    commence_time_utc: str | None = None
+    bookmaker_last_update_utc: str | None = None
+    market_last_update_utc: str | None = None

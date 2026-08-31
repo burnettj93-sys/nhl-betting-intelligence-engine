@@ -43,9 +43,21 @@ class Test03SettlementCompleteness(unittest.TestCase):
 
 class Test04ContractStatus(unittest.TestCase):
     def test_normal_when_zero_verified_contracts(self):
-        result = ese.check_contract_status()
+        from unittest import mock
+        with mock.patch("research.generic_prop_pricing.provider_adapter.VERIFIED_CONTRACTS", frozenset()):
+            result = ese.check_contract_status()
         self.assertEqual(result["status"], ese.NORMAL)
         self.assertEqual(result["verified_contracts"], 0)
+
+    def test_watch_now_that_moneyline_is_really_verified(self):
+        # Live DK / Paper Bankroll completion sprint (2026-08-31): real,
+        # not mocked -- MONEYLINE was actually verified this sprint (see
+        # tests/test_provider_adapter_boundary.py), so the real function
+        # now correctly reports WATCH ("drift monitoring not yet
+        # implemented"), not NORMAL.
+        result = ese.check_contract_status()
+        self.assertEqual(result["status"], ese.WATCH)
+        self.assertEqual(result["verified_contracts"], 1)
 
 
 class Test05InputDrift(unittest.TestCase):

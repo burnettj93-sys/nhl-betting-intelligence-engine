@@ -65,7 +65,19 @@ def archive_result(result: ApiResult, *, event_id: str | None, market_filter: st
     # silently; the endpoint tag plus a numeric de-dupe suffix below fixes
     # this for good, not just for this specific pair of endpoints).
     endpoint_tag = result.endpoint.strip("/").replace("/", "-") or "unknown"
-    fname_base = f"{safe_ts}_{endpoint_tag}_{event_id or 'na'}_{(market_filter or 'none').replace(',', '+')}"
+    market_tag = (market_filter or "none").replace(",", "+")
+    # Live DK / Paper Bankroll completion sprint: a real probe requesting
+    # many markets in one call (the-odds-api's own supported pattern)
+    # produced a market_tag long enough that the full filename exceeded
+    # the OS path-length limit (OSError: File name too long) -- a real,
+    # reproduced bug, not hypothetical. The full market_filter string is
+    # never lost (it's still written into meta.market_filter below); only
+    # the FILENAME is shortened, with a short content hash appended so two
+    # different long market lists that happen to share the same 60-char
+    # prefix still get distinct filenames.
+    if len(market_tag) > 60:
+        market_tag = f"{market_tag[:60]}-{_checksum(market_tag)[:8]}"
+    fname_base = f"{safe_ts}_{endpoint_tag}_{event_id or 'na'}_{market_tag}"
     path = out_dir / f"{fname_base}.json"
     suffix = 2
     while path.exists():

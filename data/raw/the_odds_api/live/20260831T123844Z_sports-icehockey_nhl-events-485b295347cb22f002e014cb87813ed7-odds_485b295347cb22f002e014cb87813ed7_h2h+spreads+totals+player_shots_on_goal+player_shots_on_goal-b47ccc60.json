@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/485b295347cb22f002e014cb87813ed7/odds",
+    "event_id": "485b295347cb22f002e014cb87813ed7",
+    "http_status": 200,
+    "market_filter": "h2h,spreads,totals,player_shots_on_goal,player_shots_on_goal_alternate,player_points,player_points_alternate,player_goals,player_goal_scorer_anytime,player_assists,player_assists_alternate,player_total_saves,player_total_saves_alternate,team_totals,alternate_team_totals",
+    "requests_last_header": "3",
+    "requests_remaining_header": "484",
+    "requests_used_header": "16",
+    "response_checksum_sha256": "6bd5aa0a4465837daacb5fdb63edb8096dc2ff7b4baaa99a94c31e7a69bf6778",
+    "retrieved_at_utc": "2026-08-31T12:38:44Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Montr\u00e9al Canadiens",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Montr\u00e9al Canadiens",
+                "price": -105
+              },
+              {
+                "name": "Toronto Maple Leafs",
+                "price": -115
+              }
+            ]
+          },
+          {
+            "key": "spreads",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Montr\u00e9al Canadiens",
+                "point": 1.5,
+                "price": -250
+              },
+              {
+                "name": "Toronto Maple Leafs",
+                "point": -1.5,
+                "price": 205
+              }
+            ]
+          },
+          {
+            "key": "totals",
+            "last_update": "2026-08-31T12:37:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "point": 6.5,
+                "price": 105
+              },
+              {
+                "name": "Under",
+                "point": 6.5,
+                "price": -125
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-29T23:10:00Z",
+    "home_team": "Toronto Maple Leafs",
+    "id": "485b295347cb22f002e014cb87813ed7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

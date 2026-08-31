@@ -1,9 +1,18 @@
 """
 Preseason Operational Readiness Closure sprint (2026-08-30), Track 5 Part
 40: tests for the provider-adapter boundary. The load-bearing assertion
-is the negative one -- VERIFIED_CONTRACTS must be empty, matching the
-real, twice-confirmed fact that no market's payload has ever been
-observed live (see NHL_ENGINE_STATE_OF_THE_UNION_2026_08_30.md).
+was originally negative -- VERIFIED_CONTRACTS must be empty, matching
+the (then-true) fact that no market's payload had ever been observed
+live (see NHL_ENGINE_STATE_OF_THE_UNION_2026_08_30.md).
+
+Live DK / Paper Bankroll completion sprint (2026-08-31), Parts 9-17:
+Part 41's real workflow was actually completed for MONEYLINE this
+sprint -- a real DraftKings h2h payload was captured, archived, and
+regression-tested (see tests/test_generic_prop_pricing.py::
+TestMoneylineContractParity). The guard here now asserts the new real
+fact precisely (exactly MONEYLINE, nothing else) rather than the old
+"always empty" fact -- the spirit (never let an unverified contract
+appear without a real, tested payload behind it) is unchanged.
 """
 from __future__ import annotations
 
@@ -14,10 +23,11 @@ from research.generic_prop_pricing.evaluator import CONTRACT_NOT_VERIFIED
 
 
 class Test01NoContractsVerifiedYet(unittest.TestCase):
-    def test_verified_contracts_is_currently_empty(self):
-        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset(),
-                          "no real DraftKings payload has ever been observed for any market -- "
-                          "this must stay empty until Part 41's real workflow adds a real entry")
+    def test_verified_contracts_is_exactly_moneyline_and_nothing_else(self):
+        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({("draftkings", "MONEYLINE")}),
+                          "MONEYLINE is the only real, live-observed DraftKings payload contract "
+                          "as of the Live DK completion sprint (2026-08-31) -- every other market "
+                          "family must stay unverified until its own real payload is observed")
 
     def test_sog_is_not_verified_despite_being_the_reference_implementation(self):
         self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG_3PLUS"))

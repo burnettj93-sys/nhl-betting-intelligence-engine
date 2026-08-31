@@ -1,10 +1,12 @@
 # Demo Walkthrough — NHL Betting Intelligence Engine
 
-Same-Day Demo Experience sprint (2026-08-31). A ~5-minute click-by-click
-path through the demo. Everything priced below the header banner is
-**SIMULATED MARKET (DEMO ONLY)** — never DraftKings, never a live book.
-Every model probability shown is the real, frozen production engine's
-own output for real NHL player identities.
+Updated for the Live DK / Paper Bankroll completion sprint (2026-08-31).
+A ~6-minute click-by-click path through the demo. Everything labeled
+**SIMULATED — DEMO ONLY** is a deterministic simulated price; everything
+labeled **LIVE — DRAFTKINGS** is a real DraftKings price captured via a
+real, credit-metered Odds API probe. Every model probability shown is
+the real, frozen production engine's own output for real NHL player
+identities.
 
 ## Before you start
 
@@ -12,79 +14,89 @@ Launch the dashboard (`streamlit run dashboard/app.py` or the project's
 existing launcher) and open the **Today** page. That is the intended
 landing page for this demo.
 
-## The 5-minute path
+## The 6-minute path (Today → Live Model Edges → Top Conviction → High-Confidence Combo → Team Hub → All Eligible Bets → Bet Detail → Paper Performance → Model Learning)
 
-1. **Today page — orient.** Point out the System Health chips at the
-   top (real, live status of the actual data pipelines) and the
-   `DEMO MODE` banner directly below it. Say: *"Everything above this
-   banner is real, live engine status. Everything below it is today's
-   simulated game night, built on the same real, frozen models."*
+1. **Today page — orient.** Point out the System Health chips (real,
+   live status of the actual data pipelines) and the `DEMO MODE` banner.
+   Say: *"Everything above this banner is real, live engine status.
+   Everything below it is today's simulated game night, built on the
+   same real, frozen models."*
 
-2. **Today's Slate.** Scroll to section 1. Six simulated matchups, each
-   showing its strongest opportunity inline. Click **"EDM-COL Hub"**
-   (or any team button) on one of the game cards.
-   → Lands on the **Team Intelligence Hub** for that team.
+2. **Live Model Edges.** If present (it is, right now — two real
+   DraftKings-priced games), point out the **LIVE — DRAFTKINGS** label
+   and the captured timestamp. Say: *"This number is not simulated.
+   This is an actual DraftKings market, captured by the engine, compared
+   against the frozen model's own fair probability."* Then show the
+   ⚠ staleness disclosure on a WAIT row: *"The model sees a real edge
+   here, but the Elo rating behind it predates this game by months —
+   so the engine refuses to call it a bet. That refusal is the honest
+   answer, not a bug."*
 
-3. **Team Hub — BETS tab.** This is the P0 requirement: every eligible
-   bet connected to the team, across every market family (SOG, Goals,
-   Assists, Points, Blocks, Goalie Saves), with filters and sort. Show
-   the filter row, then click a player's bet row.
-   → Lands on **Player Intelligence** for that player.
+3. **Today's Slate.** Scroll to section 1. Click a team button on any
+   game card. → Lands on the **Team Intelligence Hub** for that team.
 
-4. **Player Intelligence.** Show the Best Available Market card, then
-   open the **All Eligible Bets** tab to show every validated threshold
-   for that player (e.g. SOG 2+/3+/4+/5+, not just one). Click **"Open
-   {team} — Team Hub"** or **"Open Game Detail"** to show the
-   clickthrough back out.
+4. **Team Hub — BETS tab.** Every eligible bet connected to the team,
+   across every market family, with filters and sort. Click a player's
+   bet row. → Lands on **Player Intelligence** for that player.
 
-5. **Back to Today — Top Conviction.** Return to Today (browser back or
-   the search bar). Scroll to section 2, **Top Conviction**. Say:
-   *"These are the highest-confidence model edges from today's slate —
-   never 'sure things' or 'locks,' because that's not how this engine
-   talks about probability. Notice these aren't just the highest
-   probabilities — they're the best combination of probability and
-   price value."* Click a card to jump to that player.
+5. **Player Intelligence — All Eligible Bets.** Every validated
+   threshold for that player (e.g. SOG 2+/3+/4+/5+, not just one).
 
-6. **High-Confidence Combos.** Scroll to section 3. Show a validated
-   2-leg combo (same player, two markets with a real, frozen
-   correlation) and open the "Research / demo exploration" expander to
-   show a combo that was found but correctly excluded for having no
-   validated dependence — say: *"We never assume independence just
-   because it would make a bigger number."*
+6. **Back to Today — Top Conviction.** Scroll to section 2. Say:
+   *"Never 'sure things' or 'locks' — these are the best combination of
+   probability, price value, AND how mature the underlying model is.
+   A market backed by a fully validated model outranks an equally
+   strong empirical-baseline market, all else equal."*
 
-7. **Game Detail.** From Today's Slate, click **"Game Detail"** on any
-   matchup. Walk the tabs: PREVIEW (win model, team SOG, this game's Top
-   Conviction), BETS (every eligible bet for the game + same-game
-   combinations), PLAYER PROPS, STATS (availability), BETTING TRENDS
-   (simulated line movement), MODEL (readiness/freshness disclosure).
+7. **High-Confidence Combos.** Scroll to section 3. Explain the three
+   classes: *"HIGH-CONFIDENCE means every leg is individually a real
+   favorite with real value — not just a mathematically valid parlay.
+   A 6% longshot combo, even with perfectly real joint-dependence math
+   behind it, lands in Value Combinations, never here."* If none qualify
+   today, that's expected — show Value Combinations instead, and read
+   one leg's numbers aloud.
 
-8. **Model Learning.** Open from the Today page's Model Health section
-   or the sidebar. Show the **"WAITING FOR 2026-27 RESULTS"** state and
-   read the explanatory caption: daily re-scoring never auto-changes
-   production. Say: *"This page is empty right now because the season
-   hasn't produced real results yet — that's honest, not broken. Once
-   real games are settled, this populates itself automatically."*
+8. **Game Detail.** From Today's Slate, click **"Game Detail"** on any
+   matchup. Walk PREVIEW → BETS → PLAYER PROPS → STATS → BETTING TRENDS
+   → MODEL.
+
+9. **Paper Performance.** Open from the sidebar or Today's Model Health
+   section. Show both tabs: *"Real-Market Paper only uses real
+   DraftKings prices — right now it's empty because every live edge we
+   found was flagged stale, so honestly, nothing should have been bet
+   yet."* Switch to Demo Paper: *"Six $10 paper bets exist here, one per
+   BET-grade opportunity on tonight's simulated slate — all still
+   pending, because no game has actually been played. That's the exact
+   state this should be in before the season starts."*
+
+10. **Model Learning.** Show **"WAITING FOR 2026-27 RESULTS"** and read
+    the explanatory caption: daily re-scoring — including paper
+    performance — never auto-changes production.
 
 ## Fallback routes
 
+- If Live Model Edges shows nothing, that's a real, possible state
+  (DraftKings hasn't posted a moneyline for any tracked event right
+  now) — fall back to Today's Slate and continue from step 3.
 - If a team's BETS tab is empty for a filter combination, switch the
-  Decision filter to "ALL" — every team has at least a few RESEARCH_ONLY
-  rows even when nothing is actionable.
+  Decision filter to "ALL".
 - If Top Conviction is empty on a given run (it never pads to force a
-  result), fall back to section 4, **Best Player Props**, which always
-  reflects the full slate.
+  result), fall back to section 4, **Best Player Props**.
+- If no High-Confidence Combo exists, open the Value Combinations
+  expander instead — the underlying math is still real.
 - If Game Detail's BETS tab looks thin for one matchup, pick a different
-  one of the six from Today's Slate — Team SOG/Moneyline are
-  intentionally not priced this sprint (no live projection engine
-  wired), so some matchups lean more on player props than others.
-- Search (top of every page) is the universal fallback: type a player,
-  team, or game name and it routes correctly from anywhere.
+  one of the six from Today's Slate.
+- Search (top of every page) is the universal fallback.
 
 ## What NOT to do live
 
-- Do not click into Team SOG or Moneyline expecting a priced bet card —
-  both are disclosed, deliberate scope limitations this sprint (shown
-  as real historical context only).
-- Do not describe Top Conviction picks as "locks" or "sure things" —
-  the UI itself never uses that language; keep the talk track consistent
-  with it.
+- Do not click into Team SOG or Moneyline (outside the Live Model Edges
+  section) expecting a priced bet card — both are disclosed, deliberate
+  scope limitations (shown as real historical context only).
+- Do not describe Top Conviction picks, or any Live Model Edges row, as
+  "locks" or "sure things" — the UI itself never uses that language.
+- Do not present a Live Model Edges row marked WAIT as if it were
+  actionable — the staleness disclosure is the point being demonstrated,
+  not a defect to explain away.
+- Do not place a real bet from this dashboard — there is no such control,
+  and Paper Performance is explicitly theoretical.

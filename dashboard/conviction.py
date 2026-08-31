@@ -1,28 +1,51 @@
 """
-Same-Day Demo Experience sprint (2026-08-31): Top Conviction ranking +
-High-Confidence Combos. Presentation-level logic only -- never a new
+Same-Day Demo Experience sprint (2026-08-31) + Live DK / Paper Bankroll
+completion sprint (2026-08-31, later merge): Top Conviction ranking +
+combo classification. Presentation-level logic only -- never a new
 probability model, never a refit, never a change to decision_policy.
 
-CONVICTION SCORE (Part 14): a ranking score, NEVER presented as a
-literal probability. Combines conservative probability, no-vig edge,
-EV, and confidence -- deliberately weighted so a high-probability but
-bad-value leg (e.g. 90% at -800 simulated, no real edge) does NOT
-outrank a lower-probability, better-value leg (Part 13/18).
+CONVICTION SCORE (Part 14, extended Part 2 of the completion sprint): a
+ranking score, NEVER presented as a literal probability. Combines
+conservative probability, no-vig edge, EV, confidence, AND a maturity
+weight sourced from research/model_registry.py's own real `status`
+field -- deliberately weighted so (a) a high-probability but bad-value
+leg (e.g. 90% at -800 simulated, no real edge) does NOT outrank a
+lower-probability, better-value leg, and (b) an EMPIRICAL_BASELINE-status
+market is not treated as equivalent to a fully VALIDATED one when both
+compete for a Top Conviction slot. This does NOT change model_registry.py
+itself, and does NOT exclude a lower-maturity market from qualifying --
+it only discounts its presentation score, generically, by real registry
+status (never a special case for any one prop name).
 
-JOINT DEPENDENCE (Part 18/19): combos are built ONLY from the real,
-frozen per-pair correlations in research/joint_scoring_dependence_results.json
-(`rho_by_name`), fed into the real, already-tested
+JOINT DEPENDENCE (Part 18/19 of the demo sprint): combos are built ONLY
+from the real, frozen per-pair correlations in
+research/joint_scoring_dependence_results.json (`rho_by_name`), fed into
+the real, already-tested
 research.joint_scoring_dependence.joint_models.gaussian_copula_joint_upper_tail
 -- never reimplemented, never a blind independence multiply. A leg pair
-with no real frozen rho is marked JOINT_DEPENDENCE_NOT_VALIDATED and
-excluded from Top Conviction Combos (may appear in a separately-labeled
-research/exploration list only).
+with no real frozen rho is marked JOINT_DEPENDENCE_NOT_VALIDATED.
+
+COMBO CLASSES (completion sprint, Parts 3-8): a combo that clears the
+joint-dependence math is NOT automatically "HIGH-CONFIDENCE" -- e.g. a
+5.9% joint probability is a real, validated number, but it is a longshot,
+not a high-confidence pick. Three classes, never mixed:
+  - HIGH_CONFIDENCE: every leg individually high-probability
+    (>= HIGH_CONFIDENCE_LEG_MIN_CONSERVATIVE_PROBABILITY) with real
+    positive price value, AND the combo's own joint probability clears
+    HIGH_CONFIDENCE_COMBO_MIN_JOINT_PROBABILITY, AND the dependence is
+    VALIDATED (real frozen rho).
+  - VALUE_COMBINATION: dependence is VALIDATED but the combo doesn't
+    meet the high-confidence bar (e.g. individually longshot legs).
+  - RESEARCH_COMBINATION: dependence is JOINT_DEPENDENCE_NOT_VALIDATED.
+It is expected and correct for HIGH_CONFIDENCE to be empty on a given
+slate -- see build_combo_board()'s own docstring.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 from dashboard import data_access as da
+from research import model_registry
 from research.joint_scoring_dependence import joint_models as jm
 from research.joint_scoring_dependence.logical_implication_registry import detect_redundant_leg
 
@@ -30,6 +53,46 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 _RHO_PATH = REPO_ROOT / "research" / "joint_scoring_dependence_results.json"
 
 CONFIDENCE_WEIGHT = {"HIGH": 1.0, "MEDIUM": 0.6, "LOW": 0.0}
+
+# Completion sprint Part 2: real model_registry.py model_id per prop --
+# never invented, matches the model_id strings already used as registry
+# entry keys (research/model_registry.py).
+_PROP_TO_MODEL_ID = {
+    "sog": "PLAYER_SOG", "goals": "GOALS", "assists": "ASSISTS",
+    "points": "POINTS", "blocks": "BLOCKED_SHOTS", "saves": "GOALIE_SAVES",
+}
+# A modest, principled discount for a real but lesser-validated model
+# status -- never zero (an EMPIRICAL_BASELINE_REMAINS_CHAMPION model is
+# still real, tested, and currently the best-known approach for its
+# market; "champion" means nothing beat it, not that it's unproven).
+# VALIDATED-status families get no discount. An unrecognized/unlisted
+# status is treated conservatively (lower than either named tier) rather
+# than assumed trustworthy.
+_MATURITY_WEIGHT = {
+    "VALIDATED": 1.0,
+    "VALIDATED_OVERLAY": 1.0,
+    "EMPIRICAL_BASELINE_REMAINS_CHAMPION": 0.85,
+    "PARTIAL": 0.7,
+}
+_DEFAULT_MATURITY_WEIGHT = 0.6
+
+# Completion sprint Parts 5/6: a HIGH-CONFIDENCE combo leg must be an
+# individual favorite with real value, not merely a positive-EV
+# longshot (Part 6's explicit warning: EV can be large purely because a
+# longshot's payout is large, even when the hit probability is low).
+# 0.65 conservative probability is the chosen floor -- roughly "clearly
+# more likely than not" (a leg priced anywhere near even money or worse
+# does not match the owner's own -250-to--350-favorite illustration).
+# Not reverse-engineered from today's data: today's only BET-grade legs
+# are POINTS-market longshots (6.7%-51.5% conservative probability), so
+# this floor produces zero HIGH_CONFIDENCE combos today regardless of
+# whether it is set at 0.60 or 0.75 -- see the completion sprint report.
+HIGH_CONFIDENCE_LEG_MIN_CONSERVATIVE_PROBABILITY = 0.65
+# Two legs each exactly at the floor, combined via this project's real,
+# weakest-observed frozen rho (0.046), land at joint probability ~0.43;
+# 0.40 is set just below that as a natural, non-arbitrary backstop that
+# a 5.9%-type longshot combo cannot possibly clear.
+HIGH_CONFIDENCE_COMBO_MIN_JOINT_PROBABILITY = 0.40
 
 # Combo-name convention -> (prop_a, threshold_a, prop_b, threshold_b).
 # Sourced directly from the real rho_by_name keys -- never invented.
@@ -69,18 +132,39 @@ def _rho_lookup() -> dict[tuple, float]:
 _RHO_LOOKUP = _rho_lookup()
 
 
+def maturity_weight(prop: str | None) -> float:
+    """Completion sprint Part 2: looks up the REAL model_registry.py
+    status for this prop's model_id and returns a generic, documented
+    discount -- never a special case keyed on the prop name itself, only
+    on the registry's own real `status` field. Unknown/unmapped props
+    (e.g. a combo-only or non-registry prop) get the conservative
+    default, never full trust."""
+    model_id = _PROP_TO_MODEL_ID.get(prop)
+    if model_id is None:
+        return _DEFAULT_MATURITY_WEIGHT
+    entry = model_registry.get(model_id)
+    if entry is None:
+        return _DEFAULT_MATURITY_WEIGHT
+    return _MATURITY_WEIGHT.get(entry.status, _DEFAULT_MATURITY_WEIGHT)
+
+
 def conviction_score(opp: dict) -> float:
-    """Part 14: a presentation-level ranking score, NEVER a literal
-    probability. Weighted so value (edge/EV) matters as much as raw
-    probability -- a 90% leg with -800 simulated pricing (no real edge)
-    scores LOWER than a 78% leg with a real, meaningful edge."""
+    """Part 14 (+ completion sprint Part 2): a presentation-level
+    ranking score, NEVER a literal probability. Weighted so value
+    (edge/EV) matters as much as raw probability -- a 90% leg with -800
+    simulated pricing (no real edge) scores LOWER than a 78% leg with a
+    real, meaningful edge -- AND so a market backed by a lower-maturity
+    model (per research/model_registry.py's own real status) is
+    discounted relative to an equally-strong VALIDATED-status market,
+    without being excluded from qualifying at all."""
     conservative_p = opp.get("conservative_probability") or 0.0
     edge = opp.get("conservative_edge") or 0.0
     ev = opp.get("ev") or 0.0
     confidence_w = CONFIDENCE_WEIGHT.get(opp.get("confidence"), 0.3)
     edge_component = min(max(edge, 0.0), 0.15) / 0.15
     ev_component = min(max(ev, 0.0), 0.30) / 0.30
-    return (0.30 * conservative_p) + (0.35 * edge_component) + (0.20 * ev_component) + (0.15 * confidence_w)
+    base = (0.30 * conservative_p) + (0.35 * edge_component) + (0.20 * ev_component) + (0.15 * confidence_w)
+    return base * maturity_weight(opp.get("prop"))
 
 
 def top_conviction(opportunities: list[dict], *, max_n: int = 5, min_edge: float = 0.02) -> list[dict]:
@@ -230,15 +314,43 @@ def combo_eligible_legs(opportunities: list[dict]) -> list[dict]:
     ]
 
 
-def build_high_confidence_combos(opportunities: list[dict], *, max_combos: int = 4) -> dict:
-    """Part 16-22: 2-leg and 3-leg combos, built per-player (a validated
+def _leg_meets_high_confidence_bar(leg: dict) -> bool:
+    """Completion sprint Parts 5/6: individually high-probability AND
+    real positive price value -- NOT large EV alone (a longshot's payout
+    inflates EV even at low hit probability; requiring the probability
+    floor directly closes that door)."""
+    return (
+        (leg.get("conservative_probability") or 0.0) >= HIGH_CONFIDENCE_LEG_MIN_CONSERVATIVE_PROBABILITY
+        and (leg.get("raw_edge") or 0.0) > 0
+        and leg.get("confidence") in ("HIGH", "MEDIUM")
+    )
+
+
+def build_combo_board(opportunities: list[dict], *, max_per_class: int = 4) -> dict:
+    """Part 16-22 of the demo sprint + Parts 3-8 of the completion
+    sprint: 2-leg and 3-leg combos, built per-player (a validated
     joint-dependence pair is always a same-player relationship in this
     project's real registry -- see _pair_key) from every combo-eligible
-    leg, not just the narrow Top Conviction list -- Top Conviction is a
-    single-leg ranking, this is a separate, real search over every
-    eligible pair/triple. Returns {"validated": [...], "not_validated":
-    [...]} -- the two are NEVER mixed in the same list, and only
-    "validated" may ever be labeled Top Conviction Combos in the UI."""
+    leg, not just the narrow Top Conviction list.
+
+    Returns {"high_confidence": [...], "value": [...], "research": [...]}
+    -- three classes, never mixed:
+      - high_confidence: VALIDATED dependence AND every leg clears
+        _leg_meets_high_confidence_bar() AND the combo's own joint
+        probability clears HIGH_CONFIDENCE_COMBO_MIN_JOINT_PROBABILITY
+        AND the combo has positive aggregate value (combo_edge > 0 --
+        parlay vig compounds across legs, so this is checked separately
+        from each leg's own positive edge). A 5.9%-joint-probability
+        combo can never land here, by construction (see the module
+        docstring's worked example).
+      - value: VALIDATED dependence, but doesn't clear the
+        high-confidence bar (e.g. individually-longshot legs whose
+        joint math is nonetheless real and correctly computed).
+      - research: JOINT_DEPENDENCE_NOT_VALIDATED -- unsupported pairs,
+        kept for exploration, never presented as actionable.
+    It is normal and correct for "high_confidence" to be empty on a
+    given slate -- this function never pads or lowers its own bar to
+    force a result (Part 7)."""
     from collections import defaultdict
     from itertools import combinations
 
@@ -247,7 +359,7 @@ def build_high_confidence_combos(opportunities: list[dict], *, max_combos: int =
     for o in eligible:
         by_player[o["player_id"]].append(o)
 
-    validated, not_validated = [], []
+    high_confidence, value, research = [], [], []
     seen_validated_keys = set()
     for player_legs in by_player.values():
         if len(player_legs) < 2:
@@ -258,14 +370,28 @@ def build_high_confidence_combos(opportunities: list[dict], *, max_combos: int =
             for leg_group in combinations(player_legs, size):
                 combo = _combo_from_legs(list(leg_group))
                 if combo is None:
-                    continue
+                    continue  # redundant leg pair -- collapsed entirely, never a combo
                 if combo["status"] == "VALIDATED":
                     key = tuple(sorted((l["player_id"], l["prop"], l["threshold"]) for l in leg_group))
                     if key in seen_validated_keys:
                         continue
                     seen_validated_keys.add(key)
-                    validated.append(combo)
+                    if (all(_leg_meets_high_confidence_bar(l) for l in leg_group)
+                            and (combo["joint_probability"] or 0.0) >= HIGH_CONFIDENCE_COMBO_MIN_JOINT_PROBABILITY
+                            and (combo["combo_edge"] or -1.0) > 0.0):
+                        combo["combo_class"] = "HIGH_CONFIDENCE"
+                        high_confidence.append(combo)
+                    else:
+                        combo["combo_class"] = "VALUE_COMBINATION"
+                        value.append(combo)
                 else:
-                    not_validated.append(combo)
-    validated.sort(key=lambda c: -(c["combo_edge"] or -1))
-    return {"validated": validated[:max_combos], "not_validated": not_validated[:max_combos]}
+                    combo["combo_class"] = "RESEARCH_COMBINATION"
+                    research.append(combo)
+
+    high_confidence.sort(key=lambda c: -(c["joint_probability"] or 0.0))
+    value.sort(key=lambda c: -(c["combo_edge"] or -1))
+    return {
+        "high_confidence": high_confidence[:max_per_class],
+        "value": value[:max_per_class],
+        "research": research[:max_per_class],
+    }

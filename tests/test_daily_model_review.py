@@ -239,5 +239,46 @@ class Test10RetrainingTriggers(unittest.TestCase):
         self.assertNotIn("model_registry", src)
 
 
+class Test11PaperPerformanceIntegration(unittest.TestCase):
+    """Completion sprint Part 47: additive-only integration -- omitted
+    entirely without paper_conn, never changes any pre-existing key,
+    never lets paper results influence recommendation/promotion logic
+    (Part 48)."""
+
+    def test_omitted_when_no_paper_conn_supplied(self):
+        conn = pl.init_db(db_path=":memory:")
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertIn("paper_performance", result)
+        self.assertIsNone(result["paper_performance"])
+
+    def test_present_and_real_when_paper_conn_supplied(self):
+        import tempfile
+        from pathlib import Path
+        from operational import paper_bankroll as pb
+        conn = pl.init_db(db_path=":memory:")
+        with tempfile.TemporaryDirectory() as tmp:
+            paper_conn = pb.init_db(Path(tmp) / "paper.db")
+            pb.record_paper_bet(paper_conn, track="DEMO_PAPER", price_source="SIMULATED_DEMO",
+                                 market_id="PLAYER_SOG_3PLUS", entry_odds=150, event_id="e1", player_id="p1")
+            result = dmr.run_daily_review(conn, now_utc=NOW, paper_conn=paper_conn)
+        self.assertIsNotNone(result["paper_performance"])
+        self.assertIn("DEMO_PAPER", result["paper_performance"])
+        self.assertIn("REAL_MARKET_PAPER", result["paper_performance"])
+        self.assertEqual(result["paper_performance"]["DEMO_PAPER"]["season_to_date"]["bets"], 0)  # still PENDING
+
+    def test_paper_performance_never_affects_recommendation_or_promotion(self):
+        import tempfile
+        from pathlib import Path
+        from operational import paper_bankroll as pb
+        conn = pl.init_db(db_path=":memory:")
+        without = dmr.run_daily_review(conn, now_utc=NOW)
+        with tempfile.TemporaryDirectory() as tmp:
+            paper_conn = pb.init_db(Path(tmp) / "paper.db")
+            with_paper = dmr.run_daily_review(conn, now_utc=NOW, paper_conn=paper_conn)
+        self.assertEqual(without["recommendation"], with_paper["recommendation"])
+        self.assertEqual(without["promotion_candidates"], with_paper["promotion_candidates"])
+        self.assertEqual(without["engine_status"], with_paper["engine_status"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -37,11 +37,16 @@ class Test02OddsArchiveFreshness(unittest.TestCase):
 
 class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
     """Part 50: this must never be inferred from demo-mode market
-    availability -- it reads only the real provider_adapter registry."""
+    availability -- it reads only the real provider_adapter registry.
 
-    def test_reports_zero_verified_contracts(self):
+    Live DK / Paper Bankroll completion sprint (2026-08-31): MONEYLINE
+    was actually, really verified this sprint, so the honest count is
+    now 1, not 0 -- the class name is kept (renaming would obscure the
+    history in a diff) but the assertion reflects the current real fact."""
+
+    def test_reports_the_real_verified_contract_count(self):
         item = sh.contract_status_health()
-        self.assertIn("VERIFIED LIVE CONTRACTS: 0", item["message"])
+        self.assertIn("VERIFIED LIVE CONTRACTS: 1", item["message"])
         self.assertEqual(item["status"], "OK")
 
     def test_never_imports_demo_data(self):

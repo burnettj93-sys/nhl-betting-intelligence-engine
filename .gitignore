@@ -78,6 +78,11 @@ research/joint_scoring_dependence/joint_scoring.jsonl
 # prospective_ledger.py::backup_db) rather than relying on git history.
 operational/prospective_observations.db
 
+# Paper bankroll store (Live DK / Paper Bankroll completion sprint,
+# 2026-08-31) -- same reasoning: real accumulating operational data, not
+# a reproducible research artifact, never committed.
+operational/paper_bankroll.db
+
 # Preseason Operational Readiness Closure sprint (2026-08-30): any future
 # ad-hoc quarantine of confirmed-synthetic test pollution discovered under
 # the real Odds API evidence tree (see tests/test_evidence_directory_

@@ -1,0 +1,25 @@
+{
+  "_provenance": "Real DraftKings NHL moneyline payload captured live via The Odds API (GET /v4/sports/icehockey_nhl/events/{id}/odds, markets=h2h) during the Live DK / Paper Bankroll completion sprint, 2026-08-31. Contains no API key, no PII -- public sportsbook market data only. Archived in full (with the two additional markets DraftKings also had posted, spreads/totals) under data/raw/the_odds_api/live/.",
+  "id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+  "sport_key": "icehockey_nhl",
+  "sport_title": "NHL",
+  "commence_time": "2026-09-29T21:10:00Z",
+  "home_team": "Carolina Hurricanes",
+  "away_team": "Florida Panthers",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "markets": [
+        {
+          "key": "h2h",
+          "last_update": "2026-08-31T12:37:46Z",
+          "outcomes": [
+            {"name": "Carolina Hurricanes", "price": -130},
+            {"name": "Florida Panthers", "price": 110}
+          ]
+        }
+      ]
+    }
+  ]
+}

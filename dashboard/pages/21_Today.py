@@ -25,6 +25,7 @@ from dashboard import data_access as da
 from dashboard import demo_data as dd
 from dashboard import eligible_bets as eb
 from dashboard import formatting as fmt
+from dashboard import live_dk as ldk
 from operational.system_health import build_system_health
 from operational.live_readiness import live_readiness
 from operational import prospective_ledger as pl
@@ -86,6 +87,26 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+# ---- 0. Live Model Edges (real DraftKings, when a verified contract exists) ----
+_live_rows = ldk.build_live_moneyline_comparisons()
+_live_priced = [r for r in _live_rows if r.get("status") == "PRICED"]
+if _live_priced:
+    st.markdown("## Live Model Edges")
+    st.caption(f"{ldk.LIVE_SOURCE_LABEL} — real DraftKings MONEYLINE prices, captured via a real Odds "
+               f"API probe and compared against this engine's real Elo win model. This is not "
+               f"simulated.")
+    for r in sorted(_live_priced, key=lambda r: -abs(r.get("raw_edge") or 0.0))[:6]:
+        lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
+        lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
+        lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
+        lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
+        lc4.markdown(comp.label_badge(r["decision"], "input"), unsafe_allow_html=True)
+        if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
+            st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
+                       f"real edge, not presented as actionable. {r['decision_reason']}")
+        st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
+                   f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
 
 # ---- 1. Today's Slate ---------------------------------------------------
 st.markdown("## 1 · Today's Slate")
@@ -153,24 +174,50 @@ else:
 # ---- 3. High-Confidence Combos -------------------------------------------
 st.divider()
 st.markdown("## 3 · High-Confidence Combos")
-combos = cv.build_high_confidence_combos(opportunities)
-if not combos["validated"]:
-    st.caption("No dependency-validated combo clears the bar on today's simulated slate.")
+combo_board = cv.build_combo_board(opportunities)
+
+
+def _render_combo(c: dict) -> None:
+    with st.container(border=True):
+        legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
+        st.markdown(f"**{legs_desc}**")
+        for l in c["legs"]:
+            st.caption(f"{l['player']} {l['market']} {l['threshold']} — marginal P "
+                       f"{fmt.format_probability(l['coherent_probability'])}, conservative P "
+                       f"{fmt.format_probability(l['conservative_probability'])}, fair "
+                       f"{fmt.format_american_odds(l['fair_odds'])}, current "
+                       f"{fmt.format_american_odds(l['current_odds'])}, edge "
+                       f"{fmt.format_edge(l['raw_edge'])}")
+        cc1, cc2, cc3, cc4 = st.columns(4)
+        cc1.metric("Joint P", fmt.format_probability(c["joint_probability"]))
+        cc2.metric("Fair combo price", fmt.format_american_odds(c["fair_combo_price"]))
+        cc3.metric("Sim. combo price", fmt.format_american_odds(c["simulated_combo_price"]))
+        cc4.metric("Combo edge", fmt.format_edge(c["combo_edge"]))
+        st.caption(f"Dependency: {c['pairwise'][0]['method']}")
+
+
+if not combo_board["high_confidence"]:
+    comp.render_empty_state(
+        "NO_QUALIFYING_OPPORTUNITIES",
+        "No combo on today's simulated slate clears the HIGH-CONFIDENCE bar (every leg "
+        "individually >= 65% conservative probability with real positive value, plus real "
+        "positive combined value) — that's a real, honest result, not an error. See Value "
+        "Combinations below for what does exist today.")
 else:
-    for c in combos["validated"]:
-        with st.container(border=True):
-            legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
-            st.markdown(f"**{legs_desc}**")
-            cc1, cc2, cc3, cc4 = st.columns(4)
-            cc1.metric("Joint P", fmt.format_probability(c["joint_probability"]))
-            cc2.metric("Fair combo price", fmt.format_american_odds(c["fair_combo_price"]))
-            cc3.metric("Sim. combo price", fmt.format_american_odds(c["simulated_combo_price"]))
-            cc4.metric("Combo edge", fmt.format_edge(c["combo_edge"]))
-            st.caption(f"Dependency: {c['pairwise'][0]['method']}")
-if combos["not_validated"]:
-    with st.expander(f"Research / demo exploration — {len(combos['not_validated'])} combo(s) with "
+    for c in combo_board["high_confidence"]:
+        _render_combo(c)
+
+if combo_board["value"]:
+    with st.expander(f"Value Combinations — {len(combo_board['value'])} combo(s) with real "
+                      f"joint-dependence support but not individually high-probability "
+                      f"favorites (not HIGH-CONFIDENCE)"):
+        for c in combo_board["value"]:
+            _render_combo(c)
+
+if combo_board["research"]:
+    with st.expander(f"Research combinations — {len(combo_board['research'])} combo(s) with "
                       f"unsupported dependence (not actionable)"):
-        for c in combos["not_validated"]:
+        for c in combo_board["research"]:
             legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
             st.caption(f"{legs_desc} — JOINT DEPENDENCE NOT VALIDATED")
 
@@ -214,10 +261,12 @@ else:
 # ---- 7. Model Health -------------------------------------------------------
 st.divider()
 st.markdown("## 7 · Model Health")
-mh1, mh2 = st.columns(2)
+mh1, mh2, mh3 = st.columns(3)
 if mh1.button("Open Model Health"):
     st.switch_page("pages/22_Model_Health.py")
 if mh2.button("Open Model Learning"):
     st.switch_page("pages/32_Model_Learning.py")
+if mh3.button("Open Paper Performance"):
+    st.switch_page("pages/33_Paper_Performance.py")
 
 comp.render_provenance_panel()

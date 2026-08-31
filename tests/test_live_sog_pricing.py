@@ -8,6 +8,7 @@ genuine live API smoke test this slice actually ran once
 suite.
 """
 import ast
+import copy
 import os
 import unittest
 from unittest import mock
@@ -449,8 +450,21 @@ class TestStaleness(unittest.TestCase):
 # --------------------------------------------------------------------------
 class TestMissingOpposingSide(unittest.TestCase):
     def test_group_standard_two_sided_leaves_under_none_if_absent(self):
-        event = dict(STANDARD_EVENT_ODDS_FIXTURE)
-        market = dict(event["bookmakers"][0]["markets"][0])
+        # Root cause fix (test-order-dependency investigation, 2026-08-31,
+        # LIVE_DK_PAPER_BANKROLL_COMPLETION_REPORT.md Section F): the old
+        # `dict(STANDARD_EVENT_ODDS_FIXTURE)` was only a SHALLOW copy, so
+        # `event["bookmakers"][0]` stayed the SAME dict object as the
+        # module-level fixture's -- the old
+        # `event["bookmakers"][0]["markets"] = [market]` line therefore
+        # mutated the shared fixture's nested "markets" list in place,
+        # permanently shrinking its outcomes from 2 to 1 for every test
+        # that ran later in the same process (reproduced: passes alone,
+        # corrupts STANDARD_EVENT_ODDS_FIXTURE once it runs before other
+        # tests reading that fixture). A full deep copy makes every
+        # nested list/dict independent, so nothing here can reach the
+        # shared original -- confirmed by TestFixtureImmutability below.
+        event = copy.deepcopy(STANDARD_EVENT_ODDS_FIXTURE)
+        market = event["bookmakers"][0]["markets"][0]
         market["outcomes"] = [market["outcomes"][0]]  # Over only
         event["bookmakers"][0]["markets"] = [market]
         quotes = market_parser.parse_event_odds_response(event)
@@ -458,6 +472,43 @@ class TestMissingOpposingSide(unittest.TestCase):
         (key, pair), = pairs.items()
         self.assertIsNotNone(pair["over"])
         self.assertIsNone(pair["under"])
+
+
+class TestFixtureImmutability(unittest.TestCase):
+    """Regression guard for the exact test-order-dependency bug fixed
+    above: proves market_parser.py's real functions treat their input as
+    read-only (never mutate it), AND that this test file's own fixture
+    manipulation (deepcopy, not shallow copy) can never corrupt the
+    shared module-level STANDARD_EVENT_ODDS_FIXTURE for a later test."""
+
+    def test_parse_event_odds_response_never_mutates_its_input(self):
+        before = copy.deepcopy(STANDARD_EVENT_ODDS_FIXTURE)
+        market_parser.parse_event_odds_response(STANDARD_EVENT_ODDS_FIXTURE)
+        self.assertEqual(STANDARD_EVENT_ODDS_FIXTURE, before,
+                          "parse_event_odds_response mutated its input -- it must be read-only")
+
+    def test_group_standard_two_sided_never_mutates_its_input(self):
+        quotes = market_parser.parse_event_odds_response(STANDARD_EVENT_ODDS_FIXTURE)
+        before = copy.deepcopy(quotes)
+        market_parser.group_standard_two_sided(quotes)
+        self.assertEqual(quotes, before, "group_standard_two_sided mutated its input quotes")
+
+    def test_fixture_survives_the_missing_opposing_side_test_pattern(self):
+        # Directly re-exercises TestMissingOpposingSide's own mutation
+        # pattern and proves the shared fixture is untouched afterward --
+        # this is the exact scenario that used to corrupt
+        # STANDARD_EVENT_ODDS_FIXTURE for every later test in the process.
+        before = copy.deepcopy(STANDARD_EVENT_ODDS_FIXTURE)
+        event = copy.deepcopy(STANDARD_EVENT_ODDS_FIXTURE)
+        market = event["bookmakers"][0]["markets"][0]
+        market["outcomes"] = [market["outcomes"][0]]
+        event["bookmakers"][0]["markets"] = [market]
+        market_parser.parse_event_odds_response(event)
+        self.assertEqual(STANDARD_EVENT_ODDS_FIXTURE, before,
+                          "the shared module-level fixture must never be mutated by a test "
+                          "that only intended to modify its own local deep copy")
+        self.assertEqual(len(STANDARD_EVENT_ODDS_FIXTURE["bookmakers"][0]["markets"][0]["outcomes"]), 2,
+                          "the real fixture must still have both Over and Under outcomes")
 
 
 # --------------------------------------------------------------------------

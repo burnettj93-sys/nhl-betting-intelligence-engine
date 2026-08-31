@@ -31,6 +31,7 @@ from operational import challenger_registry as cr
 from operational import engine_status_evaluator as ese
 from operational import error_taxonomy as et
 from operational import model_scorecard as ms
+from operational import paper_bankroll as pb
 from operational import prospective_ledger as pl
 from operational import rejected_research_check as rrc
 
@@ -297,10 +298,21 @@ def daily_recommendation(engine_status: str, queue: list[dict], promotion_candid
 
 def run_daily_review(ledger_conn, *, now_utc: dt.datetime | None = None,
                       season_start_utc: str | None = None,
-                      inputs_ready: dict | None = None) -> dict:
+                      inputs_ready: dict | None = None, paper_conn=None) -> dict:
     """The single entry point. Never mutates a prediction row; only
     reads the ledger and (optionally, via write_daily_report()) writes a
-    disposable report file."""
+    disposable report file.
+
+    paper_conn (completion sprint Part 47, optional, additive): when
+    given an operational/paper_bankroll.py connection, attaches a
+    "paper_performance" section (yesterday/7-day/30-day/season ROI, P&L,
+    bankroll, drawdown, CLV for both REAL_MARKET_PAPER and DEMO_PAPER)
+    to the result. Omitted entirely when paper_conn is None -- never
+    required, never changes any existing key this function already
+    returns. Part 48: this is READ-ONLY reporting; nothing here can
+    promote a challenger or touch production -- see
+    daily_recommendation()/promotion_candidates(), computed identically
+    whether or not paper_conn is supplied."""
     now_utc = now_utc or dt.datetime.now(dt.timezone.utc)
     inputs_ready = inputs_ready if inputs_ready is not None else {"results_ingested": True, "settlement_completed": True}
 
@@ -323,6 +335,11 @@ def run_daily_review(ledger_conn, *, now_utc: dt.datetime | None = None,
     recommendation = daily_recommendation(contract_status["status"], queue, promo_candidates)
     engine_status = ese.combine_status([run_order["status"], contract_status["status"]])
 
+    paper_performance = None
+    if paper_conn is not None:
+        paper_performance = {track: pb.windowed_performance(paper_conn, track, now_utc.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
+                              for track in pb.TRACKS}
+
     return {
         "generated_at_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "engine_status": engine_status,
@@ -342,6 +359,7 @@ def run_daily_review(ledger_conn, *, now_utc: dt.datetime | None = None,
         "improvement_queue": queue,
         "recommendation": recommendation,
         "rejected_research_entries_on_file": len(rrc.all_rejected_entries()),
+        "paper_performance": paper_performance,
     }
 
 
@@ -382,6 +400,20 @@ def write_daily_report(result: dict, *, report_date: str, out_dir: Path = DAILY_
     lines.append("")
     lines.append(f"Rejected-research entries on file (consulted this run): "
                   f"{result['rejected_research_entries_on_file']}")
+    if result.get("paper_performance"):
+        lines.append("")
+        lines.append("## Paper performance (completion sprint Part 47 -- read-only, "
+                      "never auto-promotes a model)")
+        for track, windows in result["paper_performance"].items():
+            lines.append(f"### {track}")
+            lines.append(f"- Current bankroll: ${windows['current_bankroll']:.2f} "
+                          f"(max drawdown ${windows['max_drawdown']:.2f})")
+            for label, key in (("Yesterday", "yesterday"), ("Last 7 days", "last_7_days"),
+                                ("Last 30 days", "last_30_days"), ("Season to date", "season_to_date")):
+                w = windows[key]
+                roi = f"{w['roi']:.1%}" if w["roi"] is not None else "n/a"
+                lines.append(f"- {label}: {w['bets']} bets, {w['wins']}-{w['losses']}, "
+                              f"net ${w['net_profit']:.2f}, ROI {roi}, CLV {w['avg_clv']}")
     path.write_text("\n".join(lines) + "\n")
     return path
 

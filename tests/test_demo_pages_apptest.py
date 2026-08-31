@@ -65,6 +65,16 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
         markdown_text = " ".join(m.value for m in at.markdown)
         self.assertIn("WAITING FOR 2026-27 RESULTS", markdown_text)
 
+    def test_paper_performance(self):
+        self._assert_clean(AppTest.from_file(_page("33_Paper_Performance.py"), default_timeout=90))
+
+    def test_today_shows_live_model_edges_section(self):
+        at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        markdown_text = " ".join(m.value for m in at.markdown)
+        self.assertIn("Live Model Edges", markdown_text)
+
 
 if __name__ == "__main__":
     unittest.main()

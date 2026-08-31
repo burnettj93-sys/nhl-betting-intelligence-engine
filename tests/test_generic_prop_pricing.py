@@ -9,9 +9,11 @@ inputs, rather than merely asserting it by design.
 """
 from __future__ import annotations
 
+import json
 import unittest
 
 from research.generic_prop_pricing import evaluator as ge
+from research.generic_prop_pricing import provider_adapter as pa
 from research.generic_prop_pricing.normalized_market import NormalizedPropMarket
 from research.live_sog_pricing import pricing as sog_pricing
 
@@ -182,6 +184,73 @@ class Test06GoalsAssistsPointsSavesModelSideReadiness(unittest.TestCase):
                 lineup_status="CONFIRMED", market=_market(threshold=t), provider_contract_verified=True)
             self.assertEqual(result["status"], ge.NOT_MODEL_VALIDATED,
                               f"Saves {t}+ must not be operationally eligible")
+
+
+class TestMoneylineContractParity(unittest.TestCase):
+    """Live DK / Paper Bankroll completion sprint, Parts 9-17: the
+    real-payload regression test required before dk_contract_verified
+    can be True for MONEYLINE. Loads a sanitized, real, live-captured
+    DraftKings h2h payload (tests/fixtures/draftkings_h2h_real_payload.json)
+    -- not a synthetic guess."""
+
+    @staticmethod
+    def _load_fixture():
+        import json
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_h2h_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def test_moneyline_is_the_only_verified_contract(self):
+        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({("draftkings", "MONEYLINE")}))
+
+    def test_parses_the_real_payload_correctly(self):
+        payload = self._load_fixture()
+        result = pa.parse_the_odds_api_h2h_market(payload)
+        self.assertEqual(result["status"], "PARSED")
+        market = result["market"]
+        self.assertEqual(market.event_id, "9de33ce1013f2a3375dbded2c9fbc7d6")
+        self.assertEqual(market.sportsbook, "draftkings")
+        self.assertEqual(market.home_team_abbrev, "CAR")
+        self.assertEqual(market.away_team_abbrev, "FLA")
+        self.assertEqual(market.home_price, -130.0)
+        self.assertEqual(market.away_price, 110.0)
+        self.assertEqual(market.captured_at_utc, "2026-08-31T12:37:46Z")
+        self.assertEqual(market.provenance, "THE_ODDS_API")
+        self.assertEqual(market.commence_time_utc, "2026-09-29T21:10:00Z")
+
+    def test_unrecognized_team_name_is_data_unavailable_not_a_crash(self):
+        payload = dict(self._load_fixture())
+        payload["home_team"] = "Some Made Up Team"
+        result = pa.parse_the_odds_api_h2h_market(payload)
+        self.assertEqual(result["status"], "DATA_UNAVAILABLE")
+
+    def test_missing_bookmaker_block_is_data_unavailable(self):
+        payload = dict(self._load_fixture())
+        payload["bookmakers"] = []
+        result = pa.parse_the_odds_api_h2h_market(payload)
+        self.assertEqual(result["status"], "DATA_UNAVAILABLE")
+
+    def test_missing_h2h_market_is_data_unavailable(self):
+        payload = self._load_fixture()
+        payload = json.loads(json.dumps(payload))  # deep copy
+        payload["bookmakers"][0]["markets"] = [
+            m for m in payload["bookmakers"][0]["markets"] if m["key"] != "h2h"]
+        result = pa.parse_the_odds_api_h2h_market(payload)
+        self.assertEqual(result["status"], "DATA_UNAVAILABLE")
+
+    def test_unverified_sportsbook_returns_contract_not_verified(self):
+        payload = self._load_fixture()
+        result = pa.parse_the_odds_api_h2h_market(payload, sportsbook="fanduel")
+        self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
+
+    def test_other_prop_families_remain_unverified(self):
+        # Part 16: one observed payload (h2h) must never overgeneralize to
+        # families that were never actually parsed against a real payload.
+        for market_id in ("PLAYER_SOG", "PLAYER_GOALS", "PLAYER_ASSISTS",
+                           "PLAYER_POINTS", "GOALIE_SAVES", "SPREADS", "TOTALS"):
+            self.assertFalse(pa.is_contract_verified("draftkings", market_id),
+                              f"{market_id} must remain CONTRACT_NOT_VERIFIED")
 
 
 class Test07MarketDecisionEligibilityChecklist(unittest.TestCase):
