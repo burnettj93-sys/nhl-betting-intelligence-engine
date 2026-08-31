@@ -42,7 +42,7 @@ for tab, track in ((tab_real, "REAL_MARKET_PAPER"), (tab_demo, "DEMO_PAPER")):
         summary, breakdowns, bets = data["summary"], data["breakdowns"], data["bets"]
 
         # st.markdown treats a "$...$" pair as inline LaTeX -- escape every
-        # literal dollar sign so "$1,000.00 ... $0.00" renders as plain
+        # literal dollar sign so "$500.00 ... $0.00" renders as plain
         # text instead of being parsed as math notation.
         st.markdown(f"#### {data['answer'].replace('$', chr(92) + '$')}")
 

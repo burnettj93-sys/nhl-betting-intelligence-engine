@@ -1,8 +1,9 @@
 """
 Tests for operational/paper_bankroll.py (Live DK / Paper Bankroll
-completion sprint, 2026-08-31, Part 52). Covers the exact $10/$1000
-economics, first-actionable-entry-only idempotency, immutable entry
-snapshot, payout math for both odds signs, settlement idempotency,
+completion sprint, 2026-08-31, Part 52; default bankroll updated to
+$500 the same day, see TestFiveHundredDollarBaseline). Covers the exact
+$10/$500 economics, first-actionable-entry-only idempotency, immutable
+entry snapshot, payout math for both odds signs, settlement idempotency,
 track separation (REAL_MARKET_PAPER / DEMO_PAPER / REAL_BET untouched),
 straight-vs-combo separation, and every required breakdown.
 """
@@ -35,11 +36,19 @@ class TestPaperBankroll(unittest.TestCase):
 
 
 class TestConstants(TestPaperBankroll):
-    def test_starting_bankroll_is_1000(self):
-        self.assertEqual(pb.PAPER_STARTING_BANKROLL, 1000.00)
+    def test_starting_bankroll_is_500(self):
+        self.assertEqual(pb.PAPER_STARTING_BANKROLL, 500.00)
 
     def test_stake_is_10(self):
         self.assertEqual(pb.PAPER_BET_STAKE, 10.00)
+
+    def test_stake_is_exactly_2_percent_of_the_default_starting_bankroll(self):
+        # Owner directive (2026-08-31 baseline update): $500 bankroll,
+        # $10 fixed stake -- a fixed dollar amount, never a dynamic
+        # percentage or Kelly stake. This test only documents the
+        # resulting ratio; it must never be read as license to derive
+        # PAPER_BET_STAKE FROM PAPER_STARTING_BANKROLL programmatically.
+        self.assertAlmostEqual(pb.PAPER_BET_STAKE / pb.PAPER_STARTING_BANKROLL, 0.02)
 
 
 class TestPayoutMath(unittest.TestCase):
@@ -191,6 +200,76 @@ class TestBankrollSummary(TestPaperBankroll):
         self.assertEqual(s["bets"], 1)
         self.assertEqual(s["wins"], 0)
         self.assertEqual(s["current_bankroll"], pb.PAPER_STARTING_BANKROLL)
+
+
+class TestFiveHundredDollarBaseline(TestPaperBankroll):
+    """Owner directive (2026-08-31): default starting bankroll is now
+    $500 (was $1,000). Fixed $10 stake unchanged. These tests use the
+    literal 500.00 (not the pb.PAPER_STARTING_BANKROLL symbol) so a
+    future accidental edit of the constant would be caught here too,
+    not just silently pass because both sides moved together."""
+
+    def test_pending_stake_does_not_change_bankroll_until_settlement(self):
+        # This architecture tracks pending stake separately from
+        # realized bankroll -- current_bankroll only ever reflects
+        # SETTLED (WIN/LOSS/VOID) profit_loss, never an "at risk" stake
+        # deduction for a still-PENDING bet.
+        self._bet(entry_odds=150)
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        self.assertEqual(s["pending"], 1)
+        self.assertEqual(s["current_bankroll"], 500.00)
+        self.assertEqual(s["net_profit"], 0.0)
+
+    def test_win_bankroll_arithmetic_starts_from_500(self):
+        r = self._bet(entry_odds=200)  # $10 win at +200 = $20 profit
+        pb.settle_paper_bet(self.conn, r["paper_bet_id"], "WIN")
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        self.assertEqual(s["current_bankroll"], 520.00)
+
+    def test_loss_bankroll_arithmetic_starts_from_500(self):
+        r = self._bet(entry_odds=200)
+        pb.settle_paper_bet(self.conn, r["paper_bet_id"], "LOSS")
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        self.assertEqual(s["current_bankroll"], 490.00)
+
+    def test_void_bankroll_arithmetic_returns_to_exactly_500(self):
+        r = self._bet(entry_odds=200)
+        pb.settle_paper_bet(self.conn, r["paper_bet_id"], "VOID")
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        self.assertEqual(s["current_bankroll"], 500.00)
+
+    def test_roi_uses_amount_staked_not_starting_bankroll(self):
+        r = self._bet(entry_odds=200)
+        pb.settle_paper_bet(self.conn, r["paper_bet_id"], "WIN")
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        # $20 profit on $10 staked = 200% ROI, NOT 20/500 = 4% -- proves
+        # the denominator is total_staked, unaffected by the $500 vs
+        # the old $1,000 bankroll value.
+        self.assertAlmostEqual(s["roi"], 2.0)
+
+    def test_drawdown_uses_the_500_baseline(self):
+        r1 = self._bet(entry_odds=200, market_id="M1")
+        pb.settle_paper_bet(self.conn, r1["paper_bet_id"], "WIN")  # 500 -> 520 (new peak)
+        r2 = self._bet(entry_odds=-200, market_id="M2")
+        pb.settle_paper_bet(self.conn, r2["paper_bet_id"], "LOSS")  # 520 -> 510
+        s = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        self.assertEqual(s["peak_bankroll"], 520.00)
+        self.assertAlmostEqual(s["max_drawdown"], 10.00)
+        self.assertAlmostEqual(s["current_drawdown"], 10.00)
+
+    def test_existing_immutable_rows_are_unaffected_by_the_constant_change(self):
+        # PAPER_STARTING_BANKROLL is a pure Python constant, never
+        # persisted per-row -- confirms changing it cannot mutate any
+        # already-recorded paper_bets row's entry fields.
+        r = self._bet(entry_odds=175, market_id="M_frozen")
+        before = dict(self.conn.execute(
+            "SELECT * FROM paper_bets WHERE paper_bet_id = ?", (r["paper_bet_id"],)).fetchone())
+        pb.bankroll_summary(self.conn, "DEMO_PAPER")  # reads PAPER_STARTING_BANKROLL
+        after = dict(self.conn.execute(
+            "SELECT * FROM paper_bets WHERE paper_bet_id = ?", (r["paper_bet_id"],)).fetchone())
+        self.assertEqual(before, after)
+        self.assertEqual(after["entry_odds"], 175)
+        self.assertEqual(after["stake"], pb.PAPER_BET_STAKE)
 
 
 class TestTrackSeparation(TestPaperBankroll):

@@ -44,8 +44,8 @@ DB_PATH = REPO_ROOT / "operational" / "paper_bankroll.db"
 SCHEMA_PATH = REPO_ROOT / "operational" / "paper_bankroll_schema.sql"
 SCHEMA_VERSION = 1
 
-PAPER_STARTING_BANKROLL = 1000.00
-PAPER_BET_STAKE = 10.00
+PAPER_STARTING_BANKROLL = 500.00
+PAPER_BET_STAKE = 10.00  # 2% of the default starting bankroll -- fixed, never dynamic/Kelly
 
 TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER")
 PRICE_SOURCES = ("LIVE_DRAFTKINGS", "SIMULATED_DEMO")
