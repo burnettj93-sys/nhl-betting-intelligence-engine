@@ -1,0 +1,1094 @@
+{
+  "alpha": 0.06361255157281723,
+  "baseline_results": {
+    "A_season_to_date": {
+      "mae": 0.5356998968062762,
+      "n": 87989,
+      "nll_mean": 0.8633842273269963,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21038433040237242,
+          "brier_skill_score": 0.0792434898462383,
+          "log_loss": 0.6120854591896768,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.078315377159067,
+          "brier_skill_score": 0.05472307420381883,
+          "log_loss": 0.2793689992783295,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.019023154260641044,
+          "brier_skill_score": 0.006309124596146631,
+          "log_loss": 0.08706814554587038,
+          "n": 87989
+        }
+      }
+    },
+    "B_last10": {
+      "mae": 0.5334234510194005,
+      "n": 87989,
+      "nll_mean": 1.0171600168780033,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21830397685567182,
+          "brier_skill_score": 0.044582799974302145,
+          "log_loss": 0.8879146005478423,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07970423915839482,
+          "brier_skill_score": 0.03795932679297276,
+          "log_loss": 0.3192674040237417,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.019186077851377888,
+          "brier_skill_score": -0.002201329731514212,
+          "log_loss": 0.09477873415871588,
+          "n": 87989
+        }
+      }
+    },
+    "C_per60_x_recent_toi": {
+      "mae": 0.5321011680364032,
+      "n": 87989,
+      "nll_mean": 0.9966474891160645,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21284107435648134,
+          "brier_skill_score": 0.06849143913409472,
+          "log_loss": 0.8487440636822087,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07848794851530434,
+          "brier_skill_score": 0.052640115185781045,
+          "log_loss": 0.32005334946920955,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.019038743906532433,
+          "brier_skill_score": 0.005494785992737339,
+          "log_loss": 0.09510184818114856,
+          "n": 87989
+        }
+      }
+    },
+    "D_empirical_distribution": {
+      "mae": 0.5313532086180953,
+      "n": 87989,
+      "nll_mean": 0.8654513721152503,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.2076941509583335,
+          "brier_skill_score": 0.09101718150779536,
+          "log_loss": 0.6036812639151411,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07678664446970847,
+          "brier_skill_score": 0.07317507928100642,
+          "log_loss": 0.2737114233495854,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.01850940834418816,
+          "brier_skill_score": 0.033145085786423945,
+          "log_loss": 0.08532934539951743,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "baseline_vs_headline_bootstrap": {
+    "A_season_to_date": {
+      "ci_half_width": 0.0005352757733232405,
+      "ci_high": -0.0002979366789129523,
+      "ci_low": -0.0013684882255594333,
+      "frac_improved": 0.999,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -0.0008304751429500379
+    },
+    "B_last10": {
+      "ci_half_width": 0.0006771960345095945,
+      "ci_high": -0.008074210922508013,
+      "ci_low": -0.009428602991527202,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -0.008750121596217741
+    },
+    "C_per60_x_recent_toi": {
+      "ci_half_width": 0.0008416276765318559,
+      "ci_high": -0.0024737926423557266,
+      "ci_low": -0.004157047995419438,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -0.0032872190970545667
+    },
+    "D_empirical_distribution": {
+      "ci_half_width": 0.0005324708167717684,
+      "ci_high": 0.002383580091887161,
+      "ci_low": 0.001318638458343624,
+      "frac_improved": 0.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 0.0018597043010896985
+    }
+  },
+  "calibration_gaps_tuning_validate": {
+    "1": {
+      "actual_rate": 0.35048718874052687,
+      "gap": -6.27530607659188e-05,
+      "mean_pred": 0.35042443567976095
+    },
+    "2": {
+      "actual_rate": 0.09325153374233129,
+      "gap": -0.005204558399177883,
+      "mean_pred": 0.08804697534315341
+    },
+    "3": {
+      "actual_rate": 0.022158065680259836,
+      "gap": -0.003287438425074018,
+      "mean_pred": 0.018870627255185818
+    }
+  },
+  "calibration_needed": false,
+  "calibration_scales": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+  },
+  "common_evaluation_set_by_season": {
+    "20242025": {
+      "common_evaluation_rows": 44143,
+      "excluded_insufficient_history_or_not_active": 3081,
+      "total_target_player_games": 47224
+    },
+    "20252026": {
+      "common_evaluation_rows": 43846,
+      "excluded_insufficient_history_or_not_active": 3366,
+      "total_target_player_games": 47212
+    }
+  },
+  "confidence_breakdown": {
+    "HIGH": {
+      "n": 60157,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.3936200275944612,
+          "brier": 0.21984720709017874,
+          "brier_skill_score": 0.07891668275380748
+        },
+        "2": {
+          "actual_rate": 0.10928071546120983,
+          "brier": 0.09116313371394685,
+          "brier_skill_score": 0.06344160571924462
+        },
+        "3": {
+          "actual_rate": 0.024602290672739665,
+          "brier": 0.02333694390669104,
+          "brier_skill_score": 0.027506503542525373
+        }
+      }
+    },
+    "LOW": {
+      "n": 1140,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.18947368421052632,
+          "brier": 0.15912795096379137,
+          "brier_skill_score": -0.03616865616754472
+        },
+        "2": {
+          "actual_rate": 0.02894736842105263,
+          "brier": 0.02834998109336594,
+          "brier_skill_score": -0.008558085706341867
+        },
+        "3": {
+          "actual_rate": 0.0008771929824561404,
+          "brier": 0.0009342655709957787,
+          "brier_skill_score": -0.0659978367569043
+        }
+      }
+    },
+    "MEDIUM": {
+      "n": 26692,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2695564213996703,
+          "brier": 0.18850891163641526,
+          "brier_skill_score": 0.042595358933869565
+        },
+        "2": {
+          "actual_rate": 0.05297467405964334,
+          "brier": 0.04832665801750296,
+          "brier_skill_score": 0.03671038927749404
+        },
+        "3": {
+          "actual_rate": 0.008879064888356061,
+          "brier": 0.008640873702415723,
+          "brier_skill_score": 0.018107872777291645
+        }
+      }
+    }
+  },
+  "config": {
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "feature_names": [
+      "intercept",
+      "log_baseline_rate",
+      "recent_form_log_ratio",
+      "toi_log_ratio",
+      "pp_role_rate",
+      "opponent_log_factor",
+      "team_context_log_factor",
+      "h2h_shrunk_delta"
+    ],
+    "locked_stage": "M6_plus_h2h",
+    "tuning_season": 20232024,
+    "tuning_split_date": "2024-02-24",
+    "warmup_season": 20222023
+  },
+  "conservative_probability_check": {
+    "fraction_conservative_leq_raw": 1.0,
+    "mean_conservative_prob_1plus": 0.27069220994321463,
+    "mean_raw_prob_1plus": 0.35098054214484947
+  },
+  "corpus_size": 188863,
+  "date_clustered_sensitivity": {
+    "A_season_to_date": {
+      "ci_high": -5.4549843748225024e-05,
+      "ci_low": -0.0016725328630731728,
+      "frac_improved": 0.984,
+      "n_dates_resampled": 345,
+      "n_resamples": 500,
+      "point_delta": -0.0008304751429500379
+    },
+    "B_last10": {
+      "ci_high": -0.008062420066048487,
+      "ci_low": -0.009470922177937602,
+      "frac_improved": 1.0,
+      "n_dates_resampled": 345,
+      "n_resamples": 500,
+      "point_delta": -0.008750121596217741
+    },
+    "C_per60_x_recent_toi": {
+      "ci_high": -0.0016637652910548861,
+      "ci_low": -0.00506913510710244,
+      "frac_improved": 1.0,
+      "n_dates_resampled": 345,
+      "n_resamples": 500,
+      "point_delta": -0.0032872190970545667
+    },
+    "D_empirical_distribution": {
+      "ci_high": 0.002343342742070098,
+      "ci_low": 0.0014175463596225735,
+      "frac_improved": 0.0,
+      "n_dates_resampled": 345,
+      "n_resamples": 500,
+      "point_delta": 0.0018597043010896985
+    }
+  },
+  "distribution_analysis": {
+    "hurdle_model_needed": false,
+    "negbin_implied_zero_rate": 0.6277971298622023,
+    "negbin_zero_rate_gap": 0.0177028701377977,
+    "observed_zero_rate": 0.6455,
+    "poisson_implied_zero_rate": 0.6234417141174892,
+    "poisson_zero_rate_gap": 0.022058285882510797,
+    "tuning_fit_mean": 0.4725,
+    "tuning_fit_variance": 0.5464104166666667,
+    "variance_to_mean_ratio": 1.1564241622574958
+  },
+  "eval_examples_n": 87989,
+  "excluded": {
+    "insufficient_history": 1101,
+    "not_projected_active": 8475
+  },
+  "freeze_manifest_path": "research/player_points_freeze_manifest.json",
+  "goal_assist_dependence": {
+    "lift_ratio": 1.240589162579741,
+    "p_assist": 0.238886888752409,
+    "p_goal": 0.15070910720966843,
+    "p_goal_and_assist_observed": 0.04466422414705944,
+    "p_goal_times_p_assist_independence": 0.03600242972797094,
+    "within_player_lift_mean_n100plus_players": 1.0147688916573847,
+    "within_player_lift_n_players": 622
+  },
+  "headline_calibrated": {
+    "mae": 0.5432207714139593,
+    "n": 87989,
+    "nll_mean": 0.8573218225608353,
+    "thresholds": {
+      "1": {
+        "actual_rate": 0.35333962199820435,
+        "brier": 0.2095538552594279,
+        "brier_skill_score": 0.08287810176303156,
+        "log_loss": 0.608402941627774,
+        "n": 87989
+      },
+      "2": {
+        "actual_rate": 0.09115912216299765,
+        "brier": 0.07735460988395738,
+        "brier_skill_score": 0.06631966186216032,
+        "log_loss": 0.27600901799351507,
+        "n": 87989
+      },
+      "3": {
+        "actual_rate": 0.019525167918717112,
+        "brier": 0.018588548548234763,
+        "brier_skill_score": 0.029011128948287057,
+        "log_loss": 0.08516007153370407,
+        "n": 87989
+      }
+    }
+  },
+  "headline_uncalibrated": {
+    "mae": 0.5432207714139593,
+    "n": 87989,
+    "nll_mean": 0.8573218225608353,
+    "thresholds": {
+      "1": {
+        "actual_rate": 0.35333962199820435,
+        "brier": 0.2095538552594279,
+        "brier_skill_score": 0.08287810176303156,
+        "log_loss": 0.608402941627774,
+        "n": 87989
+      },
+      "2": {
+        "actual_rate": 0.09115912216299765,
+        "brier": 0.07735460988395738,
+        "brier_skill_score": 0.06631966186216032,
+        "log_loss": 0.27600901799351507,
+        "n": 87989
+      },
+      "3": {
+        "actual_rate": 0.019525167918717112,
+        "brier": 0.018588548548234763,
+        "brier_skill_score": 0.029011128948287057,
+        "log_loss": 0.08516007153370407,
+        "n": 87989
+      }
+    }
+  },
+  "kept_stage_names_by_bootstrap_95pct_bar": [
+    "M0_baseline_only",
+    "M3_plus_pp_role",
+    "M4_plus_opponent_context",
+    "M5_plus_team_context",
+    "M6_plus_h2h"
+  ],
+  "locked_stage": "M6_plus_h2h",
+  "per_feature_verdicts": {
+    "h2h_added_value": true,
+    "opponent_context_added_value": true,
+    "pp_role_added_value": true,
+    "recent_form_added_value": false,
+    "team_context_added_value": true,
+    "toi_role_added_value": false
+  },
+  "points_model_evaluation_conditionality": "CONDITIONAL ON ACTUAL GAME PARTICIPATION",
+  "post_lock_diagnostic_ablations": {
+    "M0_baseline_only_to_M1_plus_recent_form_on_eval": {
+      "ci_half_width": 4.0423206720499594e-05,
+      "ci_high": 6.995533911252627e-05,
+      "ci_low": -1.0891074328472916e-05,
+      "frac_improved": 0.082,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 2.8533120752627372e-05
+    },
+    "M1_plus_recent_form_to_M2_plus_toi_role_on_eval": {
+      "ci_half_width": 1.0328948175097885e-06,
+      "ci_high": -1.0392238904977091e-06,
+      "ci_low": -3.105013525517286e-06,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -2.0993143821645965e-06
+    },
+    "M2_plus_toi_role_to_M3_plus_pp_role_on_eval": {
+      "ci_half_width": 3.8680933153179e-05,
+      "ci_high": -0.00018153778760110484,
+      "ci_low": -0.00025889965390746283,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -0.0002216752370594599
+    },
+    "M3_plus_pp_role_to_M4_plus_opponent_context_on_eval": {
+      "ci_half_width": 5.5127290499668025e-05,
+      "ci_high": -9.006542921627392e-05,
+      "ci_low": -0.00020032001021560997,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -0.00014596367987690373
+    },
+    "M4_plus_opponent_context_to_M5_plus_team_context_on_eval": {
+      "ci_half_width": 1.6077375382131387e-05,
+      "ci_high": -3.79097897096059e-05,
+      "ci_low": -7.006454047386868e-05,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -5.315227272059686e-05
+    },
+    "M5_plus_team_context_to_M6_plus_h2h_on_eval": {
+      "ci_half_width": 9.229892172155085e-06,
+      "ci_high": -4.257983737532278e-05,
+      "ci_low": -6.103962171963295e-05,
+      "frac_improved": 1.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -5.1837301903917554e-05
+    }
+  },
+  "representative_examples": {
+    "correct_prediction": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.214,
+      "expected_points": 0.354,
+      "game_date": "2024-10-04",
+      "h2h_games": 5,
+      "opponent": "BUF",
+      "p_1plus": 0.295,
+      "p_2plus": 0.051,
+      "p_3plus": null,
+      "player": "Erik Haula",
+      "position": "L",
+      "team": "NJD"
+    },
+    "defenseman": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.361,
+      "expected_points": 0.599,
+      "game_date": "2024-10-04",
+      "h2h_games": 6,
+      "opponent": "NJD",
+      "p_1plus": 0.445,
+      "p_2plus": 0.124,
+      "p_3plus": null,
+      "player": "Rasmus Dahlin",
+      "position": "D",
+      "team": "BUF"
+    },
+    "elite_scorer_playmaker": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.509,
+      "expected_points": 0.906,
+      "game_date": "2024-10-04",
+      "h2h_games": 6,
+      "opponent": "BUF",
+      "p_1plus": 0.586,
+      "p_2plus": 0.231,
+      "p_3plus": null,
+      "player": "Timo Meier",
+      "position": "R",
+      "team": "NJD"
+    },
+    "high_assist_player": {
+      "actual_points": 2.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.455,
+      "expected_points": 0.785,
+      "game_date": "2024-10-05",
+      "h2h_games": 7,
+      "opponent": "BUF",
+      "p_1plus": 0.535,
+      "p_2plus": 0.188,
+      "p_3plus": null,
+      "player": "Jack Hughes",
+      "position": "C",
+      "team": "NJD"
+    },
+    "high_confidence": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.214,
+      "expected_points": 0.354,
+      "game_date": "2024-10-04",
+      "h2h_games": 5,
+      "opponent": "BUF",
+      "p_1plus": 0.295,
+      "p_2plus": 0.051,
+      "p_3plus": null,
+      "player": "Erik Haula",
+      "position": "L",
+      "team": "NJD"
+    },
+    "low_confidence": {
+      "actual_points": 0.0,
+      "confidence": "LOW",
+      "conservative_p_1plus": 0.275,
+      "expected_points": 0.469,
+      "game_date": "2024-10-08",
+      "h2h_games": 1,
+      "opponent": "STL",
+      "p_1plus": 0.37,
+      "p_2plus": 0.083,
+      "p_3plus": null,
+      "player": "Shane Wright",
+      "position": "C",
+      "team": "SEA"
+    },
+    "model_miss": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.638,
+      "expected_points": 1.26,
+      "game_date": "2024-10-09",
+      "h2h_games": 6,
+      "opponent": "WPG",
+      "p_1plus": 0.702,
+      "p_2plus": 0.355,
+      "p_3plus": null,
+      "player": "Connor McDavid",
+      "position": "C",
+      "team": "EDM"
+    },
+    "pp_heavy_player": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.458,
+      "expected_points": 0.791,
+      "game_date": "2024-10-04",
+      "h2h_games": 6,
+      "opponent": "NJD",
+      "p_1plus": 0.538,
+      "p_2plus": 0.19,
+      "p_3plus": null,
+      "player": "Alex Tuch",
+      "position": "R",
+      "team": "BUF"
+    },
+    "shooting_heavy_player": {
+      "actual_points": 2.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.463,
+      "expected_points": 0.803,
+      "game_date": "2024-10-08",
+      "h2h_games": 5,
+      "opponent": "SEA",
+      "p_1plus": 0.543,
+      "p_2plus": 0.194,
+      "p_3plus": null,
+      "player": "Jordan Kyrou",
+      "position": "R",
+      "team": "STL"
+    },
+    "strong_h2h": {
+      "actual_points": 0.0,
+      "confidence": "HIGH",
+      "conservative_p_1plus": 0.214,
+      "expected_points": 0.354,
+      "game_date": "2024-10-04",
+      "h2h_games": 5,
+      "opponent": "BUF",
+      "p_1plus": 0.295,
+      "p_2plus": 0.051,
+      "p_3plus": null,
+      "player": "Erik Haula",
+      "position": "L",
+      "team": "NJD"
+    },
+    "weak_h2h": {
+      "actual_points": 0.0,
+      "confidence": "MEDIUM",
+      "conservative_p_1plus": 0.04,
+      "expected_points": 0.1,
+      "game_date": "2024-10-05",
+      "h2h_games": 0,
+      "opponent": "BUF",
+      "p_1plus": 0.095,
+      "p_2plus": 0.005,
+      "p_3plus": null,
+      "player": "Kurtis MacDermid",
+      "position": "L",
+      "team": "NJD"
+    }
+  },
+  "season_results": {
+    "20242025": {
+      "mae": 0.5391253825244363,
+      "n": 44143,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.3506784767686836,
+          "brier": 0.20925822532615826,
+          "brier_skill_score": 0.08100398622197025
+        },
+        "2": {
+          "actual_rate": 0.0890288380943751,
+          "brier": 0.07599637305519939,
+          "brier_skill_score": 0.0629612919142889
+        },
+        "3": {
+          "actual_rate": 0.01841741612486691,
+          "brier": 0.01763388979097757,
+          "brier_skill_score": 0.024577930920188007
+        }
+      }
+    },
+    "20252026": {
+      "mae": 0.5473439012718759,
+      "n": 43846,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.3560187930483967,
+          "brier": 0.209851487703535,
+          "brier_skill_score": 0.08469478840654787
+        },
+        "2": {
+          "actual_rate": 0.09330383615381106,
+          "brier": 0.07872204701235827,
+          "brier_skill_score": 0.06945988442912987
+        },
+        "3": {
+          "actual_rate": 0.020640423299730877,
+          "brier": 0.019549673885132176,
+          "brier_skill_score": 0.032883610926763174
+        }
+      }
+    }
+  },
+  "segment_results": {
+    "defensemen": {
+      "mean_actual_points": 0.34871445598501616,
+      "n": 29365,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2819342754980419,
+          "brier": 0.19242715084635537
+        },
+        "2": {
+          "actual_rate": 0.056632044951472844,
+          "brier": 0.050933097503967587
+        }
+      }
+    },
+    "forwards": {
+      "mean_actual_points": 0.5272755185589519,
+      "n": 58624,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.3891068504366812,
+          "brier": 0.21813269114728737
+        },
+        "2": {
+          "actual_rate": 0.10845387554585152,
+          "brier": 0.09058925288065499
+        }
+      }
+    },
+    "non_pp": {
+      "mean_actual_points": 0.27422974903081004,
+      "n": 44109,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2349180439366116,
+          "brier": 0.17932096999939962
+        },
+        "2": {
+          "actual_rate": 0.03457344306150672,
+          "brier": 0.033469296939214604
+        }
+      }
+    },
+    "pp_heavy": {
+      "mean_actual_points": 0.6621467639015497,
+      "n": 43880,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.4723792160437557,
+          "brier": 0.23994451925064456
+        },
+        "2": {
+          "actual_rate": 0.1480401093892434,
+          "brier": 0.1214689505557819
+        }
+      }
+    }
+  },
+  "stage_results_eval": {
+    "M0_baseline_only": {
+      "mae": 0.5441303213049797,
+      "n": 87989,
+      "nll_mean": 0.8585430005414983,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21000004994463722,
+          "brier_skill_score": 0.08092531060022612,
+          "log_loss": 0.6094175719471346,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.0774805976580651,
+          "brier_skill_score": 0.06479897282104696,
+          "log_loss": 0.2766527111697409,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.018600694705448804,
+          "brier_skill_score": 0.028376663946876435,
+          "log_loss": 0.08532455701970641,
+          "n": 87989
+        }
+      }
+    },
+    "M1_plus_recent_form": {
+      "mae": 0.5444208123752019,
+      "n": 87989,
+      "nll_mean": 0.858657537698154,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21002858306537134,
+          "brier_skill_score": 0.08080043411051474,
+          "log_loss": 0.6094808803914475,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07751094317435481,
+          "brier_skill_score": 0.06443269843930244,
+          "log_loss": 0.276761033976443,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.01860488664836702,
+          "brier_skill_score": 0.028157694191862426,
+          "log_loss": 0.08537161721453274,
+          "n": 87989
+        }
+      }
+    },
+    "M2_plus_toi_role": {
+      "mae": 0.5444201912408294,
+      "n": 87989,
+      "nll_mean": 0.8586517403113705,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.21002648375098368,
+          "brier_skill_score": 0.0808096218546096,
+          "log_loss": 0.6094755661634262,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07751072200091076,
+          "brier_skill_score": 0.06443536803192695,
+          "log_loss": 0.2767589169734611,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.018604900918929457,
+          "brier_skill_score": 0.028156948756721367,
+          "log_loss": 0.08537100996089941,
+          "n": 87989
+        }
+      }
+    },
+    "M3_plus_pp_role": {
+      "mae": 0.5437540546513676,
+      "n": 87989,
+      "nll_mean": 0.8580182085980123,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.20980480851392494,
+          "brier_skill_score": 0.08177979352695486,
+          "log_loss": 0.6089615597858309,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.0774216748482771,
+          "brier_skill_score": 0.06551017890235777,
+          "log_loss": 0.27638260488548033,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.01859551426644199,
+          "brier_skill_score": 0.028647268647922663,
+          "log_loss": 0.0852731132529269,
+          "n": 87989
+        }
+      }
+    },
+    "M4_plus_opponent_context": {
+      "mae": 0.5433207221359199,
+      "n": 87989,
+      "nll_mean": 0.857656356938052,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.20965884483404912,
+          "brier_skill_score": 0.0824186101547646,
+          "log_loss": 0.6086372971853108,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.0773951821150236,
+          "brier_skill_score": 0.06582994968498379,
+          "log_loss": 0.27620872734617585,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.01859474406045739,
+          "brier_skill_score": 0.028687501022038653,
+          "log_loss": 0.08525703120667387,
+          "n": 87989
+        }
+      }
+    },
+    "M5_plus_team_context": {
+      "mae": 0.5432877055982342,
+      "n": 87989,
+      "nll_mean": 0.8574943424601643,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.20960569256132952,
+          "brier_skill_score": 0.08265123347344261,
+          "log_loss": 0.6085193222941311,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07737773409820477,
+          "brier_skill_score": 0.06604054954797423,
+          "log_loss": 0.2761121756870492,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.018593089488571017,
+          "brier_skill_score": 0.02877392901203757,
+          "log_loss": 0.08521935656531462,
+          "n": 87989
+        }
+      }
+    },
+    "M6_plus_h2h": {
+      "mae": 0.5432207714139593,
+      "n": 87989,
+      "nll_mean": 0.8573218225608353,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.35333962199820435,
+          "brier": 0.2095538552594279,
+          "brier_skill_score": 0.08287810176303156,
+          "log_loss": 0.608402941627774,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.09115912216299765,
+          "brier": 0.07735460988395738,
+          "brier_skill_score": 0.06631966186216032,
+          "log_loss": 0.27600901799351507,
+          "n": 87989
+        },
+        "3": {
+          "actual_rate": 0.019525167918717112,
+          "brier": 0.018588548548234763,
+          "brier_skill_score": 0.029011128948287057,
+          "log_loss": 0.08516007153370407,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "stage_value_tests_tuning_validate": {
+    "M0_baseline_only_to_M1_plus_recent_form": {
+      "ci_half_width": 9.9666799807413e-05,
+      "ci_high": 0.00015374785023580806,
+      "ci_low": -4.558574937901794e-05,
+      "frac_improved": 0.139,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 5.5155059448364074e-05
+    },
+    "M1_plus_recent_form_to_M2_plus_toi_role": {
+      "ci_half_width": 2.781079777594564e-06,
+      "ci_high": 4.498335227587358e-06,
+      "ci_low": -1.06382432760177e-06,
+      "frac_improved": 0.122,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 1.636263316368014e-06
+    },
+    "M2_plus_toi_role_to_M3_plus_pp_role": {
+      "ci_half_width": 9.833082711456498e-05,
+      "ci_high": -0.0001483414921959192,
+      "ci_low": -0.00034500314642504915,
+      "frac_improved": 1.0,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -0.00024268451602843522
+    },
+    "M3_plus_pp_role_to_M4_plus_opponent_context": {
+      "ci_half_width": 0.0001531134796524669,
+      "ci_high": -2.7336616061940378e-05,
+      "ci_low": -0.0003335635753668742,
+      "frac_improved": 0.99,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -0.00017744309692985238
+    },
+    "M4_plus_opponent_context_to_M5_plus_team_context": {
+      "ci_half_width": 4.756280480691655e-05,
+      "ci_high": -1.8786988987135045e-05,
+      "ci_low": -0.00011391259860096814,
+      "frac_improved": 0.996,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -6.647586254368565e-05
+    },
+    "M5_plus_team_context_to_M6_plus_h2h": {
+      "ci_half_width": 2.211433362886428e-05,
+      "ci_high": -7.1099127237628235e-06,
+      "ci_low": -5.1338579981491383e-05,
+      "frac_improved": 0.996,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -2.7856440903722968e-05
+    }
+  },
+  "stage_weights": {
+    "M0_baseline_only": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.1998504887360347,
+      "log_baseline_rate": 0.7014628482470947,
+      "opponent_log_factor": 0.0,
+      "pp_role_rate": 0.0,
+      "recent_form_log_ratio": 0.0,
+      "team_context_log_factor": 0.0,
+      "toi_log_ratio": 0.0
+    },
+    "M1_plus_recent_form": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.20469670233280549,
+      "log_baseline_rate": 0.6812151909248714,
+      "opponent_log_factor": 0.0,
+      "pp_role_rate": 0.0,
+      "recent_form_log_ratio": 0.006884295913060236,
+      "team_context_log_factor": 0.0,
+      "toi_log_ratio": 0.0
+    },
+    "M2_plus_toi_role": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.20471235286838957,
+      "log_baseline_rate": 0.6811856430917236,
+      "opponent_log_factor": 0.0,
+      "pp_role_rate": 0.0,
+      "recent_form_log_ratio": 0.0068731868176305,
+      "team_context_log_factor": 0.0,
+      "toi_log_ratio": 0.013399951201496823
+    },
+    "M3_plus_pp_role": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.2322214256725162,
+      "log_baseline_rate": 0.6667119083934789,
+      "opponent_log_factor": 0.0,
+      "pp_role_rate": 0.1384347686597273,
+      "recent_form_log_ratio": 0.006505290908490582,
+      "team_context_log_factor": 0.0,
+      "toi_log_ratio": 0.013110552613419486
+    },
+    "M4_plus_opponent_context": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.2314062657913923,
+      "log_baseline_rate": 0.6663716095667834,
+      "opponent_log_factor": 0.12591834451627087,
+      "pp_role_rate": 0.1385443934441191,
+      "recent_form_log_ratio": 0.0064352408043176065,
+      "team_context_log_factor": 0.0,
+      "toi_log_ratio": 0.013038098791487113
+    },
+    "M5_plus_team_context": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.23040499871883216,
+      "log_baseline_rate": 0.6677834089689983,
+      "opponent_log_factor": 0.1261346116373019,
+      "pp_role_rate": 0.13913980280112181,
+      "recent_form_log_ratio": 0.006466454208535886,
+      "team_context_log_factor": -0.043584525538071246,
+      "toi_log_ratio": 0.013013248476072182
+    },
+    "M6_plus_h2h": {
+      "h2h_shrunk_delta": 0.03667811974970841,
+      "intercept": -0.23005535772079633,
+      "log_baseline_rate": 0.6682856213879123,
+      "opponent_log_factor": 0.12588831706400327,
+      "pp_role_rate": 0.1393266260269363,
+      "recent_form_log_ratio": 0.006466278628546088,
+      "team_context_log_factor": -0.04342963379141663,
+      "toi_log_ratio": 0.013032886036823345
+    }
+  },
+  "test_suite_returncode": 0,
+  "test_suite_stderr_tail": "/Users/johnburnett/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020\n  warnings.warn(\n.......................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 791 tests in 9.539s\n\nOK",
+  "three_plus_support_checks": {
+    "bootstrap_ci_half_width": 0.00011894329190981039,
+    "events_per_confidence_bucket": {
+      "HIGH": 1480,
+      "LOW": 1,
+      "MEDIUM": 237
+    },
+    "events_per_season": {
+      "20242025": 813,
+      "20252026": 905
+    },
+    "min_required": 500,
+    "passes_bootstrap_width": true,
+    "passes_per_bucket": false,
+    "passes_per_season": true,
+    "passes_tail_stability": true,
+    "passes_total": true,
+    "tail_variance_to_mean_ratio": 0.06713813520911656,
+    "three_plus_status": "INSUFFICIENT_DATA",
+    "total_3plus_events": 1718
+  },
+  "three_plus_support_standard": {
+    "max_bootstrap_ci_half_width": 0.01,
+    "max_tail_variance_to_mean_ratio": 3.0,
+    "min_events_per_confidence_bucket": 50,
+    "min_events_per_eval_season": 150,
+    "min_total_events_eval_common_set": 500
+  },
+  "tuning_fit_n": 30237,
+  "tuning_validate_n": 13855
+}

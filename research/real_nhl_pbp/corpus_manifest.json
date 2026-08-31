@@ -1,0 +1,54 @@
+{
+  "corpus_name": "nhl_play_by_play_research_corpus",
+  "contract_version": "pbp_contract_v1",
+  "seasons": [
+    "20222023",
+    "20232024",
+    "20242025",
+    "20252026"
+  ],
+  "per_season": {
+    "20222023": {
+      "expected_games": 1312,
+      "retrieved_games": 1312,
+      "normalized_games": 1312,
+      "missing_games": [],
+      "event_count": 408732,
+      "raw_bytes": 181903806,
+      "acceptance_status": "COMPLETE"
+    },
+    "20232024": {
+      "expected_games": 1312,
+      "retrieved_games": 1312,
+      "normalized_games": 1312,
+      "missing_games": [],
+      "event_count": 413676,
+      "raw_bytes": 187043535,
+      "acceptance_status": "COMPLETE"
+    },
+    "20242025": {
+      "expected_games": 1312,
+      "retrieved_games": 1312,
+      "normalized_games": 1312,
+      "missing_games": [],
+      "event_count": 420073,
+      "raw_bytes": 189857161,
+      "acceptance_status": "COMPLETE"
+    },
+    "20252026": {
+      "expected_games": 1312,
+      "retrieved_games": 1312,
+      "normalized_games": 1312,
+      "missing_games": [],
+      "event_count": 413859,
+      "raw_bytes": 187656890,
+      "acceptance_status": "COMPLETE"
+    }
+  },
+  "total_games_expected": 5248,
+  "total_games_retrieved": 5248,
+  "total_events": 1656340,
+  "total_raw_bytes": 746461392,
+  "anomaly_count": 0,
+  "acceptance_status": "COMPLETE"
+}

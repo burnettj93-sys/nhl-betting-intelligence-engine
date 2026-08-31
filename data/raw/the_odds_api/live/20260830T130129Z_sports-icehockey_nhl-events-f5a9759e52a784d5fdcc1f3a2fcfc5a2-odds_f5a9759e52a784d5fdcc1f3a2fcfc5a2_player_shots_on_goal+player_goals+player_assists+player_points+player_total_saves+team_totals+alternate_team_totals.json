@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/f5a9759e52a784d5fdcc1f3a2fcfc5a2/odds",
+    "event_id": "f5a9759e52a784d5fdcc1f3a2fcfc5a2",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "025a023af95d23df2be2345d7c0abcc747836190b9c94a78024230973f1a6a2d",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Boston Bruins",
+    "bookmakers": [],
+    "commence_time": "2026-10-03T00:10:00Z",
+    "home_team": "Winnipeg Jets",
+    "id": "f5a9759e52a784d5fdcc1f3a2fcfc5a2",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -1,0 +1,302 @@
+{
+  "best_challenger_on_dev": "E_pp_xg_per_shot",
+  "best_final_candidate": "E_pp_xg_per_shot",
+  "calibration_by_region": {
+    "0-10%": {
+      "actual_rate": 0.06258703388519264,
+      "challenger_mean_pred": 0.06250582590144797,
+      "incumbent_mean_pred": 0.06270354597936625,
+      "n": 12926
+    },
+    "10-20%": {
+      "actual_rate": 0.13692369989009082,
+      "challenger_mean_pred": 0.14826550969421592,
+      "incumbent_mean_pred": 0.1487247740552681,
+      "n": 17287
+    },
+    "20-30%": {
+      "actual_rate": 0.23477715003138733,
+      "challenger_mean_pred": 0.24011952597991848,
+      "incumbent_mean_pred": 0.2408615614135523,
+      "n": 9558
+    },
+    "30-40%": {
+      "actual_rate": 0.345962389380531,
+      "challenger_mean_pred": 0.33685659627737974,
+      "incumbent_mean_pred": 0.33781442530312933,
+      "n": 3616
+    },
+    "40-50%": {
+      "actual_rate": 0.39869281045751637,
+      "challenger_mean_pred": 0.4270601466657501,
+      "incumbent_mean_pred": 0.42813865612354723,
+      "n": 459
+    }
+  },
+  "challenger_cleared_95pct_bar_on_dev": false,
+  "challenger_final_metrics": {
+    "B_xg_per_shot": {
+      "brier": 0.12350716208362719,
+      "brier_skill_score": 0.06351637197654281,
+      "date_bootstrap_vs_incumbent": {
+        "ci_high": -7.586277509935568e-07,
+        "ci_low": -5.9496676157455575e-06,
+        "frac_improved": 0.998,
+        "n_dates_resampled": 167,
+        "n_resamples": 500,
+        "point_delta": -3.434979375493974e-06
+      },
+      "game_bootstrap_vs_incumbent": {
+        "ci_high": -7.897895740183181e-07,
+        "ci_low": -6.158282872328891e-06,
+        "frac_improved": 0.994,
+        "n_games_resampled": 1312,
+        "n_resamples": 1000,
+        "point_delta": -3.434979375493974e-06
+      },
+      "log_loss": 0.4022502775112005,
+      "n": 43846
+    },
+    "C_high_danger_rate": {
+      "brier": 0.12350913544988046,
+      "brier_skill_score": 0.06350140907757318,
+      "date_bootstrap_vs_incumbent": {
+        "ci_high": -5.348953006217849e-07,
+        "ci_low": -2.3781918167542493e-06,
+        "frac_improved": 1.0,
+        "n_dates_resampled": 167,
+        "n_resamples": 500,
+        "point_delta": -1.4616131225192452e-06
+      },
+      "game_bootstrap_vs_incumbent": {
+        "ci_high": -4.877644097789346e-07,
+        "ci_low": -2.393015299043122e-06,
+        "frac_improved": 0.998,
+        "n_games_resampled": 1312,
+        "n_resamples": 1000,
+        "point_delta": -1.4616131225192452e-06
+      },
+      "log_loss": 0.4022578593503022,
+      "n": 43846
+    },
+    "D_combined_xg_hd": {
+      "brier": 0.12350584783080164,
+      "brier_skill_score": 0.06352633719826317,
+      "date_bootstrap_vs_incumbent": {
+        "ci_high": -1.2319155733298004e-06,
+        "ci_low": -8.09971430744405e-06,
+        "frac_improved": 0.998,
+        "n_dates_resampled": 167,
+        "n_resamples": 500,
+        "point_delta": -4.74923220093737e-06
+      },
+      "game_bootstrap_vs_incumbent": {
+        "ci_high": -1.1715461945560612e-06,
+        "ci_low": -8.384706203970471e-06,
+        "frac_improved": 0.997,
+        "n_games_resampled": 1312,
+        "n_resamples": 1000,
+        "point_delta": -4.74923220093737e-06
+      },
+      "log_loss": 0.40224566323164956,
+      "n": 43846
+    },
+    "D_finishing_above_xg": {
+      "brier": 0.12351037361520362,
+      "brier_skill_score": 0.06349202078353133,
+      "date_bootstrap_vs_incumbent": {
+        "ci_high": 1.1356650436722404e-07,
+        "ci_low": -5.482430520675763e-07,
+        "frac_improved": 0.908,
+        "n_dates_resampled": 167,
+        "n_resamples": 500,
+        "point_delta": -2.2344779898597622e-07
+      },
+      "game_bootstrap_vs_incumbent": {
+        "ci_high": 1.5318421324461706e-07,
+        "ci_low": -5.755312773164656e-07,
+        "frac_improved": 0.886,
+        "n_games_resampled": 1312,
+        "n_resamples": 1000,
+        "point_delta": -2.2344779898597622e-07
+      },
+      "log_loss": 0.40226218317217965,
+      "n": 43846
+    },
+    "E_pp_xg_per_shot": {
+      "brier": 0.12350500507151627,
+      "brier_skill_score": 0.06353272735620863,
+      "date_bootstrap_vs_incumbent": {
+        "ci_high": -1.8189544639529709e-06,
+        "ci_low": -9.401714940820982e-06,
+        "frac_improved": 1.0,
+        "n_dates_resampled": 167,
+        "n_resamples": 500,
+        "point_delta": -5.591991485059955e-06
+      },
+      "game_bootstrap_vs_incumbent": {
+        "ci_high": -1.6636219900001414e-06,
+        "ci_low": -9.55028167937133e-06,
+        "frac_improved": 0.998,
+        "n_games_resampled": 1312,
+        "n_resamples": 1000,
+        "point_delta": -5.591991485059955e-06
+      },
+      "log_loss": 0.4022417241546242,
+      "n": 43846
+    }
+  },
+  "confidence_comparison": {
+    "HIGH": {
+      "challenger_skill": 0.06800344573201522,
+      "incumbent_skill": 0.0680071279125467,
+      "n": 30866
+    },
+    "LOW": {
+      "challenger_skill": 0.0012453921320124683,
+      "incumbent_skill": 0.0007829146937887721,
+      "n": 473
+    },
+    "MEDIUM": {
+      "challenger_skill": 0.04400878278941889,
+      "incumbent_skill": 0.043840825968495034,
+      "n": 12507
+    }
+  },
+  "dev_fit_n": 30357,
+  "dev_select_diagnostic_recheck": {
+    "B_xg_per_shot": {
+      "brier": 0.12288379813699077,
+      "frac_improved_vs_incumbent": 0.815
+    },
+    "C_high_danger_rate": {
+      "brier": 0.12288501415720396,
+      "frac_improved_vs_incumbent": 0.853
+    },
+    "D_combined_xg_hd": {
+      "brier": 0.12288297195110663,
+      "frac_improved_vs_incumbent": 0.82
+    },
+    "D_finishing_above_xg": {
+      "brier": 0.12288559387258907,
+      "frac_improved_vs_incumbent": 0.876
+    },
+    "E_pp_xg_per_shot": {
+      "brier": 0.12288282169562842,
+      "frac_improved_vs_incumbent": 0.811
+    }
+  },
+  "dev_select_n": 13786,
+  "dev_value_tests": {
+    "B_xg_per_shot": {
+      "ci_high": 2.8825497843387726e-06,
+      "ci_low": -7.483516835396498e-06,
+      "frac_improved": 0.815,
+      "n_games_resampled": 408,
+      "n_resamples": 1000,
+      "point_delta": -2.168781284533905e-06
+    },
+    "C_high_danger_rate": {
+      "ci_high": 9.000951307625016e-07,
+      "ci_low": -2.8532340046044657e-06,
+      "frac_improved": 0.853,
+      "n_games_resampled": 408,
+      "n_resamples": 1000,
+      "point_delta": -9.527610722176449e-07
+    },
+    "D_combined_xg_hd": {
+      "ci_high": 3.847837686823952e-06,
+      "ci_low": -1.0120662705281891e-05,
+      "frac_improved": 0.82,
+      "n_games_resampled": 408,
+      "n_resamples": 1000,
+      "point_delta": -2.9949671692397484e-06
+    },
+    "D_finishing_above_xg": {
+      "ci_high": 2.2932904671091325e-07,
+      "ci_low": -9.671978524750102e-07,
+      "frac_improved": 0.876,
+      "n_games_resampled": 408,
+      "n_resamples": 1000,
+      "point_delta": -3.730456871603449e-07
+    },
+    "E_pp_xg_per_shot": {
+      "ci_high": 4.312507870779525e-06,
+      "ci_low": -1.11616724219471e-05,
+      "frac_improved": 0.811,
+      "n_games_resampled": 408,
+      "n_resamples": 1000,
+      "point_delta": -3.1452226479378176e-06
+    }
+  },
+  "evaluation_status": "REUSED HISTORICAL DATA UNDER NEW GOALS DEVELOPMENT CYCLE",
+  "final_best_beats_incumbent_95pct_bar": true,
+  "final_fold_n": 43846,
+  "freeze_manifest_path": "research/goals_shot_quality_manifest.json",
+  "incumbent_final_metrics": {
+    "brier": 0.12351059706300238,
+    "brier_skill_score": 0.06349032650765507,
+    "log_loss": 0.4022629300655001,
+    "n": 43846
+  },
+  "methodology_note": "DEV=2024-25 (internal split), FINAL FOLD=2025-26 -- single final fold, not multiple rolling folds, because 2022-23/2023-24 already fed the incumbent's own fit and cannot be reused without backward temporal leakage.",
+  "n_2plus_events_final_fold": 790,
+  "segments": {
+    "position": {
+      "DEFENSE": {
+        "challenger_brier": 0.06843822478593362,
+        "delta": -2.6902407406353968e-06,
+        "incumbent_brier": 0.06844091502667425,
+        "n": 14638
+      },
+      "FORWARD": {
+        "challenger_brier": 0.15110249650606702,
+        "delta": -7.046244684311143e-06,
+        "incumbent_brier": 0.15110954275075134,
+        "n": 29208
+      }
+    },
+    "sample_size": {
+      "LOW": {
+        "challenger_brier": 0.10716129209829094,
+        "delta": -3.3769750199030835e-05,
+        "incumbent_brier": 0.10719506184848997,
+        "n": 1375
+      },
+      "MATURE": {
+        "challenger_brier": 0.12701064731239167,
+        "delta": -2.9109672670390996e-06,
+        "incumbent_brier": 0.1270135582796587,
+        "n": 39128
+      },
+      "MEDIUM": {
+        "challenger_brier": 0.08919565291393695,
+        "delta": -2.538220907905009e-05,
+        "incumbent_brier": 0.089221035123016,
+        "n": 3343
+      }
+    },
+    "shot_volume": {
+      "HIGH": {
+        "challenger_brier": 0.17608035585075982,
+        "delta": -1.6570338974286614e-06,
+        "incumbent_brier": 0.17608201288465725,
+        "n": 14599
+      },
+      "LOW": {
+        "challenger_brier": 0.0860986108662297,
+        "delta": -1.3077404455788533e-05,
+        "incumbent_brier": 0.0861116882706855,
+        "n": 14632
+      },
+      "MEDIUM": {
+        "challenger_brier": 0.10843711687347155,
+        "delta": -2.028521302391284e-06,
+        "incumbent_brier": 0.10843914539477394,
+        "n": 14615
+      }
+    }
+  },
+  "test_suite_returncode": 0,
+  "test_suite_stderr_tail": "/Users/johnburnett/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020\n  warnings.warn(\n..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 938 tests in 17.282s\n\nOK"
+}

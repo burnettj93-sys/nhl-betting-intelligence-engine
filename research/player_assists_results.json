@@ -1,0 +1,331 @@
+{
+  "alpha": 0.11973322000006173,
+  "baseline_results": {
+    "A_season_average": {
+      "mae": 0.4117477209058222,
+      "n": 87989,
+      "nll_mean": 0.6679231725193564,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.1772758728581282,
+          "brier_skill_score": 0.04053013803782535,
+          "log_loss": 0.5386385682872001,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.040013861561083705,
+          "brier_skill_score": 0.013041524544696537,
+          "log_loss": 0.166011290618319,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "baseline_vs_full_threshold1": {
+    "A_season_average": {
+      "ci_high": -0.0014443687193916033,
+      "ci_low": -0.0039012403948618934,
+      "frac_resamples_improved": 1.0,
+      "n_resamples": 1000,
+      "point_delta": -0.0026821448523909053
+    }
+  },
+  "confidence_breakdown": {
+    "HIGH": {
+      "n": 60444,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2700847065051949,
+          "brier": 0.188222140634441,
+          "brier_skill_score": 0.045231126721411274
+        },
+        "2": {
+          "actual_rate": 0.04941764277678512,
+          "brier": 0.04557169789596317,
+          "brier_skill_score": 0.02988452037717637
+        }
+      }
+    },
+    "LOW": {
+      "n": 971,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.13388259526261587,
+          "brier": 0.12090314083894836,
+          "brier_skill_score": -0.04264555210587151
+        },
+        "2": {
+          "actual_rate": 0.01132852729145211,
+          "brier": 0.011747286751894993,
+          "brier_skill_score": -0.04884693072380952
+        }
+      }
+    },
+    "MEDIUM": {
+      "n": 26574,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.1906374651915406,
+          "brier": 0.15031252637501613,
+          "brier_skill_score": 0.025809652124297755
+        },
+        "2": {
+          "actual_rate": 0.027357567547226614,
+          "brier": 0.026018387227750614,
+          "brier_skill_score": 0.02220079326803681
+        }
+      }
+    }
+  },
+  "corpus_size": 188863,
+  "eval_examples_n": 87989,
+  "excluded": {
+    "insufficient_history": 1101,
+    "not_projected_active": 8475
+  },
+  "headline_negbin": {
+    "mae": 0.4216652321115824,
+    "n": 87989,
+    "nll_mean": 0.6616771716751798,
+    "thresholds": {
+      "1": {
+        "actual_rate": 0.2445873916057689,
+        "brier": 0.1760174941048823,
+        "brier_skill_score": 0.047340858917136686,
+        "log_loss": 0.5338959061969665,
+        "n": 87989
+      },
+      "2": {
+        "actual_rate": 0.0423348373092091,
+        "brier": 0.03928902486717221,
+        "brier_skill_score": 0.030919921941680473,
+        "log_loss": 0.16285838638515743,
+        "n": 87989
+      },
+      "3": {
+        "actual_rate": 0.005818909181829547,
+        "brier": 0.005719285100842868,
+        "brier_skill_score": 0.011367988670293316,
+        "log_loss": 0.03224800234047823,
+        "n": 87989
+      }
+    }
+  },
+  "headline_poisson": {
+    "mae": 0.4216652321115824,
+    "n": 87989,
+    "nll_mean": 0.6617552492718209,
+    "thresholds": {
+      "1": {
+        "actual_rate": 0.2445873916057689,
+        "brier": 0.17602997072534576,
+        "brier_skill_score": 0.04727333172846271,
+        "log_loss": 0.5339637287655472,
+        "n": 87989
+      },
+      "2": {
+        "actual_rate": 0.0423348373092091,
+        "brier": 0.03929303600734107,
+        "brier_skill_score": 0.03082098550736867,
+        "log_loss": 0.16282881914070013,
+        "n": 87989
+      },
+      "3": {
+        "actual_rate": 0.005818909181829547,
+        "brier": 0.005722585887868785,
+        "brier_skill_score": 0.010797416709136476,
+        "log_loss": 0.03223178023300764,
+        "n": 87989
+      }
+    }
+  },
+  "overdispersion": {
+    "mean": 0.2961081375306178,
+    "variance": 0.32609117654903963,
+    "variance_to_mean_ratio": 1.1012570585478136
+  },
+  "stage_results": {
+    "M0_baseline_only": {
+      "mae": 0.4219130048836762,
+      "n": 87989,
+      "nll_mean": 0.6620522779510304,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.17613643505703744,
+          "brier_skill_score": 0.04669711503306473,
+          "log_loss": 0.5342717884928749,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.03929408180053529,
+          "brier_skill_score": 0.030795190584900767,
+          "log_loss": 0.1628662644349879,
+          "n": 87989
+        }
+      }
+    },
+    "M1_plus_recent_form": {
+      "mae": 0.42193779270542636,
+      "n": 87989,
+      "nll_mean": 0.6620673000416546,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.17613420216393408,
+          "brier_skill_score": 0.046709200116066274,
+          "log_loss": 0.53422881405565,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.03930630012187009,
+          "brier_skill_score": 0.030493820626422474,
+          "log_loss": 0.16296694285969124,
+          "n": 87989
+        }
+      }
+    },
+    "M2_plus_toi_role": {
+      "mae": 0.42193798340430294,
+      "n": 87989,
+      "nll_mean": 0.662065501291521,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.17613364439123427,
+          "brier_skill_score": 0.046712218948164796,
+          "log_loss": 0.534227152927664,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.0393062869783444,
+          "brier_skill_score": 0.030494144816929802,
+          "log_loss": 0.1629665030092216,
+          "n": 87989
+        }
+      }
+    },
+    "M3_plus_opponent": {
+      "mae": 0.42171366231773755,
+      "n": 87989,
+      "nll_mean": 0.6618712793229,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.17606689010735654,
+          "brier_skill_score": 0.04707351302899443,
+          "log_loss": 0.534056150666166,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.0392998044450233,
+          "brier_skill_score": 0.03065403918738241,
+          "log_loss": 0.16288542459111158,
+          "n": 87989
+        }
+      }
+    },
+    "M4_plus_h2h": {
+      "mae": 0.4216652321115824,
+      "n": 87989,
+      "nll_mean": 0.6617552492718209,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.2445873916057689,
+          "brier": 0.17602997072534576,
+          "brier_skill_score": 0.04727333172846271,
+          "log_loss": 0.5339637287655472,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.0423348373092091,
+          "brier": 0.03929303600734107,
+          "brier_skill_score": 0.03082098550736867,
+          "log_loss": 0.16282881914070013,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "stage_weights": {
+    "M0_baseline_only": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.3955613688247435,
+      "log_baseline_rate": 0.624082360259225,
+      "opponent_log_factor": 0.0,
+      "recent_form_log_ratio": 0.0,
+      "toi_log_ratio": 0.0
+    },
+    "M1_plus_recent_form": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.4081703036262344,
+      "log_baseline_rate": 0.6005385380947544,
+      "opponent_log_factor": 0.0,
+      "recent_form_log_ratio": 0.006355093178525223,
+      "toi_log_ratio": 0.0
+    },
+    "M2_plus_toi_role": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.4081729977476302,
+      "log_baseline_rate": 0.6005398870824832,
+      "opponent_log_factor": 0.0,
+      "recent_form_log_ratio": 0.006350474205313077,
+      "toi_log_ratio": 0.006164760757232955
+    },
+    "M3_plus_opponent": {
+      "h2h_shrunk_delta": 0.0,
+      "intercept": -0.4074809501568404,
+      "log_baseline_rate": 0.6003784313819629,
+      "opponent_log_factor": 0.08508228720511306,
+      "recent_form_log_ratio": 0.006315733453072977,
+      "toi_log_ratio": 0.0061717400043102425
+    },
+    "M4_plus_h2h": {
+      "h2h_shrunk_delta": 0.042066808980326525,
+      "intercept": -0.40700375998745575,
+      "log_baseline_rate": 0.600712828896012,
+      "opponent_log_factor": 0.0849337347101971,
+      "recent_form_log_ratio": 0.006326304344983407,
+      "toi_log_ratio": 0.006177718310647435
+    }
+  },
+  "test_suite_returncode": 0,
+  "test_suite_stderr_tail": "/Users/johnburnett/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020\n  warnings.warn(\n....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 740 tests in 13.450s\n\nOK",
+  "tuning_examples_n": 44092,
+  "value_tests_threshold1": {
+    "M0_baseline_only_to_M1_plus_recent_form": {
+      "ci_high": 7.721177246744482e-05,
+      "ci_low": -0.00013493999092586972,
+      "frac_resamples_improved": 0.7,
+      "n_resamples": 1000,
+      "point_delta": -2.678032387148921e-05
+    },
+    "M1_plus_recent_form_to_M2_plus_toi_role": {
+      "ci_high": 1.8931367196106663e-08,
+      "ci_low": -2.0353792798410986e-06,
+      "frac_resamples_improved": 0.973,
+      "n_resamples": 1000,
+      "point_delta": -9.741510289817956e-07
+    },
+    "M2_plus_toi_role_to_M3_plus_opponent": {
+      "ci_high": -3.810460868203247e-05,
+      "ci_low": -0.00014643915754974923,
+      "frac_resamples_improved": 1.0,
+      "n_resamples": 1000,
+      "point_delta": -9.104828343362015e-05
+    },
+    "M3_plus_opponent_to_M4_plus_h2h": {
+      "ci_high": -2.3998019329896092e-05,
+      "ci_low": -6.008374009011663e-05,
+      "frac_resamples_improved": 1.0,
+      "n_resamples": 1000,
+      "point_delta": -4.1877527820199933e-05
+    }
+  }
+}

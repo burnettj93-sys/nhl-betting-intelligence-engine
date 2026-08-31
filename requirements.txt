@@ -1,1 +1,5 @@
 requests>=2.31
+
+# Dashboard (dashboard/) -- Streamlit brings in Altair (charting) and
+# pandas (dataframes) as its own dependencies automatically.
+streamlit>=1.36

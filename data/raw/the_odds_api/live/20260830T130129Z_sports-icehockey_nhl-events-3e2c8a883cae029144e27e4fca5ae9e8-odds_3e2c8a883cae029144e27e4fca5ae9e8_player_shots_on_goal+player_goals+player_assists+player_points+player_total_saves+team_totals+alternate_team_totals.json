@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3e2c8a883cae029144e27e4fca5ae9e8/odds",
+    "event_id": "3e2c8a883cae029144e27e4fca5ae9e8",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "8b7f2b256ed5e0492a201cfda6a2d76009788f6418a5f53fd2eee2ba1c706d6d",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New Jersey Devils",
+    "bookmakers": [],
+    "commence_time": "2026-10-03T23:40:00Z",
+    "home_team": "New York Islanders",
+    "id": "3e2c8a883cae029144e27e4fca5ae9e8",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

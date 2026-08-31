@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/ac3cb11040dbdb0d2ccfa53e7d6b6cda/odds",
+    "event_id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "7a9c728b347c0068856e99713b9973cca43649b17aeb0f0209c2e620ab472f4d",
+    "retrieved_at_utc": "2026-08-30T13:01:27Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Rangers",
+    "bookmakers": [],
+    "commence_time": "2026-09-30T00:10:00Z",
+    "home_team": "Boston Bruins",
+    "id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

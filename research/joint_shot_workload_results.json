@@ -1,0 +1,3417 @@
+{
+  "config": {
+    "warmup_season": 20222023,
+    "tuning_season": 20232024,
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "min_joint_positive_events": 30
+  },
+  "corpus_size": {
+    "joint_rows": 188863
+  },
+  "examples_by_season_n": {
+    "20232024": 43007,
+    "20242025": 43108,
+    "20252026": 42938
+  },
+  "league_avg_player_share": 0.05556406153106161,
+  "empty_net_dist": {
+    "0": 0.8444971516909849,
+    "1": 0.14063658118210118,
+    "2": 0.014866267126913872
+  },
+  "league_save_pct": 0.9036558297427862,
+  "raw_dependence": {
+    "player_team_raw_corr": 0.24259744432829694,
+    "player_team_residual_corr": 0.24339785735848993
+  },
+  "rho_by_family": {
+    "PLAYER_TEAM": 0.24339785735848993,
+    "TEAM_GOALIE": 0.7963614259236492,
+    "PLAYER_GOALIE": 0.19923742217018978
+  },
+  "pair_results": {
+    "PLAYER2_TEAM25": {
+      "combo": {
+        "name": "PLAYER2_TEAM25",
+        "family": "PLAYER_TEAM",
+        "x_player": 2,
+        "y_team": 25
+      },
+      "field_a": "actual_player_sog",
+      "x_a": 2,
+      "field_b": "actual_team_sog",
+      "x_b": 25,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 15018.0,
+          "A_naive_independence": {
+            "brier": 0.20650291153534756,
+            "log_loss": 0.6014148433010105,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 241,
+                "mean_predicted": 0.03529136148907772,
+                "mean_actual": 0.0912863070539419
+              },
+              {
+                "band": "5%-10%",
+                "n": 1522,
+                "mean_predicted": 0.08066714647377814,
+                "mean_actual": 0.12417871222076216
+              },
+              {
+                "band": "10%-20%",
+                "n": 8542,
+                "mean_predicted": 0.15514064842008318,
+                "mean_actual": 0.19339733083586982
+              },
+              {
+                "band": "20%-30%",
+                "n": 10909,
+                "mean_predicted": 0.24980440821787053,
+                "mean_actual": 0.2691355761298011
+              },
+              {
+                "band": "30%-50%",
+                "n": 15683,
+                "mean_predicted": 0.3887325075989295,
+                "mean_actual": 0.41363259580437417
+              },
+              {
+                "band": "50%-100%",
+                "n": 6211,
+                "mean_predicted": 0.5888035542516625,
+                "mean_actual": 0.6008694252133312
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.2274386134327081,
+            "log_loss": 0.6474046794677681,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 43108,
+                "mean_predicted": 0.39528906584804313,
+                "mean_actual": 0.34838081098635987
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.22359118857902724,
+            "log_loss": 0.6387809291725367,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 742,
+                "mean_predicted": 0.17794533725034967,
+                "mean_actual": 0.19002695417789758
+              },
+              {
+                "band": "20%-30%",
+                "n": 8089,
+                "mean_predicted": 0.2617517364696384,
+                "mean_actual": 0.2738286561997775
+              },
+              {
+                "band": "30%-50%",
+                "n": 34277,
+                "mean_predicted": 0.3843096079478205,
+                "mean_actual": 0.369402223065029
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.20525270166516993,
+            "log_loss": 0.5979894298145502,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 80,
+                "mean_predicted": 0.034208011485734116,
+                "mean_actual": 0.0875
+              },
+              {
+                "band": "5%-10%",
+                "n": 626,
+                "mean_predicted": 0.08222366114688388,
+                "mean_actual": 0.10702875399361023
+              },
+              {
+                "band": "10%-20%",
+                "n": 6748,
+                "mean_predicted": 0.1610583318997584,
+                "mean_actual": 0.17160640189685833
+              },
+              {
+                "band": "20%-30%",
+                "n": 11547,
+                "mean_predicted": 0.25021816263001617,
+                "mean_actual": 0.2506278687104876
+              },
+              {
+                "band": "30%-50%",
+                "n": 16153,
+                "mean_predicted": 0.3885785628072263,
+                "mean_actual": 0.3867393053921872
+              },
+              {
+                "band": "50%-100%",
+                "n": 7954,
+                "mean_predicted": 0.5995675510374349,
+                "mean_actual": 0.5839829016846869
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.20570863582166443,
+            "log_loss": 0.5990305010088233,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 127,
+                "mean_predicted": 0.03458577292412032,
+                "mean_actual": 0.09448818897637795
+              },
+              {
+                "band": "5%-10%",
+                "n": 806,
+                "mean_predicted": 0.08076969971870908,
+                "mean_actual": 0.11786600496277916
+              },
+              {
+                "band": "10%-20%",
+                "n": 6566,
+                "mean_predicted": 0.15792277158767626,
+                "mean_actual": 0.1699664940603107
+              },
+              {
+                "band": "20%-30%",
+                "n": 10564,
+                "mean_predicted": 0.25105516579447873,
+                "mean_actual": 0.24488829988640667
+              },
+              {
+                "band": "30%-50%",
+                "n": 17395,
+                "mean_predicted": 0.39047615073132974,
+                "mean_actual": 0.3864328830123599
+              },
+              {
+                "band": "50%-100%",
+                "n": 7650,
+                "mean_predicted": 0.5906398308218711,
+                "mean_actual": 0.5864052287581699
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0012502098701761,
+              "ci_low": -0.0018789024847928326,
+              "ci_high": -0.0007004994201049441,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0012502098701761,
+              "ci_low": -0.0019659219429733754,
+              "ci_high": -0.0006337670360674896,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.323261555053265,
+            "mean_structural_p": 0.3497255550320604,
+            "lift_ratio": 1.0818655963417452,
+            "lift_diff": 0.026463999978795394
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 14117.0,
+          "A_naive_independence": {
+            "brier": 0.19968962323643633,
+            "log_loss": 0.5854618019284662,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 261,
+                "mean_predicted": 0.03496088923076573,
+                "mean_actual": 0.07279693486590039
+              },
+              {
+                "band": "5%-10%",
+                "n": 1983,
+                "mean_predicted": 0.0804930796407191,
+                "mean_actual": 0.11497730711043873
+              },
+              {
+                "band": "10%-20%",
+                "n": 9639,
+                "mean_predicted": 0.1541408774841991,
+                "mean_actual": 0.17781927585849155
+              },
+              {
+                "band": "20%-30%",
+                "n": 11326,
+                "mean_predicted": 0.24913902122409962,
+                "mean_actual": 0.2630231326152216
+              },
+              {
+                "band": "30%-50%",
+                "n": 14874,
+                "mean_predicted": 0.38816256864334736,
+                "mean_actual": 0.4218098695710636
+              },
+              {
+                "band": "50%-100%",
+                "n": 4855,
+                "mean_predicted": 0.5768049423895257,
+                "mean_actual": 0.5979402677651905
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.2232901529468667,
+            "log_loss": 0.6389769567897845,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 42938,
+                "mean_predicted": 0.39450359085849485,
+                "mean_actual": 0.3287763752387163
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.21569150937831044,
+            "log_loss": 0.6216040028527874,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 1463,
+                "mean_predicted": 0.17187561850689465,
+                "mean_actual": 0.1319207108680793
+              },
+              {
+                "band": "20%-30%",
+                "n": 10458,
+                "mean_predicted": 0.2611555145217131,
+                "mean_actual": 0.2583668005354752
+              },
+              {
+                "band": "30%-50%",
+                "n": 31017,
+                "mean_predicted": 0.37493120215482406,
+                "mean_actual": 0.3618015926749847
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.19870872510979423,
+            "log_loss": 0.5827443489998814,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 101,
+                "mean_predicted": 0.0357515556902682,
+                "mean_actual": 0.0594059405940594
+              },
+              {
+                "band": "5%-10%",
+                "n": 767,
+                "mean_predicted": 0.08324090296629143,
+                "mean_actual": 0.10299869621903521
+              },
+              {
+                "band": "10%-20%",
+                "n": 7863,
+                "mean_predicted": 0.15965725473981385,
+                "mean_actual": 0.1521047946076561
+              },
+              {
+                "band": "20%-30%",
+                "n": 11908,
+                "mean_predicted": 0.24837623615418972,
+                "mean_actual": 0.2445414847161572
+              },
+              {
+                "band": "30%-50%",
+                "n": 15624,
+                "mean_predicted": 0.3886662127903247,
+                "mean_actual": 0.3885048643113159
+              },
+              {
+                "band": "50%-100%",
+                "n": 6675,
+                "mean_predicted": 0.5913549954292321,
+                "mean_actual": 0.577378277153558
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.1990733357502261,
+            "log_loss": 0.5837034599655972,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 131,
+                "mean_predicted": 0.033469447696503625,
+                "mean_actual": 0.06870229007633588
+              },
+              {
+                "band": "5%-10%",
+                "n": 956,
+                "mean_predicted": 0.08145418755414072,
+                "mean_actual": 0.10669456066945607
+              },
+              {
+                "band": "10%-20%",
+                "n": 7619,
+                "mean_predicted": 0.1571085876250913,
+                "mean_actual": 0.15671347945924663
+              },
+              {
+                "band": "20%-30%",
+                "n": 11134,
+                "mean_predicted": 0.2508555322153811,
+                "mean_actual": 0.2360337704329082
+              },
+              {
+                "band": "30%-50%",
+                "n": 16859,
+                "mean_predicted": 0.38950784882943895,
+                "mean_actual": 0.3894655673527493
+              },
+              {
+                "band": "50%-100%",
+                "n": 6239,
+                "mean_predicted": 0.5793631365002985,
+                "mean_actual": 0.5799006251001763
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0009808981266401229,
+              "ci_low": -0.0016503210240151056,
+              "ci_high": -0.00032883468297312257,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.0009808981266401229,
+              "ci_low": -0.0016940897759880058,
+              "ci_high": -0.00020896642758858053,
+              "frac_improved": 0.992,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.30393062282298705,
+            "mean_structural_p": 0.33304581948319123,
+            "lift_ratio": 1.0957955351447466,
+            "lift_diff": 0.02911519666020418
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "PLAYER3_TEAM30": {
+      "combo": {
+        "name": "PLAYER3_TEAM30",
+        "family": "PLAYER_TEAM",
+        "x_player": 3,
+        "y_team": 30
+      },
+      "field_a": "actual_player_sog",
+      "x_a": 3,
+      "field_b": "actual_team_sog",
+      "x_b": 30,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 5346.0,
+          "A_naive_independence": {
+            "brier": 0.10248234447647894,
+            "log_loss": 0.3511833821917844,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 16716,
+                "mean_predicted": 0.02692745007152201,
+                "mean_actual": 0.051387891840153146
+              },
+              {
+                "band": "5%-10%",
+                "n": 11844,
+                "mean_predicted": 0.07236052383385753,
+                "mean_actual": 0.10351232691658224
+              },
+              {
+                "band": "10%-20%",
+                "n": 9985,
+                "mean_predicted": 0.1407341329900102,
+                "mean_actual": 0.18597896845267903
+              },
+              {
+                "band": "20%-30%",
+                "n": 3382,
+                "mean_predicted": 0.24052651786622242,
+                "mean_actual": 0.281785925487877
+              },
+              {
+                "band": "30%-50%",
+                "n": 1127,
+                "mean_predicted": 0.3568340170724774,
+                "mean_actual": 0.37533274179236914
+              },
+              {
+                "band": "50%-100%",
+                "n": 54,
+                "mean_predicted": 0.5603614177812876,
+                "mean_actual": 0.5185185185185185
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.10979697513171947,
+            "log_loss": 0.3795505680604936,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 43108,
+                "mean_predicted": 0.16536933137952797,
+                "mean_actual": 0.12401410411060591
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10728187364435758,
+            "log_loss": 0.3691029528714498,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 2926,
+                "mean_predicted": 0.03952311529108916,
+                "mean_actual": 0.06254272043745727
+              },
+              {
+                "band": "5%-10%",
+                "n": 13652,
+                "mean_predicted": 0.07744268341412097,
+                "mean_actual": 0.09690887782009962
+              },
+              {
+                "band": "10%-20%",
+                "n": 23241,
+                "mean_predicted": 0.14301626922568278,
+                "mean_actual": 0.1358805559141173
+              },
+              {
+                "band": "20%-30%",
+                "n": 3277,
+                "mean_predicted": 0.22521402225525042,
+                "mean_actual": 0.20689655172413793
+              },
+              {
+                "band": "30%-50%",
+                "n": 12,
+                "mean_predicted": 0.3014244346453675,
+                "mean_actual": 0.3333333333333333
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.1013071055873354,
+            "log_loss": 0.343787164215288,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 11214,
+                "mean_predicted": 0.03190499223016063,
+                "mean_actual": 0.04271446406277867
+              },
+              {
+                "band": "5%-10%",
+                "n": 12907,
+                "mean_predicted": 0.07274157240151373,
+                "mean_actual": 0.08042147671805996
+              },
+              {
+                "band": "10%-20%",
+                "n": 11901,
+                "mean_predicted": 0.14103269537217653,
+                "mean_actual": 0.1547769095034031
+              },
+              {
+                "band": "20%-30%",
+                "n": 4712,
+                "mean_predicted": 0.24285689232768298,
+                "mean_actual": 0.2442699490662139
+              },
+              {
+                "band": "30%-50%",
+                "n": 2213,
+                "mean_predicted": 0.3649317021690711,
+                "mean_actual": 0.3465883416177135
+              },
+              {
+                "band": "50%-100%",
+                "n": 161,
+                "mean_predicted": 0.5595470349564212,
+                "mean_actual": 0.42857142857142855
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.10138139925253085,
+            "log_loss": 0.34389622876655745,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 11055,
+                "mean_predicted": 0.030569418855723066,
+                "mean_actual": 0.040434192672998644
+              },
+              {
+                "band": "5%-10%",
+                "n": 12526,
+                "mean_predicted": 0.0734451053970387,
+                "mean_actual": 0.08159029219224014
+              },
+              {
+                "band": "10%-20%",
+                "n": 12759,
+                "mean_predicted": 0.14194549036657508,
+                "mean_actual": 0.15620346422133397
+              },
+              {
+                "band": "20%-30%",
+                "n": 4816,
+                "mean_predicted": 0.24211585430267926,
+                "mean_actual": 0.24854651162790697
+              },
+              {
+                "band": "30%-50%",
+                "n": 1866,
+                "mean_predicted": 0.35791997685682614,
+                "mean_actual": 0.3445873526259378
+              },
+              {
+                "band": "50%-100%",
+                "n": 86,
+                "mean_predicted": 0.5576939316500653,
+                "mean_actual": 0.5116279069767442
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0011752388891433374,
+              "ci_low": -0.0016092370774496434,
+              "ci_high": -0.00074662603712633,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0011752388891433374,
+              "ci_low": -0.0016399834019784065,
+              "ci_high": -0.0007371087418398675,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.09182192991587311,
+            "mean_structural_p": 0.1163846796802406,
+            "lift_ratio": 1.26750417669147,
+            "lift_diff": 0.024562749764367495
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 5064.0,
+          "A_naive_independence": {
+            "brier": 0.09824202771137389,
+            "log_loss": 0.34003663358804637,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 18995,
+                "mean_predicted": 0.02598113787668562,
+                "mean_actual": 0.049065543564095815
+              },
+              {
+                "band": "5%-10%",
+                "n": 11544,
+                "mean_predicted": 0.07182729980822777,
+                "mean_actual": 0.11113998613998614
+              },
+              {
+                "band": "10%-20%",
+                "n": 9241,
+                "mean_predicted": 0.14000710817127734,
+                "mean_actual": 0.19640731522562493
+              },
+              {
+                "band": "20%-30%",
+                "n": 2524,
+                "mean_predicted": 0.23782618257708807,
+                "mean_actual": 0.2999207606973059
+              },
+              {
+                "band": "30%-50%",
+                "n": 608,
+                "mean_predicted": 0.3480735354288889,
+                "mean_actual": 0.42269736842105265
+              },
+              {
+                "band": "50%-100%",
+                "n": 26,
+                "mean_predicted": 0.560893196366595,
+                "mean_actual": 0.7692307692307693
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.10574259905540004,
+            "log_loss": 0.369752412281731,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 42938,
+                "mean_predicted": 0.16489648106103222,
+                "mean_actual": 0.11793749126647725
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10221377519147488,
+            "log_loss": 0.354419332143907,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4386,
+                "mean_predicted": 0.03763356252511618,
+                "mean_actual": 0.0476516187870497
+              },
+              {
+                "band": "5%-10%",
+                "n": 15722,
+                "mean_predicted": 0.07635276243364543,
+                "mean_actual": 0.09343594962472968
+              },
+              {
+                "band": "10%-20%",
+                "n": 21095,
+                "mean_predicted": 0.13785140320293376,
+                "mean_actual": 0.13932211424508179
+              },
+              {
+                "band": "20%-30%",
+                "n": 1735,
+                "mean_predicted": 0.22055101852120046,
+                "mean_actual": 0.2576368876080692
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.09662536785534992,
+            "log_loss": 0.33058848160388365,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 13364,
+                "mean_predicted": 0.031074414681323024,
+                "mean_actual": 0.041080514815923376
+              },
+              {
+                "band": "5%-10%",
+                "n": 12670,
+                "mean_predicted": 0.07225326088059483,
+                "mean_actual": 0.08413575374901341
+              },
+              {
+                "band": "10%-20%",
+                "n": 11200,
+                "mean_predicted": 0.14148110723373097,
+                "mean_actual": 0.16044642857142857
+              },
+              {
+                "band": "20%-30%",
+                "n": 4089,
+                "mean_predicted": 0.2417217040482713,
+                "mean_actual": 0.256297383223282
+              },
+              {
+                "band": "30%-50%",
+                "n": 1542,
+                "mean_predicted": 0.35867459060197376,
+                "mean_actual": 0.36251621271076523
+              },
+              {
+                "band": "50%-100%",
+                "n": 73,
+                "mean_predicted": 0.5845678177166075,
+                "mean_actual": 0.6164383561643836
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.09683354155783701,
+            "log_loss": 0.3312016608786839,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12854,
+                "mean_predicted": 0.0298657652674715,
+                "mean_actual": 0.0388983973860277
+              },
+              {
+                "band": "5%-10%",
+                "n": 12859,
+                "mean_predicted": 0.07287894019728129,
+                "mean_actual": 0.08406563496383855
+              },
+              {
+                "band": "10%-20%",
+                "n": 12043,
+                "mean_predicted": 0.14170189088663573,
+                "mean_actual": 0.1609233579672839
+              },
+              {
+                "band": "20%-30%",
+                "n": 4025,
+                "mean_predicted": 0.2396196470736307,
+                "mean_actual": 0.26931677018633543
+              },
+              {
+                "band": "30%-50%",
+                "n": 1116,
+                "mean_predicted": 0.34987212172653015,
+                "mean_actual": 0.3888888888888889
+              },
+              {
+                "band": "50%-100%",
+                "n": 41,
+                "mean_predicted": 0.5600070530758698,
+                "mean_actual": 0.6585365853658537
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.001616659856024022,
+              "ci_low": -0.0020981768616686047,
+              "ci_high": -0.0011607848987771202,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.001616659856024022,
+              "ci_low": -0.002068925567950644,
+              "ci_high": -0.0011461483333994327,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.08018484715253307,
+            "mean_structural_p": 0.10478982280104014,
+            "lift_ratio": 1.3068531838902406,
+            "lift_diff": 0.02460497564850707
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "PLAYER4_TEAM30": {
+      "combo": {
+        "name": "PLAYER4_TEAM30",
+        "family": "PLAYER_TEAM",
+        "x_player": 4,
+        "y_team": 30
+      },
+      "field_a": "actual_player_sog",
+      "x_a": 4,
+      "field_b": "actual_team_sog",
+      "x_b": 30,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 2789.0,
+          "A_naive_independence": {
+            "brier": 0.05763560508638226,
+            "log_loss": 0.22063400507939418,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 30577,
+                "mean_predicted": 0.018138088310476926,
+                "mean_actual": 0.03280243320142591
+              },
+              {
+                "band": "5%-10%",
+                "n": 7523,
+                "mean_predicted": 0.07104096557521658,
+                "mean_actual": 0.10926492090921175
+              },
+              {
+                "band": "10%-20%",
+                "n": 4208,
+                "mean_predicted": 0.13701599536006762,
+                "mean_actual": 0.17609315589353614
+              },
+              {
+                "band": "20%-30%",
+                "n": 669,
+                "mean_predicted": 0.2348338350929246,
+                "mean_actual": 0.26905829596412556
+              },
+              {
+                "band": "30%-50%",
+                "n": 125,
+                "mean_predicted": 0.35312216664207907,
+                "mean_actual": 0.328
+              },
+              {
+                "band": "50%-100%",
+                "n": 6,
+                "mean_predicted": 0.5570689215284733,
+                "mean_actual": 0.3333333333333333
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.060759954335926715,
+            "log_loss": 0.24156122565443117,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 43060,
+                "mean_predicted": 0.08666868686936018,
+                "mean_actual": 0.06428239665582908
+              },
+              {
+                "band": "10%-20%",
+                "n": 48,
+                "mean_predicted": 0.10215310638155183,
+                "mean_actual": 0.4375
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.060085944107161664,
+            "log_loss": 0.23629474500407216,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 15093,
+                "mean_predicted": 0.03577791131176724,
+                "mean_actual": 0.043530113297555156
+              },
+              {
+                "band": "5%-10%",
+                "n": 23385,
+                "mean_predicted": 0.07204259153106807,
+                "mean_actual": 0.07000213812272825
+              },
+              {
+                "band": "10%-20%",
+                "n": 4630,
+                "mean_predicted": 0.11392588543280385,
+                "mean_actual": 0.10691144708423327
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.056993979421273246,
+            "log_loss": 0.21474407383941768,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 27595,
+                "mean_predicted": 0.02098766849217511,
+                "mean_actual": 0.026997644500815366
+              },
+              {
+                "band": "5%-10%",
+                "n": 8165,
+                "mean_predicted": 0.07128736572481095,
+                "mean_actual": 0.08952847519902021
+              },
+              {
+                "band": "10%-20%",
+                "n": 5606,
+                "mean_predicted": 0.13780138887560697,
+                "mean_actual": 0.1589368533713878
+              },
+              {
+                "band": "20%-30%",
+                "n": 1361,
+                "mean_predicted": 0.23845798771695412,
+                "mean_actual": 0.21969140337986776
+              },
+              {
+                "band": "30%-50%",
+                "n": 369,
+                "mean_predicted": 0.3527765401856131,
+                "mean_actual": 0.3170731707317073
+              },
+              {
+                "band": "50%-100%",
+                "n": 12,
+                "mean_predicted": 0.5654769696329348,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.057059212397390965,
+            "log_loss": 0.2147988977925894,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 26004,
+                "mean_predicted": 0.02162278781289064,
+                "mean_actual": 0.02607291185971389
+              },
+              {
+                "band": "5%-10%",
+                "n": 9422,
+                "mean_predicted": 0.07143791192516571,
+                "mean_actual": 0.08427085544470389
+              },
+              {
+                "band": "10%-20%",
+                "n": 6213,
+                "mean_predicted": 0.13837108994788155,
+                "mean_actual": 0.15515853854820538
+              },
+              {
+                "band": "20%-30%",
+                "n": 1248,
+                "mean_predicted": 0.2355684389174494,
+                "mean_actual": 0.23076923076923078
+              },
+              {
+                "band": "30%-50%",
+                "n": 213,
+                "mean_predicted": 0.3542252662391964,
+                "mean_actual": 0.29107981220657275
+              },
+              {
+                "band": "50%-100%",
+                "n": 8,
+                "mean_predicted": 0.5593003097388087,
+                "mean_actual": 0.375
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0006416256651094188,
+              "ci_low": -0.0008414240375794538,
+              "ci_high": -0.0004480365771611372,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0006416256651094188,
+              "ci_low": -0.0008335090141266266,
+              "ci_high": -0.00044347311439883047,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.043384043305269765,
+            "mean_structural_p": 0.05556352016953158,
+            "lift_ratio": 1.280736324610445,
+            "lift_diff": 0.012179476864261816
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 2653.0,
+          "A_naive_independence": {
+            "brier": 0.055176242380138275,
+            "log_loss": 0.2126628691805008,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 32074,
+                "mean_predicted": 0.01715565979463496,
+                "mean_actual": 0.033266820477645447
+              },
+              {
+                "band": "5%-10%",
+                "n": 7036,
+                "mean_predicted": 0.07041235589302573,
+                "mean_actual": 0.11270608300170551
+              },
+              {
+                "band": "10%-20%",
+                "n": 3408,
+                "mean_predicted": 0.13310160014614447,
+                "mean_actual": 0.19160798122065728
+              },
+              {
+                "band": "20%-30%",
+                "n": 362,
+                "mean_predicted": 0.23187286642007177,
+                "mean_actual": 0.30662983425414364
+              },
+              {
+                "band": "30%-50%",
+                "n": 57,
+                "mean_predicted": 0.37427082441792076,
+                "mean_actual": 0.49122807017543857
+              },
+              {
+                "band": "50%-100%",
+                "n": 1,
+                "mean_predicted": 0.5027002724580684,
+                "mean_actual": 1.0
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.05836484225744286,
+            "log_loss": 0.23477179725399888,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 42913,
+                "mean_predicted": 0.08643277704837866,
+                "mean_actual": 0.06147321324540349
+              },
+              {
+                "band": "10%-20%",
+                "n": 25,
+                "mean_predicted": 0.10226978190825417,
+                "mean_actual": 0.6
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.05741917199616519,
+            "log_loss": 0.22732262688568747,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 18206,
+                "mean_predicted": 0.03404800707708123,
+                "mean_actual": 0.04048116005712402
+              },
+              {
+                "band": "5%-10%",
+                "n": 22234,
+                "mean_predicted": 0.06959363712371162,
+                "mean_actual": 0.07250157416569218
+              },
+              {
+                "band": "10%-20%",
+                "n": 2498,
+                "mean_predicted": 0.11170904157749065,
+                "mean_actual": 0.12169735788630905
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.05434378475281801,
+            "log_loss": 0.20593553551438648,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 28586,
+                "mean_predicted": 0.01983836524446573,
+                "mean_actual": 0.02669138739242986
+              },
+              {
+                "band": "5%-10%",
+                "n": 8148,
+                "mean_predicted": 0.07079863934990616,
+                "mean_actual": 0.09302896416298478
+              },
+              {
+                "band": "10%-20%",
+                "n": 5010,
+                "mean_predicted": 0.1383186811102437,
+                "mean_actual": 0.16187624750499002
+              },
+              {
+                "band": "20%-30%",
+                "n": 969,
+                "mean_predicted": 0.23539433897853276,
+                "mean_actual": 0.24148606811145512
+              },
+              {
+                "band": "30%-50%",
+                "n": 204,
+                "mean_predicted": 0.35416889095081816,
+                "mean_actual": 0.3627450980392157
+              },
+              {
+                "band": "50%-100%",
+                "n": 21,
+                "mean_predicted": 0.545130420560014,
+                "mean_actual": 0.6190476190476191
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.054436920824265496,
+            "log_loss": 0.20574624467602928,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 27501,
+                "mean_predicted": 0.020827115563030418,
+                "mean_actual": 0.025817243009345115
+              },
+              {
+                "band": "5%-10%",
+                "n": 9126,
+                "mean_predicted": 0.07146847404856725,
+                "mean_actual": 0.08820951128643437
+              },
+              {
+                "band": "10%-20%",
+                "n": 5440,
+                "mean_predicted": 0.1360801092398082,
+                "mean_actual": 0.16268382352941177
+              },
+              {
+                "band": "20%-30%",
+                "n": 758,
+                "mean_predicted": 0.23268276459537604,
+                "mean_actual": 0.2678100263852243
+              },
+              {
+                "band": "30%-50%",
+                "n": 109,
+                "mean_predicted": 0.3576194772344581,
+                "mean_actual": 0.44036697247706424
+              },
+              {
+                "band": "50%-100%",
+                "n": 4,
+                "mean_predicted": 0.5158424452295403,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0008324576273205306,
+              "ci_low": -0.0010534251003935444,
+              "ci_high": -0.0006232199319871762,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.0008324576273205306,
+              "ci_low": -0.0010491837686043282,
+              "ci_high": -0.0006183780125826252,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.03738078942947638,
+            "mean_structural_p": 0.05004282271460197,
+            "lift_ratio": 1.3387310294506787,
+            "lift_diff": 0.012662033285125586
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "TEAM25_GOALIE20": {
+      "combo": {
+        "name": "TEAM25_GOALIE20",
+        "family": "TEAM_GOALIE",
+        "y_team": 25,
+        "z_saves": 20
+      },
+      "field_a": "actual_team_sog",
+      "x_a": 25,
+      "field_b": "actual_goalie_saves",
+      "x_b": 20,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 29230.0,
+          "A_naive_independence": {
+            "brier": 0.221051345648385,
+            "log_loss": 0.6353979518412476,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 17,
+                "mean_predicted": 0.0958663623867219,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "10%-20%",
+                "n": 184,
+                "mean_predicted": 0.17208274455082087,
+                "mean_actual": 0.45652173913043476
+              },
+              {
+                "band": "20%-30%",
+                "n": 1431,
+                "mean_predicted": 0.2577379216492675,
+                "mean_actual": 0.44584206848357794
+              },
+              {
+                "band": "30%-50%",
+                "n": 8941,
+                "mean_predicted": 0.41396686959908946,
+                "mean_actual": 0.5966894083435857
+              },
+              {
+                "band": "50%-100%",
+                "n": 32535,
+                "mean_predicted": 0.7029473390813805,
+                "mean_actual": 0.7122483479329952
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.22223009135667923,
+            "log_loss": 0.6380997451063689,
+            "calibration": [
+              {
+                "band": "50%-100%",
+                "n": 43108,
+                "mean_predicted": 0.7496688707710522,
+                "mean_actual": 0.6780643963997401
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.21837604576634553,
+            "log_loss": 0.6313312343787095,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 135,
+                "mean_predicted": 0.4579415492857601,
+                "mean_actual": 0.37777777777777777
+              },
+              {
+                "band": "50%-100%",
+                "n": 42973,
+                "mean_predicted": 0.766200060338757,
+                "mean_actual": 0.6790077490517301
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.21475392736712656,
+            "log_loss": 0.6263103305181525,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 69,
+                "mean_predicted": 0.2650958517350521,
+                "mean_actual": 0.2608695652173913
+              },
+              {
+                "band": "30%-50%",
+                "n": 3301,
+                "mean_predicted": 0.4396191444401562,
+                "mean_actual": 0.5101484398667071
+              },
+              {
+                "band": "50%-100%",
+                "n": 39738,
+                "mean_predicted": 0.7405812948761722,
+                "mean_actual": 0.6927374301675978
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.21424409463377825,
+            "log_loss": 0.6235641821916315,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 119,
+                "mean_predicted": 0.2627406498509973,
+                "mean_actual": 0.42857142857142855
+              },
+              {
+                "band": "30%-50%",
+                "n": 4191,
+                "mean_predicted": 0.4328544412279298,
+                "mean_actual": 0.49821045096635647
+              },
+              {
+                "band": "50%-100%",
+                "n": 38798,
+                "mean_predicted": 0.7294159244025598,
+                "mean_actual": 0.6982576421465024
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.006297418281264094,
+              "ci_low": -0.010078010816585714,
+              "ci_high": -0.002791949620498335,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.006297418281264094,
+              "ci_low": -0.010450018934811567,
+              "ci_high": -0.002550011353214088,
+              "frac_improved": 0.998,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.6257257441109817,
+            "mean_structural_p": 0.7167740072690917,
+            "lift_ratio": 1.1455082582345553,
+            "lift_diff": 0.09104826315810999
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 27365.0,
+          "A_naive_independence": {
+            "brier": 0.22374509386438945,
+            "log_loss": 0.638362842694853,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 645,
+                "mean_predicted": 0.15916570121792437,
+                "mean_actual": 0.3054263565891473
+              },
+              {
+                "band": "20%-30%",
+                "n": 2029,
+                "mean_predicted": 0.2565797445471038,
+                "mean_actual": 0.318876293740759
+              },
+              {
+                "band": "30%-50%",
+                "n": 11211,
+                "mean_predicted": 0.41173811207679367,
+                "mean_actual": 0.5516011060565515
+              },
+              {
+                "band": "50%-100%",
+                "n": 29053,
+                "mean_predicted": 0.6787932551573133,
+                "mean_actual": 0.6999965580146629
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.24174761264927863,
+            "log_loss": 0.6806244072340006,
+            "calibration": [
+              {
+                "band": "50%-100%",
+                "n": 42938,
+                "mean_predicted": 0.7478640755463956,
+                "mean_actual": 0.6373142670827705
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.22964671283550003,
+            "log_loss": 0.6541861587213891,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 516,
+                "mean_predicted": 0.45882570115073307,
+                "mean_actual": 0.29069767441860467
+              },
+              {
+                "band": "50%-100%",
+                "n": 42422,
+                "mean_predicted": 0.7482436557999419,
+                "mean_actual": 0.6415303380321531
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.21961264025439337,
+            "log_loss": 0.6320617121456352,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 296,
+                "mean_predicted": 0.27223318840824673,
+                "mean_actual": 0.22297297297297297
+              },
+              {
+                "band": "30%-50%",
+                "n": 4761,
+                "mean_predicted": 0.43465886438696044,
+                "mean_actual": 0.4133585381222432
+              },
+              {
+                "band": "50%-100%",
+                "n": 37881,
+                "mean_predicted": 0.7156591552818609,
+                "mean_actual": 0.6686993479580793
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.2185633626250692,
+            "log_loss": 0.6288346409766785,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 499,
+                "mean_predicted": 0.2667663135865944,
+                "mean_actual": 0.30060120240480964
+              },
+              {
+                "band": "30%-50%",
+                "n": 6023,
+                "mean_predicted": 0.4335402587717336,
+                "mean_actual": 0.4373235928939067
+              },
+              {
+                "band": "50%-100%",
+                "n": 36416,
+                "mean_predicted": 0.705992032557892,
+                "mean_actual": 0.6750054920913884
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.00413245360999881,
+              "ci_low": -0.00823443765241405,
+              "ci_high": -0.0003652084041592951,
+              "frac_improved": 0.986,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.00413245360999881,
+              "ci_low": -0.007797020070351657,
+              "ci_high": -1.175671359837649e-05,
+              "frac_improved": 0.976,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.5813088312345706,
+            "mean_structural_p": 0.6814447887267066,
+            "lift_ratio": 1.1722594808674582,
+            "lift_diff": 0.100135957492136
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "TEAM30_GOALIE25": {
+      "combo": {
+        "name": "TEAM30_GOALIE25",
+        "family": "TEAM_GOALIE",
+        "y_team": 30,
+        "z_saves": 25
+      },
+      "field_a": "actual_team_sog",
+      "x_a": 30,
+      "field_b": "actual_goalie_saves",
+      "x_b": 25,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 15901.0,
+          "A_naive_independence": {
+            "brier": 0.24379934683208757,
+            "log_loss": 0.7168896065866731,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 3302,
+                "mean_predicted": 0.03376637786490734,
+                "mean_actual": 0.20321017565112054
+              },
+              {
+                "band": "5%-10%",
+                "n": 6140,
+                "mean_predicted": 0.07464429633099974,
+                "mean_actual": 0.2791530944625407
+              },
+              {
+                "band": "10%-20%",
+                "n": 12324,
+                "mean_predicted": 0.14735898117314455,
+                "mean_actual": 0.31256085686465435
+              },
+              {
+                "band": "20%-30%",
+                "n": 9054,
+                "mean_predicted": 0.24791972097216,
+                "mean_actual": 0.35222001325381047
+              },
+              {
+                "band": "30%-50%",
+                "n": 9313,
+                "mean_predicted": 0.3865502457293192,
+                "mean_actual": 0.51927413293246
+              },
+              {
+                "band": "50%-100%",
+                "n": 2975,
+                "mean_predicted": 0.6043350120807418,
+                "mean_actual": 0.5509243697478992
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.2453727883021038,
+            "log_loss": 0.6838886633434125,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 41288,
+                "mean_predicted": 0.4857957021490234,
+                "mean_actual": 0.36117031583026543
+              },
+              {
+                "band": "50%-100%",
+                "n": 1820,
+                "mean_predicted": 0.5035605552572935,
+                "mean_actual": 0.5434065934065934
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.22739110754427613,
+            "log_loss": 0.6462537821081635,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 17,
+                "mean_predicted": 0.08472006216386528,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "10%-20%",
+                "n": 1184,
+                "mean_predicted": 0.171428350005963,
+                "mean_actual": 0.16891891891891891
+              },
+              {
+                "band": "20%-30%",
+                "n": 5931,
+                "mean_predicted": 0.25828121903153883,
+                "mean_actual": 0.2422862923621649
+              },
+              {
+                "band": "30%-50%",
+                "n": 22001,
+                "mean_predicted": 0.40580436359613975,
+                "mean_actual": 0.3258488250534067
+              },
+              {
+                "band": "50%-100%",
+                "n": 13975,
+                "mean_predicted": 0.5850932258906356,
+                "mean_actual": 0.5076923076923077
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.22548084152867506,
+            "log_loss": 0.6442302222311813,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 17,
+                "mean_predicted": 0.037411219308170075,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "5%-10%",
+                "n": 598,
+                "mean_predicted": 0.08401139707801218,
+                "mean_actual": 0.16722408026755853
+              },
+              {
+                "band": "10%-20%",
+                "n": 5561,
+                "mean_predicted": 0.16006776661435082,
+                "mean_actual": 0.2289156626506024
+              },
+              {
+                "band": "20%-30%",
+                "n": 9237,
+                "mean_predicted": 0.25359134107173664,
+                "mean_actual": 0.29988091371657466
+              },
+              {
+                "band": "30%-50%",
+                "n": 17724,
+                "mean_predicted": 0.39496678005860075,
+                "mean_actual": 0.36357481381178064
+              },
+              {
+                "band": "50%-100%",
+                "n": 9971,
+                "mean_predicted": 0.6101146582960169,
+                "mean_actual": 0.5329455420720088
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.22553165929794683,
+            "log_loss": 0.6457907836758947,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 69,
+                "mean_predicted": 0.04131275518671726,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "5%-10%",
+                "n": 1066,
+                "mean_predicted": 0.0817929952495404,
+                "mean_actual": 0.18761726078799248
+              },
+              {
+                "band": "10%-20%",
+                "n": 7292,
+                "mean_predicted": 0.1561513280736136,
+                "mean_actual": 0.2528798683488755
+              },
+              {
+                "band": "20%-30%",
+                "n": 9958,
+                "mean_predicted": 0.25074547361946764,
+                "mean_actual": 0.3158264711789516
+              },
+              {
+                "band": "30%-50%",
+                "n": 16621,
+                "mean_predicted": 0.3896833673182033,
+                "mean_actual": 0.3752481800132363
+              },
+              {
+                "band": "50%-100%",
+                "n": 8102,
+                "mean_predicted": 0.601686278173438,
+                "mean_actual": 0.5523327573438657
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.018318505303415916,
+              "ci_low": -0.02346094607535762,
+              "ci_high": -0.012816682820864372,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.018318505303415916,
+              "ci_low": -0.023630028718457013,
+              "ci_high": -0.012515440499172054,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.23263359228587246,
+            "mean_structural_p": 0.3796807864301557,
+            "lift_ratio": 1.6320978526763403,
+            "lift_diff": 0.14704719414428322
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 15279.0,
+          "A_naive_independence": {
+            "brier": 0.24412764087448185,
+            "log_loss": 0.7237310946319563,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4944,
+                "mean_predicted": 0.03176675530028145,
+                "mean_actual": 0.1858818770226537
+              },
+              {
+                "band": "5%-10%",
+                "n": 7767,
+                "mean_predicted": 0.07505638702731643,
+                "mean_actual": 0.23715720355349557
+              },
+              {
+                "band": "10%-20%",
+                "n": 13434,
+                "mean_predicted": 0.14849938794034728,
+                "mean_actual": 0.35953550692273334
+              },
+              {
+                "band": "20%-30%",
+                "n": 8083,
+                "mean_predicted": 0.24713872975961604,
+                "mean_actual": 0.3894593591488309
+              },
+              {
+                "band": "30%-50%",
+                "n": 7143,
+                "mean_predicted": 0.37309706907684864,
+                "mean_actual": 0.48075038499230016
+              },
+              {
+                "band": "50%-100%",
+                "n": 1567,
+                "mean_predicted": 0.5807817370383602,
+                "mean_actual": 0.7058072750478621
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.24469512143873495,
+            "log_loss": 0.6825323476948301,
+            "calibration": [
+              {
+                "band": "30%-50%",
+                "n": 42153,
+                "mean_predicted": 0.48461998963853037,
+                "mean_actual": 0.34972599814959787
+              },
+              {
+                "band": "50%-100%",
+                "n": 785,
+                "mean_predicted": 0.5029360392294551,
+                "mean_actual": 0.6840764331210191
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.2190040575562748,
+            "log_loss": 0.6274179892625763,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 48,
+                "mean_predicted": 0.09399457723609557,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "10%-20%",
+                "n": 2063,
+                "mean_predicted": 0.16432936062171352,
+                "mean_actual": 0.10857973824527388
+              },
+              {
+                "band": "20%-30%",
+                "n": 7405,
+                "mean_predicted": 0.2561568161827257,
+                "mean_actual": 0.24469952734638759
+              },
+              {
+                "band": "30%-50%",
+                "n": 23208,
+                "mean_predicted": 0.39971738000594725,
+                "mean_actual": 0.3474663908996898
+              },
+              {
+                "band": "50%-100%",
+                "n": 10214,
+                "mean_predicted": 0.5698651865070369,
+                "mean_actual": 0.5070491482279225
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.21826116809718574,
+            "log_loss": 0.6268606737393927,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 99,
+                "mean_predicted": 0.04585416583249514,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "5%-10%",
+                "n": 1132,
+                "mean_predicted": 0.08002004619556662,
+                "mean_actual": 0.08303886925795052
+              },
+              {
+                "band": "10%-20%",
+                "n": 7135,
+                "mean_predicted": 0.15712912302514723,
+                "mean_actual": 0.22284512964260686
+              },
+              {
+                "band": "20%-30%",
+                "n": 10312,
+                "mean_predicted": 0.25047470834943425,
+                "mean_actual": 0.3074088440651668
+              },
+              {
+                "band": "30%-50%",
+                "n": 17888,
+                "mean_predicted": 0.38893274241728226,
+                "mean_actual": 0.38875223613595705
+              },
+              {
+                "band": "50%-100%",
+                "n": 6372,
+                "mean_predicted": 0.5918202988196823,
+                "mean_actual": 0.5447269303201506
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.21996194057136445,
+            "log_loss": 0.6323792156935066,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 279,
+                "mean_predicted": 0.04277316979616717,
+                "mean_actual": 0.053763440860215055
+              },
+              {
+                "band": "5%-10%",
+                "n": 1736,
+                "mean_predicted": 0.0795826724406048,
+                "mean_actual": 0.10368663594470046
+              },
+              {
+                "band": "10%-20%",
+                "n": 9216,
+                "mean_predicted": 0.15492751880169559,
+                "mean_actual": 0.2412109375
+              },
+              {
+                "band": "20%-30%",
+                "n": 11271,
+                "mean_predicted": 0.2515539735042552,
+                "mean_actual": 0.32454972939402005
+              },
+              {
+                "band": "30%-50%",
+                "n": 15741,
+                "mean_predicted": 0.38707515457274344,
+                "mean_actual": 0.4200495521250238
+              },
+              {
+                "band": "50%-100%",
+                "n": 4695,
+                "mean_predicted": 0.5883130895743443,
+                "mean_actual": 0.551863684771033
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.025866472777274108,
+              "ci_low": -0.031094614854333763,
+              "ci_high": -0.020764536366771585,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.025866472777274108,
+              "ci_low": -0.0309010659120193,
+              "ci_high": -0.020078238326640185,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.193481258392063,
+            "mean_structural_p": 0.3383353109235165,
+            "lift_ratio": 1.7486722679771225,
+            "lift_diff": 0.14485405253145348
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "PLAYER3_GOALIE20": {
+      "combo": {
+        "name": "PLAYER3_GOALIE20",
+        "family": "PLAYER_GOALIE",
+        "x_player": 3,
+        "z_saves": 20
+      },
+      "field_a": "actual_player_sog",
+      "x_a": 3,
+      "field_b": "actual_goalie_saves",
+      "x_b": 20,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 8585.0,
+          "A_naive_independence": {
+            "brier": 0.1424390605741246,
+            "log_loss": 0.44709616801397595,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4428,
+                "mean_predicted": 0.03252102592293693,
+                "mean_actual": 0.048102981029810296
+              },
+              {
+                "band": "5%-10%",
+                "n": 8092,
+                "mean_predicted": 0.07576176988284565,
+                "mean_actual": 0.07995551161641128
+              },
+              {
+                "band": "10%-20%",
+                "n": 13046,
+                "mean_predicted": 0.1460936122902017,
+                "mean_actual": 0.1459451172773264
+              },
+              {
+                "band": "20%-30%",
+                "n": 8448,
+                "mean_predicted": 0.24608402532922743,
+                "mean_actual": 0.2507102272727273
+              },
+              {
+                "band": "30%-50%",
+                "n": 7829,
+                "mean_predicted": 0.3808900916526737,
+                "mean_actual": 0.38561757568016347
+              },
+              {
+                "band": "50%-100%",
+                "n": 1265,
+                "mean_predicted": 0.5636560348849482,
+                "mean_actual": 0.5407114624505929
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.15866778278055776,
+            "log_loss": 0.49691901889593526,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 43108,
+                "mean_predicted": 0.22306398669302085,
+                "mean_actual": 0.19915096965760415
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.1595467809080488,
+            "log_loss": 0.4992701373184905,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 6176,
+                "mean_predicted": 0.18345479209491827,
+                "mean_actual": 0.15398316062176165
+              },
+              {
+                "band": "20%-30%",
+                "n": 36932,
+                "mean_predicted": 0.23461617530256543,
+                "mean_actual": 0.2067042131484891
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.14199672122833282,
+            "log_loss": 0.44575202988404794,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 3787,
+                "mean_predicted": 0.03322390563492369,
+                "mean_actual": 0.04251386321626617
+              },
+              {
+                "band": "5%-10%",
+                "n": 9613,
+                "mean_predicted": 0.07568510733039714,
+                "mean_actual": 0.0844689482991782
+              },
+              {
+                "band": "10%-20%",
+                "n": 13153,
+                "mean_predicted": 0.14485615680784145,
+                "mean_actual": 0.15023188626168935
+              },
+              {
+                "band": "20%-30%",
+                "n": 7698,
+                "mean_predicted": 0.24624426201105432,
+                "mean_actual": 0.2550012990387113
+              },
+              {
+                "band": "30%-50%",
+                "n": 7311,
+                "mean_predicted": 0.38229225951324597,
+                "mean_actual": 0.3896867733552182
+              },
+              {
+                "band": "50%-100%",
+                "n": 1546,
+                "mean_predicted": 0.572285087622803,
+                "mean_actual": 0.5329883570504528
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.14241411122737727,
+            "log_loss": 0.4468723493927562,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 3699,
+                "mean_predicted": 0.03284070097042179,
+                "mean_actual": 0.044065963773992974
+              },
+              {
+                "band": "5%-10%",
+                "n": 7432,
+                "mean_predicted": 0.07578561328072025,
+                "mean_actual": 0.07588805166846072
+              },
+              {
+                "band": "10%-20%",
+                "n": 13153,
+                "mean_predicted": 0.14617389904471698,
+                "mean_actual": 0.1341899186497377
+              },
+              {
+                "band": "20%-30%",
+                "n": 8842,
+                "mean_predicted": 0.2472077657812798,
+                "mean_actual": 0.24112191811807285
+              },
+              {
+                "band": "30%-50%",
+                "n": 8487,
+                "mean_predicted": 0.3826660433179879,
+                "mean_actual": 0.3725698126546483
+              },
+              {
+                "band": "50%-100%",
+                "n": 1495,
+                "mean_predicted": 0.5639664366651396,
+                "mean_actual": 0.534448160535117
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.00044233934579457346,
+              "ci_low": -0.0007012801121462908,
+              "ci_high": -0.00018343274128040932,
+              "frac_improved": 0.999,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.00044233934579457346,
+              "ci_low": -0.0006606675049482258,
+              "ci_high": -0.0002015160694192053,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.19571624450858954,
+            "mean_structural_p": 0.19332728685226389,
+            "lift_ratio": 0.9877937691767797,
+            "lift_diff": -0.0023889576563256576
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 8153.0,
+          "A_naive_independence": {
+            "brier": 0.1370395151394069,
+            "log_loss": 0.4334650273779913,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4782,
+                "mean_predicted": 0.03259322740579163,
+                "mean_actual": 0.04161438728565454
+              },
+              {
+                "band": "5%-10%",
+                "n": 8435,
+                "mean_predicted": 0.0750467219186489,
+                "mean_actual": 0.08085358624777712
+              },
+              {
+                "band": "10%-20%",
+                "n": 13332,
+                "mean_predicted": 0.14548248641169567,
+                "mean_actual": 0.1401890189018902
+              },
+              {
+                "band": "20%-30%",
+                "n": 8177,
+                "mean_predicted": 0.24667341351798602,
+                "mean_actual": 0.25412743059801884
+              },
+              {
+                "band": "30%-50%",
+                "n": 7362,
+                "mean_predicted": 0.3768243573418313,
+                "mean_actual": 0.38440641130127684
+              },
+              {
+                "band": "50%-100%",
+                "n": 850,
+                "mean_predicted": 0.5597894370768206,
+                "mean_actual": 0.5823529411764706
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.15358347045710902,
+            "log_loss": 0.48548880425530205,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 42938,
+                "mean_predicted": 0.22267773578407904,
+                "mean_actual": 0.18987842936326796
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.1535844712713497,
+            "log_loss": 0.48514606957013656,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 8366,
+                "mean_predicted": 0.18034681488290172,
+                "mean_actual": 0.13805880946688978
+              },
+              {
+                "band": "20%-30%",
+                "n": 34572,
+                "mean_predicted": 0.23109436080792664,
+                "mean_actual": 0.20241814184889506
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.13656717514138,
+            "log_loss": 0.4317538583639074,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4181,
+                "mean_predicted": 0.03397573159096904,
+                "mean_actual": 0.03802917962209998
+              },
+              {
+                "band": "5%-10%",
+                "n": 9948,
+                "mean_predicted": 0.0754554488424818,
+                "mean_actual": 0.07961399276236429
+              },
+              {
+                "band": "10%-20%",
+                "n": 13054,
+                "mean_predicted": 0.1439481470108348,
+                "mean_actual": 0.14846024207139574
+              },
+              {
+                "band": "20%-30%",
+                "n": 7740,
+                "mean_predicted": 0.24604857136146682,
+                "mean_actual": 0.25516795865633074
+              },
+              {
+                "band": "30%-50%",
+                "n": 6796,
+                "mean_predicted": 0.380447747428764,
+                "mean_actual": 0.3828722778104767
+              },
+              {
+                "band": "50%-100%",
+                "n": 1219,
+                "mean_predicted": 0.5681067164903105,
+                "mean_actual": 0.5635767022149303
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.13710767719895883,
+            "log_loss": 0.43363355656739894,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 3898,
+                "mean_predicted": 0.03300315400466379,
+                "mean_actual": 0.03873781426372499
+              },
+              {
+                "band": "5%-10%",
+                "n": 7852,
+                "mean_predicted": 0.07550493388631373,
+                "mean_actual": 0.07514009169638308
+              },
+              {
+                "band": "10%-20%",
+                "n": 13390,
+                "mean_predicted": 0.14620813634180818,
+                "mean_actual": 0.13002240477968632
+              },
+              {
+                "band": "20%-30%",
+                "n": 8577,
+                "mean_predicted": 0.24738495671125388,
+                "mean_actual": 0.23807858225486767
+              },
+              {
+                "band": "30%-50%",
+                "n": 8147,
+                "mean_predicted": 0.3785483524119325,
+                "mean_actual": 0.3698293850497115
+              },
+              {
+                "band": "50%-100%",
+                "n": 1074,
+                "mean_predicted": 0.558357339049363,
+                "mean_actual": 0.5735567970204841
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.00047233999802581694,
+              "ci_low": -0.000722605038318197,
+              "ci_high": -0.00021183918334910512,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.00047233999802581694,
+              "ci_low": -0.0007560377141969943,
+              "ci_high": -0.0001951199330207376,
+              "frac_improved": 0.998,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.18621041651407746,
+            "mean_structural_p": 0.18524950792332223,
+            "lift_ratio": 0.9948396625240211,
+            "lift_diff": -0.0009609085907552328
+          },
+          "frechet_violations": 0
+        }
+      }
+    },
+    "PLAYER4_GOALIE25": {
+      "combo": {
+        "name": "PLAYER4_GOALIE25",
+        "family": "PLAYER_GOALIE",
+        "x_player": 4,
+        "z_saves": 25
+      },
+      "field_a": "actual_player_sog",
+      "x_a": 4,
+      "field_b": "actual_goalie_saves",
+      "x_b": 25,
+      "by_season": {
+        "20242025": {
+          "n": 43108,
+          "n_positive": 3157.0,
+          "A_naive_independence": {
+            "brier": 0.0637253743713412,
+            "log_loss": 0.23540538342213294,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 25963,
+                "mean_predicted": 0.02062995223510986,
+                "mean_actual": 0.029580556946423756
+              },
+              {
+                "band": "5%-10%",
+                "n": 8988,
+                "mean_predicted": 0.07162599993807013,
+                "mean_actual": 0.09479305740987984
+              },
+              {
+                "band": "10%-20%",
+                "n": 6339,
+                "mean_predicted": 0.13962633503221478,
+                "mean_actual": 0.1665877898722196
+              },
+              {
+                "band": "20%-30%",
+                "n": 1493,
+                "mean_predicted": 0.23645879413684673,
+                "mean_actual": 0.25385130609511053
+              },
+              {
+                "band": "30%-50%",
+                "n": 314,
+                "mean_predicted": 0.3527342788809399,
+                "mean_actual": 0.3089171974522293
+              },
+              {
+                "band": "50%-100%",
+                "n": 11,
+                "mean_predicted": 0.5603997723619693,
+                "mean_actual": 0.45454545454545453
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.06789511662901218,
+            "log_loss": 0.2622477815121772,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 42378,
+                "mean_predicted": 0.09190948435699206,
+                "mean_actual": 0.06942281372410213
+              },
+              {
+                "band": "10%-20%",
+                "n": 730,
+                "mean_predicted": 0.10235764686004126,
+                "mean_actual": 0.2945205479452055
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06763262172496717,
+            "log_loss": 0.2599518588275623,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4396,
+                "mean_predicted": 0.04106684449678112,
+                "mean_actual": 0.04481346678798908
+              },
+              {
+                "band": "5%-10%",
+                "n": 27948,
+                "mean_predicted": 0.07641501777877338,
+                "mean_actual": 0.06748246743953056
+              },
+              {
+                "band": "10%-20%",
+                "n": 10764,
+                "mean_predicted": 0.11390739483809056,
+                "mean_actual": 0.09977703455964325
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.06330507709690726,
+            "log_loss": 0.2326755240584126,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 24646,
+                "mean_predicted": 0.022388313373259416,
+                "mean_actual": 0.02734723687413779
+              },
+              {
+                "band": "5%-10%",
+                "n": 8892,
+                "mean_predicted": 0.07130525149205606,
+                "mean_actual": 0.0840080971659919
+              },
+              {
+                "band": "10%-20%",
+                "n": 6862,
+                "mean_predicted": 0.14006182842415352,
+                "mean_actual": 0.15461964441853687
+              },
+              {
+                "band": "20%-30%",
+                "n": 2005,
+                "mean_predicted": 0.2405242371181589,
+                "mean_actual": 0.22443890274314215
+              },
+              {
+                "band": "30%-50%",
+                "n": 677,
+                "mean_predicted": 0.3569498162125575,
+                "mean_actual": 0.31314623338257014
+              },
+              {
+                "band": "50%-100%",
+                "n": 26,
+                "mean_predicted": 0.5552244340795737,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06341396574879159,
+            "log_loss": 0.23278649565535423,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22601,
+                "mean_predicted": 0.022725442313556256,
+                "mean_actual": 0.024998893854254238
+              },
+              {
+                "band": "5%-10%",
+                "n": 10044,
+                "mean_predicted": 0.07191849145642672,
+                "mean_actual": 0.0759657506969335
+              },
+              {
+                "band": "10%-20%",
+                "n": 7806,
+                "mean_predicted": 0.1402981374307893,
+                "mean_actual": 0.14975659748911094
+              },
+              {
+                "band": "20%-30%",
+                "n": 2173,
+                "mean_predicted": 0.23779091620516427,
+                "mean_actual": 0.23331799355729407
+              },
+              {
+                "band": "30%-50%",
+                "n": 470,
+                "mean_predicted": 0.35292782752223256,
+                "mean_actual": 0.31063829787234043
+              },
+              {
+                "band": "50%-100%",
+                "n": 14,
+                "mean_predicted": 0.5587801940570766,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0004202972744345723,
+              "ci_low": -0.0006068007589920404,
+              "ci_high": -0.0002226914494363949,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0004202972744345723,
+              "ci_low": -0.0006229109978151265,
+              "ci_high": -0.00021267216415722656,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.05879273489383989,
+            "mean_structural_p": 0.06693130951552227,
+            "lift_ratio": 1.1384282366924747,
+            "lift_diff": 0.008138574621682382
+          },
+          "frechet_violations": 0
+        },
+        "20252026": {
+          "n": 42938,
+          "n_positive": 3006.0,
+          "A_naive_independence": {
+            "brier": 0.06114329006085387,
+            "log_loss": 0.22698464488195183,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 27311,
+                "mean_predicted": 0.019851613414576648,
+                "mean_actual": 0.02954853355790707
+              },
+              {
+                "band": "5%-10%",
+                "n": 8711,
+                "mean_predicted": 0.0716076686660911,
+                "mean_actual": 0.09769257260934451
+              },
+              {
+                "band": "10%-20%",
+                "n": 5754,
+                "mean_predicted": 0.13761543717241811,
+                "mean_actual": 0.17518248175182483
+              },
+              {
+                "band": "20%-30%",
+                "n": 1003,
+                "mean_predicted": 0.23452275135933484,
+                "mean_actual": 0.27517447657028915
+              },
+              {
+                "band": "30%-50%",
+                "n": 151,
+                "mean_predicted": 0.3595387289544343,
+                "mean_actual": 0.40397350993377484
+              },
+              {
+                "band": "50%-100%",
+                "n": 8,
+                "mean_predicted": 0.5230509402179453,
+                "mean_actual": 0.375
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.06528656222392341,
+            "log_loss": 0.2549967625579421,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 42530,
+                "mean_predicted": 0.09172804626410475,
+                "mean_actual": 0.0673877263108394
+              },
+              {
+                "band": "10%-20%",
+                "n": 408,
+                "mean_predicted": 0.10225857229845353,
+                "mean_actual": 0.3431372549019608
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06467189846051973,
+            "log_loss": 0.25024011606060476,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 6538,
+                "mean_predicted": 0.040089199973850256,
+                "mean_actual": 0.03992046497399816
+              },
+              {
+                "band": "5%-10%",
+                "n": 29320,
+                "mean_predicted": 0.0752840527991687,
+                "mean_actual": 0.06766712141882673
+              },
+              {
+                "band": "10%-20%",
+                "n": 7080,
+                "mean_predicted": 0.11160783478674191,
+                "mean_actual": 0.10748587570621469
+              }
+            ]
+          },
+          "D_structural_factorization": {
+            "brier": 0.060635613166678023,
+            "log_loss": 0.22362615219375423,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 25488,
+                "mean_predicted": 0.021499460300075813,
+                "mean_actual": 0.02569836785938481
+              },
+              {
+                "band": "5%-10%",
+                "n": 8939,
+                "mean_predicted": 0.07147536840429176,
+                "mean_actual": 0.08848864526233359
+              },
+              {
+                "band": "10%-20%",
+                "n": 6350,
+                "mean_predicted": 0.14006168378842107,
+                "mean_actual": 0.15716535433070866
+              },
+              {
+                "band": "20%-30%",
+                "n": 1709,
+                "mean_predicted": 0.23849650942416356,
+                "mean_actual": 0.2358104154476302
+              },
+              {
+                "band": "30%-50%",
+                "n": 416,
+                "mean_predicted": 0.35658573750848804,
+                "mean_actual": 0.3389423076923077
+              },
+              {
+                "band": "50%-100%",
+                "n": 36,
+                "mean_predicted": 0.5468710401938695,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06072632481502153,
+            "log_loss": 0.22380384660530825,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23892,
+                "mean_predicted": 0.022277015130650484,
+                "mean_actual": 0.02415034321111669
+              },
+              {
+                "band": "5%-10%",
+                "n": 9741,
+                "mean_predicted": 0.07185105669813138,
+                "mean_actual": 0.08110050302843651
+              },
+              {
+                "band": "10%-20%",
+                "n": 7446,
+                "mean_predicted": 0.13907179856572077,
+                "mean_actual": 0.15551974214343273
+              },
+              {
+                "band": "20%-30%",
+                "n": 1606,
+                "mean_predicted": 0.23577700812587205,
+                "mean_actual": 0.23910336239103364
+              },
+              {
+                "band": "30%-50%",
+                "n": 242,
+                "mean_predicted": 0.35499008622833367,
+                "mean_actual": 0.38016528925619836
+              },
+              {
+                "band": "50%-100%",
+                "n": 11,
+                "mean_predicted": 0.5305656982981406,
+                "mean_actual": 0.45454545454545453
+              }
+            ]
+          },
+          "bootstrap_structural_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0005076768941763218,
+              "ci_low": -0.0007089048747631471,
+              "ci_high": -0.0003098566256092006,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1311
+            },
+            "date_clustered": {
+              "point_delta": -0.0005076768941763218,
+              "ci_low": -0.0006984086273960979,
+              "ci_high": -0.0003079536624076354,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.052435654115543164,
+            "mean_structural_p": 0.061761279361106154,
+            "lift_ratio": 1.1778489350969812,
+            "lift_diff": 0.00932562524556299
+          },
+          "frechet_violations": 0
+        }
+      }
+    }
+  },
+  "full_game_sensitivity": {
+    "PLAYER2_TEAM25": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 14232.0,
+        "naive_brier": 0.20674958904043725,
+        "structural_brier": 0.20538488934552726,
+        "game_clustered": {
+          "point_delta": -0.0013646996949078505,
+          "ci_low": -0.001959798590037337,
+          "ci_high": -0.0007295845729414219,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 13235.0,
+        "naive_brier": 0.19858834235407938,
+        "structural_brier": 0.19765689815493942,
+        "game_clustered": {
+          "point_delta": -0.0009314441991400968,
+          "ci_low": -0.0015920694904609511,
+          "ci_high": -0.00027552545783474103,
+          "frac_improved": 0.997,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "PLAYER3_TEAM30": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 5019.0,
+        "naive_brier": 0.10179191023627551,
+        "structural_brier": 0.10062744186124892,
+        "game_clustered": {
+          "point_delta": -0.0011644683750267198,
+          "ci_low": -0.001574310198590917,
+          "ci_high": -0.0007333118915530817,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 4762.0,
+        "naive_brier": 0.09789315456841731,
+        "structural_brier": 0.0962633814150057,
+        "game_clustered": {
+          "point_delta": -0.0016297731534107435,
+          "ci_low": -0.0021015618005311015,
+          "ci_high": -0.0011676286170810984,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "PLAYER4_TEAM30": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 2611.0,
+        "naive_brier": 0.057036101589601096,
+        "structural_brier": 0.05640445301956102,
+        "game_clustered": {
+          "point_delta": -0.000631648570040097,
+          "ci_low": -0.00082391967419565,
+          "ci_high": -0.0004366409952838435,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 2507.0,
+        "naive_brier": 0.05524146597984668,
+        "structural_brier": 0.05439469197568312,
+        "game_clustered": {
+          "point_delta": -0.0008467740041637195,
+          "ci_low": -0.0010782657957738098,
+          "ci_high": -0.0006355611653792864,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "TEAM25_GOALIE20": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 28902.0,
+        "naive_brier": 0.2104619128038555,
+        "structural_brier": 0.19895394626272292,
+        "game_clustered": {
+          "point_delta": -0.011507966541138032,
+          "ci_low": -0.014940114453348724,
+          "ci_high": -0.007911930343130757,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 27047.0,
+        "naive_brier": 0.21783426715730556,
+        "structural_brier": 0.20804699326770057,
+        "game_clustered": {
+          "point_delta": -0.009787273889615367,
+          "ci_low": -0.013943570810477451,
+          "ci_high": -0.005988789603642741,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "TEAM30_GOALIE25": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 15815.0,
+        "naive_brier": 0.2514852070045642,
+        "structural_brier": 0.22705267634817822,
+        "game_clustered": {
+          "point_delta": -0.024432530656387758,
+          "ci_low": -0.029742308650189675,
+          "ci_high": -0.018963941769037873,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 15141.0,
+        "naive_brier": 0.25336491354157364,
+        "structural_brier": 0.22221309802745248,
+        "game_clustered": {
+          "point_delta": -0.031151815514102038,
+          "ci_low": -0.03640360228603989,
+          "ci_high": -0.02583869698474242,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "PLAYER3_GOALIE20": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 8490.0,
+        "naive_brier": 0.14615785173551027,
+        "structural_brier": 0.1456535013681338,
+        "game_clustered": {
+          "point_delta": -0.0005043503673790584,
+          "ci_low": -0.0007631704935305572,
+          "ci_high": -0.0002239793227212794,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 8046.0,
+        "naive_brier": 0.14074340866716967,
+        "structural_brier": 0.14020678206037174,
+        "game_clustered": {
+          "point_delta": -0.000536626606796986,
+          "ci_low": -0.0007937463433956571,
+          "ci_high": -0.0002747614952502142,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    },
+    "PLAYER4_GOALIE25": {
+      "20242025": {
+        "n": 40815,
+        "n_positive": 3141.0,
+        "naive_brier": 0.06655985610382417,
+        "structural_brier": 0.06598107691233442,
+        "game_clustered": {
+          "point_delta": -0.0005787791914905749,
+          "ci_low": -0.0007639717504110272,
+          "ci_high": -0.00038593864696009894,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1308
+        }
+      },
+      "20252026": {
+        "n": 40575,
+        "n_positive": 2986.0,
+        "naive_brier": 0.06396603480549413,
+        "structural_brier": 0.06329136965405552,
+        "game_clustered": {
+          "point_delta": -0.0006746651514389079,
+          "ci_low": -0.0008929831744445144,
+          "ci_high": -0.00047106320065233576,
+          "frac_improved": 1.0,
+          "n_resamples": 1000,
+          "n_games_resampled": 1310
+        }
+      }
+    }
+  },
+  "triple_result": {
+    "combo": {
+      "name": "PLAYER3_TEAM30_GOALIE20",
+      "family": "THREE_WAY",
+      "x_player": 3,
+      "y_team": 30,
+      "z_saves": 20
+    },
+    "by_season": {
+      "20242025": {
+        "n": 43108,
+        "n_positive": 5101.0,
+        "A_naive_independence": {
+          "brier": 0.09947419362151178,
+          "log_loss": 0.3473266205196957,
+          "calibration": [
+            {
+              "band": "0%-5%",
+              "n": 19523,
+              "mean_predicted": 0.025149520218746325,
+              "mean_actual": 0.05557547508067408
+            },
+            {
+              "band": "5%-10%",
+              "n": 11067,
+              "mean_predicted": 0.07192024363007833,
+              "mean_actual": 0.11068943706514864
+            },
+            {
+              "band": "10%-20%",
+              "n": 8792,
+              "mean_predicted": 0.14039186304891357,
+              "mean_actual": 0.18858052775250228
+            },
+            {
+              "band": "20%-30%",
+              "n": 2779,
+              "mean_predicted": 0.24033900062071825,
+              "mean_actual": 0.28211586901763225
+            },
+            {
+              "band": "30%-50%",
+              "n": 903,
+              "mean_predicted": 0.35823286711303115,
+              "mean_actual": 0.3610188261351052
+            },
+            {
+              "band": "50%-100%",
+              "n": 44,
+              "mean_predicted": 0.5647431116019845,
+              "mean_actual": 0.5227272727272727
+            }
+          ]
+        },
+        "D_structural_factorization": {
+          "brier": 0.09785236993854898,
+          "log_loss": 0.334697100772342,
+          "calibration": [
+            {
+              "band": "0%-5%",
+              "n": 11214,
+              "mean_predicted": 0.03190432749268577,
+              "mean_actual": 0.04146602461209203
+            },
+            {
+              "band": "5%-10%",
+              "n": 12907,
+              "mean_predicted": 0.07274020866484306,
+              "mean_actual": 0.07678004183776245
+            },
+            {
+              "band": "10%-20%",
+              "n": 11901,
+              "mean_predicted": 0.14103024010190637,
+              "mean_actual": 0.1479707587597681
+            },
+            {
+              "band": "20%-30%",
+              "n": 4712,
+              "mean_predicted": 0.2428531774699205,
+              "mean_actual": 0.23259762308998302
+            },
+            {
+              "band": "30%-50%",
+              "n": 2213,
+              "mean_predicted": 0.3649099845150724,
+              "mean_actual": 0.3271577044735653
+            },
+            {
+              "band": "50%-100%",
+              "n": 161,
+              "mean_predicted": 0.5595424944617978,
+              "mean_actual": 0.39751552795031053
+            }
+          ]
+        },
+        "bootstrap_structural_vs_naive": {
+          "game_clustered": {
+            "point_delta": -0.001621823682962209,
+            "ci_low": -0.002177503242884876,
+            "ci_high": -0.0010346534251770012,
+            "frac_improved": 1.0,
+            "n_resamples": 1000,
+            "n_games_resampled": 1312
+          },
+          "date_clustered": {
+            "point_delta": -0.001621823682962209,
+            "ci_low": -0.0022232955868742854,
+            "ci_high": -0.001034463536068092,
+            "frac_improved": 1.0,
+            "n_resamples": 500,
+            "n_dates_resampled": 178
+          }
+        },
+        "status": "SCORED",
+        "dependence_lift": {
+          "mean_naive_p": 0.08206123545627819,
+          "mean_structural_p": 0.11638188268468418,
+          "lift_ratio": 1.4182321535567406
+        }
+      },
+      "20252026": {
+        "n": 42938,
+        "n_positive": 4848.0,
+        "A_naive_independence": {
+          "brier": 0.09559628061406017,
+          "log_loss": 0.3368379633966483,
+          "calibration": [
+            {
+              "band": "0%-5%",
+              "n": 22134,
+              "mean_predicted": 0.023966526555375695,
+              "mean_actual": 0.0528598536188669
+            },
+            {
+              "band": "5%-10%",
+              "n": 10517,
+              "mean_predicted": 0.07174215295810205,
+              "mean_actual": 0.12456023580869069
+            },
+            {
+              "band": "10%-20%",
+              "n": 7887,
+              "mean_predicted": 0.13927107277162243,
+              "mean_actual": 0.20261189298846202
+            },
+            {
+              "band": "20%-30%",
+              "n": 1917,
+              "mean_predicted": 0.23848808352702827,
+              "mean_actual": 0.2936880542514345
+            },
+            {
+              "band": "30%-50%",
+              "n": 462,
+              "mean_predicted": 0.3481499542501149,
+              "mean_actual": 0.4199134199134199
+            },
+            {
+              "band": "50%-100%",
+              "n": 21,
+              "mean_predicted": 0.5628341413177376,
+              "mean_actual": 0.6190476190476191
+            }
+          ]
+        },
+        "D_structural_factorization": {
+          "brier": 0.09327754811073961,
+          "log_loss": 0.3210389996960731,
+          "calibration": [
+            {
+              "band": "0%-5%",
+              "n": 13366,
+              "mean_predicted": 0.031076551941215946,
+              "mean_actual": 0.03853060002992668
+            },
+            {
+              "band": "5%-10%",
+              "n": 12668,
+              "mean_predicted": 0.07225531455981253,
+              "mean_actual": 0.07988632775497316
+            },
+            {
+              "band": "10%-20%",
+              "n": 11200,
+              "mean_predicted": 0.14147847835148628,
+              "mean_actual": 0.15526785714285715
+            },
+            {
+              "band": "20%-30%",
+              "n": 4089,
+              "mean_predicted": 0.24171773194586813,
+              "mean_actual": 0.24602592320860847
+            },
+            {
+              "band": "30%-50%",
+              "n": 1542,
+              "mean_predicted": 0.35866155773520336,
+              "mean_actual": 0.3476005188067445
+            },
+            {
+              "band": "50%-100%",
+              "n": 73,
+              "mean_predicted": 0.5845615041295779,
+              "mean_actual": 0.547945205479452
+            }
+          ]
+        },
+        "bootstrap_structural_vs_naive": {
+          "game_clustered": {
+            "point_delta": -0.002318732503320528,
+            "ci_low": -0.0029130048097483485,
+            "ci_high": -0.0017034018162497694,
+            "frac_improved": 1.0,
+            "n_resamples": 1000,
+            "n_games_resampled": 1311
+          },
+          "date_clustered": {
+            "point_delta": -0.002318732503320528,
+            "ci_low": -0.0029403186116619823,
+            "ci_high": -0.001716154027109923,
+            "frac_improved": 1.0,
+            "n_resamples": 500,
+            "n_dates_resampled": 167
+          }
+        },
+        "status": "SCORED",
+        "dependence_lift": {
+          "mean_naive_p": 0.07017710942147677,
+          "mean_structural_p": 0.10478763317766177,
+          "lift_ratio": 1.4931882210810026
+        }
+      }
+    }
+  },
+  "marginal_recovery": {
+    "20242025": {
+      "n": 43108,
+      "player_3plus_mean_diff_structural_minus_frozen": -0.0019837476399224437,
+      "player_3plus_abs_mean_diff": 0.051567127843530805
+    },
+    "20252026": {
+      "n": 42938,
+      "player_3plus_mean_diff_structural_minus_frozen": -0.0024107147660599923,
+      "player_3plus_abs_mean_diff": 0.0517855889035813
+    }
+  },
+  "freeze_manifest": {
+    "experiment_id": "joint_shot_workload_v1",
+    "marginal_model_versions": {
+      "player_sog": "headline_stage from research/player_sog_results.json (frozen, unchanged)",
+      "team_sog": "winner from research/team_sog_results.json (frozen, unchanged)",
+      "goalie_saves": "full_game_winner from research/goalie_saves_results.json (frozen, unchanged)"
+    },
+    "threshold_matrix": [
+      "PLAYER2_TEAM25",
+      "PLAYER3_TEAM30",
+      "PLAYER4_TEAM30",
+      "TEAM25_GOALIE20",
+      "TEAM30_GOALIE25",
+      "PLAYER3_GOALIE20",
+      "PLAYER4_GOALIE25",
+      "PLAYER3_TEAM30_GOALIE20"
+    ],
+    "joint_factorization": "P(Team SOG) x P(Player SOG | Team SOG ~ Binomial(n, shrunk_share)) x P(Goalie Saves | Team SOG, empty-net dist, league save%)",
+    "player_share_methodology": "research/joint_shot_workload/joint_models.py::PlayerShareRates -- pooled sum(player_sog)/sum(team_sog) over PIT-safe history, shrunk toward TUNING league-average share by game count (k=20)",
+    "goalie_conditional_methodology": "Saves | shots_faced ~ Binomial(shots_faced, LEAGUE-average save%, never goalie-specific -- per the Goalie Saves slice's own finding that save-rate talent does not add value)",
+    "multi_goalie_policy": "HEADLINE population = all real starter games (multi-goalie included); see report Section B for the FULL_GAME-only sensitivity split",
+    "empty_net_policy": "TUNING-season empirical empty-net-SOG-count distribution, applied as a probability-weighted mixture over shots-faced",
+    "dependence_parameters": {
+      "rho_player_team": 0.24339785735848993,
+      "rho_team_goalie": 0.7963614259236492,
+      "rho_player_goalie": 0.19923742217018978
+    },
+    "shrinkage": {
+      "player_share_k_games": 20,
+      "empirical_joint_k": 2000
+    },
+    "monte_carlo": "Gaussian copula upper-tail probability uses a DETERMINISTIC numerical quadrature (Simpson's rule, n=48) of the standard bivariate-normal CDF representation -- no sampling, no seed needed, exact to several decimal places. A SEPARATE literal generative Monte Carlo sampler (fixed seed 20232024, 20,000 draws) exists for Part 22/47 verification purposes -- see monte_carlo_sampler_verification key: it recovers the analytic structural marginals within <=0.0024 absolute probability, confirming the sampler correctly implements the same generative structure the analytic formulas compute exactly.",
+    "calibration": "6-band calibration table per combination/season/candidate",
+    "joint_conservative_methodology": "RESEARCH -- not yet operationalized (Part 39)",
+    "code_hashes": {
+      "run_joint_shot_workload_model.py": "e40f3703fd1d23d34fae43b9a8685c15186c1d874e3a39a1e73ee543b9d20373",
+      "joint_shot_workload/joint_models.py": "5c4641aebbd0cf121d206ce72428e9cbad16f4b1d78b0ff97cfa995f4c21475d",
+      "joint_shot_workload/marginal_provenance.py": "dffdb2db086b15879ca5c0f5a87adfc6f6371e4c870fd1d7567367d1553e819e",
+      "joint_shot_workload/build_joint_corpus.py": "652a28acabeb252819879ff69df6f1aa2904e89755d604b8a5cafc5920311e1d"
+    },
+    "timestamp_utc": "2026-08-29T14:30:21Z"
+  },
+  "representative_examples": {
+    "high_volume_player_high_team_env": {
+      "game_id": 2025020506,
+      "game_date": "2025-12-13",
+      "player_id": "8477492",
+      "player_team": "COL",
+      "opponent_team": "NSH",
+      "p_a": 0.7869762814217474,
+      "p_b": 0.7521248342980811,
+      "naive": 0.5919044052608518,
+      "structural": 0.6656971774731186,
+      "dependence_lift": 1.1246700844872854,
+      "actual_player_sog": 3.0,
+      "actual_team_sog": 41,
+      "actual_goalie_saves": 37
+    },
+    "low_volume_player_high_team_env": {
+      "game_id": 2025020105,
+      "game_date": "2025-10-21",
+      "player_id": "8477527",
+      "player_team": "ANA",
+      "opponent_team": "NSH",
+      "p_a": 0.00011104195005506856,
+      "p_b": 0.4318341653595663,
+      "naive": 4.7951707821929184e-05,
+      "structural": 0.00011104195005506856,
+      "dependence_lift": 2.3157037590283087,
+      "actual_player_sog": 1.0,
+      "actual_team_sog": 32,
+      "actual_goalie_saves": 27
+    },
+    "team_sog_over_and_goalie_saves_over": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8473419",
+      "player_team": "FLA",
+      "opponent_team": "CHI",
+      "p_a": 0.9107756050361402,
+      "p_b": 0.962865422161822,
+      "naive": 0.876954337437812,
+      "structural": 0.9085639040868856,
+      "dependence_lift": 1.0360447121356704,
+      "actual_player_sog": 4.0,
+      "actual_team_sog": 37,
+      "actual_goalie_saves": 34
+    },
+    "player_sog_over_and_goalie_saves_over": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8473419",
+      "player_team": "FLA",
+      "opponent_team": "CHI",
+      "p_a": 0.40916344784441194,
+      "p_b": 0.962865422161822,
+      "naive": 0.39396933594189637,
+      "structural": 0.40916344784441194,
+      "dependence_lift": 1.0385667373481993,
+      "actual_player_sog": 4.0,
+      "actual_team_sog": 37,
+      "actual_goalie_saves": 34
+    },
+    "high_dependence_lift": {
+      "game_id": 2025020059,
+      "game_date": "2025-10-15",
+      "player_id": "8483450",
+      "player_team": "CHI",
+      "opponent_team": "STL",
+      "p_a": 0.0019893046151560068,
+      "p_b": 0.0514637125654972,
+      "naive": 0.00010237700091960575,
+      "structural": 0.0019893046151560068,
+      "dependence_lift": 19.43116713018543,
+      "actual_player_sog": 1.0,
+      "actual_team_sog": 29,
+      "actual_goalie_saves": 15
+    },
+    "low_dependence_lift": {
+      "game_id": 2025020006,
+      "game_date": "2025-10-08",
+      "player_id": "8480860",
+      "player_team": "CGY",
+      "opponent_team": "EDM",
+      "p_a": 0.20408928888198086,
+      "p_b": 0.4302976708394395,
+      "naive": 0.08781914564919388,
+      "structural": 0.03654393505638695,
+      "dependence_lift": 0.41612719853102326,
+      "actual_player_sog": 1.0,
+      "actual_team_sog": 22,
+      "actual_goalie_saves": 19
+    },
+    "model_hit": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8473419",
+      "player_team": "FLA",
+      "opponent_team": "CHI",
+      "p_a": 0.9107756050361402,
+      "p_b": 0.962865422161822,
+      "naive": 0.876954337437812,
+      "structural": 0.9085639040868856,
+      "dependence_lift": 1.0360447121356704,
+      "actual_player_sog": 4.0,
+      "actual_team_sog": 37,
+      "actual_goalie_saves": 34
+    },
+    "model_miss": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8473422",
+      "player_team": "CHI",
+      "opponent_team": "FLA",
+      "p_a": 0.27061993249299277,
+      "p_b": 0.48593782106928657,
+      "naive": 0.13150446033356233,
+      "structural": 0.26732426192555403,
+      "dependence_lift": 2.0328151702800303,
+      "actual_player_sog": 0.0,
+      "actual_team_sog": 19,
+      "actual_goalie_saves": 17
+    }
+  },
+  "monte_carlo_sampler_verification": {
+    "mu_team_used": 30.291539634146343,
+    "player_share_used": 0.05556406153106161,
+    "n_samples": 20000,
+    "seed": 20232024,
+    "team_sog_25plus": {
+      "monte_carlo": 0.85245,
+      "analytic": 0.8548168489689381,
+      "abs_diff": 0.002366848968938018
+    },
+    "player_sog_3plus": {
+      "monte_carlo": 0.23815,
+      "analytic": 0.23832788217085407,
+      "abs_diff": 0.0001778821708540712
+    },
+    "goalie_saves_20plus": {
+      "monte_carlo": 0.9357,
+      "analytic": 0.9353012711936017,
+      "abs_diff": 0.0003987288063982408
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/01d78cd04d7c4fb958e1d02bace05ec4/odds",
+    "event_id": "01d78cd04d7c4fb958e1d02bace05ec4",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "631582c0a666c96e1782754ce2ca716c18c46277f30fe5e25314676eaafe3258",
+    "retrieved_at_utc": "2026-08-30T13:01:30Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "San Jose Sharks",
+    "bookmakers": [],
+    "commence_time": "2026-10-09T00:10:00Z",
+    "home_team": "St Louis Blues",
+    "id": "01d78cd04d7c4fb958e1d02bace05ec4",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

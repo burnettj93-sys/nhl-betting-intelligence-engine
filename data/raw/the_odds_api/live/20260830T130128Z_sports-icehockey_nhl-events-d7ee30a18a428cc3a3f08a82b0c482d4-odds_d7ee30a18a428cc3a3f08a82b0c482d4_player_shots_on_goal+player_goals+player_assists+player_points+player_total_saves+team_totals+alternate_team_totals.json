@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/d7ee30a18a428cc3a3f08a82b0c482d4/odds",
+    "event_id": "d7ee30a18a428cc3a3f08a82b0c482d4",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "85c7df71f96dd4cb0509349985cdced9fd777b60149070438789316c1d5185ee",
+    "retrieved_at_utc": "2026-08-30T13:01:28Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Minnesota Wild",
+    "bookmakers": [],
+    "commence_time": "2026-10-02T00:10:00Z",
+    "home_team": "Nashville Predators",
+    "id": "d7ee30a18a428cc3a3f08a82b0c482d4",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

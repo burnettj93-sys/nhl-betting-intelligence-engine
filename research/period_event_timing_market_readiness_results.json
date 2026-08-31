@@ -1,0 +1,188 @@
+{
+  "named_analyses_this_sprint": {
+    "EMPTY_NET_GOALIE_PULL_TIMING": {
+      "evidence": "First-pull timing reconstructed and cleanly separated from delayed-penalty pulls (2,870 genuine trailing pulls vs 2,689 delayed-penalty pulls across the full corpus); real, monotonic score-differential-vs-time-remaining pattern confirmed. No formal P(pull | state) regression built this sprint.",
+      "readiness": "DATA_READY"
+    },
+    "FIRST_GOAL_TIMING": {
+      "evidence": "Real survival probabilities computed (scoreless-through-5/10/15min, end-of-P1) across all 5,248 games -- see research/period_event_timing_core_results.json.",
+      "readiness": "DATA_READY"
+    },
+    "FIRST_TEAM_TO_SCORE": {
+      "evidence": "Real home-first-goal baseline rate 52.2% (2,737/5,242 decided games) -- a usable naive candidate exists; comparing it against the existing NHL Elo win-probability model or a purpose-built regression was NOT done this sprint (deferred -- see report Section AU).",
+      "readiness": "CANDIDATE_BUILT"
+    },
+    "PP_GOAL_CONVERSION": {
+      "evidence": "League PP conversion rate 19.9% (6,356 PP goals / 31,901 PP opportunities), matches known real-world NHL league averages closely -- a real, usable baseline rate exists; no per-team predictive model built/validated this sprint.",
+      "readiness": "DATA_READY"
+    },
+    "PP_OPPORTUNITY_COUNT_MODEL": {
+      "evidence": "Poisson variance/mean ratio 0.84 across 10,496 real team-game rows (research/special_teams_corpus_results.json) -- Poisson is an adequate count family; no walk-forward OOS validation run this sprint, so CANDIDATE_BUILT, not VALIDATED.",
+      "readiness": "CANDIDATE_BUILT"
+    },
+    "PP_POINTS": {
+      "evidence": "PP role only PARTIALLY predictable (rolling-PP-TOI vs next-game-PP-TOI r~0.54-0.58 across 3/5/10/20-game windows, R^2~0.29-0.34) -- real signal, not strong enough to clear Part 32's gate for building a candidate probability model this sprint.",
+      "readiness": "DATA_READY"
+    },
+    "SH_SCORING": {
+      "evidence": "773 shorthanded goals across 5,248 games (4 seasons) -- ~0.074 per team per game league-wide; a player-level SH-scoring model has essentially no real per-player support.",
+      "readiness": "INSUFFICIENT_DATA"
+    },
+    "TEAM_GOALS_BY_PERIOD_REVISIT": {
+      "evidence": "Part 17 only authorizes revisiting this if a genuinely new event-timing architecture is actually built and compared against the prior rejected candidate. That comparison was not run this sprint (time-boxed out -- see report Section AU) -- status remains ATTEMPTED_NOT_VALIDATED, unchanged, per Part 17's own explicit instruction not to simply rerun it.",
+      "readiness": "NOT_REVISITED_THIS_SPRINT"
+    }
+  },
+  "note": "Zero markets promoted to VALIDATED status this sprint by design (Part 55: data availability is not validation). Every market in an affected process family not named above defaults to DERIVABLE: the manpower/penalty/period-timing data foundation needed to compute a real, non-fabricated baseline for it now exists, but no market-specific model was individually built or validated.",
+  "process_family_detail": {
+    "EMPTY_NET_STATE": {
+      "existing_model_status_counts": {
+        "NOT_BUILT": 2
+      },
+      "market_ids": [
+        "ANY_EMPTY_NET_GOAL",
+        "TEAM_EMPTY_NET_GOAL"
+      ],
+      "total_markets": 2
+    },
+    "GAME_SCORE_STATE": {
+      "existing_model_status_counts": {
+        "NOT_BUILT": 13,
+        "RESEARCH": 1
+      },
+      "market_ids": [
+        "COME_FROM_BEHIND_WIN",
+        "EXACT_FINAL_SCORE",
+        "GAME_TO_OT",
+        "GAME_TO_SHOOTOUT",
+        "GAME_WINNING_GOAL",
+        "GOALIE_WIN",
+        "LARGEST_LEAD",
+        "METHOD_OF_VICTORY_OVERTIME",
+        "METHOD_OF_VICTORY_REGULATION",
+        "METHOD_OF_VICTORY_SHOOTOUT",
+        "PLAYER_GOAL_AND_TEAM_WIN",
+        "TEAM_LEAD_1_0",
+        "TEAM_LEAD_2_0",
+        "WINNING_MARGIN"
+      ],
+      "total_markets": 14
+    },
+    "PENALTY_PROCESS": {
+      "existing_model_status_counts": {
+        "NOT_BUILT": 6
+      },
+      "market_ids": [
+        "GAME_TOTAL_PENALTIES",
+        "GAME_TOTAL_PIM",
+        "PLAYER_PIM_OU",
+        "PLAYER_TO_RECEIVE_PENALTY",
+        "TEAM_PENALTIES_OU",
+        "TEAM_PIM_OU"
+      ],
+      "total_markets": 6
+    },
+    "PERIOD_EVENT_TIMING": {
+      "existing_model_status_counts": {
+        "NOT_BUILT": 49,
+        "PARTIAL": 2,
+        "RESEARCH": 7,
+        "VALIDATED": 4
+      },
+      "market_ids": [
+        "COME_FROM_BEHIND_WIN",
+        "FIRST_GOAL_METHOD_EV",
+        "FIRST_GOAL_METHOD_PP",
+        "FIRST_GOAL_METHOD_SH",
+        "FIRST_GOAL_TIMING",
+        "GAME_WINNING_GOAL",
+        "LARGEST_LEAD",
+        "LEAD_AFTER_EVERY_PERIOD",
+        "PERIOD_1_BOTH_TEAMS_SCORE",
+        "PERIOD_1_CORRECT_SCORE",
+        "PERIOD_1_FIRST_TEAM_TO_SCORE",
+        "PERIOD_1_GAME_TOTAL_GOALS",
+        "PERIOD_1_GOALIE_SAVES",
+        "PERIOD_1_PERIOD_WINNING_MARGIN",
+        "PERIOD_1_PLAYER_GOAL",
+        "PERIOD_1_PLAYER_POINT",
+        "PERIOD_1_PLAYER_SOG",
+        "PERIOD_1_TEAM_TOTAL_GOALS",
+        "PERIOD_1_TEAM_TO_SCORE",
+        "PERIOD_2_BOTH_TEAMS_SCORE",
+        "PERIOD_2_CORRECT_SCORE",
+        "PERIOD_2_FIRST_TEAM_TO_SCORE",
+        "PERIOD_2_GAME_TOTAL_GOALS",
+        "PERIOD_2_GOALIE_SAVES",
+        "PERIOD_2_PERIOD_WINNING_MARGIN",
+        "PERIOD_2_PLAYER_GOAL",
+        "PERIOD_2_PLAYER_POINT",
+        "PERIOD_2_PLAYER_SOG",
+        "PERIOD_2_TEAM_TOTAL_GOALS",
+        "PERIOD_2_TEAM_TO_SCORE",
+        "PERIOD_3_BOTH_TEAMS_SCORE",
+        "PERIOD_3_CORRECT_SCORE",
+        "PERIOD_3_FIRST_TEAM_TO_SCORE",
+        "PERIOD_3_GAME_TOTAL_GOALS",
+        "PERIOD_3_GOALIE_SAVES",
+        "PERIOD_3_PERIOD_WINNING_MARGIN",
+        "PERIOD_3_PLAYER_GOAL",
+        "PERIOD_3_PLAYER_POINT",
+        "PERIOD_3_PLAYER_SOG",
+        "PERIOD_3_TEAM_TOTAL_GOALS",
+        "PERIOD_3_TEAM_TO_SCORE",
+        "PLAYER_FIRST_GOAL_SCORER",
+        "PLAYER_GOAL_PERIOD_1",
+        "PLAYER_GOAL_PERIOD_2",
+        "PLAYER_GOAL_PERIOD_3",
+        "PLAYER_LAST_GOAL_SCORER",
+        "RACE_TO_1",
+        "RACE_TO_2",
+        "RACE_TO_3",
+        "RACE_TO_4",
+        "TEAM_FIRST_GOAL_SCORER",
+        "TEAM_HIGHEST_SCORING_PERIOD",
+        "TEAM_LEAD_1_0",
+        "TEAM_LEAD_2_0",
+        "TEAM_PERIOD_1_TOTAL",
+        "TEAM_PERIOD_2_TOTAL",
+        "TEAM_PERIOD_3_TOTAL",
+        "TEAM_SCORE_EVERY_PERIOD",
+        "TEAM_SCORE_IN_PERIOD_1",
+        "TEAM_TO_SCORE_FIRST",
+        "TEAM_TO_SCORE_LAST",
+        "TEAM_WIN_EVERY_PERIOD"
+      ],
+      "total_markets": 62
+    },
+    "SPECIAL_TEAMS_STATE": {
+      "existing_model_status_counts": {
+        "NOT_BUILT": 13
+      },
+      "market_ids": [
+        "ANY_PP_GOAL",
+        "ANY_SH_GOAL",
+        "FIRST_GOAL_METHOD_EV",
+        "FIRST_GOAL_METHOD_PP",
+        "FIRST_GOAL_METHOD_SH",
+        "GAME_TOTAL_PP_GOALS",
+        "PLAYER_PP_GOAL",
+        "PLAYER_PP_POINT",
+        "PLAYER_SH_GOAL",
+        "PLAYER_SH_POINT",
+        "TEAM_PP_GOALS_TOTAL",
+        "TEAM_PP_GOAL_ANYTIME",
+        "TEAM_SH_GOAL"
+      ],
+      "total_markets": 13
+    }
+  },
+  "process_family_market_counts": {
+    "EMPTY_NET_STATE": 2,
+    "GAME_SCORE_STATE": 14,
+    "PENALTY_PROCESS": 6,
+    "PERIOD_EVENT_TIMING": 62,
+    "SPECIAL_TEAMS_STATE": 13
+  },
+  "validated_market_count_this_sprint": 0
+}

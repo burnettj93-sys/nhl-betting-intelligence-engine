@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3a9af73961ea2f2322255a6fca4d421e/odds",
+    "event_id": "3a9af73961ea2f2322255a6fca4d421e",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "07258f26fc4bce288f802859a37f0485562e93e2d31d33f7a6c0f18c5f8e56e7",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Boston Bruins",
+    "bookmakers": [],
+    "commence_time": "2026-10-04T00:10:00Z",
+    "home_team": "Minnesota Wild",
+    "id": "3a9af73961ea2f2322255a6fca4d421e",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

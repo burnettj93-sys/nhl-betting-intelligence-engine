@@ -1,0 +1,48 @@
+{
+  "best_challenger_on_dev": "E_pp_xg_per_shot",
+  "calibration_policy": "none -- diagnostic calibration-by-region reported, no calibrator fit",
+  "candidate_features_tested": [
+    "xg_per_shot",
+    "high_danger_share",
+    "finishing_above_xg",
+    "pp_xg_per_shot",
+    "xg_per_shot+high_danger_share"
+  ],
+  "challenger_cleared_95pct_bar_on_dev": false,
+  "challenger_version": "goals_shot_quality_v1",
+  "combined_weights_xg_hd": [
+    -0.019118698014145147,
+    -0.010972251733133967
+  ],
+  "confidence_policy": "UNCHANGED shared research.player_sog.count_models.confidence_score",
+  "conservative_probability_policy": "UNCHANGED shared research.player_sog.count_models.conservative_mu",
+  "dev_fitted_weights": {
+    "B_xg_per_shot": -0.01924143844748682,
+    "C_high_danger_rate": -0.011187722427409256,
+    "D_finishing_above_xg": -0.006573077537146604,
+    "E_pp_xg_per_shot": -0.024711626311345408
+  },
+  "dev_season": 20242025,
+  "dev_split_date": "2025-02-23",
+  "dev_value_tests": {
+    "B_xg_per_shot": 0.815,
+    "C_high_danger_rate": 0.853,
+    "D_combined_xg_hd": 0.82,
+    "D_finishing_above_xg": 0.876,
+    "E_pp_xg_per_shot": 0.811
+  },
+  "experiment_id": "goals_shot_quality_refinement_v1",
+  "final_fold_season": 20252026,
+  "freeze_timestamp_utc": "2026-08-28T11:24:08.385049Z",
+  "incumbent_version": "player_goals_v1 (candidate E, unchanged)",
+  "shrinkage": {
+    "finishing_above_xg_games": 100,
+    "high_danger_share_attempts": 200,
+    "pp_xg_per_shot_shots": 100,
+    "xg_per_shot_shots": 100
+  },
+  "source_code_hashes": {
+    "research/player_goals/shot_quality.py": "4878fe2dc0fa7661",
+    "research/run_goals_shot_quality_refinement.py": "15bbb7d78e3ad678"
+  }
+}

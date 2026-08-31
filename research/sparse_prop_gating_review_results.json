@@ -1,0 +1,254 @@
+{
+  "confidence_table": {
+    "ASSISTS": {
+      "buckets": {
+        "HIGH": {
+          "actual_rate": 0.2700847065051949,
+          "baseline_naive_brier": 0.19713895781719762,
+          "brier": 0.188222140634441,
+          "brier_skill_score": 0.045231126721411274,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 60444,
+          "share_of_total": 0.6869495050517679
+        },
+        "LOW": {
+          "actual_rate": 0.13388259526261587,
+          "baseline_naive_brier": 0.11595804594836244,
+          "brier": 0.12090314083894836,
+          "brier_skill_score": -0.04264555210587151,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 971,
+          "share_of_total": 0.01103547034288377
+        },
+        "MEDIUM": {
+          "actual_rate": 0.1906374651915406,
+          "baseline_naive_brier": 0.15429482205688475,
+          "brier": 0.15031252637501613,
+          "brier_skill_score": 0.025809652124297755,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 26574,
+          "share_of_total": 0.3020150246053484
+        }
+      },
+      "headline_threshold": "1",
+      "total_n": 87989
+    },
+    "BLOCKS": {
+      "buckets": {
+        "HIGH": {
+          "actual_rate": 0.22822651099992058,
+          "baseline_naive_brier": 0.1761391706767237,
+          "brier": 0.14930315010831552,
+          "brier_skill_score": 0.15235691450859357,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 62955,
+          "share_of_total": 0.7154871631681233
+        },
+        "LOW": {
+          "actual_rate": 0.1151685393258427,
+          "baseline_naive_brier": 0.10190474687539453,
+          "brier": 0.10171571094314573,
+          "brier_skill_score": 0.0018550257769635037,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 1068,
+          "share_of_total": 0.01213788087147257
+        },
+        "MEDIUM": {
+          "actual_rate": 0.14587332053742802,
+          "baseline_naive_brier": 0.12459429489281279,
+          "brier": 0.11329055047173021,
+          "brier_skill_score": 0.09072441423427191,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 23966,
+          "share_of_total": 0.2723749559604041
+        }
+      },
+      "headline_threshold": "2",
+      "total_n": 87989
+    },
+    "GOALS": {
+      "buckets": {
+        "HIGH": {
+          "actual_rate": 0.165104644903904,
+          "baseline_naive_brier": 0.13784510113505977,
+          "brier": 0.1286080575441577,
+          "brier_skill_score": 0.06701031458384354,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 63166,
+          "share_of_total": 0.7178851901942288
+        },
+        "LOW": {
+          "actual_rate": 0.09174311926605505,
+          "baseline_naive_brier": 0.08332631933338945,
+          "brier": 0.08599564345850097,
+          "brier_skill_score": -0.03203458578833329,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 872,
+          "share_of_total": 0.009910329700303448
+        },
+        "MEDIUM": {
+          "actual_rate": 0.1302242077575049,
+          "baseline_naive_brier": 0.11326586347143511,
+          "brier": 0.10774482419609296,
+          "brier_skill_score": 0.048744070862396405,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 23951,
+          "share_of_total": 0.2722044801054677
+        }
+      },
+      "headline_threshold": "1",
+      "total_n": 87989
+    },
+    "POINTS": {
+      "buckets": {
+        "HIGH": {
+          "actual_rate": 0.3936200275944612,
+          "baseline_naive_brier": 0.23868330147099678,
+          "brier": 0.21984720709017874,
+          "brier_skill_score": 0.07891668275380748,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 60157,
+          "share_of_total": 0.6836877336939845
+        },
+        "LOW": {
+          "actual_rate": 0.18947368421052632,
+          "baseline_naive_brier": 0.15357340720221607,
+          "brier": 0.15912795096379137,
+          "brier_skill_score": -0.03616865616754472,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 1140,
+          "share_of_total": 0.01295616497516735
+        },
+        "MEDIUM": {
+          "actual_rate": 0.2695564213996703,
+          "baseline_naive_brier": 0.19689575708187365,
+          "brier": 0.18850891163641526,
+          "brier_skill_score": 0.042595358933869565,
+          "calibration_error": null,
+          "log_loss": null,
+          "mean_pred": null,
+          "n": 26692,
+          "share_of_total": 0.30335610133084817
+        }
+      },
+      "headline_threshold": "1",
+      "total_n": 87989
+    },
+    "SOG": {
+      "buckets": {
+        "HIGH": {
+          "actual_rate": 0.12253436080280637,
+          "baseline_naive_brier": 0.10751969122545404,
+          "brier": 0.09727305073190944,
+          "brier_skill_score": 0.0953001294624145,
+          "calibration_error": -0.009420823136332634,
+          "log_loss": 0.32753596715194727,
+          "mean_pred": 0.11311353766647374,
+          "n": 69556,
+          "share_of_total": 0.7905079043971406
+        },
+        "LOW": {
+          "actual_rate": 0.023661270236612703,
+          "baseline_naive_brier": 0.023101414527402688,
+          "brier": 0.022475112199114772,
+          "brier_skill_score": 0.02711099476376233,
+          "calibration_error": -0.0008545373534778883,
+          "log_loss": 0.10834888829395817,
+          "mean_pred": 0.022806732883134815,
+          "n": 803,
+          "share_of_total": 0.00912614076759595
+        },
+        "MEDIUM": {
+          "actual_rate": 0.046398184912081676,
+          "baseline_naive_brier": 0.04424539334894595,
+          "brier": 0.04165605849051625,
+          "brier_skill_score": 0.05852213445157195,
+          "calibration_error": -0.004170571407371058,
+          "log_loss": 0.16962890503679412,
+          "mean_pred": 0.04222761350471062,
+          "n": 17630,
+          "share_of_total": 0.2003659548352635
+        }
+      },
+      "headline_threshold": "4",
+      "total_n": 87989
+    }
+  },
+  "goals_low_bucket_composition": {
+    "HIGH": {
+      "mean_appearance_rate": 0.980877370737422,
+      "mean_history_len": 195.2097014216509,
+      "n": 63166
+    },
+    "LOW": {
+      "mean_appearance_rate": 0.5110091743119266,
+      "mean_history_len": 19.297018348623855,
+      "n": 872
+    }
+  },
+  "policy_decision": {
+    "ASSISTS": "WATCH_ONLY (already in place, RETAINED -- LOW skill -0.043, unchanged evidence)",
+    "BLOCKS": "NO_RESTRICTION (LOW skill +0.002, ~neutral, non-negative)",
+    "GOALS": "WATCH_ONLY (NEW -- LOW skill -0.032, same root-cause signature as Assists/Points)",
+    "POINTS": "WATCH_ONLY (already in place, RETAINED -- LOW skill -0.036, unchanged evidence)",
+    "SOG": "NO_RESTRICTION (LOW skill +0.027, positive)"
+  },
+  "policy_version_after": "prop_decision_policy_v2",
+  "policy_version_before": "prop_decision_policy_v1",
+  "prior_assists_points_composition": {
+    "ASSISTS": {
+      "mean_appearance_rate": 0.5092687950566427,
+      "mean_history_len": 19.30690010298661,
+      "n": 971
+    },
+    "POINTS": {
+      "mean_appearance_rate": 0.5168421052631579,
+      "mean_history_len": 19.946491228070176,
+      "n": 1140
+    }
+  },
+  "sparsity_table": {
+    "ASSISTS": {
+      "mean": 0.2961081375306178,
+      "zero_rate": 0.7598153158638802
+    },
+    "BLOCKS": {
+      "mean": 0.8782091989476549,
+      "zero_rate": 0.500092659758661
+    },
+    "GOALS": {
+      "mean": 0.17675,
+      "zero_rate": 0.845
+    },
+    "POINTS": {
+      "mean": 0.4725,
+      "zero_rate": 0.6455
+    },
+    "SOG": {
+      "mean": 1.7152771477819106,
+      "zero_rate": 0.25421072417572527
+    }
+  }
+}

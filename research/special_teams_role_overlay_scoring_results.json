@@ -1,0 +1,113 @@
+{
+  "assists": {
+    "beta_role": {
+      "PP1": 0.1556986822014754,
+      "PP2": -0.045129235224926734
+    },
+    "eval_seasons": {
+      "2024-25": {
+        "n": 43864,
+        "per_threshold": {
+          "1": {
+            "challenger_brier": 0.17486616909995417,
+            "frac_improved": 1.0,
+            "frozen_brier": 0.17540584851495586
+          },
+          "2": {
+            "challenger_brier": 0.0383185149880987,
+            "frac_improved": 0.92,
+            "frozen_brier": 0.03837522920091423
+          },
+          "3": {
+            "challenger_brier": 0.005389304443574867,
+            "frac_improved": 0.0125,
+            "frozen_brier": 0.005374360668261573
+          }
+        }
+      },
+      "2025-26": {
+        "n": 43547,
+        "per_threshold": {
+          "1": {
+            "challenger_brier": 0.1763067405924257,
+            "frac_improved": 1.0,
+            "frozen_brier": 0.17709004267933237
+          },
+          "2": {
+            "challenger_brier": 0.04034561230364347,
+            "frac_improved": 0.995,
+            "frozen_brier": 0.04045409600722712
+          },
+          "3": {
+            "challenger_brier": 0.006134525135140695,
+            "frac_improved": 0.8725,
+            "frozen_brier": 0.006141780078116346
+          }
+        }
+      }
+    },
+    "n_tuning": 82678,
+    "prop": "assists"
+  },
+  "goals": {
+    "beta_role": {
+      "PP1": 0.048423019809009996,
+      "PP2": -0.07375758190190412
+    },
+    "eval_seasons": {
+      "2024-25": {
+        "n": 43864,
+        "per_threshold": {
+          "1": {
+            "challenger_brier": 0.12177951400833709,
+            "frac_improved": 0.96,
+            "frozen_brier": 0.12183674302291547
+          },
+          "2": {
+            "challenger_brier": 0.01633773602915352,
+            "frac_improved": 0.0025,
+            "frozen_brier": 0.016322067906709904
+          }
+        }
+      },
+      "2025-26": {
+        "n": 43547,
+        "per_threshold": {
+          "1": {
+            "challenger_brier": 0.12352836024528768,
+            "frac_improved": 0.9825,
+            "frozen_brier": 0.12360185652297931
+          },
+          "2": {
+            "challenger_brier": 0.017426328046398164,
+            "frac_improved": 0.2625,
+            "frozen_brier": 0.017423022011450455
+          }
+        }
+      }
+    },
+    "n_tuning": 82678,
+    "prop": "goals"
+  },
+  "points": {
+    "beta_role": {
+      "PP1": 0.1905887926685727,
+      "PP2": -0.009877228316231501
+    },
+    "eval_seasons": {
+      "2024-25": {
+        "challenger_brier": 0.2075338989998194,
+        "frac_improved": 0.68,
+        "frozen_brier": 0.20759049522533726,
+        "n": 43864
+      },
+      "2025-26": {
+        "challenger_brier": 0.20777765520532746,
+        "frac_improved": 0.9775,
+        "frozen_brier": 0.20811435490462604,
+        "n": 43547
+      }
+    },
+    "n_tuning": 82678
+  }
+}

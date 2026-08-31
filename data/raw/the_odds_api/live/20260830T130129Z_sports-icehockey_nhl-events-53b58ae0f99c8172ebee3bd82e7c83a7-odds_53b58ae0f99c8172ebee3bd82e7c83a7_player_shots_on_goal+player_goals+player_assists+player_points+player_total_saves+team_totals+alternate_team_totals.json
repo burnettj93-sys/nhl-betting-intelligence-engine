@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/53b58ae0f99c8172ebee3bd82e7c83a7/odds",
+    "event_id": "53b58ae0f99c8172ebee3bd82e7c83a7",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "e56446e9d92aa983e5339dcc8611aa03008c3c15907c0e3fa885306fb3c11f39",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Montr\u00e9al Canadiens",
+    "bookmakers": [],
+    "commence_time": "2026-10-03T23:10:00Z",
+    "home_team": "Pittsburgh Penguins",
+    "id": "53b58ae0f99c8172ebee3bd82e7c83a7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

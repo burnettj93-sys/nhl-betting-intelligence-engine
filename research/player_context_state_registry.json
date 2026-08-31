@@ -1,0 +1,589 @@
+[
+  {
+    "signal": "COLD_STATE",
+    "prop": "sog",
+    "source": "own-history rolling recent-5 vs baseline-20 actual-rate log-ratio (expectation-relative, TUNING-fit bottom-20% cutoff)",
+    "status": "PARTIAL",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.0077933505581367045,
+      "20252026": -0.010704080526662598
+    },
+    "sample_size_by_season": {
+      "20242025": 9149,
+      "20252026": 8970
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline (see COLD_AND_TOI_DECLINE -- often the dominant real driver)",
+      "regression to the mean (see report Section R)"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "COLD_AND_TOI_DECLINE",
+    "prop": "sog",
+    "source": "COLD_STATE AND recent-10 vs baseline-20 icetime log-ratio at/below TUNING-fit bottom-20% cutoff (Part 4 multi-signal AND-rule)",
+    "status": "PARTIAL",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.03305222537015473,
+      "20252026": -0.01431178428059072
+    },
+    "sample_size_by_season": {
+      "20242025": 2484,
+      "20252026": 2402
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline is itself part of the signal definition here, not a confound to strip out -- this is the stronger, more consistent of the two production-based signals"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "HOT_STATE_CONTROL",
+    "prop": "sog",
+    "source": "same signal as COLD_STATE, top-20% cutoff (Part 5 symmetric control -- NOT assumed to create OVER value)",
+    "status": "CONSISTENT_MIRROR",
+    "effect_direction": "OVER (frozen model underpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": 0.021064456348406202,
+      "20252026": 0.018438988871386883
+    },
+    "sample_size_by_season": {
+      "20242025": 9204,
+      "20252026": 9082
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "rare-event count noise for sparser props (Goals/Assists/Points)"
+    ],
+    "operational_status": "RESEARCH ONLY -- diagnostic control, not a betting signal"
+  },
+  {
+    "signal": "ARENA_PLAYER_PERFORMANCE",
+    "prop": "sog",
+    "source": "player-arena residual, hierarchically shrunk player-arena -> arena -> league-mean-zero (TUNING-fit, EVAL-checked via correlation)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "NO RELIABLE OUT-OF-SAMPLE SIGNAL",
+    "effect_magnitude_by_season": {
+      "eval_generalization_corr": 0.012726555940510314
+    },
+    "sample_size_by_season": {
+      "eval_n_pairs": 87087
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "small raw player-arena game counts (Part 17's own stated concern) -- shrinkage was applied precisely because of this, and the effect still does not generalize"
+    ],
+    "operational_status": "RESEARCH ONLY -- confirmed NOT usable as a betting signal"
+  },
+  {
+    "signal": "ARENA_RINK_RECORDING_CANDIDATE",
+    "prop": "sog",
+    "source": "arena-wide (pooled across all players, home-team identity as arena proxy) mean prediction residual, TUNING-fit",
+    "status": "DESCRIPTIVE_ONLY -- not claimed as causal (team style-of-play is an equally plausible confound, same caveat as the existing Hits rink-variation finding in NHL_PBP_FOUR_SEASON_CORPUS_REPORT.md Section S)",
+    "effect_direction": "N/A -- descriptive spread, not a directional betting claim",
+    "effect_magnitude_by_season": {
+      "arena_raw_mean_range": 0.07117350703005261,
+      "n_arenas": 32
+    },
+    "sample_size_by_season": {
+      "n_arenas": 32
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "team style-of-play",
+      "opponent quality mix",
+      "schedule composition"
+    ],
+    "operational_status": "RESEARCH ONLY -- not operationalized"
+  },
+  {
+    "signal": "COLD_STATE",
+    "prop": "goals",
+    "source": "own-history rolling recent-5 vs baseline-20 actual-rate log-ratio (expectation-relative, TUNING-fit bottom-20% cutoff)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.005878051945855604,
+      "20252026": -0.0023691586328292856
+    },
+    "sample_size_by_season": {
+      "20242025": 9416,
+      "20252026": 9242
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline (see COLD_AND_TOI_DECLINE -- often the dominant real driver)",
+      "regression to the mean (see report Section R)"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "COLD_AND_TOI_DECLINE",
+    "prop": "goals",
+    "source": "COLD_STATE AND recent-10 vs baseline-20 icetime log-ratio at/below TUNING-fit bottom-20% cutoff (Part 4 multi-signal AND-rule)",
+    "status": "VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.030857727760287883,
+      "20252026": -0.026287392480244115
+    },
+    "sample_size_by_season": {
+      "20242025": 2010,
+      "20252026": 2053
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline is itself part of the signal definition here, not a confound to strip out -- this is the stronger, more consistent of the two production-based signals"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "HOT_STATE_CONTROL",
+    "prop": "goals",
+    "source": "same signal as COLD_STATE, top-20% cutoff (Part 5 symmetric control -- NOT assumed to create OVER value)",
+    "status": "ANOMALOUS_ASYMMETRY",
+    "effect_direction": "frozen model ALSO overpredicts HOT state in at least one season -- not a clean mirror of COLD",
+    "effect_magnitude_by_season": {
+      "20242025": 0.0007951348021592525,
+      "20252026": -0.01012937950666344
+    },
+    "sample_size_by_season": {
+      "20242025": 8385,
+      "20252026": 8154
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "rare-event count noise for sparser props (Goals/Assists/Points)"
+    ],
+    "operational_status": "RESEARCH ONLY -- diagnostic control, not a betting signal"
+  },
+  {
+    "signal": "ARENA_PLAYER_PERFORMANCE",
+    "prop": "goals",
+    "source": "player-arena residual, hierarchically shrunk player-arena -> arena -> league-mean-zero (TUNING-fit, EVAL-checked via correlation)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "NO RELIABLE OUT-OF-SAMPLE SIGNAL",
+    "effect_magnitude_by_season": {
+      "eval_generalization_corr": 0.0011925941384196518
+    },
+    "sample_size_by_season": {
+      "eval_n_pairs": 75286
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "small raw player-arena game counts (Part 17's own stated concern) -- shrinkage was applied precisely because of this, and the effect still does not generalize"
+    ],
+    "operational_status": "RESEARCH ONLY -- confirmed NOT usable as a betting signal"
+  },
+  {
+    "signal": "ARENA_RINK_RECORDING_CANDIDATE",
+    "prop": "goals",
+    "source": "arena-wide (pooled across all players, home-team identity as arena proxy) mean prediction residual, TUNING-fit",
+    "status": "DESCRIPTIVE_ONLY -- not claimed as causal (team style-of-play is an equally plausible confound, same caveat as the existing Hits rink-variation finding in NHL_PBP_FOUR_SEASON_CORPUS_REPORT.md Section S)",
+    "effect_direction": "N/A -- descriptive spread, not a directional betting claim",
+    "effect_magnitude_by_season": {
+      "arena_raw_mean_range": 0.04225890420377216,
+      "n_arenas": 32
+    },
+    "sample_size_by_season": {
+      "n_arenas": 32
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "team style-of-play",
+      "opponent quality mix",
+      "schedule composition"
+    ],
+    "operational_status": "RESEARCH ONLY -- not operationalized"
+  },
+  {
+    "signal": "COLD_STATE",
+    "prop": "assists",
+    "source": "own-history rolling recent-5 vs baseline-20 actual-rate log-ratio (expectation-relative, TUNING-fit bottom-20% cutoff)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.005173429555635491,
+      "20252026": -0.005038134533788169
+    },
+    "sample_size_by_season": {
+      "20242025": 9578,
+      "20252026": 9205
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline (see COLD_AND_TOI_DECLINE -- often the dominant real driver)",
+      "regression to the mean (see report Section R)"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "COLD_AND_TOI_DECLINE",
+    "prop": "assists",
+    "source": "COLD_STATE AND recent-10 vs baseline-20 icetime log-ratio at/below TUNING-fit bottom-20% cutoff (Part 4 multi-signal AND-rule)",
+    "status": "PARTIAL",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.014462992020455201,
+      "20252026": -0.02427613515569409
+    },
+    "sample_size_by_season": {
+      "20242025": 2212,
+      "20252026": 2281
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline is itself part of the signal definition here, not a confound to strip out -- this is the stronger, more consistent of the two production-based signals"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "HOT_STATE_CONTROL",
+    "prop": "assists",
+    "source": "same signal as COLD_STATE, top-20% cutoff (Part 5 symmetric control -- NOT assumed to create OVER value)",
+    "status": "ANOMALOUS_ASYMMETRY",
+    "effect_direction": "frozen model ALSO overpredicts HOT state in at least one season -- not a clean mirror of COLD",
+    "effect_magnitude_by_season": {
+      "20242025": -0.007520233596123456,
+      "20252026": -0.010304093310044561
+    },
+    "sample_size_by_season": {
+      "20242025": 9871,
+      "20252026": 9673
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "rare-event count noise for sparser props (Goals/Assists/Points)"
+    ],
+    "operational_status": "RESEARCH ONLY -- diagnostic control, not a betting signal"
+  },
+  {
+    "signal": "ARENA_PLAYER_PERFORMANCE",
+    "prop": "assists",
+    "source": "player-arena residual, hierarchically shrunk player-arena -> arena -> league-mean-zero (TUNING-fit, EVAL-checked via correlation)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "NO RELIABLE OUT-OF-SAMPLE SIGNAL",
+    "effect_magnitude_by_season": {
+      "eval_generalization_corr": 0.04653784191122624
+    },
+    "sample_size_by_season": {
+      "eval_n_pairs": 84389
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "small raw player-arena game counts (Part 17's own stated concern) -- shrinkage was applied precisely because of this, and the effect still does not generalize"
+    ],
+    "operational_status": "RESEARCH ONLY -- confirmed NOT usable as a betting signal"
+  },
+  {
+    "signal": "ARENA_RINK_RECORDING_CANDIDATE",
+    "prop": "assists",
+    "source": "arena-wide (pooled across all players, home-team identity as arena proxy) mean prediction residual, TUNING-fit",
+    "status": "DESCRIPTIVE_ONLY -- not claimed as causal (team style-of-play is an equally plausible confound, same caveat as the existing Hits rink-variation finding in NHL_PBP_FOUR_SEASON_CORPUS_REPORT.md Section S)",
+    "effect_direction": "N/A -- descriptive spread, not a directional betting claim",
+    "effect_magnitude_by_season": {
+      "arena_raw_mean_range": 0.04654174413009789,
+      "n_arenas": 32
+    },
+    "sample_size_by_season": {
+      "n_arenas": 32
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "team style-of-play",
+      "opponent quality mix",
+      "schedule composition"
+    ],
+    "operational_status": "RESEARCH ONLY -- not operationalized"
+  },
+  {
+    "signal": "COLD_STATE",
+    "prop": "points",
+    "source": "own-history rolling recent-5 vs baseline-20 actual-rate log-ratio (expectation-relative, TUNING-fit bottom-20% cutoff)",
+    "status": "VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.027058052508200602,
+      "20252026": -0.02568655905504938
+    },
+    "sample_size_by_season": {
+      "20242025": 9001,
+      "20252026": 8702
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline (see COLD_AND_TOI_DECLINE -- often the dominant real driver)",
+      "regression to the mean (see report Section R)"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "COLD_AND_TOI_DECLINE",
+    "prop": "points",
+    "source": "COLD_STATE AND recent-10 vs baseline-20 icetime log-ratio at/below TUNING-fit bottom-20% cutoff (Part 4 multi-signal AND-rule)",
+    "status": "VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.047152856253592904,
+      "20252026": -0.04623648934040564
+    },
+    "sample_size_by_season": {
+      "20242025": 2281,
+      "20252026": 2380
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline is itself part of the signal definition here, not a confound to strip out -- this is the stronger, more consistent of the two production-based signals"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "HOT_STATE_CONTROL",
+    "prop": "points",
+    "source": "same signal as COLD_STATE, top-20% cutoff (Part 5 symmetric control -- NOT assumed to create OVER value)",
+    "status": "ANOMALOUS_ASYMMETRY",
+    "effect_direction": "frozen model ALSO overpredicts HOT state in at least one season -- not a clean mirror of COLD",
+    "effect_magnitude_by_season": {
+      "20242025": -0.010547844646897103,
+      "20252026": -0.010007646620827478
+    },
+    "sample_size_by_season": {
+      "20242025": 9549,
+      "20252026": 9117
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "rare-event count noise for sparser props (Goals/Assists/Points)"
+    ],
+    "operational_status": "RESEARCH ONLY -- diagnostic control, not a betting signal"
+  },
+  {
+    "signal": "ARENA_PLAYER_PERFORMANCE",
+    "prop": "points",
+    "source": "player-arena residual, hierarchically shrunk player-arena -> arena -> league-mean-zero (TUNING-fit, EVAL-checked via correlation)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "NO RELIABLE OUT-OF-SAMPLE SIGNAL",
+    "effect_magnitude_by_season": {
+      "eval_generalization_corr": 0.02006890314729552
+    },
+    "sample_size_by_season": {
+      "eval_n_pairs": 86280
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "small raw player-arena game counts (Part 17's own stated concern) -- shrinkage was applied precisely because of this, and the effect still does not generalize"
+    ],
+    "operational_status": "RESEARCH ONLY -- confirmed NOT usable as a betting signal"
+  },
+  {
+    "signal": "ARENA_RINK_RECORDING_CANDIDATE",
+    "prop": "points",
+    "source": "arena-wide (pooled across all players, home-team identity as arena proxy) mean prediction residual, TUNING-fit",
+    "status": "DESCRIPTIVE_ONLY -- not claimed as causal (team style-of-play is an equally plausible confound, same caveat as the existing Hits rink-variation finding in NHL_PBP_FOUR_SEASON_CORPUS_REPORT.md Section S)",
+    "effect_direction": "N/A -- descriptive spread, not a directional betting claim",
+    "effect_magnitude_by_season": {
+      "arena_raw_mean_range": 0.0605100760926673,
+      "n_arenas": 32
+    },
+    "sample_size_by_season": {
+      "n_arenas": 32
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "team style-of-play",
+      "opponent quality mix",
+      "schedule composition"
+    ],
+    "operational_status": "RESEARCH ONLY -- not operationalized"
+  },
+  {
+    "signal": "COLD_STATE",
+    "prop": "blocks",
+    "source": "own-history rolling recent-5 vs baseline-20 actual-rate log-ratio (expectation-relative, TUNING-fit bottom-20% cutoff)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "INCONSISTENT",
+    "effect_magnitude_by_season": {
+      "20242025": 0.0042964390469312115,
+      "20252026": -0.0021823257360708403
+    },
+    "sample_size_by_season": {
+      "20242025": 9201,
+      "20252026": 9716
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline (see COLD_AND_TOI_DECLINE -- often the dominant real driver)",
+      "regression to the mean (see report Section R)"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "COLD_AND_TOI_DECLINE",
+    "prop": "blocks",
+    "source": "COLD_STATE AND recent-10 vs baseline-20 icetime log-ratio at/below TUNING-fit bottom-20% cutoff (Part 4 multi-signal AND-rule)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "UNDER (frozen model overpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": -0.013086734912824426,
+      "20252026": -0.008355176200685674
+    },
+    "sample_size_by_season": {
+      "20242025": 2153,
+      "20252026": 2325
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "role/TOI decline is itself part of the signal definition here, not a confound to strip out -- this is the stronger, more consistent of the two production-based signals"
+    ],
+    "operational_status": "RESEARCH ONLY -- no decision_policy change made this slice"
+  },
+  {
+    "signal": "HOT_STATE_CONTROL",
+    "prop": "blocks",
+    "source": "same signal as COLD_STATE, top-20% cutoff (Part 5 symmetric control -- NOT assumed to create OVER value)",
+    "status": "CONSISTENT_MIRROR",
+    "effect_direction": "OVER (frozen model underpredicts)",
+    "effect_magnitude_by_season": {
+      "20242025": 0.017444670739250913,
+      "20252026": 0.012408881452025386
+    },
+    "sample_size_by_season": {
+      "20242025": 8476,
+      "20252026": 8623
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "rare-event count noise for sparser props (Goals/Assists/Points)"
+    ],
+    "operational_status": "RESEARCH ONLY -- diagnostic control, not a betting signal"
+  },
+  {
+    "signal": "ARENA_PLAYER_PERFORMANCE",
+    "prop": "blocks",
+    "source": "player-arena residual, hierarchically shrunk player-arena -> arena -> league-mean-zero (TUNING-fit, EVAL-checked via correlation)",
+    "status": "NOT_VALIDATED",
+    "effect_direction": "NO RELIABLE OUT-OF-SAMPLE SIGNAL",
+    "effect_magnitude_by_season": {
+      "eval_generalization_corr": 0.013349301831316242
+    },
+    "sample_size_by_season": {
+      "eval_n_pairs": 87018
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "small raw player-arena game counts (Part 17's own stated concern) -- shrinkage was applied precisely because of this, and the effect still does not generalize"
+    ],
+    "operational_status": "RESEARCH ONLY -- confirmed NOT usable as a betting signal"
+  },
+  {
+    "signal": "ARENA_RINK_RECORDING_CANDIDATE",
+    "prop": "blocks",
+    "source": "arena-wide (pooled across all players, home-team identity as arena proxy) mean prediction residual, TUNING-fit",
+    "status": "DESCRIPTIVE_ONLY -- not claimed as causal (team style-of-play is an equally plausible confound, same caveat as the existing Hits rink-variation finding in NHL_PBP_FOUR_SEASON_CORPUS_REPORT.md Section S)",
+    "effect_direction": "N/A -- descriptive spread, not a directional betting claim",
+    "effect_magnitude_by_season": {
+      "arena_raw_mean_range": 0.07161445828110648,
+      "n_arenas": 32
+    },
+    "sample_size_by_season": {
+      "n_arenas": 32
+    },
+    "supported_seasons": [
+      20242025,
+      20252026
+    ],
+    "known_confounders": [
+      "team style-of-play",
+      "opponent quality mix",
+      "schedule composition"
+    ],
+    "operational_status": "RESEARCH ONLY -- not operationalized"
+  },
+  {
+    "signal": "MEDIA_SENTIMENT_STATE",
+    "prop": "ALL",
+    "source": "NONE -- no legitimate, timestamped, legally-accessible historical media/news/sentiment corpus exists anywhere in this repository (verified directly by search)",
+    "status": "NOT_BUILT",
+    "effect_direction": "N/A",
+    "effect_magnitude_by_season": {},
+    "sample_size_by_season": {},
+    "supported_seasons": [],
+    "known_confounders": [],
+    "operational_status": "NOT BUILT -- fabricating a media corpus was explicitly prohibited by this slice's own instructions; this is a first-class disclosed finding, not an omission. See report Section E/L/U."
+  }
+]

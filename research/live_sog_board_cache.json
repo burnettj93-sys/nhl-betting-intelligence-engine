@@ -1,0 +1,15 @@
+{
+  "board": [],
+  "summary": {
+    "api_error": null,
+    "events_in_near_term_window": 0,
+    "events_queried_for_odds": 0,
+    "events_seen": 32,
+    "observations_appended": 0,
+    "observations_priced": 0,
+    "quotes_parsed": 0,
+    "refreshed_at_utc": "2026-08-27T19:00:33.764537+00:00",
+    "requests_remaining_last_seen": "498",
+    "requests_used_last_seen": "2"
+  }
+}

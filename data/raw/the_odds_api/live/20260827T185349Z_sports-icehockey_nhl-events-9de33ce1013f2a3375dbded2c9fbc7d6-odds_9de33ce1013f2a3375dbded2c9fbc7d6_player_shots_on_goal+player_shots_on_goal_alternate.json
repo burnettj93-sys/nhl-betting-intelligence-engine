@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/9de33ce1013f2a3375dbded2c9fbc7d6/odds",
+    "event_id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_shots_on_goal_alternate",
+    "requests_last_header": "0",
+    "requests_remaining_header": "498",
+    "requests_used_header": "2",
+    "response_checksum_sha256": "0ac4d5b69a2af778f7406209e915197d3ca05d057843c8d8836859f661669305",
+    "retrieved_at_utc": "2026-08-27T18:53:49Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [],
+    "commence_time": "2026-09-29T21:10:00Z",
+    "home_team": "Carolina Hurricanes",
+    "id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

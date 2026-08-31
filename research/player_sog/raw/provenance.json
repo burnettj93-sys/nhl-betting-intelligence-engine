@@ -1,0 +1,40 @@
+{
+  "dataset": "moneypuck_skater_gamebygame",
+  "provenance_type": "ARCHIVAL_RESEARCH",
+  "source": "MoneyPuck",
+  "downloaded_at_utc": "2026-08-27T18:03:44+00:00",
+  "license_note": "Same MoneyPuck licensing posture already documented in MONEYPUCK_TEAM_INGESTION_REPORT.md and research/goalie_intelligence/raw/provenance.json: free for non-commercial/research use, attribution required, RESEARCH/DEVELOPMENT DATA SOURCE only. Fetched directly (not scraped) from files MoneyPuck's own data.htm page explicitly lists for download, on the peter-tanner.com CDN host (which, unlike moneypuck.com's own edge, did not present a bot-detection/licensing gate for this request) -- identical source/host pattern already used and documented for the goalie game-by-game files.",
+  "files": [
+    {
+      "season": 2022,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2022.zip",
+      "local_file": "2022.csv",
+      "byte_size": 169573607,
+      "sha256": "33cd56266a1060680a00ff00f9435e3e5f6bc77fb7197bf5dec0696a4d4e27ef"
+    },
+    {
+      "season": 2023,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2023.zip",
+      "local_file": "2023.csv",
+      "byte_size": 169708390,
+      "sha256": "41923493eb88bdd29fcd915fd1d771a0c80f79ce956b3e337e465492866130ac"
+    },
+    {
+      "season": 2024,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2024.zip",
+      "local_file": "2024.csv",
+      "byte_size": 169511756,
+      "sha256": "b911005c0d5dea869a0a0a32051afbc2b55773a8802920c9bd31c810cb7bbd34"
+    },
+    {
+      "season": 2025,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/skaters/2025.zip",
+      "local_file": "2025.csv",
+      "byte_size": 169282334,
+      "sha256": "57c5f570e15e0221e06ffb0d944826689a6964018f5109272d3263c5fa79ec88"
+    }
+  ],
+  "schema_note": "157 columns, 5 situation rows per skater-game (all, 5on5, 5on4, 4on5, other). This project uses primarily 'all' (full-game totals, used as the SOG label and most features) and '5on4' (power-play-specific TOI/shot volume). No rush-attempt field and no linemate-identity field exist in this file (verified by full header audit) -- see PLAYER_SOG_FOUNDATION_REPORT.md Section A.",
+  "cross_validation": "Every 'all'-situation gameId across all 4 seasons (188,863 rows total) matched a game_id already present in research/real_nhl_results/normalized_regular_season_games.jsonl, and every row's gameId type-digit was '02' (regular season) -- zero playoff contamination, zero unmatched games, same clean result as the goalie corpus.",
+  "note": "Raw files preserved unchanged. Checksums verified with the same hashlib.sha256().hexdigest() helper as research/moneypuck_ingestion/checksums.py."
+}

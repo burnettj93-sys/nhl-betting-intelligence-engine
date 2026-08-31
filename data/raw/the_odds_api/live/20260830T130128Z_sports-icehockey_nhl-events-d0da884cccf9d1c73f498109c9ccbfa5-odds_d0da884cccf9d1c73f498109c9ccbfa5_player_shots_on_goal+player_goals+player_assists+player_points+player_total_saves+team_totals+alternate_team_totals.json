@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/d0da884cccf9d1c73f498109c9ccbfa5/odds",
+    "event_id": "d0da884cccf9d1c73f498109c9ccbfa5",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "996496f9e907f87b6a7d4819bc69f9943211498896121b3b5dadfb0bfbd4b1b5",
+    "retrieved_at_utc": "2026-08-30T13:01:28Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Tampa Bay Lightning",
+    "bookmakers": [],
+    "commence_time": "2026-10-01T23:10:00Z",
+    "home_team": "New York Rangers",
+    "id": "d0da884cccf9d1c73f498109c9ccbfa5",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

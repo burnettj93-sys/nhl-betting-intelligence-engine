@@ -235,7 +235,7 @@ slice, by explicit scope decision).
 | Real ROSTER/AVAILABILITY SOURCE (injury/scratch/IR status) | **DEFERRED / NOT LIVE VERIFIED** | No public NHL API exists for injury reports. `record_roster_status()` in `ingest/nhl_api.py` is ready to receive data from a source you plug in (PuckPedia, beat reporters, etc.) — nothing calls it yet outside tests/demo data. Tracked separately from core ingestion and from both roster-identity ingestion tiers above (v2.1.1a spec item 8, reaffirmed v2.1.2a spec item 4) so a successful ingestion run of any kind is never mistaken for having validated this too. |
 | Real STARTING-GOALIE SOURCE | **DEFERRED / NOT LIVE VERIFIED** | No public NHL API exists for starting-goalie announcements. `record_goalie_status()` in `ingest/nhl_api.py` is ready to receive data from a source you plug in (Daily Faceoff or similar) — nothing calls it yet outside tests/demo data. Tracked separately from core/roster-identity ingestion for the same reason as the row above. |
 | Dynamic production team universe (`db.team_ids`) | **IMPLEMENTED + TESTED** | v2.1.2 spec item 2: `run_slate.py`/`backtest.py` now derive the model team universe from the database (`SELECT team_id FROM teams`), never from `ingest.demo_data.TEAMS` (the synthetic demo league only) — proven for non-demo teams (EDM/VGK) in `tests/test_dynamic_team_universe.py`, which also mechanically guards against any production module reimporting the synthetic list. |
-| Live NHL core ingestion smoke test (`validate_live_nhl.py`) | **IMPLEMENTED + NOT LIVE VERIFIED (needs network)** | v2.1.2 spec item 7/8, substantially strengthened v2.1.2a (spec item 2/6/7/8): a SEPARATE command from `validate.py` — selects a date range (backwards-searching in 7-day windows for ≥3 finalized games, or a pinned `--start`/`--end` range), ingests schedule/result/boxscore against a fresh temporary database, then checks `PRAGMA foreign_key_check`, required-field presence on every game/result/boxscore-derived row, non-empty `player_game_stats`/`goalie_game_stats` for both teams on every finalized game, canonical-timestamp compliance, and (where the boxscore reports it) a team-SOG cross-check; reruns the SAME range including boxscores a second time to prove real idempotency, and runs the CURRENT-roster sync twice to prove reconciliation idempotency. Fails loudly (never silently) on a live schema mismatch — and the top-level error classifier now only labels a genuine network/connectivity failure as `NOT EXECUTED -- NETWORK UNAVAILABLE`; anything else is reported as a real `LIVE NHL CORE INGESTION: FAIL` with the actual exception. Not runnable from this sandbox (no network) — run it from an environment with normal internet access. |
+| Live NHL core ingestion smoke test (`validate_live_nhl.py`) | **IMPLEMENTED + LIVE VERIFIED** | v2.1.2 spec item 7/8, substantially strengthened v2.1.2a (spec item 2/6/7/8): a SEPARATE command from `validate.py` — selects a date range (backwards-searching in 7-day windows for ≥3 finalized games, or a pinned `--start`/`--end` range), ingests schedule/result/boxscore against a fresh temporary database, then checks `PRAGMA foreign_key_check`, required-field presence on every game/result/boxscore-derived row, non-empty `player_game_stats`/`goalie_game_stats` for both teams on every finalized game, canonical-timestamp compliance, and (where the boxscore reports it) a team-SOG cross-check; reruns the SAME range including boxscores a second time to prove real idempotency, and runs the CURRENT-roster sync twice to prove reconciliation idempotency. Fails loudly (never silently) on a live schema mismatch — and the top-level error classifier now only labels a genuine network/connectivity failure as `NOT EXECUTED -- NETWORK UNAVAILABLE`; anything else is reported as a real `LIVE NHL CORE INGESTION: FAIL` with the actual exception. **Run for real against the live NHL API (`api-web.nhle.com`, reachable from this environment as of the Daily Operational Sync slice) on 2026-08-27**: backwards search selected 2026-06-04..2026-06-11 (4 finalized games, the most recent completed games before the current off-season gap), ingested cleanly, idempotency and current-roster reconciliation both stable on rerun — `LIVE NHL CORE INGESTION: PASS`. See `DAILY_OPERATIONAL_SYNC_REPORT.md`. |
 | Market-intelligence sportsbook schema placeholder (`config.MARKET_INTELLIGENCE_SPORTSBOOKS`) | **DEFERRED** | v2.1 architecture-only prep (spec item 17): schema/config can later distinguish DraftKings (execution/reference) from other books used only as signals — consensus, lead/lag, sharp movement. Empty and unused; no destructive rewrite needed later. |
 | Licensed DraftKings odds-data ingestion | **DEFERRED** | Needs a licensed odds-data provider (no direct DraftKings scraping). `odds_snapshots`' schema and the point-in-time query layer are ready for it; nothing pulls live prices yet. |
 | Synthetic demo dataset (`ingest/demo_data.py`) | **IMPLEMENTED + TESTED** | Deterministic (`tests/test_demo_data.py` proves same-seed → identical DB), a *deliberately shortened* round-robin (`demo_data.SEASON_GAMES_NOTE` — currently 44 games/team/season, **not** 82), one-game-per-team-per-day guaranteed by construction, OT/SO games always resolve to exactly one winner, and a player can be injured, recover, and be injured again. |
@@ -302,6 +302,133 @@ python3 validate_live_nhl.py --start 2026-01-05 --end 2026-01-12
 around interactively. `validate_live_nhl.py` always uses its own separate
 fresh temporary database too, and is never folded into `validate.py`'s
 report — see "LIVE_OBSERVATION vs. HISTORICAL_BACKFILL" above.
+
+## Dashboard (research / model visibility UI)
+
+`dashboard/` is a local Streamlit app (v1) that makes the engine's real
+data and current model visible and auditable — a **MODEL RESEARCH / NHL
+INTELLIGENCE DASHBOARD**, explicitly **not** a "trust this bet" product
+and **not** a claim of proven betting profitability (every page carries
+a `MODEL STATUS: RESEARCH / VALIDATION` header). See
+`MONEYPUCK_DASHBOARD_V1_REPORT.md` for the full design rationale and
+verification.
+
+**Setup:**
+```bash
+pip install -r requirements.txt
+```
+
+**Run:**
+```bash
+streamlit run dashboard/app.py
+```
+Opens at `http://localhost:8501` by default. Add `--server.port <N>` to
+use a different port.
+
+**Required local data** (all already present if you've followed this
+README's earlier steps): `research/real_nhl_results/normalized_regular_season_games.jsonl`
+(the real NHL corpus), `research/moneypuck_ingestion/research_moneypuck.db`
+(build via `research/moneypuck_ingestion/ingest_moneypuck_team.py` — see
+`MONEYPUCK_TEAM_INGESTION_REPORT.md`), and the four
+`research/*_comparison_results.json` experiment result files (each
+produced by its own `research/run_*_comparison.py` script). Any missing
+file is reported clearly in the app itself (e.g. `REAL NHL CORPUS: NOT
+FOUND`, with the exact command to build it) — it never fabricates data
+or crashes with a raw traceback.
+
+**Pages:**
+1. **Game Slate** — browse any real historical NHL date; current (Elo-only)
+   model win probability per game, confidence heuristic, model drivers.
+2. **Game Detail** — full probability breakdown for one game, plus team
+   context (last 5/10 record, Elo history, MoneyPuck research metrics).
+3. **Team Ratings** — sortable current Elo ratings + optional MoneyPuck
+   research context, as of any real date.
+4. **Model Performance** — real-data Brier score, log loss, calibration
+   curve, season-by-season breakdown, probability distribution.
+5. **Research Lab** — all four completed feature experiments (Elo, team
+   xG, special teams, offense/defense decomposition), parsed
+   programmatically from their result files, with status labels and a
+   Brier-delta comparison chart.
+6. **Goalie Intelligence (Research)** — the Stage 1 pregame starting-goalie
+   projection model vs. naive baselines, the empirical back-to-back
+   finding, and an interactive real-historical-date projection tool.
+   Labeled `STARTER INTELLIGENCE: RESEARCH / HISTORICAL INFERENCE`
+   throughout — every probability is PROJECTED, never CONFIRMED (no live
+   external source is integrated — see
+   `GOALIE_INTELLIGENCE_FOUNDATION_REPORT.md`). Below that, a **Goalie
+   Quality x Starter Probability Integration** panel lets you inspect any
+   real historical game's scenario-weighted goalie-quality adjustment
+   (projected starter distribution x save%/GSAx-style quality, never the
+   actual historical starter) against the baseline probability, labeled
+   `RESEARCH — NOT PRODUCTION` throughout — see
+   `GOALIE_QUALITY_INTEGRATION_REPORT.md`; the current recommendation from
+   that experiment is **KEEP CURRENT MODEL**.
+7. **Player SOG Research** — the engine's first player-prop probability
+   model (shots on goal). Pick a real historical player/game and see the
+   expected SOG, P(1+)..P(6+) with a conservative lower-bound
+   counterpart, and a confidence label with its specific drivers/risks —
+   all built from real MoneyPuck skater data, strictly point-in-time
+   safe, labeled `RESEARCH — NOT YET A BETTING RECOMMENDATION` throughout
+   (no sportsbook odds appear anywhere on the page). See
+   `PLAYER_SOG_FOUNDATION_REPORT.md`; validated (`SOG MODEL PASSES
+   VALIDATION`) — head-to-head history and player TOI/role both showed
+   real predictive value, recent form and opponent context did not.
+8. **Live SOG Markets** — real DraftKings SOG prices (via The Odds API)
+   compared against the validated SOG model: no-vig market probability,
+   model/conservative fair price, raw/conservative edge and EV, and a
+   BET/WATCH/WAIT/PASS/DATA_UNAVAILABLE research decision label. Labeled
+   `LIVE MODEL VS MARKET` and `NO AUTOMATIC BETTING` throughout — this
+   page never makes a network call itself, only reads a cached snapshot
+   refreshed by `python3 -m research.live_sog_pricing.refresh`. As of
+   this writing the real board is empty: The Odds API confirms zero
+   DraftKings SOG markets currently posted (soonest real NHL event is
+   over a month out) — see `PLAYER_SOG_LIVE_PRICING_REPORT.md`.
+9. **Data Status** — answers "do I have all of today's required hockey
+   data, and exactly when did I obtain it?" Seven independent source
+   statuses (NHL schedule/results, MoneyPuck team/skater/goalie, odds,
+   starter intelligence), read from a cached snapshot only — refresh
+   explicitly with `python3 sync_daily.py`. See
+   `DAILY_OPERATIONAL_SYNC_REPORT.md`.
+10. **Prop Registry** — one status per player-prop family (VALIDATED /
+    PARTIAL / PROMISING / RESEARCH / REJECTED / UNSUPPORTED_MARKET), so
+    the dashboard never implies every prop is equally mature. As of this
+    writing: **3 validated** (SOG, Blocked Shots, Assists — the latter
+    two built on the same reusable `research/player_props/` framework
+    the SOG model helped generalize), **1 partial** (Points — beats 3 of
+    4 naive baselines but loses to a simple per-player empirical-
+    distribution baseline at every threshold; see
+    `PLAYER_POINTS_VALIDATION_REPORT.md`), the rest RESEARCH or deferred.
+    See `MULTI_PROP_RESEARCH_REPORT.md`.
+11. **Player Points Research** — the fourth player-prop model (total
+    points), and the first built under an explicit tuning/lock/freeze
+    discipline: a machine-readable freeze manifest
+    (`research/player_points_freeze_manifest.json`) is written before any
+    2024-25/2025-26 outcome is scored. Status: **PARTIAL**, reported
+    plainly on the page itself. See `PLAYER_POINTS_VALIDATION_REPORT.md`.
+
+**Data mode**: the dashboard operates in **HISTORICAL RESEARCH** mode
+only — there's no live current-season game feed wired into this project
+yet, so "today's games" would mean either fabricating data or new
+live-ingestion work out of scope for v1. Every page browses real
+historical dates instead, labeled `DATA MODE: HISTORICAL RESEARCH`
+throughout, never presented as a live/current prediction.
+
+**MODEL INPUT vs. RESEARCH METRIC**: Elo rating and home-ice are the only
+values labeled `MODEL INPUT` (the real, unmodified production Elo
+formula — see `models/elo_model.py`). Every MoneyPuck-derived value (5v5
+xG share, xGF/60, xGA/60, PP/PK rates) is labeled `RESEARCH METRIC — NOT
+CURRENTLY USED BY MODEL`, since none of the four completed feature
+experiments were adopted (Research Lab page explains why for each).
+Player, goalie, and rest contributions are labeled `NOT AVAILABLE IN
+HISTORICAL RESEARCH MODE` rather than approximated, because the real
+corpus has no real roster or schedule-event data for these real games.
+
+**Read-only guarantee**: the dashboard never opens, reads, or writes
+`nhl.db` or any production PIT table, and never imports `db.py` or
+`models/combined_model.py` — see `tests/test_dashboard.py`'s AST-scan
+tests. It computes "current model" predictions by directly calling
+`research.elo_comparison.run_walkforward()`, which itself drives the
+real, unmodified `models/elo_model.py::EloModel` — not a reimplementation.
 
 ## Completion criteria for this development slice
 

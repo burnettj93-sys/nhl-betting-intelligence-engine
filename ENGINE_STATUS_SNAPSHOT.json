@@ -1,0 +1,502 @@
+{
+  "generated_at_utc": "2026-08-30",
+  "audit_report": "NHL_ENGINE_STATE_OF_THE_UNION_2026_08_30.md",
+  "closure_report": "PRESEASON_OPERATIONAL_READINESS_CLOSURE_REPORT.md",
+  "market_matrix_csv": "ENGINE_MARKET_MATRIX.csv",
+  "test_suite": {
+    "baseline_at_audit_time": 1994,
+    "current_total": 2093,
+    "current_passing": 2093,
+    "current_failing": 0,
+    "new_tests_this_closure_sprint": 99
+  },
+  "models": {
+    "total_entries": 16,
+    "entries": [
+      {
+        "model_id": "NHL_WIN_MODEL",
+        "display_name": "NHL Game Win Probability",
+        "market_family": "MONEYLINE",
+        "status": "VALIDATED",
+        "operational_status": "PRODUCTION_READY",
+        "validated_thresholds": [],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "ELO_REAL_DATA_COMPARISON_REPORT.md",
+        "results_file": "research/elo_comparison_results.json"
+      },
+      {
+        "model_id": "PLAYER_SOG",
+        "display_name": "Player Shots on Goal",
+        "market_family": "PLAYER_SOG",
+        "status": "VALIDATED",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "2+",
+          "3+",
+          "4+",
+          "5+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "1+ (trivial/near-universal base rate, never separately tested)",
+          "6+",
+          "7+",
+          "8+"
+        ],
+        "validation_report": "PLAYER_SOG_FOUNDATION_REPORT.md",
+        "results_file": "research/player_sog_results.json"
+      },
+      {
+        "model_id": "PLAYER_SOG_PERIOD",
+        "display_name": "Player SOG by Period",
+        "market_family": "PLAYER_SOG_PERIOD",
+        "status": "PARTIAL",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "P1_1+",
+          "P1_2+",
+          "P1_3+",
+          "P2_1+",
+          "P2_2+",
+          "P3_1+",
+          "P3_2+"
+        ],
+        "partial_thresholds": [
+          "P2_3+",
+          "P3_3+"
+        ],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "PLAYER_SOG_BY_PERIOD_VALIDATION_REPORT.md",
+        "results_file": "research/player_sog_period_results.json"
+      },
+      {
+        "model_id": "GOALS",
+        "display_name": "Player Goals / Anytime Goal Scorer",
+        "market_family": "PLAYER_GOALS",
+        "status": "VALIDATED",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "1+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "2+",
+          "3+"
+        ],
+        "validation_report": "PLAYER_GOALS_VALIDATION_REPORT.md",
+        "results_file": "research/player_goals_results.json"
+      },
+      {
+        "model_id": "ASSISTS",
+        "display_name": "Player Assists",
+        "market_family": "PLAYER_ASSISTS",
+        "status": "VALIDATED",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "1+",
+          "2+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "3+ (occurs in only 0.6% of real games -- too rare to evaluate meaningfully)"
+        ],
+        "validation_report": "MULTI_PROP_RESEARCH_REPORT.md",
+        "results_file": "research/player_assists_results.json"
+      },
+      {
+        "model_id": "POINTS",
+        "display_name": "Player Points",
+        "market_family": "PLAYER_POINTS",
+        "status": "EMPIRICAL_BASELINE_REMAINS_CHAMPION",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "1+",
+          "2+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "3+"
+        ],
+        "validation_report": "PLAYER_POINTS_REDESIGN_REPORT.md",
+        "results_file": "research/player_points_results.json"
+      },
+      {
+        "model_id": "BLOCKED_SHOTS",
+        "display_name": "Player Blocked Shots",
+        "market_family": "PLAYER_BLOCKS",
+        "status": "VALIDATED",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "1+",
+          "2+",
+          "3+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "4+"
+        ],
+        "validation_report": "MULTI_PROP_RESEARCH_REPORT.md",
+        "results_file": "research/player_blocks_results.json"
+      },
+      {
+        "model_id": "TEAM_SOG",
+        "display_name": "Team Shots on Goal",
+        "market_family": "TEAM_SOG",
+        "status": "VALIDATED",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "20+",
+          "25+",
+          "30+",
+          "35+"
+        ],
+        "partial_thresholds": [
+          "40+"
+        ],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "TEAM_SOG_VALIDATION_REPORT.md",
+        "results_file": "research/team_sog_results.json"
+      },
+      {
+        "model_id": "GOALIE_SAVES",
+        "display_name": "Goalie Saves (full-game + period)",
+        "market_family": "GOALIE_SAVES",
+        "status": "PARTIAL",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "20+",
+          "25+",
+          "P2"
+        ],
+        "partial_thresholds": [
+          "30+",
+          "P1",
+          "P3"
+        ],
+        "rejected_thresholds": [
+          "35+"
+        ],
+        "insufficient_thresholds": [
+          "40+"
+        ],
+        "validation_report": "GOALIE_SAVES_VALIDATION_REPORT.md",
+        "results_file": "research/goalie_saves_results.json"
+      },
+      {
+        "model_id": "TEAM_GOALS_PERIOD",
+        "display_name": "Team Goals by Period",
+        "market_family": "TEAM_GOALS_PERIOD",
+        "status": "ATTEMPTED_NOT_VALIDATED",
+        "operational_status": "NOT_OPERATIONAL",
+        "validated_thresholds": [],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "TEAM_GOALS_BY_PERIOD_VALIDATION_REPORT.md",
+        "results_file": "research/team_goals_period_results.json"
+      },
+      {
+        "model_id": "JOINT_SHOT_WORKLOAD",
+        "display_name": "Joint Shot/Workload Dependence",
+        "market_family": "COMBINATIONS",
+        "status": "VALIDATED",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "SOG+TeamSOG",
+          "TeamSOG+GoalieSaves",
+          "SOG+GoalieSaves",
+          "SOG+TeamSOG+GoalieSaves"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "JOINT_SHOT_WORKLOAD_VALIDATION_REPORT.md",
+        "results_file": "research/joint_shot_workload_results.json"
+      },
+      {
+        "model_id": "JOINT_SCORING_DEPENDENCE",
+        "display_name": "Joint Scoring/Contribution Dependence",
+        "market_family": "COMBINATIONS",
+        "status": "VALIDATED",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [
+          "SOG2+GOAL",
+          "SOG3+GOAL",
+          "SOG4+GOAL",
+          "GOAL_POINT",
+          "ASSIST_POINT",
+          "SOG3+POINT",
+          "SOG4+POINT",
+          "SOG2+ASSIST",
+          "SOG3+ASSIST"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "SOG3+GOAL+POINT (triple) -- structurally redundant reduction of SOG3+GOAL (Goal=>Point logical identity), never independently validated",
+          "SOG3+ASSIST+POINT (triple) -- structurally redundant reduction of SOG3+ASSIST (Assist=>Point logical identity), never independently validated"
+        ],
+        "validation_report": "JOINT_SCORING_DEPENDENCE_VALIDATION_REPORT.md",
+        "results_file": "research/joint_scoring_dependence_results.json"
+      },
+      {
+        "model_id": "PLAYER_CONTEXT_STATE",
+        "display_name": "Player Context State (Cold/Hot/TOI-decline)",
+        "market_family": "CONTEXT_SIGNAL",
+        "status": "VALIDATION_COMPLETE (MIXED, see registry)",
+        "operational_status": "RESEARCH",
+        "validated_thresholds": [],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "PLAYER_CONTEXT_STATE_VALIDATION_REPORT.md",
+        "results_file": "research/player_context_state_results.json"
+      },
+      {
+        "model_id": "CONTEXT_OVERLAY_GOALS",
+        "display_name": "Context Overlay: Goals 1+ (COLD_AND_TOI_DECLINE)",
+        "market_family": "PLAYER_GOALS",
+        "status": "VALIDATED_OVERLAY",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "1+ (COLD_AND_TOI_DECLINE state only)"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "CONTEXT_STATE_PROBABILITY_OVERLAY_REPORT.md",
+        "results_file": "research/context_overlay_results.json"
+      },
+      {
+        "model_id": "CONTEXT_OVERLAY_POINTS",
+        "display_name": "Context Overlay: Points 1+ (COLD_AND_TOI_DECLINE)",
+        "market_family": "PLAYER_POINTS",
+        "status": "VALIDATED_OVERLAY",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "1+ (COLD_AND_TOI_DECLINE state only)"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [],
+        "validation_report": "CONTEXT_STATE_PROBABILITY_OVERLAY_REPORT.md",
+        "results_file": "research/context_overlay_results.json"
+      },
+      {
+        "model_id": "PLAYER_SOG_PP_ROLE_OVERLAY",
+        "display_name": "SOG Special-Teams PP-Role Overlay (shadow)",
+        "market_family": "PLAYER_SOG",
+        "status": "PARTIAL",
+        "operational_status": "SHADOW_VALIDATED",
+        "validated_thresholds": [
+          "1+",
+          "2+",
+          "3+"
+        ],
+        "partial_thresholds": [],
+        "rejected_thresholds": [],
+        "insufficient_thresholds": [
+          "4+",
+          "5+",
+          "6+"
+        ],
+        "validation_report": "SPECIAL_TEAMS_ROLE_OVERLAY_VALIDATION_REPORT.md",
+        "results_file": "research/special_teams_role_overlay_sog_results.json"
+      }
+    ]
+  },
+  "markets": {
+    "total_canonical": 142,
+    "total_raw_labels": 164,
+    "process_family_count": 17,
+    "process_families": [
+      "EMPTY_NET_STATE",
+      "FACEOFF_PROCESS",
+      "GAME_SCORE_STATE",
+      "GOALIE_WORKLOAD_SAVE_PROCESS",
+      "GOAL_ASSIST_POINT_ATTRIBUTION",
+      "JOINT_DEPENDENCE_SIMULATION",
+      "OT_SHOOTOUT_STATE",
+      "PENALTY_PROCESS",
+      "PERIOD_EVENT_TIMING",
+      "PLAYER_ACTIVE_ROLE_TOI",
+      "PLAYER_BLOCK_EVENT_GENERATION",
+      "PLAYER_GOAL_GENERATION",
+      "PLAYER_HIT_EVENT_GENERATION",
+      "PLAYER_SHOT_GENERATION",
+      "SPECIAL_TEAMS_STATE",
+      "TEAM_GOAL_GENERATION",
+      "TEAM_SHOT_GENERATION"
+    ],
+    "by_model_status": {
+      "DERIVABLE_NOT_VALIDATED": 1,
+      "VALIDATED": 17,
+      "INSUFFICIENT_TAIL_DATA": 4,
+      "INSUFFICIENT_DATA": 5,
+      "EMPIRICAL_BASELINE_REMAINS_CHAMPION": 2,
+      "RESEARCH": 14,
+      "PARTIAL": 3,
+      "REJECTED": 2,
+      "NOT_BUILT": 94
+    },
+    "by_odds_api_support": {
+      "UNKNOWN": 130,
+      "SUPPORTED": 7,
+      "UNSUPPORTED_MARKET": 5
+    },
+    "by_category": {
+      "PLAYER_SOG": 8,
+      "PLAYER_BLOCKED_SHOTS": 4,
+      "PLAYER_ASSISTS": 3,
+      "PLAYER_POINTS": 3,
+      "PLAYER_GOALS_SCORING": 14,
+      "PLAYER_HITS": 4,
+      "GOALIE": 8,
+      "TEAM": 17,
+      "PLAYER_SPECIAL_TEAMS": 2,
+      "PLAYER_PENALTIES": 2,
+      "PLAYER_FACEOFFS": 3,
+      "PLAYER_USAGE_OTHER": 2,
+      "GAME_OUTCOME": 39,
+      "PERIOD_MARKETS": 33
+    },
+    "dk_contract_verified_count": 0
+  },
+  "live_sportsbook_evidence": {
+    "odds_api_connectivity_verified": true,
+    "real_events_retrieved": 32,
+    "real_bookmaker_coverage_observed_anywhere": false,
+    "last_real_multimarket_check_utc": "2026-08-30T13:01:27Z",
+    "last_real_multimarket_check_events": 30,
+    "last_real_multimarket_check_markets": [
+      "player_shots_on_goal",
+      "player_goals",
+      "player_assists",
+      "player_points",
+      "player_total_saves",
+      "team_totals",
+      "alternate_team_totals"
+    ],
+    "last_real_multimarket_check_result": "bookmakers: [] on every event checked",
+    "requests_used_last_observed": 5,
+    "requests_remaining_last_observed": 495,
+    "real_captures_on_disk": 37,
+    "note": "Closure sprint (2026-08-30) fixed the root-cause bug (a mutable default argument bound at import time defeated mock.patch on ARCHIVE_DIR) and deleted 51 confirmed-synthetic test fixtures that had polluted this directory; a regression guard (tests/test_evidence_directory_isolation.py) now proves the real directory stays byte-identical across a full test run."
+  },
+  "decision_pipelines_wired_to_a_real_market": {
+    "moneyline": true,
+    "player_sog": true,
+    "player_goals": false,
+    "player_assists": false,
+    "player_points": false,
+    "goalie_saves": false,
+    "blocked_shots": false,
+    "team_sog": false
+  },
+  "generic_evaluator_model_side_ready": {
+    "player_sog": true,
+    "player_goals": true,
+    "player_assists": true,
+    "player_points": true,
+    "goalie_saves": true,
+    "blocked_shots": true,
+    "team_sog": true,
+    "note": "research/generic_prop_pricing/evaluator.py::evaluate_prop() proven (via TestSOGParity) to reproduce SOG's own untouched pricing exactly, and proven to correctly price Goals/Assists/Points/Saves at their real validated thresholds the instant a NormalizedPropMarket exists -- none does yet for any family (VERIFIED_CONTRACTS is empty), so every family still returns CONTRACT_NOT_VERIFIED/DATA_UNAVAILABLE for real decisions today."
+  },
+  "outcome_resolver": {
+    "module": "operational/outcome_resolver.py",
+    "version": "outcome_resolver_v1",
+    "settleable_families": [
+      "PLAYER_SOG",
+      "PLAYER_GOALS",
+      "PLAYER_ASSISTS",
+      "PLAYER_POINTS",
+      "GOALIE_SAVES",
+      "MONEYLINE"
+    ],
+    "fails_closed_families": {
+      "TEAM_SOG": "TEAM_SOG_NOT_INGESTED (frozen nhl.db schema has no team-SOG column; not a methodology concern, just unwired)",
+      "BLOCKED_SHOTS": "BLOCKS_NOT_INGESTED (schema gap PLUS an unresolved methodology-mismatch risk between boxscore blockedShots and the model's real MoneyPuck training source)"
+    },
+    "never_exercised_against_a_real_completed_2026_27_game": true
+  },
+  "prospective_ledger": {
+    "schema_version": 3,
+    "record_types": [
+      "MODEL_OBSERVATION",
+      "SHADOW_POLICY_OBSERVATION",
+      "REAL_BET",
+      "HISTORICAL_RESEARCH"
+    ],
+    "immutability_trigger": true,
+    "idempotency": true,
+    "settlement_automated": true,
+    "settlement_idempotent": true,
+    "checkpoint_ordering_enforced": true,
+    "clv_mechanism_built": true,
+    "clv_populated_by_any_real_caller": false,
+    "note": "Settlement, checkpoint ordering (PRIMARY_DAILY required before PRE_GAME_UPDATE/MARKET_REFRESH), and the CLV closing-price resolver were all built and tested this closure sprint. CLV is still never populated by a real caller because no real price history exists yet -- mechanism-ready, not evidence-ready."
+  },
+  "scheduler": {
+    "plist_exists_in_repo": true,
+    "installed_on_machine": false,
+    "activation_target": "2026-09-17",
+    "note": "Deliberately not installed this sprint either, per standing user instruction."
+  },
+  "contradictions_found": [
+    {
+      "id": 1,
+      "description": "MODEL_REGISTRY listed ASSISTS validated_thresholds as ['1+','2+','3+'], but the cited validation_report (MULTI_PROP_RESEARCH_REPORT.md) and market_registry.py both say 3+ is INSUFFICIENT_DATA (0.6% base rate, too rare to evaluate).",
+      "severity": "low",
+      "action_taken": "FIXED this closure sprint -- validated_thresholds=['1+','2+'], insufficient_thresholds=['3+ (...)']"
+    },
+    {
+      "id": 2,
+      "description": "MODEL_REGISTRY listed JOINT_SCORING_DEPENDENCE validated_thresholds including two 'triple' combinations that joint_dependence_registry.py and the source report both mark RESEARCH/validated_combinations=[] (structurally redundant reductions of already-validated pairs, never independently fit); GOAL_POINT (actually validated) was omitted entirely.",
+      "severity": "low",
+      "action_taken": "FIXED this closure sprint -- triples moved to insufficient_thresholds with explanation, GOAL_POINT added"
+    },
+    {
+      "id": 3,
+      "description": "NEW, found during this closure sprint's own Part 3 investigation: MODEL_REGISTRY claimed PLAYER_SOG validated_thresholds=['1+'..'6+'], but PLAYER_SOG_FOUNDATION_REPORT.md Section AI explicitly validates only '2+/3+/4+/5+, the standard sportsbook SOG lines' -- 1+ was never separately tested (trivial/near-universal base rate) and 6+ was never bootstrap-validated (real tail sparsity), matching market_registry.py's own PLAYER_SOG_1PLUS=DERIVABLE_NOT_VALIDATED / PLAYER_SOG_6PLUS=INSUFFICIENT_TAIL_DATA entries that MODEL_REGISTRY contradicted.",
+      "severity": "medium (PLAYER_SOG is the flagship, most-relied-upon model in the project)",
+      "action_taken": "FIXED this closure sprint -- validated_thresholds=['2+','3+','4+','5+']; ALSO fixed the same latent bug in research/live_sog_pricing/pricing.py, which had no threshold-eligibility gate at all and would have priced a 1+/6+/7+/8+ market as if it were decision-eligible the moment one existed"
+    },
+    {
+      "id": 4,
+      "description": "NEW, found by this sprint's own added cross-registry consistency test (tests/test_registry_cross_consistency.py): MODEL_REGISTRY's GOALS entry omitted 3+ from every threshold bucket (market_registry.py has PLAYER_GOALS_3PLUS=INSUFFICIENT_DATA); BLOCKED_SHOTS entry omitted 4+ entirely (market_registry.py has PLAYER_BLOCKS_4PLUS=INSUFFICIENT_TAIL_DATA).",
+      "severity": "low (omission, not a false claim)",
+      "action_taken": "FIXED this closure sprint -- both added to insufficient_thresholds with their real source evidence cited"
+    }
+  ],
+  "readiness_scorecard_0_to_10": {
+    "historical_data_quality": 8,
+    "temporal_anti_leakage_integrity": 9,
+    "marginal_model_quality": 7,
+    "model_market_coverage": 4,
+    "joint_dependence_quality": 7,
+    "live_nhl_data_readiness": 7,
+    "sportsbook_data_readiness": 3,
+    "pricing_engine_readiness": 7,
+    "decision_policy_readiness": 6,
+    "prospective_validation_readiness": 7,
+    "settlement_ledger_readiness": 7,
+    "dashboard_ux_readiness": 7,
+    "demo_readiness": 8,
+    "live_straight_bet_readiness": 2,
+    "parlay_readiness": 1,
+    "simulator_readiness": 1,
+    "overall_preseason_readiness": 7,
+    "note": "pricing_engine_readiness (6->7) and settlement_ledger_readiness (4->7) improved this closure sprint; overall_preseason_readiness (6->7) reflects real software gaps closed. sportsbook_data_readiness (3) and live_straight_bet_readiness (2) are UNCHANGED -- no amount of software work moves those; only a real posted DraftKings price does."
+  },
+  "biggest_blocker": "No live sportsbook (DraftKings) prop or team-total price has been posted for any of the 142 canonical markets as of 2026-08-30, verified empirically -- not a software gap. This closure sprint closed the highest-value software gaps that COULD be closed before that happens (registry accuracy, settlement, checkpoint ordering, the generic pricing core, CLV mechanism, evidence-directory hygiene) so that the day a real payload appears, only payload-contract verification + a thin adapter remain."
+}

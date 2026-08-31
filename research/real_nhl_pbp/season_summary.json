@@ -1,0 +1,78 @@
+{
+  "season": "20252026",
+  "games_archived": 1312,
+  "total_normalized_events": 413859,
+  "avg_events_per_game": 315.4,
+  "event_type_counts": {
+    "faceoff": 73496,
+    "shot-on-goal": 65370,
+    "stoppage": 57202,
+    "hit": 53658,
+    "blocked-shot": 40866,
+    "giveaway": 40366,
+    "missed-shot": 39168,
+    "takeaway": 12099,
+    "penalty": 9692,
+    "goal": 8350,
+    "period-start": 4381,
+    "period-end": 4381,
+    "delayed-penalty": 3384,
+    "game-end": 1312,
+    "shootout-complete": 119,
+    "failed-shot-attempt": 15
+  },
+  "player_id_coverage": {
+    "faceoff.winner": {
+      "present": 73496,
+      "total": 73496,
+      "pct": 100.0
+    },
+    "faceoff.loser": {
+      "present": 73496,
+      "total": 73496,
+      "pct": 100.0
+    },
+    "blocked-shot.shooter": {
+      "present": 40866,
+      "total": 40866,
+      "pct": 100.0
+    },
+    "blocked-shot.blocker": {
+      "present": 40853,
+      "total": 40866,
+      "pct": 99.97
+    },
+    "shot-on-goal.shooter": {
+      "present": 65370,
+      "total": 65370,
+      "pct": 100.0
+    },
+    "missed-shot.shooter": {
+      "present": 39168,
+      "total": 39168,
+      "pct": 100.0
+    },
+    "hit.hitter": {
+      "present": 53658,
+      "total": 53658,
+      "pct": 100.0
+    },
+    "hit.hittee": {
+      "present": 53658,
+      "total": 53658,
+      "pct": 100.0
+    },
+    "penalty.committed_by": {
+      "present": 9425,
+      "total": 9692,
+      "pct": 97.25
+    },
+    "goal.scorer": {
+      "present": 8350,
+      "total": 8350,
+      "pct": 100.0
+    }
+  },
+  "raw_storage_bytes": 187656890,
+  "raw_storage_mb": 179.0
+}

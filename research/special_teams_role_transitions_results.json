@@ -1,0 +1,163 @@
+{
+  "n_merged_rows": 188863,
+  "n_pk_classified": 188863,
+  "n_pk_labeled_player_games": 188863,
+  "n_pp_classified": 188863,
+  "n_pp_labeled_player_games": 188863,
+  "pk_state_sample_support": {
+    "ADDED_TO_PK1": {
+      "n": 2927,
+      "unique_players": 525,
+      "unique_teams": 33
+    },
+    "ADDED_TO_PK2": {
+      "n": 6117,
+      "unique_players": 634,
+      "unique_teams": 33
+    },
+    "DEMOTED_PK1_TO_PK2": {
+      "n": 12289,
+      "unique_players": 590,
+      "unique_teams": 33
+    },
+    "NO_MEANINGFUL_PK": {
+      "n": 74511,
+      "unique_players": 948,
+      "unique_teams": 33
+    },
+    "PROMOTED_PK2_TO_PK1": {
+      "n": 12308,
+      "unique_players": 632,
+      "unique_teams": 33
+    },
+    "REMOVED_FROM_PK": {
+      "n": 10169,
+      "unique_players": 715,
+      "unique_teams": 33
+    },
+    "ROLE_UNCERTAIN": {
+      "n": 9764,
+      "unique_players": 1330,
+      "unique_teams": 33
+    },
+    "STABLE_PK1": {
+      "n": 43045,
+      "unique_players": 555,
+      "unique_teams": 33
+    },
+    "STABLE_PK2": {
+      "n": 17733,
+      "unique_players": 635,
+      "unique_teams": 33
+    }
+  },
+  "pp_state_sample_support": {
+    "ADDED_TO_PP1": {
+      "n": 1300,
+      "unique_players": 326,
+      "unique_teams": 33
+    },
+    "ADDED_TO_PP2": {
+      "n": 5101,
+      "unique_players": 541,
+      "unique_teams": 33
+    },
+    "DEMOTED_PP1_TO_PP2": {
+      "n": 7247,
+      "unique_players": 460,
+      "unique_teams": 33
+    },
+    "NO_MEANINGFUL_PP": {
+      "n": 74368,
+      "unique_players": 855,
+      "unique_teams": 33
+    },
+    "PROMOTED_PP2_TO_PP1": {
+      "n": 7917,
+      "unique_players": 521,
+      "unique_teams": 33
+    },
+    "REMOVED_FROM_PP": {
+      "n": 8695,
+      "unique_players": 665,
+      "unique_teams": 33
+    },
+    "ROLE_UNCERTAIN": {
+      "n": 9764,
+      "unique_players": 1330,
+      "unique_teams": 33
+    },
+    "STABLE_PP1": {
+      "n": 44786,
+      "unique_players": 453,
+      "unique_teams": 33
+    },
+    "STABLE_PP2": {
+      "n": 29685,
+      "unique_players": 617,
+      "unique_teams": 33
+    }
+  },
+  "top10_player_concentration_by_state": {
+    "ADDED_TO_PK1": {
+      "top10_player_instances": 213,
+      "top10_share": 0.07277075503928937,
+      "total_instances": 2927,
+      "unique_players": 525
+    },
+    "ADDED_TO_PK2": {
+      "top10_player_instances": 394,
+      "top10_share": 0.06441065881968285,
+      "total_instances": 6117,
+      "unique_players": 634
+    },
+    "ADDED_TO_PP1": {
+      "top10_player_instances": 158,
+      "top10_share": 0.12153846153846154,
+      "total_instances": 1300,
+      "unique_players": 326
+    },
+    "ADDED_TO_PP2": {
+      "top10_player_instances": 352,
+      "top10_share": 0.06900607723975691,
+      "total_instances": 5101,
+      "unique_players": 541
+    },
+    "DEMOTED_PK1_TO_PK2": {
+      "top10_player_instances": 700,
+      "top10_share": 0.05696151029375865,
+      "total_instances": 12289,
+      "unique_players": 590
+    },
+    "DEMOTED_PP1_TO_PP2": {
+      "top10_player_instances": 584,
+      "top10_share": 0.08058506968400718,
+      "total_instances": 7247,
+      "unique_players": 460
+    },
+    "PROMOTED_PK2_TO_PK1": {
+      "top10_player_instances": 623,
+      "top10_share": 0.05061748456288593,
+      "total_instances": 12308,
+      "unique_players": 632
+    },
+    "PROMOTED_PP2_TO_PP1": {
+      "top10_player_instances": 535,
+      "top10_share": 0.06757610205886068,
+      "total_instances": 7917,
+      "unique_players": 521
+    },
+    "REMOVED_FROM_PK": {
+      "top10_player_instances": 513,
+      "top10_share": 0.050447438292850824,
+      "total_instances": 10169,
+      "unique_players": 715
+    },
+    "REMOVED_FROM_PP": {
+      "top10_player_instances": 516,
+      "top10_share": 0.05934445083381253,
+      "total_instances": 8695,
+      "unique_players": 665
+    }
+  }
+}

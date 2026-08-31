@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/d120fca986fb8752c71db9002a8dd1b7/odds",
+    "event_id": "d120fca986fb8752c71db9002a8dd1b7",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "27681354658cbbd1084c82cf08f878a588d3599cc317a5d822fe1728fdf97d09",
+    "retrieved_at_utc": "2026-08-30T13:01:28Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Seattle Kraken",
+    "bookmakers": [],
+    "commence_time": "2026-10-02T01:10:00Z",
+    "home_team": "Calgary Flames",
+    "id": "d120fca986fb8752c71db9002a8dd1b7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

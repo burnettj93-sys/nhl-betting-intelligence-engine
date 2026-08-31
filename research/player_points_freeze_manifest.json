@@ -1,0 +1,104 @@
+{
+  "calibration_method": "NONE -- uncalibrated model already within tolerance on tuning_validate",
+  "calibration_scales": {
+    "1": 1.0,
+    "2": 1.0,
+    "3": 1.0
+  },
+  "common_evaluation_set_policy": "identical evaluation-season row list used for every headline stage AND every baseline",
+  "confidence_methodology": "shared research.player_sog.count_models.confidence_score (unchanged, same as SOG/blocks/assists) -- frozen before this slice began",
+  "conservative_probability_methodology": "shared research.player_sog.count_models.conservative_mu, normal-approx lower bound, z=0.84 (unchanged)",
+  "experiment_id": "player_points_v1",
+  "feature_formulas": {
+    "h2h_shrunk_delta": "h2h_shrunk_points_rate(games_vs_opponent, shrink=n/(n+10)) - baseline_rate",
+    "log_baseline_rate": "log(rolling_mean(points,20) or season_to_date_mean(points) or 0.30)",
+    "opponent_log_factor": "log(rolling_opponent_points_allowed(20) / league_avg_points_for)",
+    "pp_role_rate": "rolling_pp_mean(points,10), 0.0 if no PP icetime",
+    "recent_form_log_ratio": "log(rolling_mean(points,5)) - log_baseline_rate",
+    "team_context_log_factor": "log(rolling_team_points_for(20) / league_avg_points_for)",
+    "toi_log_ratio": "log(rolling_mean(icetime,10) / rolling_mean(icetime,20))"
+  },
+  "feature_set": [
+    "intercept",
+    "log_baseline_rate",
+    "recent_form_log_ratio",
+    "toi_log_ratio",
+    "pp_role_rate",
+    "opponent_log_factor",
+    "team_context_log_factor",
+    "h2h_shrunk_delta"
+  ],
+  "fitted_tuning_parameters": {
+    "h2h_shrunk_delta": 0.03667811974970841,
+    "intercept": -0.23005535772079633,
+    "log_baseline_rate": 0.6682856213879123,
+    "opponent_log_factor": 0.12588831706400327,
+    "pp_role_rate": 0.1393266260269363,
+    "recent_form_log_ratio": 0.006466278628546088,
+    "team_context_log_factor": -0.04342963379141663,
+    "toi_log_ratio": 0.013032886036823345
+  },
+  "freeze_timestamp_utc": "2026-08-27T20:39:29.582076Z",
+  "h2h_treatment": "shrunk toward baseline_rate by game count, shrink=n/(n+10)",
+  "kept_stage_names_by_bootstrap_95pct_bar": [
+    "M0_baseline_only",
+    "M3_plus_pp_role",
+    "M4_plus_opponent_context",
+    "M5_plus_team_context",
+    "M6_plus_h2h"
+  ],
+  "locked_stage": "M6_plus_h2h",
+  "lookback_windows": {
+    "baseline": 20,
+    "opponent": 20,
+    "pp_role": 10,
+    "recent_form": 5,
+    "team_context": 20,
+    "toi_recent": 10
+  },
+  "minimum_sample_rules": {
+    "eligibility_min_appearances": 4,
+    "eligibility_window_team_games": 10,
+    "min_history_games": 3
+  },
+  "model_family": "Negative Binomial",
+  "model_hyperparameters": {
+    "glm_lr": 0.05,
+    "glm_n_iter": 400,
+    "negbinom_alpha": 0.06361255157281723
+  },
+  "per_feature_tuning_validate_verdicts": {
+    "h2h_added_value": true,
+    "opponent_context_added_value": true,
+    "pp_role_added_value": true,
+    "recent_form_added_value": false,
+    "team_context_added_value": true,
+    "toi_role_added_value": false
+  },
+  "player_eligibility_policy": "PlayerHistoryIndex history_as_of() >= 3 real prior games AND projected_active() (>=4 appearances in team's last 10 real games)",
+  "preprocessing_scaling_policy": "none -- raw log-link GLM features, no external scaler",
+  "projected_active_treatment": "shared research.player_sog.features.projected_active, unchanged",
+  "season_boundary_rules": "WARMUP=20222023 (history depth only), TUNING=20232024 split at 2024-02-24 into tuning_fit/tuning_validate, EVAL=[20242025, 20252026]",
+  "shrinkage_parameters": {
+    "empirical_baseline_shrinkage_games": 20,
+    "h2h_shrinkage_games": 10
+  },
+  "software_model_version": "player_points_v1",
+  "source_code_hashes": {
+    "research/player_points/build_points_corpus.py": "1c2bbbf57fcca5ae",
+    "research/player_points/features.py": "9883ebed2681c741",
+    "research/run_player_points_model.py": "081769e71a3d18a1"
+  },
+  "target_definition": "actual_points = I_F_points (MoneyPuck direct field; cross-checked against goals+primaryAssists+secondaryAssists, 0 mismatches, all seasons)",
+  "three_plus_support_standard": {
+    "max_bootstrap_ci_half_width": 0.01,
+    "max_tail_variance_to_mean_ratio": 3.0,
+    "min_events_per_confidence_bucket": 50,
+    "min_events_per_eval_season": 150,
+    "min_total_events_eval_common_set": 500
+  },
+  "upstream_assists_eligibility": "NOT ELIGIBLE FOR CLEAN TRUE-EVALUATION USE (see Part 11 reasoning in report)",
+  "upstream_feature_generation_method": null,
+  "upstream_model_version_ids": null,
+  "upstream_sog_eligibility": "NOT ELIGIBLE FOR CLEAN TRUE-EVALUATION USE (see Part 10 reasoning in report)"
+}

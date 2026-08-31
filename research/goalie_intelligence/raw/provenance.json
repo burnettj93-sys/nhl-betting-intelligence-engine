@@ -1,0 +1,39 @@
+{
+  "dataset": "moneypuck_goalie_gamebygame",
+  "provenance_type": "ARCHIVAL_RESEARCH",
+  "source": "MoneyPuck",
+  "downloaded_at_utc": "2026-08-27T15:47:41+00:00",
+  "license_note": "Same MoneyPuck licensing posture already documented in MONEYPUCK_TEAM_INGESTION_REPORT.md and MONEYPUCK_DATA_CONTRACT_REVIEW.md: free for non-commercial/research use, attribution required, RESEARCH/DEVELOPMENT DATA SOURCE only. Fetched directly (not scraped) from files MoneyPuck's own data.htm page explicitly lists for download, on the peter-tanner.com CDN host (which, unlike moneypuck.com's own edge, did not present a bot-detection/licensing gate for this request).",
+  "files": [
+    {
+      "season": 2022,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/goalies/2022.zip",
+      "local_file": "2022.csv",
+      "byte_size": 2866646,
+      "sha256": "975ec8047624a6539a7b79b5eb3c0fe931aae73471eab570ff3dedbf479df2ed"
+    },
+    {
+      "season": 2023,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/goalies/2023.zip",
+      "local_file": "2023.csv",
+      "byte_size": 2881028,
+      "sha256": "3a6639b1a739ce83f01b717f81a6a33198d0d8a4f24d9abf510757ab4c90b2a1"
+    },
+    {
+      "season": 2024,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/goalies/2024.zip",
+      "local_file": "2024.csv",
+      "byte_size": 2845139,
+      "sha256": "9e108260acc3fd3461858e488353ac116d8119444c06f56833557544b126bc9e"
+    },
+    {
+      "season": 2025,
+      "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/goalies/2025.zip",
+      "local_file": "2025.csv",
+      "byte_size": 2829400,
+      "sha256": "51d7736111fb8dbb6e23fa38a15c4bec8eea1be1fe3927901ca3e7201309e233"
+    }
+  ],
+  "xg_model_version_semantics": "UNKNOWN",
+  "note": "Raw files preserved unchanged. Checksums verified with a proper hashlib.sha256().hexdigest() call (64-char hex), same fixed helper as research/moneypuck_ingestion/checksums.py."
+}

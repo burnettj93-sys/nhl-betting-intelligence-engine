@@ -170,6 +170,73 @@ JUSTIFIED_EXCEPTIONS = [
             "tests/test_run_slate_temporal.py."
         ),
     },
+    {
+        "file": "research/run_special_teams_role_transitions.py",
+        "kind": "game_list_slice",
+        "marker": "recent_slice = games[max(0, i - recent_n):i]",
+        "reason": (
+            "False-positive trigger: `games` here is one PLAYER's own real games sorted "
+            "chronologically, and the slice builds a PIT-safe 'strictly before target game i' "
+            "window for a special-teams ROLE-TRANSITION FEATURE classifier "
+            "(research/period_event_timing/special_teams_roles.py::classify_role_state) -- not a "
+            "model training-eligibility split. The slice upper bound is `i` (exclusive), so game i "
+            "itself is never included; this is the intended PIT guarantee, not a leak. This code "
+            "path never touches a model, a fit, or a training/eval split."
+        ),
+    },
+    {
+        "file": "research/run_special_teams_role_transitions.py",
+        "kind": "game_list_slice",
+        "marker": "baseline_slice = games[max(0, i - recent_n - baseline_n):max(0, i - recent_n)]",
+        "reason": (
+            "Same false positive as the recent_slice entry immediately above, for the paired "
+            "'baseline window' slice (the games before the recent window, also strictly before "
+            "target game i) -- see that entry's reason."
+        ),
+    },
+    {
+        "file": "operational/special_teams_roles_live.py",
+        "kind": "game_list_slice",
+        "marker": "recent_slice = current_team_games[-RECENT_GAMES:]",
+        "reason": (
+            "Same false positive as the run_special_teams_role_transitions.py entries above, "
+            "for the LIVE/prospective version of the identical role-transition feature "
+            "computation: `current_team_games` is one player's own real games for his current "
+            "team, already filtered to strictly-before `as_of_date` by "
+            "special_teams_history_store.player_history_before()'s own `game_date < before_date` "
+            "query before this function ever sees the list. Slicing the last N games of an "
+            "already-PIT-filtered list is the intended recent-window construction, not a "
+            "training-eligibility split -- this code path never touches a model fit or a "
+            "training/eval split, only the SOG shadow overlay's role-state feature."
+        ),
+    },
+    {
+        "file": "operational/special_teams_roles_live.py",
+        "kind": "game_list_slice",
+        "marker": "baseline_slice = current_team_games[-(RECENT_GAMES + BASELINE_GAMES):-RECENT_GAMES]",
+        "reason": (
+            "Same false positive as the recent_slice entry immediately above, for the paired "
+            "'baseline window' slice (the games before the recent window, also already strictly "
+            "before as_of_date) -- see that entry's reason."
+        ),
+    },
+    {
+        "file": "operational/live_odds_daily_pull.py",
+        "kind": "sorted_by_game_id",
+        "marker": "preseason_dates = sorted({",
+        "reason": (
+            "False-positive trigger: the detector flags this only because "
+            "the comprehension iterates `for g in games` (the loop variable "
+            "name `games` matches the game-collection heuristic) -- the "
+            "actual values being sorted are `dt.date` objects derived from "
+            "`gameDate`, not game ids or list positions, and this has "
+            "nothing to do with any model's training/prediction eligibility. "
+            "It is a live NHL schedule odds-pulling job's own lookup of the "
+            "earliest real preseason calendar date (gameType == 1), used "
+            "only to gate when this operational script starts making API "
+            "calls -- it never touches a model, a feature, or a prediction."
+        ),
+    },
 ]
 
 

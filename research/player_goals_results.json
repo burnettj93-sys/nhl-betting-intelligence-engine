@@ -1,0 +1,710 @@
+{
+  "alpha": 0.16638185447961729,
+  "alpha_e": 0.0,
+  "baseline_results": {
+    "A_season_to_date": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12568307154053704,
+          "brier_skill_score": 0.03981215643510272,
+          "log_loss": 0.4121658582096022,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.017117094935037824,
+          "brier_skill_score": -0.0005248881649282389,
+          "log_loss": 0.08354433185350402,
+          "n": 87989
+        }
+      }
+    },
+    "B_per60_x_recent_toi": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.1351501334640858,
+          "brier_skill_score": -0.0325138749217595,
+          "log_loss": 0.8012152559150172,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.027226200128961743,
+          "brier_skill_score": -0.5914202113482177,
+          "log_loss": 0.20159485936955351,
+          "n": 87989
+        }
+      }
+    },
+    "C_sog_x_shooting_pct": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12313063869868568,
+          "brier_skill_score": 0.059312117378299556,
+          "log_loss": 0.4032859491496567,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.01681963747069715,
+          "brier_skill_score": 0.01686203393679353,
+          "log_loss": 0.07975082454474847,
+          "n": 87989
+        }
+      }
+    },
+    "D_empirical_unshrunk": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12284503951235197,
+          "brier_skill_score": 0.06149402512043489,
+          "log_loss": 0.4299396644500143,
+          "n": 87989
+        }
+      }
+    },
+    "E_empirical_shrunk": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12257981424456635,
+          "brier_skill_score": 0.06352028112144192,
+          "log_loss": 0.3999032205463685,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.016828004929799613,
+          "brier_skill_score": 0.016372940950250547,
+          "log_loss": 0.08035844784003819,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "best_baseline_name": "E_empirical_shrunk",
+  "best_candidate_name": "E_hierarchical_plus_context",
+  "best_k_player": 15,
+  "best_shrink_shots": 75,
+  "bootstrap_vs_best_baseline": {
+    "A_hierarchical_empirical": {
+      "ci_half_width": 5.0104110539697655e-05,
+      "ci_high": 7.481364726141804e-05,
+      "ci_low": -2.5394573817977273e-05,
+      "frac_improved": 0.158,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 2.4303591223753807e-05
+    },
+    "B_logistic": {
+      "ci_half_width": 0.0002514469578388939,
+      "ci_high": 0.0016933927166715573,
+      "ci_low": 0.0011904988009937695,
+      "frac_improved": 0.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 0.001441105452953062
+    },
+    "C_poisson_glm": {
+      "ci_half_width": 0.00029006022817115035,
+      "ci_high": 0.0023164982384111105,
+      "ci_low": 0.0017363777820688098,
+      "frac_improved": 0.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 0.0020229939786920864
+    },
+    "D_negbinom": {
+      "ci_half_width": 0.0002896338678644514,
+      "ci_high": 0.0023076867879578272,
+      "ci_low": 0.0017284190522289244,
+      "frac_improved": 0.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 0.002015083685140459
+    },
+    "E_hierarchical_plus_context": {
+      "ci_half_width": 6.523054729626332e-05,
+      "ci_high": -1.1180157672846525e-05,
+      "ci_low": -0.00014164125226537316,
+      "frac_improved": 0.994,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": -7.312536015112447e-05
+    },
+    "F_shot_generation_x_conversion": {
+      "ci_half_width": 0.00022608119949447947,
+      "ci_high": 0.0007823974210370427,
+      "ci_low": 0.00033023502204808375,
+      "frac_improved": 0.0,
+      "n_games_resampled": 2624,
+      "n_resamples": 1000,
+      "point_delta": 0.0005508244541191781
+    }
+  },
+  "candidate_results": {
+    "A_hierarchical_empirical": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.1226041178357903,
+          "brier_skill_score": 0.06333460764479804,
+          "log_loss": 0.39974347847656594,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.016835933164928853,
+          "brier_skill_score": 0.015909521392426518,
+          "log_loss": 0.08029918376542339,
+          "n": 87989
+        }
+      }
+    },
+    "B_logistic": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12402091969752303,
+          "brier_skill_score": 0.05251058888315352,
+          "log_loss": 0.405795050190006,
+          "n": 87989
+        }
+      }
+    },
+    "C_poisson_glm": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12460280822325867,
+          "brier_skill_score": 0.04806510325113622,
+          "log_loss": 0.4083387592304204,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.01687937502600473,
+          "brier_skill_score": 0.01337026672569852,
+          "log_loss": 0.08157654099057954,
+          "n": 87989
+        }
+      }
+    },
+    "D_negbinom": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12459489792970718,
+          "brier_skill_score": 0.04812553595391844,
+          "log_loss": 0.4083249591345726,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.01687290852517781,
+          "brier_skill_score": 0.013748245292811045,
+          "log_loss": 0.08159465479519648,
+          "n": 87989
+        }
+      }
+    },
+    "E_hierarchical_plus_context": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12250668888441396,
+          "brier_skill_score": 0.06407894093945865,
+          "log_loss": 0.3994511328427228,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.016784024141689228,
+          "brier_skill_score": 0.018943696868386817,
+          "log_loss": 0.07893760391861945,
+          "n": 87989
+        }
+      }
+    },
+    "F_shot_generation_x_conversion": {
+      "n": 87989,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15488299673822864,
+          "brier": 0.12313063869868568,
+          "brier_skill_score": 0.059312117378299556,
+          "log_loss": 0.4032859491496567,
+          "n": 87989
+        },
+        "2": {
+          "actual_rate": 0.017411267317505596,
+          "brier": 0.01681963747069715,
+          "brier_skill_score": 0.01686203393679353,
+          "log_loss": 0.07975082454474847,
+          "n": 87989
+        }
+      }
+    }
+  },
+  "common_evaluation_set_by_season": {
+    "20242025": {
+      "common_evaluation_rows": 44143,
+      "excluded": 3081,
+      "total_target_player_games": 47224
+    },
+    "20252026": {
+      "common_evaluation_rows": 43846,
+      "excluded": 3366,
+      "total_target_player_games": 47212
+    }
+  },
+  "confidence_breakdown": {
+    "HIGH": {
+      "n": 63166,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.165104644903904,
+          "brier": 0.1286080575441577,
+          "brier_skill_score": 0.06701031458384354
+        }
+      }
+    },
+    "LOW": {
+      "n": 872,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.09174311926605505,
+          "brier": 0.08599564345850097,
+          "brier_skill_score": -0.03203458578833329
+        }
+      }
+    },
+    "MEDIUM": {
+      "n": 23951,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.1302242077575049,
+          "brier": 0.10774482419609296,
+          "brier_skill_score": 0.048744070862396405
+        }
+      }
+    }
+  },
+  "config": {
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "feature_names": [
+      "intercept",
+      "log_baseline_rate",
+      "recent_form_log_ratio",
+      "toi_log_ratio",
+      "pp_role_rate",
+      "shot_volume_log_ratio",
+      "shrunk_shooting_pct_log",
+      "opponent_log_factor",
+      "team_context_log_factor",
+      "h2h_sog_delta",
+      "h2h_goals_delta"
+    ],
+    "locked_stage": "M9_plus_h2h_goals",
+    "tuning_season": 20232024,
+    "tuning_split_date": "2024-02-24",
+    "warmup_season": 20222023
+  },
+  "conservative_probability_check": {
+    "fraction_conservative_leq_raw": 1.0,
+    "mean_conservative_prob_1plus": 0.09960717070491948,
+    "mean_raw_prob_1plus": 0.16169209353702452
+  },
+  "context_weights_e": {
+    "h2h_goals_delta": -0.0082771436152644,
+    "h2h_sog_delta": 0.0,
+    "intercept": 0.0,
+    "log_baseline_rate": 0.0,
+    "opponent_log_factor": 0.03934878697660757,
+    "pp_role_rate": 0.0,
+    "recent_form_log_ratio": 0.0,
+    "shot_volume_log_ratio": 0.0,
+    "shrunk_shooting_pct_log": -0.04953345970054761,
+    "team_context_log_factor": 0.0,
+    "toi_log_ratio": 0.0
+  },
+  "corpus_size": 188863,
+  "date_sensitivity_best_candidate": {
+    "ci_high": -1.4625055116068708e-05,
+    "ci_low": -0.0001404778617481034,
+    "frac_improved": 0.992,
+    "n_dates_resampled": 345,
+    "n_resamples": 500,
+    "point_delta": -7.312536015112447e-05
+  },
+  "distribution_analysis": {
+    "hurdle_model_needed": false,
+    "negbin_implied_zero_rate": 0.8401280791984722,
+    "observed_zero_rate": 0.845,
+    "poisson_implied_zero_rate": 0.8379892556519247,
+    "tuning_fit_mean": 0.17675,
+    "tuning_fit_variance": 0.19484277083333332,
+    "variance_to_mean_ratio": 1.1023636256482792
+  },
+  "eval_examples_n": 87989,
+  "excluded": {
+    "insufficient_history": 1101,
+    "not_projected_active": 8475
+  },
+  "freeze_manifest_path": "research/player_goals_freeze_manifest.json",
+  "goals_model_evaluation_conditionality": "CONDITIONAL ON ACTUAL GAME PARTICIPATION",
+  "k_player_shrink_grid": {
+    "k15_shrink150": {
+      "brier_1plus": 0.1208226058985135,
+      "k_player": 15,
+      "shrink_shots": 150
+    },
+    "k15_shrink250": {
+      "brier_1plus": 0.1208226058985135,
+      "k_player": 15,
+      "shrink_shots": 250
+    },
+    "k15_shrink75": {
+      "brier_1plus": 0.1208226058985135,
+      "k_player": 15,
+      "shrink_shots": 75
+    },
+    "k30_shrink150": {
+      "brier_1plus": 0.12092628119034833,
+      "k_player": 30,
+      "shrink_shots": 150
+    },
+    "k30_shrink250": {
+      "brier_1plus": 0.12092628119034833,
+      "k_player": 30,
+      "shrink_shots": 250
+    },
+    "k30_shrink75": {
+      "brier_1plus": 0.12092628119034833,
+      "k_player": 30,
+      "shrink_shots": 75
+    },
+    "k50_shrink150": {
+      "brier_1plus": 0.12115581950689014,
+      "k_player": 50,
+      "shrink_shots": 150
+    },
+    "k50_shrink250": {
+      "brier_1plus": 0.12115581950689014,
+      "k_player": 50,
+      "shrink_shots": 250
+    },
+    "k50_shrink75": {
+      "brier_1plus": 0.12115581950689014,
+      "k_player": 50,
+      "shrink_shots": 75
+    }
+  },
+  "locked_context_idx_for_candidate_e": [
+    6,
+    7,
+    10
+  ],
+  "locked_stage": "M9_plus_h2h_goals",
+  "per_feature_verdicts": {
+    "h2h_goals_added_value": true,
+    "h2h_sog_added_value": false,
+    "opponent_context_added_value": true,
+    "pp_role_added_value": false,
+    "recent_form_added_value": false,
+    "shooting_talent_added_value": true,
+    "shot_volume_added_value": false,
+    "team_context_added_value": false,
+    "toi_added_value": false
+  },
+  "representative_examples": {
+    "defenseman": {
+      "actual_goals": 0.0,
+      "career_shots": 170,
+      "confidence": "MEDIUM",
+      "game_date": "2024-10-04",
+      "opponent": "NJD",
+      "p_1plus": 0.056,
+      "player": "Connor Clifton",
+      "position": "D",
+      "raw_shooting_pct": 0.053,
+      "shrunk_shooting_pct": 0.077,
+      "team": "BUF"
+    },
+    "elite_scorer": {
+      "actual_goals": 0.0,
+      "career_shots": 535,
+      "confidence": "HIGH",
+      "game_date": "2024-10-04",
+      "opponent": "BUF",
+      "p_1plus": 0.356,
+      "player": "Timo Meier",
+      "position": "R",
+      "raw_shooting_pct": 0.127,
+      "shrunk_shooting_pct": 0.122,
+      "team": "NJD"
+    },
+    "heavily_shrunk_talent": {
+      "actual_goals": 0.0,
+      "career_shots": 16,
+      "confidence": "LOW",
+      "game_date": "2024-10-08",
+      "opponent": "STL",
+      "p_1plus": 0.249,
+      "player": "Shane Wright",
+      "position": "C",
+      "raw_shooting_pct": 0.312,
+      "shrunk_shooting_pct": 0.125,
+      "team": "SEA"
+    },
+    "high_confidence": {
+      "actual_goals": 0.0,
+      "career_shots": 319,
+      "confidence": "HIGH",
+      "game_date": "2024-10-04",
+      "opponent": "BUF",
+      "p_1plus": 0.18,
+      "player": "Erik Haula",
+      "position": "L",
+      "raw_shooting_pct": 0.094,
+      "shrunk_shooting_pct": 0.097,
+      "team": "NJD"
+    },
+    "high_shooting_pct_small_sample": {
+      "actual_goals": 0.0,
+      "career_shots": 16,
+      "confidence": "LOW",
+      "game_date": "2024-10-08",
+      "opponent": "STL",
+      "p_1plus": 0.249,
+      "player": "Shane Wright",
+      "position": "C",
+      "raw_shooting_pct": 0.312,
+      "shrunk_shooting_pct": 0.125,
+      "team": "SEA"
+    },
+    "high_volume_shooter": {
+      "actual_goals": 0.0,
+      "career_shots": 610,
+      "confidence": "MEDIUM",
+      "game_date": "2024-10-04",
+      "opponent": "BUF",
+      "p_1plus": 0.377,
+      "player": "Jack Hughes",
+      "position": "C",
+      "raw_shooting_pct": 0.115,
+      "shrunk_shooting_pct": 0.113,
+      "team": "NJD"
+    },
+    "low_confidence": {
+      "actual_goals": 0.0,
+      "career_shots": 16,
+      "confidence": "LOW",
+      "game_date": "2024-10-08",
+      "opponent": "STL",
+      "p_1plus": 0.249,
+      "player": "Shane Wright",
+      "position": "C",
+      "raw_shooting_pct": 0.312,
+      "shrunk_shooting_pct": 0.125,
+      "team": "SEA"
+    },
+    "low_volume_finisher": {
+      "actual_goals": 0.0,
+      "career_shots": 170,
+      "confidence": "MEDIUM",
+      "game_date": "2024-10-04",
+      "opponent": "NJD",
+      "p_1plus": 0.056,
+      "player": "Connor Clifton",
+      "position": "D",
+      "raw_shooting_pct": 0.053,
+      "shrunk_shooting_pct": 0.077,
+      "team": "BUF"
+    },
+    "model_hit": {
+      "actual_goals": 0.0,
+      "p_1plus": 0.18,
+      "player": "Erik Haula"
+    },
+    "model_miss": {
+      "actual_goals": 0.0,
+      "p_1plus": 0.48,
+      "player": "Auston Matthews"
+    },
+    "pp_heavy_player": {
+      "actual_goals": 0.0,
+      "career_shots": 410,
+      "confidence": "HIGH",
+      "game_date": "2024-10-04",
+      "opponent": "NJD",
+      "p_1plus": 0.312,
+      "player": "Alex Tuch",
+      "position": "R",
+      "raw_shooting_pct": 0.141,
+      "shrunk_shooting_pct": 0.132,
+      "team": "BUF"
+    }
+  },
+  "season_results": {
+    "20242025": {
+      "n": 44143,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15345581405885417,
+          "brier": 0.121509535134139,
+          "brier_skill_score": 0.06464304336391213
+        },
+        "2": {
+          "actual_rate": 0.01680900709059194,
+          "brier": 0.01624270257216537,
+          "brier_skill_score": 0.017170145572646067
+        }
+      }
+    },
+    "20252026": {
+      "n": 43846,
+      "thresholds": {
+        "1": {
+          "actual_rate": 0.15631984673630434,
+          "brier": 0.12351059706300238,
+          "brier_skill_score": 0.06349032650765507
+        },
+        "2": {
+          "actual_rate": 0.018017607079323084,
+          "brier": 0.01732901246544719,
+          "brier_skill_score": 0.02057090409682394
+        }
+      }
+    }
+  },
+  "stage_value_tests_tuning_validate": {
+    "M0_baseline_only_to_M1_plus_recent_form": {
+      "ci_half_width": 4.052937219158059e-05,
+      "ci_high": 4.440682238415761e-05,
+      "ci_low": -3.665192199900358e-05,
+      "frac_improved": 0.402,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 4.597789596161306e-06
+    },
+    "M1_plus_recent_form_to_M2_plus_toi": {
+      "ci_half_width": 1.0231191190090971e-07,
+      "ci_high": 2.045421516883028e-07,
+      "ci_low": -8.167211351661763e-11,
+      "frac_improved": 0.026,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 1.0387056234573144e-07
+    },
+    "M2_plus_toi_to_M3_plus_pp_role": {
+      "ci_half_width": 4.207529548584665e-06,
+      "ci_high": 9.46140605917467e-06,
+      "ci_low": 1.04634696200534e-06,
+      "frac_improved": 0.005,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 5.205770233149276e-06
+    },
+    "M3_plus_pp_role_to_M4_plus_shot_volume": {
+      "ci_half_width": 1.1932237561393388e-05,
+      "ci_high": 1.4014250342808676e-05,
+      "ci_low": -9.8502247799781e-06,
+      "frac_improved": 0.357,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": 2.0831212177996328e-06
+    },
+    "M4_plus_shot_volume_to_M5_plus_shooting_talent": {
+      "ci_half_width": 1.7870373027910336e-05,
+      "ci_high": -3.207497201743181e-05,
+      "ci_low": -6.781571807325248e-05,
+      "frac_improved": 1.0,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -5.065511953077084e-05
+    },
+    "M5_plus_shooting_talent_to_M6_plus_opponent": {
+      "ci_half_width": 2.4709646899274962e-05,
+      "ci_high": -8.509922802879544e-06,
+      "ci_low": -5.792921660142947e-05,
+      "frac_improved": 0.995,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -3.273744219768615e-05
+    },
+    "M6_plus_opponent_to_M7_plus_team_context": {
+      "ci_half_width": 2.3348970604186725e-06,
+      "ci_high": 1.0780193200332633e-06,
+      "ci_low": -3.5917748008040817e-06,
+      "frac_improved": 0.863,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -1.325317873140941e-06
+    },
+    "M7_plus_team_context_to_M8_plus_h2h_sog": {
+      "ci_half_width": 6.099804647802243e-06,
+      "ci_high": 4.656122713039834e-06,
+      "ci_low": -7.543486582564651e-06,
+      "frac_improved": 0.688,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -1.597634403521786e-06
+    },
+    "M8_plus_h2h_sog_to_M9_plus_h2h_goals": {
+      "ci_half_width": 3.0760705319807236e-06,
+      "ci_high": -1.5741918620304496e-06,
+      "ci_low": -7.726332925991897e-06,
+      "frac_improved": 0.998,
+      "n_games_resampled": 410,
+      "n_resamples": 1000,
+      "point_delta": -4.607029635436688e-06
+    }
+  },
+  "test_suite_returncode": 0,
+  "test_suite_stderr_tail": "/Users/johnburnett/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020\n  warnings.warn(\n..........................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 938 tests in 10.528s\n\nOK",
+  "tuning_fit_n": 30237,
+  "tuning_validate_n": 13855,
+  "two_plus_support_checks": {
+    "bootstrap_ci_half_width": 5.4071401961439114e-05,
+    "events_per_confidence_bucket": {
+      "HIGH": 1202,
+      "LOW": 5,
+      "MEDIUM": 325
+    },
+    "events_per_season": {
+      "20242025": 742,
+      "20252026": 790
+    },
+    "passes_bootstrap_width": true,
+    "passes_per_bucket": false,
+    "passes_per_season": true,
+    "passes_total": true,
+    "total_2plus_events": 1532,
+    "two_plus_status": "INSUFFICIENT_DATA"
+  },
+  "two_plus_support_standard": {
+    "max_bootstrap_ci_half_width": 0.01,
+    "min_events_per_confidence_bucket": 30,
+    "min_events_per_eval_season": 100,
+    "min_total_events_eval_common_set": 300
+  },
+  "upstream_sog_eligibility": "NOT ELIGIBLE FOR CLEAN EVALUATION -- consistent with the same structural finding documented for PLAYER_POINTS_VALIDATION_REPORT.md Part 10/Section I: the validated SOG model exposes a single globally-fitted weight state whose own headline-stage selection was reported directly against its eval seasons rather than a separate pre-registered tuning-only split, so a genuinely clean out-of-fold reuse cannot be guaranteed. A player's own PIT-safe rolling SOG rate (NOT the SOG model's prediction) is used instead as the shot-volume signal."
+}

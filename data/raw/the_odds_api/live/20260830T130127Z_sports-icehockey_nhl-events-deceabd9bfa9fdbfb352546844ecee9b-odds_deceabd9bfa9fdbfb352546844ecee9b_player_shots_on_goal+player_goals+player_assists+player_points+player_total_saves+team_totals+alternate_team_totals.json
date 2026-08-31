@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/deceabd9bfa9fdbfb352546844ecee9b/odds",
+    "event_id": "deceabd9bfa9fdbfb352546844ecee9b",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "dec925d04de3ab1a81bf6acc012e8660fe93d32a26372fea31456d42e80ffaf6",
+    "retrieved_at_utc": "2026-08-30T13:01:27Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [],
+    "commence_time": "2026-09-30T02:40:00Z",
+    "home_team": "Vegas Golden Knights",
+    "id": "deceabd9bfa9fdbfb352546844ecee9b",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

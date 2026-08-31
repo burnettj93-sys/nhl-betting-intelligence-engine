@@ -1,0 +1,2573 @@
+{
+  "seasons": [
+    20222023,
+    20232024,
+    20242025,
+    20252026
+  ],
+  "per_season": {
+    "20222023": {
+      "games_sampled": 30,
+      "invariant_violations_total": 0,
+      "unexplained_mismatches_total": 0,
+      "pbp_blocks": 829,
+      "boxscore_blocks": 829,
+      "block_gap_absolute": 0,
+      "block_gap_relative_pct": 0.0,
+      "per_game": [
+        {
+          "game_id": 2022020034,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 27,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2022020071,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2022020099,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2022020149,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020171,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 19,
+          "boxscore_blocks": 19
+        },
+        {
+          "game_id": 2022020260,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2022020275,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020316,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 33,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2022020336,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2022020342,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 25,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2022020349,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020412,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 24,
+          "boxscore_blocks": 24
+        },
+        {
+          "game_id": 2022020454,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 16,
+          "boxscore_blocks": 16
+        },
+        {
+          "game_id": 2022020468,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020542,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2022020580,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020680,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2022020850,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 39,
+          "boxscore_blocks": 39
+        },
+        {
+          "game_id": 2022020861,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 42,
+          "boxscore_blocks": 42
+        },
+        {
+          "game_id": 2022020928,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 40,
+          "boxscore_blocks": 40
+        },
+        {
+          "game_id": 2022020941,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 25,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2022020948,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 33,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2022021025,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 15,
+          "boxscore_blocks": 15
+        },
+        {
+          "game_id": 2022021060,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 20,
+          "boxscore_blocks": 20
+        },
+        {
+          "game_id": 2022021063,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 25,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2022021081,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 20,
+          "boxscore_blocks": 20
+        },
+        {
+          "game_id": 2022021108,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 15,
+          "boxscore_blocks": 15
+        },
+        {
+          "game_id": 2022021111,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2022021171,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2022021234,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 24,
+          "boxscore_blocks": 24
+        }
+      ]
+    },
+    "20232024": {
+      "games_sampled": 29,
+      "invariant_violations_total": 0,
+      "unexplained_mismatches_total": 0,
+      "pbp_blocks": 1015,
+      "boxscore_blocks": 942,
+      "block_gap_absolute": 73,
+      "block_gap_relative_pct": 7.75,
+      "per_game": [
+        {
+          "game_id": 2023020009,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475786,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478856,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482077,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 26,
+          "boxscore_blocks": 23
+        },
+        {
+          "game_id": 2023020048,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475188,
+              "field": "blocked_shots",
+              "reconstructed": 7,
+              "boxscore": 6,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8475794,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478434,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479353,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 40,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2023020137,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477450,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2023020156,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478463,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480188,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 35,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2023020171,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480821,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2023020173,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475193,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8475793,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8475913,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478038,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481186,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 41,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2023020180,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476474,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477949,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2023020207,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477503,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478233,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2023020279,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476474,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477934,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480830,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 40,
+          "boxscore_blocks": 37
+        },
+        {
+          "game_id": 2023020300,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476881,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477989,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479439,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480188,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483515,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 39,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2023020356,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477426,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479542,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479591,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 22,
+          "boxscore_blocks": 19
+        },
+        {
+          "game_id": 2023020464,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476981,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2023020485,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8479941,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480762,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8484145,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 33,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2023020487,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476292,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480002,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 35,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2023020522,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8471218,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 40,
+          "boxscore_blocks": 39
+        },
+        {
+          "game_id": 2023020528,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476292,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481559,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481716,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 47,
+          "boxscore_blocks": 44
+        },
+        {
+          "game_id": 2023020635,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 43,
+          "boxscore_blocks": 43
+        },
+        {
+          "game_id": 2023020657,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8481703,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 26,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2023020710,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478401,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 22,
+          "boxscore_blocks": 21
+        },
+        {
+          "game_id": 2023020806,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478133,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478449,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481093,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2023020869,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476927,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477496,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478043,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478493,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479520,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 46,
+          "boxscore_blocks": 40
+        },
+        {
+          "game_id": 2023020871,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477021,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479343,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480849,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2023020915,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8474641,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478366,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2023020917,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 42,
+          "boxscore_blocks": 42
+        },
+        {
+          "game_id": 2023020924,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 45,
+          "boxscore_blocks": 45
+        },
+        {
+          "game_id": 2023020940,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475786,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482077,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2023020976,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2023021168,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477070,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477380,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478458,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479324,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 26,
+          "boxscore_blocks": 22
+        },
+        {
+          "game_id": 2023021188,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8474586,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476826,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477473,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480188,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482133,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 31
+        }
+      ]
+    },
+    "20242025": {
+      "games_sampled": 30,
+      "invariant_violations_total": 0,
+      "unexplained_mismatches_total": 0,
+      "pbp_blocks": 1015,
+      "boxscore_blocks": 940,
+      "block_gap_absolute": 75,
+      "block_gap_relative_pct": 7.98,
+      "per_game": [
+        {
+          "game_id": 2024020009,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476399,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478046,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481028,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 37,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2024020010,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477425,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2024020019,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8482077,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 39,
+          "boxscore_blocks": 38
+        },
+        {
+          "game_id": 2024020094,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8479407,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 29
+        },
+        {
+          "game_id": 2024020123,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475220,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482079,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2024020150,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478874,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479772,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480281,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482092,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 36,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2024020162,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476438,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476889,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480015,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 43,
+          "boxscore_blocks": 38
+        },
+        {
+          "game_id": 2024020229,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480281,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2024020371,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476826,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482665,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2024020413,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475167,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476822,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 41,
+          "boxscore_blocks": 39
+        },
+        {
+          "game_id": 2024020438,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480064,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2024020452,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476460,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 25,
+          "boxscore_blocks": 24
+        },
+        {
+          "game_id": 2024020460,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8471675,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478569,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481577,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482055,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 24
+        },
+        {
+          "game_id": 2024020542,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478424,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482699,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482745,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 48,
+          "boxscore_blocks": 45
+        },
+        {
+          "game_id": 2024020714,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8474564,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476873,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481568,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482703,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2024020728,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476374,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482705,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 28
+        },
+        {
+          "game_id": 2024020842,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8481725,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 37,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2024020943,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8482703,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2024020963,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480028,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 37,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2024020967,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475343,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478020,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481596,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 44,
+          "boxscore_blocks": 41
+        },
+        {
+          "game_id": 2024020999,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477021,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477070,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8484144,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 26,
+          "boxscore_blocks": 22
+        },
+        {
+          "game_id": 2024021003,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8474102,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480801,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482092,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 35,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2024021049,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476873,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480762,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 45,
+          "boxscore_blocks": 42
+        },
+        {
+          "game_id": 2024021064,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477960,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482124,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 33,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2024021087,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477492,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477501,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479525,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2024021145,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480246,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 33,
+          "boxscore_blocks": 32
+        },
+        {
+          "game_id": 2024021155,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480459,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482691,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483485,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 29,
+          "boxscore_blocks": 26
+        },
+        {
+          "game_id": 2024021171,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478463,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479520,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2024021246,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475184,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476389,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480015,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482109,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482157,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2024021260,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480188,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 22,
+          "boxscore_blocks": 21
+        }
+      ]
+    },
+    "20252026": {
+      "games_sampled": 30,
+      "invariant_violations_total": 0,
+      "unexplained_mismatches_total": 1,
+      "pbp_blocks": 982,
+      "boxscore_blocks": 899,
+      "block_gap_absolute": 83,
+      "block_gap_relative_pct": 9.23,
+      "per_game": [
+        {
+          "game_id": 2025020073,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475343,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476880,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479520,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2025020079,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475768,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476905,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482720,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 37,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2025020086,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8473533,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 41,
+          "boxscore_blocks": 40
+        },
+        {
+          "game_id": 2025020140,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476292,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477476,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477492,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479525,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480039,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 44,
+          "boxscore_blocks": 37
+        },
+        {
+          "game_id": 2025020143,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8473604,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2025020193,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478882,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 34,
+          "boxscore_blocks": 33
+        },
+        {
+          "game_id": 2025020231,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478046,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 37,
+          "boxscore_blocks": 36
+        },
+        {
+          "game_id": 2025020240,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478458,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2025020242,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8482745,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 2,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 35,
+          "boxscore_blocks": 34
+        },
+        {
+          "game_id": 2025020270,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8481581,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482145,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483515,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2025020303,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8473419,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478542,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481024,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482713,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 41,
+          "boxscore_blocks": 35
+        },
+        {
+          "game_id": 2025020318,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477527,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479661,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483489,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8484153,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 43,
+          "boxscore_blocks": 39
+        },
+        {
+          "game_id": 2025020349,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476429,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477500,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480009,
+              "field": "blocked_shots",
+              "reconstructed": 4,
+              "boxscore": 3,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8485702,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 42,
+          "boxscore_blocks": 38
+        },
+        {
+          "game_id": 2025020424,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8480068,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 39,
+          "boxscore_blocks": 38
+        },
+        {
+          "game_id": 2025020434,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8474641,
+              "field": "blocked_shots",
+              "reconstructed": 6,
+              "boxscore": 5,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481554,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482665,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483512,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2025020584,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476455,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 41,
+          "boxscore_blocks": 40
+        },
+        {
+          "game_id": 2025020669,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476474,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481559,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 24,
+          "boxscore_blocks": 22
+        },
+        {
+          "game_id": 2025020697,
+          "invariant_violations": {},
+          "boxscore_mismatches": [],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 23,
+          "boxscore_blocks": 23
+        },
+        {
+          "game_id": 2025020702,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8483499,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 30
+        },
+        {
+          "game_id": 2025020750,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476921,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482702,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 23,
+          "boxscore_blocks": 21
+        },
+        {
+          "game_id": 2025020814,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476878,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478519,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480995,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 27,
+          "boxscore_blocks": 24
+        },
+        {
+          "game_id": 2025020828,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8479671,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 32,
+          "boxscore_blocks": 31
+        },
+        {
+          "game_id": 2025020970,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8477964,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478891,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479942,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479992,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 26
+        },
+        {
+          "game_id": 2025020987,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8478133,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483515,
+              "field": "blocked_shots",
+              "reconstructed": 3,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 30,
+          "boxscore_blocks": 27
+        },
+        {
+          "game_id": 2025021003,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476878,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477416,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8478010,
+              "field": "sog",
+              "reconstructed": 2,
+              "boxscore": 1
+            },
+            {
+              "player_id": 8479420,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480995,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8484145,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [
+            {
+              "player_id": 8478010,
+              "field": "sog",
+              "reconstructed": 2,
+              "boxscore": 1
+            }
+          ],
+          "pbp_blocks": 26,
+          "boxscore_blocks": 21
+        },
+        {
+          "game_id": 2025021044,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8479987,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8482177,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 28,
+          "boxscore_blocks": 26
+        },
+        {
+          "game_id": 2025021188,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475172,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476455,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 24,
+          "boxscore_blocks": 22
+        },
+        {
+          "game_id": 2025021211,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8471215,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476483,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477511,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479393,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8479638,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481725,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 31,
+          "boxscore_blocks": 25
+        },
+        {
+          "game_id": 2025021231,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8475726,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8476882,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8477479,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8483493,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 24,
+          "boxscore_blocks": 20
+        },
+        {
+          "game_id": 2025021284,
+          "invariant_violations": {},
+          "boxscore_mismatches": [
+            {
+              "player_id": 8476921,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8480015,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8481533,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 1,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8484203,
+              "field": "blocked_shots",
+              "reconstructed": 2,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            },
+            {
+              "player_id": 8485406,
+              "field": "blocked_shots",
+              "reconstructed": 1,
+              "boxscore": 0,
+              "known_discrepancy": "event-feed blocker attribution >= official boxscore blockedShots; see NHL_PLAY_BY_PLAY_FOUNDATION_REPORT.md Section S"
+            }
+          ],
+          "unexplained_mismatches": [],
+          "pbp_blocks": 43,
+          "boxscore_blocks": 37
+        }
+      ]
+    }
+  }
+}

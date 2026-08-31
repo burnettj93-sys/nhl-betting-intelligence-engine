@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4951992db982c394e261970cbfb52332/odds",
+    "event_id": "4951992db982c394e261970cbfb52332",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "a84b219b16606022722ad95060e1ebd2fbb4a1d1d50b3e5b20cc10c6c0fcec7e",
+    "retrieved_at_utc": "2026-08-30T13:01:30Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Minnesota Wild",
+    "bookmakers": [],
+    "commence_time": "2026-10-10T22:10:00Z",
+    "home_team": "Florida Panthers",
+    "id": "4951992db982c394e261970cbfb52332",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

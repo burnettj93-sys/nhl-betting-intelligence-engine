@@ -1,0 +1,265 @@
+{
+  "eval_seasons": {
+    "2024-25": {
+      "challenger_mae": 0.761853106118166,
+      "frozen_mae": 0.7609220713041294,
+      "frozen_residual_by_state": {
+        "ADDED_TO_PK1": {
+          "mean": -0.007407196289990473,
+          "n": 738
+        },
+        "ADDED_TO_PK2": {
+          "mean": -0.020401197553665238,
+          "n": 1567
+        },
+        "DEMOTED_PK1_TO_PK2": {
+          "mean": -0.014010444420488226,
+          "n": 2922
+        },
+        "NO_MEANINGFUL_PK": {
+          "mean": -0.04820211476675227,
+          "n": 18162
+        },
+        "PROMOTED_PK2_TO_PK1": {
+          "mean": -0.017619186255832264,
+          "n": 3054
+        },
+        "REMOVED_FROM_PK": {
+          "mean": -0.06573550319053681,
+          "n": 2541
+        },
+        "ROLE_UNCERTAIN": {
+          "mean": -0.01908380059208934,
+          "n": 279
+        },
+        "STABLE_PK1": {
+          "mean": 0.03062547677673674,
+          "n": 10874
+        },
+        "STABLE_PK2": {
+          "mean": -0.015955287214185182,
+          "n": 4006
+        }
+      },
+      "game_clustered_bootstrap_brier_delta": {
+        "1": {
+          "ci_high": 0.00016821044925643958,
+          "ci_low": 8.24175288050566e-05,
+          "frac_improved": 0.0,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 0.00012381408102346558
+        },
+        "2": {
+          "ci_high": 0.00011233071065747113,
+          "ci_low": 2.4719748849516554e-05,
+          "frac_improved": 0.0,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 6.967403089808144e-05
+        },
+        "3": {
+          "ci_high": 5.168075961456409e-05,
+          "ci_low": 5.5737874418981814e-06,
+          "frac_improved": 0.006,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 2.9047662384221185e-05
+        }
+      },
+      "n": 44143,
+      "per_threshold": {
+        "1": {
+          "challenger_brier": 0.2217727930956295,
+          "challenger_log_loss": 0.634345184079489,
+          "frozen_brier": 0.22164897901460603,
+          "frozen_log_loss": 0.6340789181448077
+        },
+        "2": {
+          "challenger_brier": 0.143586034402818,
+          "challenger_log_loss": 0.4505169393108694,
+          "frozen_brier": 0.14351636037191992,
+          "frozen_log_loss": 0.45035559225132943
+        },
+        "3": {
+          "challenger_brier": 0.06705659857889425,
+          "challenger_log_loss": 0.23668051997965986,
+          "frozen_brier": 0.06702755091651003,
+          "frozen_log_loss": 0.23656755884570604
+        }
+      },
+      "post_overlay_residual_by_state": {
+        "ADDED_TO_PK1": {
+          "mean": -0.013095803586925817,
+          "n": 738
+        },
+        "ADDED_TO_PK2": {
+          "mean": -0.025320788604097047,
+          "n": 1567
+        },
+        "DEMOTED_PK1_TO_PK2": {
+          "mean": -0.01625655803502465,
+          "n": 2922
+        },
+        "NO_MEANINGFUL_PK": {
+          "mean": -0.049416727748740764,
+          "n": 18162
+        },
+        "PROMOTED_PK2_TO_PK1": {
+          "mean": -0.021615494720590638,
+          "n": 3054
+        },
+        "REMOVED_FROM_PK": {
+          "mean": -0.11120375391356796,
+          "n": 2541
+        },
+        "ROLE_UNCERTAIN": {
+          "mean": -0.01908380059208934,
+          "n": 279
+        },
+        "STABLE_PK1": {
+          "mean": 0.02888287154273331,
+          "n": 10874
+        },
+        "STABLE_PK2": {
+          "mean": -0.020688216954602285,
+          "n": 4006
+        }
+      }
+    },
+    "2025-26": {
+      "challenger_mae": 0.7338065493726308,
+      "frozen_mae": 0.7330375167201788,
+      "frozen_residual_by_state": {
+        "ADDED_TO_PK1": {
+          "mean": 0.051681686699661895,
+          "n": 712
+        },
+        "ADDED_TO_PK2": {
+          "mean": -0.004605089923614776,
+          "n": 1473
+        },
+        "DEMOTED_PK1_TO_PK2": {
+          "mean": -0.028992509460757685,
+          "n": 2942
+        },
+        "NO_MEANINGFUL_PK": {
+          "mean": -0.06109727901453433,
+          "n": 18035
+        },
+        "PROMOTED_PK2_TO_PK1": {
+          "mean": -0.03091775139115016,
+          "n": 2998
+        },
+        "REMOVED_FROM_PK": {
+          "mean": -0.05819439087870435,
+          "n": 2317
+        },
+        "ROLE_UNCERTAIN": {
+          "mean": -0.02115297960971328,
+          "n": 299
+        },
+        "STABLE_PK1": {
+          "mean": 0.007293267120357642,
+          "n": 10849
+        },
+        "STABLE_PK2": {
+          "mean": -0.038874330331970464,
+          "n": 4221
+        }
+      },
+      "game_clustered_bootstrap_brier_delta": {
+        "1": {
+          "ci_high": 0.00011940985089262113,
+          "ci_low": 3.038637969046687e-05,
+          "frac_improved": 0.0,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 7.616722063835679e-05
+        },
+        "2": {
+          "ci_high": 9.95742456429416e-05,
+          "ci_low": 1.7072677702401062e-05,
+          "frac_improved": 0.002,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 5.841646076906737e-05
+        },
+        "3": {
+          "ci_high": 4.4360723624653486e-05,
+          "ci_low": 2.3576351374093862e-06,
+          "frac_improved": 0.016,
+          "n_games_resampled": 1312,
+          "n_resamples": 500,
+          "point_delta": 2.3450541663729008e-05
+        }
+      },
+      "n": 43846,
+      "per_threshold": {
+        "1": {
+          "challenger_brier": 0.22235895194011776,
+          "challenger_log_loss": 0.6359905594939061,
+          "frozen_brier": 0.2222827847194794,
+          "frozen_log_loss": 0.6358211197104607
+        },
+        "2": {
+          "challenger_brier": 0.13430444757692056,
+          "challenger_log_loss": 0.42676343104636594,
+          "frozen_brier": 0.1342460311161515,
+          "frozen_log_loss": 0.42659916721774893
+        },
+        "3": {
+          "challenger_brier": 0.060502157177356714,
+          "challenger_log_loss": 0.21658984076226717,
+          "frozen_brier": 0.060478706635692984,
+          "frozen_log_loss": 0.2164994983140319
+        }
+      },
+      "post_overlay_residual_by_state": {
+        "ADDED_TO_PK1": {
+          "mean": 0.04700909041879488,
+          "n": 712
+        },
+        "ADDED_TO_PK2": {
+          "mean": -0.009183735803198399,
+          "n": 1473
+        },
+        "DEMOTED_PK1_TO_PK2": {
+          "mean": -0.03060955736950939,
+          "n": 2942
+        },
+        "NO_MEANINGFUL_PK": {
+          "mean": -0.06217644321962667,
+          "n": 18035
+        },
+        "PROMOTED_PK2_TO_PK1": {
+          "mean": -0.03445775251360223,
+          "n": 2998
+        },
+        "REMOVED_FROM_PK": {
+          "mean": -0.10208552281809134,
+          "n": 2317
+        },
+        "ROLE_UNCERTAIN": {
+          "mean": -0.02115297960971328,
+          "n": 299
+        },
+        "STABLE_PK1": {
+          "mean": 0.006081055963645979,
+          "n": 10849
+        },
+        "STABLE_PK2": {
+          "mean": -0.043223807729393354,
+          "n": 4221
+        }
+      }
+    }
+  },
+  "fit": {
+    "beta_removal": -0.05031310061195385,
+    "decay_name": "step_2",
+    "declines": true,
+    "n_active_rows": 7678
+  },
+  "n_tuning_candidates": 39941
+}

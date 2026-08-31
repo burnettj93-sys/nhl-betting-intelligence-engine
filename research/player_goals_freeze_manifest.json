@@ -1,0 +1,111 @@
+{
+  "calibration_method": "NONE this cycle -- see distribution_analysis for hurdle/overdispersion check",
+  "confidence_methodology": "shared research.player_sog.count_models.confidence_score (unchanged) -- per explicit instruction, NOT redesigned this slice",
+  "conservative_probability_methodology": "shared research.player_sog.count_models.conservative_mu (unchanged)",
+  "experiment_id": "player_goals_v1",
+  "feature_set": [
+    "intercept",
+    "log_baseline_rate",
+    "recent_form_log_ratio",
+    "toi_log_ratio",
+    "pp_role_rate",
+    "shot_volume_log_ratio",
+    "shrunk_shooting_pct_log",
+    "opponent_log_factor",
+    "team_context_log_factor",
+    "h2h_sog_delta",
+    "h2h_goals_delta"
+  ],
+  "fitted_tuning_parameters_candidate_b": {
+    "h2h_goals_delta": 0.38272662787226575,
+    "h2h_sog_delta": -0.0254666020239434,
+    "intercept": -0.6035759272136006,
+    "log_baseline_rate": 0.5949367284425359,
+    "opponent_log_factor": 0.5800550423956617,
+    "pp_role_rate": 0.1438346022743892,
+    "recent_form_log_ratio": -0.010501076144099411,
+    "shot_volume_log_ratio": 0.2808379009953629,
+    "shrunk_shooting_pct_log": 0.8299932085724019,
+    "team_context_log_factor": 0.02318191384940164,
+    "toi_log_ratio": 0.019615117086092648
+  },
+  "fitted_tuning_parameters_candidate_c": {
+    "h2h_goals_delta": 0.01728873010973111,
+    "h2h_sog_delta": 0.011488071980787395,
+    "intercept": -0.47360184232933816,
+    "log_baseline_rate": 0.7163193097659518,
+    "opponent_log_factor": 0.06548877697473841,
+    "pp_role_rate": -0.0184335310068275,
+    "recent_form_log_ratio": 0.0034028771457687208,
+    "shot_volume_log_ratio": 0.03229217707285663,
+    "shrunk_shooting_pct_log": 0.04512493791436176,
+    "team_context_log_factor": -0.006894386482530285,
+    "toi_log_ratio": 0.0009825064256524742
+  },
+  "freeze_timestamp_utc": "2026-08-28T02:14:20.141624Z",
+  "locked_context_idx_for_candidate_e": [
+    6,
+    7,
+    10
+  ],
+  "locked_stage": "M9_plus_h2h_goals",
+  "lookback_windows": {
+    "baseline": 20,
+    "opponent": 20,
+    "pp_role": 10,
+    "recent_form": 5,
+    "shot_volume": 10,
+    "team_context": 20,
+    "toi_recent": 10
+  },
+  "model_family_candidates": [
+    "A_hierarchical_empirical",
+    "B_logistic",
+    "C_poisson_glm",
+    "D_negbinom_if_overdispersed",
+    "E_hierarchical_plus_context_offset",
+    "F_shot_generation_x_conversion"
+  ],
+  "model_hyperparameters": {
+    "glm_lr": 0.05,
+    "glm_n_iter": 400,
+    "logistic_lr": 0.3,
+    "logistic_n_iter": 3000,
+    "negbinom_alpha": 0.16638185447961729
+  },
+  "per_feature_tuning_validate_verdicts": {
+    "h2h_goals_added_value": true,
+    "h2h_sog_added_value": false,
+    "opponent_context_added_value": true,
+    "pp_role_added_value": false,
+    "recent_form_added_value": false,
+    "shooting_talent_added_value": true,
+    "shot_volume_added_value": false,
+    "team_context_added_value": false,
+    "toi_added_value": false
+  },
+  "player_eligibility_policy": "PlayerHistoryIndex history_as_of() >= 3 real prior games AND projected_active()",
+  "season_boundary_rules": "WARMUP=20222023 (history depth only), TUNING=20232024 split at 2024-02-24, EVAL=[20242025, 20252026]",
+  "shooting_talent_methodology": "career shots-on-goal-weighted shrinkage toward league shooting%, n_shots/(n_shots+K) credibility weight, K chosen via tuning-validate grid search",
+  "shrinkage_parameters": {
+    "empirical_baseline_shrinkage_games": 20,
+    "h2h_shrinkage_games": 10,
+    "role_hierarchical_k_player": 15,
+    "shooting_talent_shrinkage_shots": 75
+  },
+  "software_model_version": "player_goals_v1",
+  "source_code_hashes": {
+    "research/player_goals/build_goals_corpus.py": "34aab86c4a2fe6bc",
+    "research/player_goals/features.py": "2ebca998675a8104",
+    "research/player_goals/hierarchy.py": "b083456b644670dd",
+    "research/run_player_goals_model.py": "b1d5f559a58db599"
+  },
+  "target_definition": "actual_goals = I_F_goals (MoneyPuck direct field)",
+  "two_plus_support_standard": {
+    "max_bootstrap_ci_half_width": 0.01,
+    "min_events_per_confidence_bucket": 30,
+    "min_events_per_eval_season": 100,
+    "min_total_events_eval_common_set": 300
+  },
+  "upstream_sog_eligibility": "NOT ELIGIBLE FOR CLEAN EVALUATION -- consistent with the same structural finding documented for PLAYER_POINTS_VALIDATION_REPORT.md Part 10/Section I: the validated SOG model exposes a single globally-fitted weight state whose own headline-stage selection was reported directly against its eval seasons rather than a separate pre-registered tuning-only split, so a genuinely clean out-of-fold reuse cannot be guaranteed. A player's own PIT-safe rolling SOG rate (NOT the SOG model's prediction) is used instead as the shot-volume signal."
+}

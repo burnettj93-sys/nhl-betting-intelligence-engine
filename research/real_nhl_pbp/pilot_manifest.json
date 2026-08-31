@@ -1,0 +1,279 @@
+{
+  "pilot_season": 20252026,
+  "games_selected": 30,
+  "games_fetched": 30,
+  "games_failed": 0,
+  "fetched": [
+    {
+      "game_id": 2025020073,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020073.json",
+      "num_plays": 320,
+      "expected_period_type": "REG",
+      "expected_home_score": 5,
+      "expected_away_score": 1
+    },
+    {
+      "game_id": 2025020079,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020079.json",
+      "num_plays": 335,
+      "expected_period_type": "OT",
+      "expected_home_score": 3,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025020086,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020086.json",
+      "num_plays": 384,
+      "expected_period_type": "OT",
+      "expected_home_score": 3,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025020140,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020140.json",
+      "num_plays": 335,
+      "expected_period_type": "OT",
+      "expected_home_score": 4,
+      "expected_away_score": 3
+    },
+    {
+      "game_id": 2025020143,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020143.json",
+      "num_plays": 307,
+      "expected_period_type": "REG",
+      "expected_home_score": 2,
+      "expected_away_score": 3
+    },
+    {
+      "game_id": 2025020193,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020193.json",
+      "num_plays": 327,
+      "expected_period_type": "OT",
+      "expected_home_score": 2,
+      "expected_away_score": 3
+    },
+    {
+      "game_id": 2025020231,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020231.json",
+      "num_plays": 317,
+      "expected_period_type": "SO",
+      "expected_home_score": 2,
+      "expected_away_score": 1
+    },
+    {
+      "game_id": 2025020240,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020240.json",
+      "num_plays": 296,
+      "expected_period_type": "REG",
+      "expected_home_score": 1,
+      "expected_away_score": 9
+    },
+    {
+      "game_id": 2025020242,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020242.json",
+      "num_plays": 355,
+      "expected_period_type": "OT",
+      "expected_home_score": 3,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025020270,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020270.json",
+      "num_plays": 283,
+      "expected_period_type": "REG",
+      "expected_home_score": 0,
+      "expected_away_score": 7
+    },
+    {
+      "game_id": 2025020303,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020303.json",
+      "num_plays": 334,
+      "expected_period_type": "REG",
+      "expected_home_score": 8,
+      "expected_away_score": 5
+    },
+    {
+      "game_id": 2025020318,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020318.json",
+      "num_plays": 362,
+      "expected_period_type": "REG",
+      "expected_home_score": 4,
+      "expected_away_score": 3
+    },
+    {
+      "game_id": 2025020349,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020349.json",
+      "num_plays": 335,
+      "expected_period_type": "SO",
+      "expected_home_score": 1,
+      "expected_away_score": 0
+    },
+    {
+      "game_id": 2025020424,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020424.json",
+      "num_plays": 343,
+      "expected_period_type": "REG",
+      "expected_home_score": 0,
+      "expected_away_score": 7
+    },
+    {
+      "game_id": 2025020434,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020434.json",
+      "num_plays": 306,
+      "expected_period_type": "REG",
+      "expected_home_score": 9,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025020584,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020584.json",
+      "num_plays": 321,
+      "expected_period_type": "REG",
+      "expected_home_score": 1,
+      "expected_away_score": 0
+    },
+    {
+      "game_id": 2025020669,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020669.json",
+      "num_plays": 295,
+      "expected_period_type": "REG",
+      "expected_home_score": 9,
+      "expected_away_score": 0
+    },
+    {
+      "game_id": 2025020697,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020697.json",
+      "num_plays": 348,
+      "expected_period_type": "REG",
+      "expected_home_score": 10,
+      "expected_away_score": 2
+    },
+    {
+      "game_id": 2025020702,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020702.json",
+      "num_plays": 315,
+      "expected_period_type": "REG",
+      "expected_home_score": 5,
+      "expected_away_score": 0
+    },
+    {
+      "game_id": 2025020750,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020750.json",
+      "num_plays": 327,
+      "expected_period_type": "REG",
+      "expected_home_score": 9,
+      "expected_away_score": 1
+    },
+    {
+      "game_id": 2025020814,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020814.json",
+      "num_plays": 322,
+      "expected_period_type": "REG",
+      "expected_home_score": 8,
+      "expected_away_score": 5
+    },
+    {
+      "game_id": 2025020828,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020828.json",
+      "num_plays": 336,
+      "expected_period_type": "OT",
+      "expected_home_score": 4,
+      "expected_away_score": 5
+    },
+    {
+      "game_id": 2025020970,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020970.json",
+      "num_plays": 287,
+      "expected_period_type": "OT",
+      "expected_home_score": 3,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025020987,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025020987.json",
+      "num_plays": 340,
+      "expected_period_type": "SO",
+      "expected_home_score": 6,
+      "expected_away_score": 5
+    },
+    {
+      "game_id": 2025021003,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021003.json",
+      "num_plays": 366,
+      "expected_period_type": "REG",
+      "expected_home_score": 8,
+      "expected_away_score": 7
+    },
+    {
+      "game_id": 2025021044,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021044.json",
+      "num_plays": 338,
+      "expected_period_type": "SO",
+      "expected_home_score": 2,
+      "expected_away_score": 3
+    },
+    {
+      "game_id": 2025021188,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021188.json",
+      "num_plays": 302,
+      "expected_period_type": "REG",
+      "expected_home_score": 6,
+      "expected_away_score": 8
+    },
+    {
+      "game_id": 2025021211,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021211.json",
+      "num_plays": 304,
+      "expected_period_type": "REG",
+      "expected_home_score": 9,
+      "expected_away_score": 4
+    },
+    {
+      "game_id": 2025021231,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021231.json",
+      "num_plays": 283,
+      "expected_period_type": "REG",
+      "expected_home_score": 3,
+      "expected_away_score": 2
+    },
+    {
+      "game_id": 2025021284,
+      "season": "20252026",
+      "archived_path": "/Users/johnburnett/Downloads/nhl_engine 2/research/real_nhl_pbp/raw/20252026/2025021284.json",
+      "num_plays": 330,
+      "expected_period_type": "SO",
+      "expected_home_score": 3,
+      "expected_away_score": 2
+    }
+  ],
+  "failures": []
+}

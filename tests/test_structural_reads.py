@@ -101,6 +101,20 @@ JUSTIFIED_EXCEPTIONS = {
     ("validate_live_nhl.py", "goalie_game_stats"),
     ("validate_live_nhl.py", "game_result_events"),
     ("validate_live_nhl.py", "team_membership_events"),
+    # Preseason Operational Readiness Closure sprint (2026-08-30):
+    # operational/outcome_resolver.py is POST-HOC SETTLEMENT of an
+    # already-made, already-recorded prediction -- every function in it
+    # first checks games.game_state == 'FINAL' and fails closed
+    # (GAME_NOT_FINAL) otherwise. It answers "what actually happened",
+    # never "what was known at prediction_time_utc" -- the opposite
+    # question point_in_time.py exists to gate. schema.sql's own
+    # player_game_stats docstring names this exact use case explicitly:
+    # "This table exists for model *learning* (post-hoc, after
+    # result_observed_at_utc) and for settlement, not pricing." This
+    # resolver never touches models/combined_model.py, pricing/engine.py,
+    # or backtest.py, and never feeds a pregame decision.
+    ("operational/outcome_resolver.py", "player_game_stats"),
+    ("operational/outcome_resolver.py", "goalie_game_stats"),
 }
 
 # a SELECT keyword must appear within this many characters before the

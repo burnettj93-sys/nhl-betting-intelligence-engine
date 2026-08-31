@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/8d556511643d0c038bff0b7cf4f2b64f/odds",
+    "event_id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "2346587aed51436dbdbac52df624e5243e5993af85cb392c755caa531a0f9fe1",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [],
+    "commence_time": "2026-10-03T23:10:00Z",
+    "home_team": "Buffalo Sabres",
+    "id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

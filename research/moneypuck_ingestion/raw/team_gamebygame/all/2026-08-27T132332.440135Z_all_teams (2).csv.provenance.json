@@ -1,0 +1,11 @@
+{
+  "byte_size": 126483024,
+  "dataset": "team_gamebygame",
+  "downloaded_at_utc": "2026-08-27T13:23:32.440135+00:00",
+  "original_filename": "all_teams (2).csv",
+  "season_coverage": "all",
+  "sha256": "d4ca191ccc57e54c56f46497f09240b3e7f2d80f66dc2c41fe635825d035dd8f",
+  "source_url": "https://moneypuck.com/moneypuck/playerData/careers/gameByGame/all_teams.csv",
+  "validation_reason": null,
+  "validation_status": "VALID"
+}

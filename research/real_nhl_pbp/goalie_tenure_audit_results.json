@@ -1,0 +1,66 @@
+{
+  "seasons": [
+    "20222023",
+    "20232024",
+    "20242025",
+    "20252026"
+  ],
+  "per_season": {
+    "20222023": {
+      "games": 1312,
+      "games_with_any_goalie_change": 152,
+      "games_with_mid_period_change": 106,
+      "games_multi_goalie": 152,
+      "games_3plus_goalies": 0,
+      "total_returns_after_empty_net": 147,
+      "total_coherence_violations": 0,
+      "boxscore_fetch_failures": 0,
+      "games_exact_save_match": 1312,
+      "games_save_mismatch": 0,
+      "largest_save_discrepancy": 0,
+      "mismatch_rate_pct": 0.0
+    },
+    "20232024": {
+      "games": 1312,
+      "games_with_any_goalie_change": 164,
+      "games_with_mid_period_change": 108,
+      "games_multi_goalie": 164,
+      "games_3plus_goalies": 0,
+      "total_returns_after_empty_net": 163,
+      "total_coherence_violations": 0,
+      "boxscore_fetch_failures": 0,
+      "games_exact_save_match": 1312,
+      "games_save_mismatch": 0,
+      "largest_save_discrepancy": 0,
+      "mismatch_rate_pct": 0.0
+    },
+    "20242025": {
+      "games": 1312,
+      "games_with_any_goalie_change": 136,
+      "games_with_mid_period_change": 84,
+      "games_multi_goalie": 136,
+      "games_3plus_goalies": 0,
+      "total_returns_after_empty_net": 176,
+      "total_coherence_violations": 0,
+      "boxscore_fetch_failures": 0,
+      "games_exact_save_match": 1312,
+      "games_save_mismatch": 0,
+      "largest_save_discrepancy": 0,
+      "mismatch_rate_pct": 0.0
+    },
+    "20252026": {
+      "games": 1312,
+      "games_with_any_goalie_change": 140,
+      "games_with_mid_period_change": 89,
+      "games_multi_goalie": 140,
+      "games_3plus_goalies": 0,
+      "total_returns_after_empty_net": 185,
+      "total_coherence_violations": 0,
+      "boxscore_fetch_failures": 0,
+      "games_exact_save_match": 1312,
+      "games_save_mismatch": 0,
+      "largest_save_discrepancy": 0,
+      "mismatch_rate_pct": 0.0
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3a95439904d3d0af12970bb0c8e66a3a/odds",
+    "event_id": "3a95439904d3d0af12970bb0c8e66a3a",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "c603edecd8c6b445837c9f26d9c19ffdadf400757ac6ddb2def621672048b814",
+    "retrieved_at_utc": "2026-08-30T13:01:30Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [],
+    "commence_time": "2026-10-07T02:40:00Z",
+    "home_team": "Los Angeles Kings",
+    "id": "3a95439904d3d0af12970bb0c8e66a3a",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

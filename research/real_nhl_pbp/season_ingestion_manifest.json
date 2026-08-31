@@ -1,0 +1,10 @@
+{
+  "season": 20222023,
+  "games_in_authoritative_schedule": 1312,
+  "games_already_archived_before_run": 1312,
+  "games_requested_this_run": 0,
+  "games_retrieved_total": 1312,
+  "games_missing": [],
+  "retries": 0,
+  "failures": []
+}

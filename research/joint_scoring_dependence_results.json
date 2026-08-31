@@ -1,0 +1,3750 @@
+{
+  "config": {
+    "warmup_season": 20222023,
+    "tuning_season": 20232024,
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "min_joint_positive_events": 30
+  },
+  "corpus_size": {
+    "joint_rows": 188863
+  },
+  "examples_by_season_n": {
+    "20232024": 44017,
+    "20242025": 44076,
+    "20252026": 43777
+  },
+  "conversion_rates": {
+    "goal_per_shot": 0.10172754381770827,
+    "point_per_shot": 0.2730475483473206,
+    "assist_per_shot": 0.17132000452961235
+  },
+  "coherence_violations": {
+    "goal_gt_point": 0,
+    "assist_gt_point": 3517,
+    "goal_gt_sog1plus": 0,
+    "n": 44017
+  },
+  "raw_dependence": {
+    "sog_goal": 0.3732187019493731,
+    "sog_assist": 0.13982698744227462,
+    "sog_point": 0.3292552892048106,
+    "goal_assist": 0.059082289555284814
+  },
+  "rho_by_name": {
+    "SOG2_GOAL": 0.29709996461829946,
+    "SOG3_GOAL": 0.29709996461829946,
+    "SOG4_GOAL": 0.29709996461829946,
+    "SOG2_ASSIST": 0.04639932276734841,
+    "SOG3_ASSIST": 0.04639932276734841,
+    "SOG3_POINT": 0.21599995087962656,
+    "SOG4_POINT": 0.21599995087962656
+  },
+  "pair_results": {
+    "SOG2_GOAL": {
+      "combo": {
+        "name": "SOG2_GOAL",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 2,
+        "event": "goals",
+        "x_event": 1,
+        "conv_field": "actual_goals",
+        "label_b": "GOAL_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 5385.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.10102920047221628,
+            "log_loss": 0.34482141154062135,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 19127,
+                "mean_predicted": 0.024134813235409627,
+                "mean_actual": 0.04428295080253045
+              },
+              {
+                "band": "5%-10%",
+                "n": 11027,
+                "mean_predicted": 0.07331016108847828,
+                "mean_actual": 0.11553459689852182
+              },
+              {
+                "band": "10%-20%",
+                "n": 9783,
+                "mean_predicted": 0.14073274425198293,
+                "mean_actual": 0.19871205151793928
+              },
+              {
+                "band": "20%-30%",
+                "n": 3485,
+                "mean_predicted": 0.24263179739973093,
+                "mean_actual": 0.3101865136298422
+              },
+              {
+                "band": "30%-50%",
+                "n": 654,
+                "mean_predicted": 0.34126565466811365,
+                "mean_actual": 0.3654434250764526
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.10672006180892485,
+            "log_loss": 0.3687743724722111,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 44076,
+                "mean_predicted": 0.12050950072958408,
+                "mean_actual": 0.122175333514838
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.0999431007123879,
+            "log_loss": 0.338503349115571,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 7095,
+                "mean_predicted": 0.0352166716227188,
+                "mean_actual": 0.02649753347427766
+              },
+              {
+                "band": "5%-10%",
+                "n": 10220,
+                "mean_predicted": 0.07487276893452727,
+                "mean_actual": 0.05420743639921722
+              },
+              {
+                "band": "10%-20%",
+                "n": 18601,
+                "mean_predicted": 0.1443328552852123,
+                "mean_actual": 0.13031557443148217
+              },
+              {
+                "band": "20%-30%",
+                "n": 7202,
+                "mean_predicted": 0.24184487962798945,
+                "mean_actual": 0.25881699527908913
+              },
+              {
+                "band": "30%-50%",
+                "n": 958,
+                "mean_predicted": 0.33457378327616144,
+                "mean_actual": 0.3705636743215031
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.09965486797436006,
+            "log_loss": 0.3367617360942898,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 9232,
+                "mean_predicted": 0.03489617947109001,
+                "mean_actual": 0.030654246100519932
+              },
+              {
+                "band": "5%-10%",
+                "n": 13129,
+                "mean_predicted": 0.07377894545164493,
+                "mean_actual": 0.06908370782237794
+              },
+              {
+                "band": "10%-20%",
+                "n": 14794,
+                "mean_predicted": 0.1433644020608343,
+                "mean_actual": 0.1530350141949439
+              },
+              {
+                "band": "20%-30%",
+                "n": 5727,
+                "mean_predicted": 0.24283780505847288,
+                "mean_actual": 0.2617426226645713
+              },
+              {
+                "band": "30%-50%",
+                "n": 1194,
+                "mean_predicted": 0.33789080973986074,
+                "mean_actual": 0.36180904522613067
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.09953001024041436,
+            "log_loss": 0.3358668074100865,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12753,
+                "mean_predicted": 0.02886477437915219,
+                "mean_actual": 0.03207088528189446
+              },
+              {
+                "band": "5%-10%",
+                "n": 11721,
+                "mean_predicted": 0.07348183152210877,
+                "mean_actual": 0.08275744390410375
+              },
+              {
+                "band": "10%-20%",
+                "n": 13065,
+                "mean_predicted": 0.1411624252828102,
+                "mean_actual": 0.16364332185227706
+              },
+              {
+                "band": "20%-30%",
+                "n": 5076,
+                "mean_predicted": 0.24193587923573148,
+                "mean_actual": 0.2645784081954295
+              },
+              {
+                "band": "30%-50%",
+                "n": 1461,
+                "mean_predicted": 0.3403998652449426,
+                "mean_actual": 0.3593429158110883
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0014991902318014783,
+              "ci_low": -0.001675320694166857,
+              "ci_high": -0.0013174350067895885,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0014991902318014783,
+              "ci_low": -0.0016737761152552794,
+              "ci_high": -0.001291844542199841,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.08429906770542897,
+            "mean_winner_p": 0.10888172310035653,
+            "lift_ratio": 1.2916124230558295
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 5436.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.10256337407664945,
+            "log_loss": 0.3502375898792904,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 18964,
+                "mean_predicted": 0.024759188645085355,
+                "mean_actual": 0.04788019405188779
+              },
+              {
+                "band": "5%-10%",
+                "n": 10974,
+                "mean_predicted": 0.071892124264836,
+                "mean_actual": 0.11354109713869145
+              },
+              {
+                "band": "10%-20%",
+                "n": 9901,
+                "mean_predicted": 0.1401194083349216,
+                "mean_actual": 0.2001817998182002
+              },
+              {
+                "band": "20%-30%",
+                "n": 3402,
+                "mean_predicted": 0.2393441311790161,
+                "mean_actual": 0.3218694885361552
+              },
+              {
+                "band": "30%-50%",
+                "n": 536,
+                "mean_predicted": 0.34058953107258605,
+                "mean_actual": 0.3824626865671642
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.10824171308165917,
+            "log_loss": 0.3727671023022649,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 43777,
+                "mean_predicted": 0.12046517454089285,
+                "mean_actual": 0.12417479498366722
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10137268365855248,
+            "log_loss": 0.3428165361053962,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 6186,
+                "mean_predicted": 0.035445459695226306,
+                "mean_actual": 0.027481409634658907
+              },
+              {
+                "band": "5%-10%",
+                "n": 11182,
+                "mean_predicted": 0.07510822312872774,
+                "mean_actual": 0.05714541226971919
+              },
+              {
+                "band": "10%-20%",
+                "n": 18422,
+                "mean_predicted": 0.14549367085578835,
+                "mean_actual": 0.13141895559656933
+              },
+              {
+                "band": "20%-30%",
+                "n": 7042,
+                "mean_predicted": 0.24015605652207792,
+                "mean_actual": 0.26498153933541607
+              },
+              {
+                "band": "30%-50%",
+                "n": 945,
+                "mean_predicted": 0.3297858199755382,
+                "mean_actual": 0.35978835978835977
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.10088662467854957,
+            "log_loss": 0.3403953435435058,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8915,
+                "mean_predicted": 0.03448724082937105,
+                "mean_actual": 0.03129556926528323
+              },
+              {
+                "band": "5%-10%",
+                "n": 13619,
+                "mean_predicted": 0.07449833309138795,
+                "mean_actual": 0.06975548865555474
+              },
+              {
+                "band": "10%-20%",
+                "n": 14245,
+                "mean_predicted": 0.14358024009755593,
+                "mean_actual": 0.15366795366795366
+              },
+              {
+                "band": "20%-30%",
+                "n": 5884,
+                "mean_predicted": 0.2427942665834057,
+                "mean_actual": 0.27396329027872196
+              },
+              {
+                "band": "30%-50%",
+                "n": 1114,
+                "mean_predicted": 0.3337592776985788,
+                "mean_actual": 0.3644524236983842
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.10090306392604374,
+            "log_loss": 0.3403333368496438,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12327,
+                "mean_predicted": 0.02925946371802029,
+                "mean_actual": 0.03472053216516589
+              },
+              {
+                "band": "5%-10%",
+                "n": 12563,
+                "mean_predicted": 0.07389320238631154,
+                "mean_actual": 0.08341956539043222
+              },
+              {
+                "band": "10%-20%",
+                "n": 12595,
+                "mean_predicted": 0.14291388478863468,
+                "mean_actual": 0.16522429535529973
+              },
+              {
+                "band": "20%-30%",
+                "n": 5079,
+                "mean_predicted": 0.24246771811310708,
+                "mean_actual": 0.2833234888757629
+              },
+              {
+                "band": "30%-50%",
+                "n": 1213,
+                "mean_predicted": 0.3388311992371931,
+                "mean_actual": 0.36273701566364386
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0016603101506045964,
+              "ci_low": -0.001823284166506109,
+              "ci_high": -0.0014816000877591606,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0016603101506045964,
+              "ci_low": -0.0018276016031657238,
+              "ci_high": -0.001510018889609402,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.08320817803864328,
+            "mean_winner_p": 0.10808182092686361,
+            "lift_ratio": 1.2989326707366262
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG3_GOAL": {
+      "combo": {
+        "name": "SOG3_GOAL",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 3,
+        "event": "goals",
+        "x_event": 1,
+        "conv_field": "actual_goals",
+        "label_b": "GOAL_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 3500.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.06940214679639735,
+            "log_loss": 0.2557499379767914,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 29614,
+                "mean_predicted": 0.017641065376051923,
+                "mean_actual": 0.03711082596069427
+              },
+              {
+                "band": "5%-10%",
+                "n": 8138,
+                "mean_predicted": 0.07112563015795706,
+                "mean_actual": 0.12546080117965103
+              },
+              {
+                "band": "10%-20%",
+                "n": 5286,
+                "mean_predicted": 0.14015361086551176,
+                "mean_actual": 0.2026106696935301
+              },
+              {
+                "band": "20%-30%",
+                "n": 927,
+                "mean_predicted": 0.23447274502847174,
+                "mean_actual": 0.296655879180151
+              },
+              {
+                "band": "30%-50%",
+                "n": 111,
+                "mean_predicted": 0.3226697619495027,
+                "mean_actual": 0.3063063063063063
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.07280472107690673,
+            "log_loss": 0.27538593664570016,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 44076,
+                "mean_predicted": 0.08226316427724577,
+                "mean_actual": 0.07940829476359017
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06889016330287885,
+            "log_loss": 0.25142285882554666,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 11790,
+                "mean_predicted": 0.03133263645730554,
+                "mean_actual": 0.015945716709075488
+              },
+              {
+                "band": "5%-10%",
+                "n": 15739,
+                "mean_predicted": 0.0756189506273011,
+                "mean_actual": 0.05229048859520935
+              },
+              {
+                "band": "10%-20%",
+                "n": 15333,
+                "mean_predicted": 0.13840036271990835,
+                "mean_actual": 0.13963347029283246
+              },
+              {
+                "band": "20%-30%",
+                "n": 1214,
+                "mean_predicted": 0.22380695873435655,
+                "mean_actual": 0.28665568369028005
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.06820846211292284,
+            "log_loss": 0.24613414117209834,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 20471,
+                "mean_predicted": 0.025731055784200152,
+                "mean_actual": 0.02369205217136437
+              },
+              {
+                "band": "5%-10%",
+                "n": 11213,
+                "mean_predicted": 0.0720697420716372,
+                "mean_actual": 0.07705342013734058
+              },
+              {
+                "band": "10%-20%",
+                "n": 9391,
+                "mean_predicted": 0.13928122240044177,
+                "mean_actual": 0.14758811628154617
+              },
+              {
+                "band": "20%-30%",
+                "n": 2661,
+                "mean_predicted": 0.234526855302107,
+                "mean_actual": 0.2461480646373544
+              },
+              {
+                "band": "30%-50%",
+                "n": 340,
+                "mean_predicted": 0.33424357299004037,
+                "mean_actual": 0.3235294117647059
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06814119031655255,
+            "log_loss": 0.2453949158841125,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22828,
+                "mean_predicted": 0.022534546385941774,
+                "mean_actual": 0.02610828806728579
+              },
+              {
+                "band": "5%-10%",
+                "n": 10641,
+                "mean_predicted": 0.07239567842509333,
+                "mean_actual": 0.0874917770886195
+              },
+              {
+                "band": "10%-20%",
+                "n": 7953,
+                "mean_predicted": 0.1391453857076666,
+                "mean_actual": 0.16031686156167485
+              },
+              {
+                "band": "20%-30%",
+                "n": 2342,
+                "mean_predicted": 0.2337095840759098,
+                "mean_actual": 0.25491033304867633
+              },
+              {
+                "band": "30%-50%",
+                "n": 312,
+                "mean_predicted": 0.3351782074547264,
+                "mean_actual": 0.32371794871794873
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0012609564798442552,
+              "ci_low": -0.0014224923301375397,
+              "ci_high": -0.0011035585569485057,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0012609564798442552,
+              "ci_low": -0.0014084478172688014,
+              "ci_high": -0.0011102366531512697,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.047537604445156985,
+            "mean_winner_p": 0.06904727602741684,
+            "lift_ratio": 1.4524769776120094
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 3480.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.06918182360340279,
+            "log_loss": 0.25415535626022573,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 29800,
+                "mean_predicted": 0.017837852638866204,
+                "mean_actual": 0.0362751677852349
+              },
+              {
+                "band": "5%-10%",
+                "n": 7827,
+                "mean_predicted": 0.070983274051399,
+                "mean_actual": 0.1241855116903028
+              },
+              {
+                "band": "10%-20%",
+                "n": 5279,
+                "mean_predicted": 0.13815859609926195,
+                "mean_actual": 0.21803371850729306
+              },
+              {
+                "band": "20%-30%",
+                "n": 813,
+                "mean_predicted": 0.2351245699519323,
+                "mean_actual": 0.3148831488314883
+              },
+              {
+                "band": "30%-50%",
+                "n": 58,
+                "mean_predicted": 0.3140250976759569,
+                "mean_actual": 0.3448275862068966
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.07286961926418987,
+            "log_loss": 0.27554772775891634,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 43777,
+                "mean_predicted": 0.08221193725435341,
+                "mean_actual": 0.07949379811316444
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06873672825133363,
+            "log_loss": 0.2506673538718527,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 11176,
+                "mean_predicted": 0.03215259357561858,
+                "mean_actual": 0.015658554044380817
+              },
+              {
+                "band": "5%-10%",
+                "n": 15552,
+                "mean_predicted": 0.07429339496131179,
+                "mean_actual": 0.04520318930041152
+              },
+              {
+                "band": "10%-20%",
+                "n": 15833,
+                "mean_predicted": 0.13619647250930936,
+                "mean_actual": 0.14248721025705804
+              },
+              {
+                "band": "20%-30%",
+                "n": 1216,
+                "mean_predicted": 0.22089414388674714,
+                "mean_actual": 0.2845394736842105
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.0677443636635096,
+            "log_loss": 0.24414873056889794,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 20646,
+                "mean_predicted": 0.02578533714323768,
+                "mean_actual": 0.023878717427104523
+              },
+              {
+                "band": "5%-10%",
+                "n": 11180,
+                "mean_predicted": 0.07209716992901817,
+                "mean_actual": 0.07209302325581396
+              },
+              {
+                "band": "10%-20%",
+                "n": 9150,
+                "mean_predicted": 0.140639035448955,
+                "mean_actual": 0.15377049180327867
+              },
+              {
+                "band": "20%-30%",
+                "n": 2529,
+                "mean_predicted": 0.23489622270646685,
+                "mean_actual": 0.26888098062475285
+              },
+              {
+                "band": "30%-50%",
+                "n": 272,
+                "mean_predicted": 0.3259702399190915,
+                "mean_actual": 0.34558823529411764
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06777219311988518,
+            "log_loss": 0.2436541772628987,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23140,
+                "mean_predicted": 0.02328141015224437,
+                "mean_actual": 0.025237683664649957
+              },
+              {
+                "band": "5%-10%",
+                "n": 10326,
+                "mean_predicted": 0.0723522617027133,
+                "mean_actual": 0.0853186132093744
+              },
+              {
+                "band": "10%-20%",
+                "n": 8079,
+                "mean_predicted": 0.1403712564356803,
+                "mean_actual": 0.16969922020051986
+              },
+              {
+                "band": "20%-30%",
+                "n": 1963,
+                "mean_predicted": 0.23361483229455232,
+                "mean_actual": 0.2847682119205298
+              },
+              {
+                "band": "30%-50%",
+                "n": 269,
+                "mean_predicted": 0.3252340146545585,
+                "mean_actual": 0.3159851301115242
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.00140963048351804,
+              "ci_low": -0.0015581908164272185,
+              "ci_high": -0.0012591768162989458,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.00140963048351804,
+              "ci_low": -0.0015841161678082916,
+              "ci_high": -0.0012451356898227073,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.04627688179826491,
+            "mean_winner_p": 0.06775189098716897,
+            "lift_ratio": 1.4640548013265067
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG4_GOAL": {
+      "combo": {
+        "name": "SOG4_GOAL",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 4,
+        "event": "goals",
+        "x_event": 1,
+        "conv_field": "actual_goals",
+        "label_b": "GOAL_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 1928.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.04014983365068432,
+            "log_loss": 0.164021631922536,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 37465,
+                "mean_predicted": 0.012102934784138023,
+                "mean_actual": 0.027145335646603496
+              },
+              {
+                "band": "5%-10%",
+                "n": 4482,
+                "mean_predicted": 0.0706585839540033,
+                "mean_actual": 0.11624274877286926
+              },
+              {
+                "band": "10%-20%",
+                "n": 1945,
+                "mean_predicted": 0.12867802161009587,
+                "mean_actual": 0.17737789203084833
+              },
+              {
+                "band": "20%-30%",
+                "n": 182,
+                "mean_predicted": 0.2261582227313179,
+                "mean_actual": 0.24175824175824176
+              },
+              {
+                "band": "30%-50%",
+                "n": 2,
+                "mean_predicted": 0.3390777027836538,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.041712984058951776,
+            "log_loss": 0.1784203053111534,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 41016,
+                "mean_predicted": 0.047181890470943545,
+                "mean_actual": 0.034157401989467526
+              },
+              {
+                "band": "5%-10%",
+                "n": 3060,
+                "mean_predicted": 0.051530726861170356,
+                "mean_actual": 0.17222222222222222
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.040161369569585145,
+            "log_loss": 0.1631500809995781,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23027,
+                "mean_predicted": 0.028682338118740866,
+                "mean_actual": 0.01302818430538064
+              },
+              {
+                "band": "5%-10%",
+                "n": 17394,
+                "mean_predicted": 0.06938962444483095,
+                "mean_actual": 0.060078187880878466
+              },
+              {
+                "band": "10%-20%",
+                "n": 3655,
+                "mean_predicted": 0.11524093432037581,
+                "mean_actual": 0.1595075239398085
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.039647090745179796,
+            "log_loss": 0.1571459108112502,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 31518,
+                "mean_predicted": 0.017164851519723544,
+                "mean_actual": 0.019354019925122153
+              },
+              {
+                "band": "5%-10%",
+                "n": 7627,
+                "mean_predicted": 0.07045391617489558,
+                "mean_actual": 0.07578340107512783
+              },
+              {
+                "band": "10%-20%",
+                "n": 4346,
+                "mean_predicted": 0.1358499995550728,
+                "mean_actual": 0.140819144040497
+              },
+              {
+                "band": "20%-30%",
+                "n": 554,
+                "mean_predicted": 0.23431386523257067,
+                "mean_actual": 0.22021660649819494
+              },
+              {
+                "band": "30%-50%",
+                "n": 31,
+                "mean_predicted": 0.33592179182774456,
+                "mean_actual": 0.1935483870967742
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.039574766226441155,
+            "log_loss": 0.15642680779126059,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 32429,
+                "mean_predicted": 0.016412144541308567,
+                "mean_actual": 0.02007462456443307
+              },
+              {
+                "band": "5%-10%",
+                "n": 7203,
+                "mean_predicted": 0.07021561336712404,
+                "mean_actual": 0.07927252533666528
+              },
+              {
+                "band": "10%-20%",
+                "n": 3913,
+                "mean_predicted": 0.13575457742516003,
+                "mean_actual": 0.14796831075900843
+              },
+              {
+                "band": "20%-30%",
+                "n": 506,
+                "mean_predicted": 0.23348916936915481,
+                "mean_actual": 0.24110671936758893
+              },
+              {
+                "band": "30%-50%",
+                "n": 25,
+                "mean_predicted": 0.3227420735617148,
+                "mean_actual": 0.2
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0005750674242433682,
+              "ci_low": -0.0006833292187547746,
+              "ci_high": -0.00047278305758375466,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0005750674242433682,
+              "ci_low": -0.000672228786740392,
+              "ci_high": -0.0004755663466949195,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.02410032509628545,
+            "mean_winner_p": 0.03846570086709267,
+            "lift_ratio": 1.5960656428249316
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 1931.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.040369793204165054,
+            "log_loss": 0.16343050143558696,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 37401,
+                "mean_predicted": 0.011921182236667558,
+                "mean_actual": 0.026630304002566777
+              },
+              {
+                "band": "5%-10%",
+                "n": 4563,
+                "mean_predicted": 0.06998188203264481,
+                "mean_actual": 0.1244795090948937
+              },
+              {
+                "band": "10%-20%",
+                "n": 1703,
+                "mean_predicted": 0.1295629045113845,
+                "mean_actual": 0.19553728714034058
+              },
+              {
+                "band": "20%-30%",
+                "n": 110,
+                "mean_predicted": 0.22293555634244236,
+                "mean_actual": 0.3090909090909091
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.04204333998981487,
+            "log_loss": 0.17949688907591713,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 41214,
+                "mean_predicted": 0.04719047182024677,
+                "mean_actual": 0.0350123744358713
+              },
+              {
+                "band": "5%-10%",
+                "n": 2563,
+                "mean_predicted": 0.05149246832991467,
+                "mean_actual": 0.1904018728053063
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.04041777754479585,
+            "log_loss": 0.16364855190950434,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22625,
+                "mean_predicted": 0.02898567792836721,
+                "mean_actual": 0.01188950276243094
+              },
+              {
+                "band": "5%-10%",
+                "n": 17623,
+                "mean_predicted": 0.06939630709115116,
+                "mean_actual": 0.06082959768484367
+              },
+              {
+                "band": "10%-20%",
+                "n": 3529,
+                "mean_predicted": 0.11390789769793809,
+                "mean_actual": 0.167186171720034
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.03968436648487253,
+            "log_loss": 0.1559188624567997,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 31797,
+                "mean_predicted": 0.01716601887106554,
+                "mean_actual": 0.018712457150045603
+              },
+              {
+                "band": "5%-10%",
+                "n": 7370,
+                "mean_predicted": 0.07128370467161878,
+                "mean_actual": 0.08018995929443691
+              },
+              {
+                "band": "10%-20%",
+                "n": 4147,
+                "mean_predicted": 0.13607241937840023,
+                "mean_actual": 0.14998794309139138
+              },
+              {
+                "band": "20%-30%",
+                "n": 441,
+                "mean_predicted": 0.22899290112989604,
+                "mean_actual": 0.2675736961451247
+              },
+              {
+                "band": "30%-50%",
+                "n": 22,
+                "mean_predicted": 0.31522493938505897,
+                "mean_actual": 0.22727272727272727
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.039663109666124206,
+            "log_loss": 0.15547808703002453,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 32696,
+                "mean_predicted": 0.016527277511841534,
+                "mean_actual": 0.019421335943234648
+              },
+              {
+                "band": "5%-10%",
+                "n": 6893,
+                "mean_predicted": 0.07090908791302154,
+                "mean_actual": 0.08501378209778036
+              },
+              {
+                "band": "10%-20%",
+                "n": 3791,
+                "mean_predicted": 0.13376494675496714,
+                "mean_actual": 0.160379847006067
+              },
+              {
+                "band": "20%-30%",
+                "n": 391,
+                "mean_predicted": 0.23162734578148758,
+                "mean_actual": 0.2531969309462916
+              },
+              {
+                "band": "30%-50%",
+                "n": 6,
+                "mean_predicted": 0.3055314421799317,
+                "mean_actual": 0.5
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0007066835380406325,
+              "ci_low": -0.0008139800488456833,
+              "ci_high": -0.0006081313336728997,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0007066835380406325,
+              "ci_low": -0.0008153789970911929,
+              "ci_high": -0.0006016370536915949,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.023079699434157618,
+            "mean_winner_p": 0.03720343108283688,
+            "lift_ratio": 1.611954747893135
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG2_ASSIST": {
+      "combo": {
+        "name": "SOG2_ASSIST",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 2,
+        "event": "assists",
+        "x_event": 1,
+        "conv_field": "actual_assists",
+        "label_b": "ASSIST_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 5674.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.10380748062045558,
+            "log_loss": 0.3493118147972803,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 9535,
+                "mean_predicted": 0.03300951565045362,
+                "mean_actual": 0.04090194022024122
+              },
+              {
+                "band": "5%-10%",
+                "n": 12822,
+                "mean_predicted": 0.07327271251737935,
+                "mean_actual": 0.0709717672749961
+              },
+              {
+                "band": "10%-20%",
+                "n": 14173,
+                "mean_predicted": 0.1444932652419968,
+                "mean_actual": 0.15367247583433288
+              },
+              {
+                "band": "20%-30%",
+                "n": 6295,
+                "mean_predicted": 0.2385048608723506,
+                "mean_actual": 0.2664019062748213
+              },
+              {
+                "band": "30%-50%",
+                "n": 1251,
+                "mean_predicted": 0.3430888441018559,
+                "mean_actual": 0.4148681055155875
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.11161266430183032,
+            "log_loss": 0.3816575379742176,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 44076,
+                "mean_predicted": 0.13539834341986953,
+                "mean_actual": 0.12873218985388873
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10715518397019134,
+            "log_loss": 0.3636497353210211,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 166,
+                "mean_predicted": 0.043140265022134826,
+                "mean_actual": 0.012048192771084338
+              },
+              {
+                "band": "5%-10%",
+                "n": 9677,
+                "mean_predicted": 0.07574947544166082,
+                "mean_actual": 0.05642244497261548
+              },
+              {
+                "band": "10%-20%",
+                "n": 28502,
+                "mean_predicted": 0.14409189277119075,
+                "mean_actual": 0.12216686548312398
+              },
+              {
+                "band": "20%-30%",
+                "n": 5708,
+                "mean_predicted": 0.2271171187100546,
+                "mean_actual": 0.2862648913805186
+              },
+              {
+                "band": "30%-50%",
+                "n": 23,
+                "mean_predicted": 0.3087556695758828,
+                "mean_actual": 0.43478260869565216
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.10589375407319636,
+            "log_loss": 0.35875310074312705,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 1696,
+                "mean_predicted": 0.037486332015046205,
+                "mean_actual": 0.01945754716981132
+              },
+              {
+                "band": "5%-10%",
+                "n": 9191,
+                "mean_predicted": 0.0800140294001604,
+                "mean_actual": 0.04558807529104559
+              },
+              {
+                "band": "10%-20%",
+                "n": 17693,
+                "mean_predicted": 0.14641587741296186,
+                "mean_actual": 0.09133555643474821
+              },
+              {
+                "band": "20%-30%",
+                "n": 10611,
+                "mean_predicted": 0.24517206532719676,
+                "mean_actual": 0.19121666195457543
+              },
+              {
+                "band": "30%-50%",
+                "n": 4811,
+                "mean_predicted": 0.35292479623202255,
+                "mean_actual": 0.31926834337975474
+              },
+              {
+                "band": "50%-100%",
+                "n": 74,
+                "mean_predicted": 0.5150914130041333,
+                "mean_actual": 0.5540540540540541
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.10373627330194692,
+            "log_loss": 0.3490862967120227,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8282,
+                "mean_predicted": 0.03369221261078975,
+                "mean_actual": 0.03730982854382999
+              },
+              {
+                "band": "5%-10%",
+                "n": 13018,
+                "mean_predicted": 0.07355923847109272,
+                "mean_actual": 0.06752189276386542
+              },
+              {
+                "band": "10%-20%",
+                "n": 14580,
+                "mean_predicted": 0.14461802758471515,
+                "mean_actual": 0.14801097393689985
+              },
+              {
+                "band": "20%-30%",
+                "n": 6777,
+                "mean_predicted": 0.23920030297898764,
+                "mean_actual": 0.25837391176036595
+              },
+              {
+                "band": "30%-50%",
+                "n": 1419,
+                "mean_predicted": 0.34293376832417044,
+                "mean_actual": 0.40662438336856943
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -7.120731850913942e-05,
+              "ci_low": -0.00011329587489486426,
+              "ci_high": -2.8406352900356424e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -7.120731850913942e-05,
+              "ci_low": -0.00011102234812525313,
+              "ci_high": -3.382890945949346e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.1187209307346992,
+            "mean_winner_p": 0.12371466067667188,
+            "lift_ratio": 1.042062759372498
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 5682.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.10395486444085557,
+            "log_loss": 0.348722080364923,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 9246,
+                "mean_predicted": 0.03255835960471312,
+                "mean_actual": 0.038286826735885786
+              },
+              {
+                "band": "5%-10%",
+                "n": 12688,
+                "mean_predicted": 0.07331809039168775,
+                "mean_actual": 0.06959331651954603
+              },
+              {
+                "band": "10%-20%",
+                "n": 14254,
+                "mean_predicted": 0.14421737487359965,
+                "mean_actual": 0.15020345166269117
+              },
+              {
+                "band": "20%-30%",
+                "n": 6353,
+                "mean_predicted": 0.23941427917071098,
+                "mean_actual": 0.2771918778529828
+              },
+              {
+                "band": "30%-50%",
+                "n": 1236,
+                "mean_predicted": 0.34425160659942416,
+                "mean_actual": 0.4393203883495146
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.11235928478041822,
+            "log_loss": 0.3835094151154684,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 43777,
+                "mean_predicted": 0.13543195914343006,
+                "mean_actual": 0.1297941841606323
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10760588248609736,
+            "log_loss": 0.3644336746008071,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 170,
+                "mean_predicted": 0.041155029420880195,
+                "mean_actual": 0.01764705882352941
+              },
+              {
+                "band": "5%-10%",
+                "n": 8864,
+                "mean_predicted": 0.07537347206348688,
+                "mean_actual": 0.051105595667870034
+              },
+              {
+                "band": "10%-20%",
+                "n": 28657,
+                "mean_predicted": 0.1453830971668761,
+                "mean_actual": 0.12059880657430994
+              },
+              {
+                "band": "20%-30%",
+                "n": 6038,
+                "mean_predicted": 0.22728851058490832,
+                "mean_actual": 0.28883736336535276
+              },
+              {
+                "band": "30%-50%",
+                "n": 48,
+                "mean_predicted": 0.3090038966520307,
+                "mean_actual": 0.5416666666666666
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.1058675434467789,
+            "log_loss": 0.3583283166996656,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 1633,
+                "mean_predicted": 0.03751884232708476,
+                "mean_actual": 0.02510716472749541
+              },
+              {
+                "band": "5%-10%",
+                "n": 9168,
+                "mean_predicted": 0.07932993410055345,
+                "mean_actual": 0.0443935427574171
+              },
+              {
+                "band": "10%-20%",
+                "n": 17447,
+                "mean_predicted": 0.14608753338315664,
+                "mean_actual": 0.08637588124032786
+              },
+              {
+                "band": "20%-30%",
+                "n": 10466,
+                "mean_predicted": 0.24488960071673233,
+                "mean_actual": 0.19453468373781768
+              },
+              {
+                "band": "30%-50%",
+                "n": 4986,
+                "mean_predicted": 0.35322328252359986,
+                "mean_actual": 0.33273164861612514
+              },
+              {
+                "band": "50%-100%",
+                "n": 77,
+                "mean_predicted": 0.5193133500598964,
+                "mean_actual": 0.4155844155844156
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.10387607493802488,
+            "log_loss": 0.3485486520990661,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8180,
+                "mean_predicted": 0.03350042972856678,
+                "mean_actual": 0.03594132029339853
+              },
+              {
+                "band": "5%-10%",
+                "n": 12621,
+                "mean_predicted": 0.07371560903409416,
+                "mean_actual": 0.0646541478488234
+              },
+              {
+                "band": "10%-20%",
+                "n": 14696,
+                "mean_predicted": 0.14408590565026,
+                "mean_actual": 0.14473326075122483
+              },
+              {
+                "band": "20%-30%",
+                "n": 6888,
+                "mean_predicted": 0.24006331792987567,
+                "mean_actual": 0.26901858304297327
+              },
+              {
+                "band": "30%-50%",
+                "n": 1392,
+                "mean_predicted": 0.34442003546187283,
+                "mean_actual": 0.42528735632183906
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -7.878950282992625e-05,
+              "ci_low": -0.00011836814924068295,
+              "ci_high": -3.948004410279926e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -7.878950282992625e-05,
+              "ci_low": -0.00011720515821540822,
+              "ci_high": -3.7533159875743904e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.11954823049938589,
+            "mean_winner_p": 0.12460592341866987,
+            "lift_ratio": 1.0423067150233558
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG3_ASSIST": {
+      "combo": {
+        "name": "SOG3_ASSIST",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 3,
+        "event": "assists",
+        "x_event": 1,
+        "conv_field": "actual_assists",
+        "label_b": "ASSIST_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 3184.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.06232414642911046,
+            "log_loss": 0.2284926034846647,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23917,
+                "mean_predicted": 0.022815648714365356,
+                "mean_actual": 0.02408328803779738
+              },
+              {
+                "band": "5%-10%",
+                "n": 10094,
+                "mean_predicted": 0.07215988510009759,
+                "mean_actual": 0.08192985932236972
+              },
+              {
+                "band": "10%-20%",
+                "n": 8564,
+                "mean_predicted": 0.13758299187129608,
+                "mean_actual": 0.156352171882298
+              },
+              {
+                "band": "20%-30%",
+                "n": 1357,
+                "mean_predicted": 0.23583334755249208,
+                "mean_actual": 0.2778187177597642
+              },
+              {
+                "band": "30%-50%",
+                "n": 144,
+                "mean_predicted": 0.33100200394526813,
+                "mean_actual": 0.4513888888888889
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.06674697688615772,
+            "log_loss": 0.2575775928707046,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 44076,
+                "mean_predicted": 0.07957907110845276,
+                "mean_actual": 0.07223886015064888
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06489459620417426,
+            "log_loss": 0.2456161966714072,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 6659,
+                "mean_predicted": 0.03973213723186415,
+                "mean_actual": 0.022525904790509085
+              },
+              {
+                "band": "5%-10%",
+                "n": 25624,
+                "mean_predicted": 0.07537968012435156,
+                "mean_actual": 0.049601935685295036
+              },
+              {
+                "band": "10%-20%",
+                "n": 11793,
+                "mean_predicted": 0.12125279052218917,
+                "mean_actual": 0.14949546341049774
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.06403365963819789,
+            "log_loss": 0.2379811180485215,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12521,
+                "mean_predicted": 0.029856644395794826,
+                "mean_actual": 0.013736921971088572
+              },
+              {
+                "band": "5%-10%",
+                "n": 12047,
+                "mean_predicted": 0.0729778207764562,
+                "mean_actual": 0.03594255831327301
+              },
+              {
+                "band": "10%-20%",
+                "n": 12618,
+                "mean_predicted": 0.14477969975067606,
+                "mean_actual": 0.09415121255349501
+              },
+              {
+                "band": "20%-30%",
+                "n": 5433,
+                "mean_predicted": 0.2400544068832779,
+                "mean_actual": 0.17577765507086324
+              },
+              {
+                "band": "30%-50%",
+                "n": 1445,
+                "mean_predicted": 0.35402662792115824,
+                "mean_actual": 0.29411764705882354
+              },
+              {
+                "band": "50%-100%",
+                "n": 12,
+                "mean_predicted": 0.511371278537652,
+                "mean_actual": 0.9166666666666666
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06224687544854577,
+            "log_loss": 0.22815051374005457,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22812,
+                "mean_predicted": 0.0239127109788905,
+                "mean_actual": 0.02332105909170612
+              },
+              {
+                "band": "5%-10%",
+                "n": 10371,
+                "mean_predicted": 0.07239010791222696,
+                "mean_actual": 0.07405264680358692
+              },
+              {
+                "band": "10%-20%",
+                "n": 9178,
+                "mean_predicted": 0.13887823467218885,
+                "mean_actual": 0.15123120505556767
+              },
+              {
+                "band": "20%-30%",
+                "n": 1529,
+                "mean_predicted": 0.23558226405510987,
+                "mean_actual": 0.2707652060170046
+              },
+              {
+                "band": "30%-50%",
+                "n": 186,
+                "mean_predicted": 0.32967658103491154,
+                "mean_actual": 0.44086021505376344
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -7.727098056434234e-05,
+              "ci_low": -0.00010662570121691695,
+              "ci_high": -4.6584342050695615e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -7.727098056434234e-05,
+              "ci_low": -0.00010697823091818104,
+              "ci_high": -5.1505908962717895e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.0639807295145769,
+            "mean_winner_p": 0.0678919170442477,
+            "lift_ratio": 1.0611307116899895
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 3200.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.06269521265703347,
+            "log_loss": 0.228583685445541,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23806,
+                "mean_predicted": 0.0229421107565197,
+                "mean_actual": 0.02264135091993615
+              },
+              {
+                "band": "5%-10%",
+                "n": 10095,
+                "mean_predicted": 0.07212349401444004,
+                "mean_actual": 0.08013868251609708
+              },
+              {
+                "band": "10%-20%",
+                "n": 8462,
+                "mean_predicted": 0.13815085872372143,
+                "mean_actual": 0.16544552115339164
+              },
+              {
+                "band": "20%-30%",
+                "n": 1269,
+                "mean_predicted": 0.2346952743901537,
+                "mean_actual": 0.3073286052009456
+              },
+              {
+                "band": "30%-50%",
+                "n": 145,
+                "mean_predicted": 0.33266326429857834,
+                "mean_actual": 0.42758620689655175
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.06745558305356648,
+            "log_loss": 0.2595885972367148,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 43777,
+                "mean_predicted": 0.0795683591424267,
+                "mean_actual": 0.07309774539141559
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.06542708345869361,
+            "log_loss": 0.24665975484357552,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 6064,
+                "mean_predicted": 0.03930499586428267,
+                "mean_actual": 0.017150395778364115
+              },
+              {
+                "band": "5%-10%",
+                "n": 25156,
+                "mean_predicted": 0.07585449888998459,
+                "mean_actual": 0.04786134520591509
+              },
+              {
+                "band": "10%-20%",
+                "n": 12557,
+                "mean_predicted": 0.12148315378745486,
+                "mean_actual": 0.15067293143266705
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.06393363404492176,
+            "log_loss": 0.23731080612148509,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12532,
+                "mean_predicted": 0.02964449529607988,
+                "mean_actual": 0.014921800191509736
+              },
+              {
+                "band": "5%-10%",
+                "n": 12139,
+                "mean_predicted": 0.07289107078535512,
+                "mean_actual": 0.034269709201746434
+              },
+              {
+                "band": "10%-20%",
+                "n": 12619,
+                "mean_predicted": 0.14451427382530965,
+                "mean_actual": 0.09493620730644267
+              },
+              {
+                "band": "20%-30%",
+                "n": 5190,
+                "mean_predicted": 0.24082434701305871,
+                "mean_actual": 0.18709055876685934
+              },
+              {
+                "band": "30%-50%",
+                "n": 1279,
+                "mean_predicted": 0.3536209741134871,
+                "mean_actual": 0.32916340891321344
+              },
+              {
+                "band": "50%-100%",
+                "n": 18,
+                "mean_predicted": 0.5131108666165782,
+                "mean_actual": 0.3888888888888889
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.06259829114878106,
+            "log_loss": 0.22822924844900042,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22602,
+                "mean_predicted": 0.023923192703561396,
+                "mean_actual": 0.02150252190071675
+              },
+              {
+                "band": "5%-10%",
+                "n": 10440,
+                "mean_predicted": 0.07206119627661485,
+                "mean_actual": 0.075
+              },
+              {
+                "band": "10%-20%",
+                "n": 9122,
+                "mean_predicted": 0.1393709991931806,
+                "mean_actual": 0.15632536724402543
+              },
+              {
+                "band": "20%-30%",
+                "n": 1443,
+                "mean_predicted": 0.23538801986448912,
+                "mean_actual": 0.2993762993762994
+              },
+              {
+                "band": "30%-50%",
+                "n": 170,
+                "mean_predicted": 0.3338620364520472,
+                "mean_actual": 0.4294117647058823
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -9.692150825099666e-05,
+              "ci_low": -0.00012764836683397396,
+              "ci_high": -6.439472720322359e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -9.692150825099666e-05,
+              "ci_low": -0.00012732926709600745,
+              "ci_high": -6.85864663857727e-05,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.06371710267469241,
+            "mean_winner_p": 0.06763356566496682,
+            "lift_ratio": 1.0614664324941125
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG3_POINT": {
+      "combo": {
+        "name": "SOG3_POINT",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 3,
+        "event": "points",
+        "x_event": 1,
+        "conv_field": "actual_points",
+        "label_b": "POINT_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 5556.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.0993149359992269,
+            "log_loss": 0.3329351481699696,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 18828,
+                "mean_predicted": 0.024756658740635783,
+                "mean_actual": 0.035957085192266834
+              },
+              {
+                "band": "5%-10%",
+                "n": 9185,
+                "mean_predicted": 0.07241790884426179,
+                "mean_actual": 0.10342950462710941
+              },
+              {
+                "band": "10%-20%",
+                "n": 9601,
+                "mean_predicted": 0.14250827760451276,
+                "mean_actual": 0.18477241953963128
+              },
+              {
+                "band": "20%-30%",
+                "n": 4385,
+                "mean_predicted": 0.24460853239913963,
+                "mean_actual": 0.2948688711516534
+              },
+              {
+                "band": "30%-50%",
+                "n": 1967,
+                "mean_predicted": 0.36292100611522904,
+                "mean_actual": 0.4097610574478902
+              },
+              {
+                "band": "50%-100%",
+                "n": 110,
+                "mean_predicted": 0.537936268491281,
+                "mean_actual": 0.509090909090909
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.1094082313281941,
+            "log_loss": 0.37562530915123227,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 44076,
+                "mean_predicted": 0.1344175467873479,
+                "mean_actual": 0.12605499591614483
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.1026559800845402,
+            "log_loss": 0.3485784289969846,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 161,
+                "mean_predicted": 0.04794081990202887,
+                "mean_actual": 0.0
+              },
+              {
+                "band": "5%-10%",
+                "n": 11150,
+                "mean_predicted": 0.08293114833173176,
+                "mean_actual": 0.02977578475336323
+              },
+              {
+                "band": "10%-20%",
+                "n": 25090,
+                "mean_predicted": 0.14189476834314504,
+                "mean_actual": 0.11450777202072539
+              },
+              {
+                "band": "20%-30%",
+                "n": 7483,
+                "mean_predicted": 0.23002004495049524,
+                "mean_actual": 0.30108245356140584
+              },
+              {
+                "band": "30%-50%",
+                "n": 192,
+                "mean_predicted": 0.31227148327515136,
+                "mean_actual": 0.5104166666666666
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.09975303895318419,
+            "log_loss": 0.33434381236334476,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 7891,
+                "mean_predicted": 0.03082356075940971,
+                "mean_actual": 0.021290077303256875
+              },
+              {
+                "band": "5%-10%",
+                "n": 10595,
+                "mean_predicted": 0.07369602063866526,
+                "mean_actual": 0.047569608305804624
+              },
+              {
+                "band": "10%-20%",
+                "n": 12359,
+                "mean_predicted": 0.14502730857621035,
+                "mean_actual": 0.11481511449146371
+              },
+              {
+                "band": "20%-30%",
+                "n": 7361,
+                "mean_predicted": 0.24476787171267048,
+                "mean_actual": 0.1999728297785627
+              },
+              {
+                "band": "30%-50%",
+                "n": 5416,
+                "mean_predicted": 0.36850671317286093,
+                "mean_actual": 0.32403988183161003
+              },
+              {
+                "band": "50%-100%",
+                "n": 454,
+                "mean_predicted": 0.5502132947122347,
+                "mean_actual": 0.5242290748898678
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.09841416005364927,
+            "log_loss": 0.328617656376856,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 13932,
+                "mean_predicted": 0.029220263771874255,
+                "mean_actual": 0.02770600057421763
+              },
+              {
+                "band": "5%-10%",
+                "n": 10356,
+                "mean_predicted": 0.07208154061114672,
+                "mean_actual": 0.07367709540363075
+              },
+              {
+                "band": "10%-20%",
+                "n": 11100,
+                "mean_predicted": 0.14410291212191312,
+                "mean_actual": 0.15630630630630632
+              },
+              {
+                "band": "20%-30%",
+                "n": 5400,
+                "mean_predicted": 0.2435332418293065,
+                "mean_actual": 0.25981481481481483
+              },
+              {
+                "band": "30%-50%",
+                "n": 3087,
+                "mean_predicted": 0.3598196961916214,
+                "mean_actual": 0.3764172335600907
+              },
+              {
+                "band": "50%-100%",
+                "n": 201,
+                "mean_predicted": 0.5390910902138614,
+                "mean_actual": 0.5323383084577115
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0009007759455764014,
+              "ci_low": -0.001091700264355372,
+              "ci_high": -0.0007183542970258666,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0009007759455764014,
+              "ci_low": -0.001108663260884657,
+              "ci_high": -0.0007012990000745956,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.09858303521002554,
+            "mean_winner_p": 0.119959063688783,
+            "lift_ratio": 1.2168327281992997
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 5493.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.09803262238585356,
+            "log_loss": 0.3286794185599351,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 18818,
+                "mean_predicted": 0.024735822035340936,
+                "mean_actual": 0.03523222446593687
+              },
+              {
+                "band": "5%-10%",
+                "n": 9235,
+                "mean_predicted": 0.07257563059739083,
+                "mean_actual": 0.0955062263129399
+              },
+              {
+                "band": "10%-20%",
+                "n": 9573,
+                "mean_predicted": 0.14139348033546414,
+                "mean_actual": 0.18552178000626762
+              },
+              {
+                "band": "20%-30%",
+                "n": 4261,
+                "mean_predicted": 0.2435409440201594,
+                "mean_actual": 0.31142924196198074
+              },
+              {
+                "band": "30%-50%",
+                "n": 1787,
+                "mean_predicted": 0.35968546404044366,
+                "mean_actual": 0.4392837157246782
+              },
+              {
+                "band": "50%-100%",
+                "n": 103,
+                "mean_predicted": 0.552191322666631,
+                "mean_actual": 0.5825242718446602
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.10896381279677383,
+            "log_loss": 0.37445507577143566,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 43777,
+                "mean_predicted": 0.1343349074102527,
+                "mean_actual": 0.12547684857345182
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.10180402087886728,
+            "log_loss": 0.34597453482239043,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 228,
+                "mean_predicted": 0.04672357827589194,
+                "mean_actual": 0.0043859649122807015
+              },
+              {
+                "band": "5%-10%",
+                "n": 10636,
+                "mean_predicted": 0.08280467663782602,
+                "mean_actual": 0.02604362542309139
+              },
+              {
+                "band": "10%-20%",
+                "n": 25213,
+                "mean_predicted": 0.1420842578765829,
+                "mean_actual": 0.11220402173481935
+              },
+              {
+                "band": "20%-30%",
+                "n": 7401,
+                "mean_predicted": 0.22912937199243946,
+                "mean_actual": 0.299689231184975
+              },
+              {
+                "band": "30%-50%",
+                "n": 299,
+                "mean_predicted": 0.3109938814398869,
+                "mean_actual": 0.5618729096989966
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.09802617281293653,
+            "log_loss": 0.32987039411826186,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8132,
+                "mean_predicted": 0.03092175728639481,
+                "mean_actual": 0.023610427939006393
+              },
+              {
+                "band": "5%-10%",
+                "n": 10398,
+                "mean_predicted": 0.07425135547635743,
+                "mean_actual": 0.04606655125985767
+              },
+              {
+                "band": "10%-20%",
+                "n": 12532,
+                "mean_predicted": 0.1448239237830499,
+                "mean_actual": 0.10644749441429939
+              },
+              {
+                "band": "20%-30%",
+                "n": 7284,
+                "mean_predicted": 0.2450826289036506,
+                "mean_actual": 0.20950027457440967
+              },
+              {
+                "band": "30%-50%",
+                "n": 5102,
+                "mean_predicted": 0.3685772997797314,
+                "mean_actual": 0.3492747941983536
+              },
+              {
+                "band": "50%-100%",
+                "n": 329,
+                "mean_predicted": 0.5573022288965767,
+                "mean_actual": 0.547112462006079
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.09700259347997658,
+            "log_loss": 0.3244021060844087,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 13670,
+                "mean_predicted": 0.02857386475102766,
+                "mean_actual": 0.027724945135332846
+              },
+              {
+                "band": "5%-10%",
+                "n": 10649,
+                "mean_predicted": 0.07194292243714119,
+                "mean_actual": 0.0695839984975115
+              },
+              {
+                "band": "10%-20%",
+                "n": 11301,
+                "mean_predicted": 0.1442675496933763,
+                "mean_actual": 0.15078311653835944
+              },
+              {
+                "band": "20%-30%",
+                "n": 5274,
+                "mean_predicted": 0.24591838887106082,
+                "mean_actual": 0.28403488813045125
+              },
+              {
+                "band": "30%-50%",
+                "n": 2736,
+                "mean_predicted": 0.36161983119305624,
+                "mean_actual": 0.3961988304093567
+              },
+              {
+                "band": "50%-100%",
+                "n": 147,
+                "mean_predicted": 0.5550180547656998,
+                "mean_actual": 0.5918367346938775
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0010300289058753215,
+              "ci_low": -0.0012143005747923125,
+              "ci_high": -0.0008352930012129056,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0010300289058753215,
+              "ci_low": -0.0012385934825284023,
+              "ci_high": -0.0008418676616088749,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.09654923882002384,
+            "mean_winner_p": 0.11775694054789604,
+            "lift_ratio": 1.2196568506086847
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "SOG4_POINT": {
+      "combo": {
+        "name": "SOG4_POINT",
+        "kind": "structural",
+        "field_sog": "actual_sog",
+        "x_sog": 4,
+        "event": "points",
+        "x_event": 1,
+        "conv_field": "actual_points",
+        "label_b": "POINT_1_PLUS"
+      },
+      "winner_candidate": "E_gaussian_copula",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 2870.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.05638108433735433,
+            "log_loss": 0.21006423936740778,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 29873,
+                "mean_predicted": 0.01612694716154372,
+                "mean_actual": 0.026311384862584945
+              },
+              {
+                "band": "5%-10%",
+                "n": 7405,
+                "mean_predicted": 0.07151683647752169,
+                "mean_actual": 0.099932478055368
+              },
+              {
+                "band": "10%-20%",
+                "n": 5329,
+                "mean_predicted": 0.1404102498210571,
+                "mean_actual": 0.17301557515481328
+              },
+              {
+                "band": "20%-30%",
+                "n": 1138,
+                "mean_predicted": 0.23870615678133011,
+                "mean_actual": 0.2548330404217926
+              },
+              {
+                "band": "30%-50%",
+                "n": 330,
+                "mean_predicted": 0.34983001657290247,
+                "mean_actual": 0.4
+              },
+              {
+                "band": "50%-100%",
+                "n": 1,
+                "mean_predicted": 0.5138611465998044,
+                "mean_actual": 0.0
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.060599210381069524,
+            "log_loss": 0.23886467897172947,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 44076,
+                "mean_predicted": 0.07304669631615636,
+                "mean_actual": 0.06511480170614393
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.05832681865372972,
+            "log_loss": 0.22367917062055367,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8418,
+                "mean_predicted": 0.04245717831468409,
+                "mean_actual": 0.009265858873841768
+              },
+              {
+                "band": "5%-10%",
+                "n": 25883,
+                "mean_predicted": 0.07231461041013645,
+                "mean_actual": 0.04705791446122938
+              },
+              {
+                "band": "10%-20%",
+                "n": 9775,
+                "mean_predicted": 0.12171006766106614,
+                "mean_actual": 0.1610230179028133
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.056467072096611066,
+            "log_loss": 0.20897346461666355,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 22643,
+                "mean_predicted": 0.02144013481282139,
+                "mean_actual": 0.01695888354016694
+              },
+              {
+                "band": "5%-10%",
+                "n": 9142,
+                "mean_predicted": 0.07260492429558414,
+                "mean_actual": 0.063880988842704
+              },
+              {
+                "band": "10%-20%",
+                "n": 8313,
+                "mean_predicted": 0.14155049043809517,
+                "mean_actual": 0.11909058101768315
+              },
+              {
+                "band": "20%-30%",
+                "n": 2991,
+                "mean_predicted": 0.23874118000579833,
+                "mean_actual": 0.1995987963891675
+              },
+              {
+                "band": "30%-50%",
+                "n": 954,
+                "mean_predicted": 0.35673177414764273,
+                "mean_actual": 0.31551362683438156
+              },
+              {
+                "band": "50%-100%",
+                "n": 33,
+                "mean_predicted": 0.5357248420484543,
+                "mean_actual": 0.42424242424242425
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.05603384111973097,
+            "log_loss": 0.2069051406843479,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 26167,
+                "mean_predicted": 0.019091446992582396,
+                "mean_actual": 0.020865976229602172
+              },
+              {
+                "band": "5%-10%",
+                "n": 8658,
+                "mean_predicted": 0.07212782463592447,
+                "mean_actual": 0.08004158004158005
+              },
+              {
+                "band": "10%-20%",
+                "n": 6851,
+                "mean_predicted": 0.1409563803024367,
+                "mean_actual": 0.14523427236899722
+              },
+              {
+                "band": "20%-30%",
+                "n": 1860,
+                "mean_predicted": 0.23585085144618168,
+                "mean_actual": 0.23870967741935484
+              },
+              {
+                "band": "30%-50%",
+                "n": 533,
+                "mean_predicted": 0.35119481596817165,
+                "mean_actual": 0.3527204502814259
+              },
+              {
+                "band": "50%-100%",
+                "n": 7,
+                "mean_predicted": 0.5170886069335313,
+                "mean_actual": 0.5714285714285714
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.00034724321762354127,
+              "ci_low": -0.00045308078110194855,
+              "ci_high": -0.0002445187074372468,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.00034724321762354127,
+              "ci_low": -0.00044123215431077917,
+              "ci_high": -0.00024556623079256823,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 178
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.04871571968876641,
+            "mean_winner_p": 0.0616941147439468,
+            "lift_ratio": 1.2664108246392825
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 2877.0,
+          "kind": "structural",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.05645397291305249,
+            "log_loss": 0.2081474946531674,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 30051,
+                "mean_predicted": 0.016221603348225564,
+                "mean_actual": 0.02475791155036438
+              },
+              {
+                "band": "5%-10%",
+                "n": 7292,
+                "mean_predicted": 0.07102392177871604,
+                "mean_actual": 0.10381239714755897
+              },
+              {
+                "band": "10%-20%",
+                "n": 5125,
+                "mean_predicted": 0.13914983479558657,
+                "mean_actual": 0.18634146341463415
+              },
+              {
+                "band": "20%-30%",
+                "n": 1079,
+                "mean_predicted": 0.23837798356775183,
+                "mean_actual": 0.2928637627432808
+              },
+              {
+                "band": "30%-50%",
+                "n": 230,
+                "mean_predicted": 0.3572867637251917,
+                "mean_actual": 0.45652173913043476
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.06110420475562871,
+            "log_loss": 0.2403162952323975,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 43777,
+                "mean_predicted": 0.07297734479333638,
+                "mean_actual": 0.06571944171596958
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.058588845228576394,
+            "log_loss": 0.2237410666189364,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 8162,
+                "mean_predicted": 0.04226291231388445,
+                "mean_actual": 0.0078412153883852
+              },
+              {
+                "band": "5%-10%",
+                "n": 26054,
+                "mean_predicted": 0.07286243469152505,
+                "mean_actual": 0.0438704229676825
+              },
+              {
+                "band": "10%-20%",
+                "n": 9561,
+                "mean_predicted": 0.12231069060384987,
+                "mean_actual": 0.1746679217655057
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.056101115172614034,
+            "log_loss": 0.20625238145252103,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 23042,
+                "mean_predicted": 0.021637090921214318,
+                "mean_actual": 0.016318027948962765
+              },
+              {
+                "band": "5%-10%",
+                "n": 8971,
+                "mean_predicted": 0.07297154507131322,
+                "mean_actual": 0.059971017723776616
+              },
+              {
+                "band": "10%-20%",
+                "n": 8237,
+                "mean_predicted": 0.14123180247789333,
+                "mean_actual": 0.13087289061551535
+              },
+              {
+                "band": "20%-30%",
+                "n": 2734,
+                "mean_predicted": 0.2405432740289181,
+                "mean_actual": 0.22165325530358448
+              },
+              {
+                "band": "30%-50%",
+                "n": 759,
+                "mean_predicted": 0.3499726442290479,
+                "mean_actual": 0.3465085638998682
+              },
+              {
+                "band": "50%-100%",
+                "n": 34,
+                "mean_predicted": 0.5348688458351687,
+                "mean_actual": 0.47058823529411764
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.05594792510768703,
+            "log_loss": 0.2048080653291379,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 26241,
+                "mean_predicted": 0.01902834704337636,
+                "mean_actual": 0.019244693418695932
+              },
+              {
+                "band": "5%-10%",
+                "n": 8787,
+                "mean_predicted": 0.07187232269119712,
+                "mean_actual": 0.07750085353362922
+              },
+              {
+                "band": "10%-20%",
+                "n": 6624,
+                "mean_predicted": 0.1405093137176123,
+                "mean_actual": 0.16228864734299517
+              },
+              {
+                "band": "20%-30%",
+                "n": 1703,
+                "mean_predicted": 0.23683886860290168,
+                "mean_actual": 0.26717557251908397
+              },
+              {
+                "band": "30%-50%",
+                "n": 417,
+                "mean_predicted": 0.35022198349391537,
+                "mean_actual": 0.381294964028777
+              },
+              {
+                "band": "50%-100%",
+                "n": 5,
+                "mean_predicted": 0.50561075887445,
+                "mean_actual": 0.4
+              }
+            ]
+          },
+          "winner_candidate": "E_gaussian_copula",
+          "bootstrap_winner_vs_naive": {
+            "game_clustered": {
+              "point_delta": -0.0005060478053651452,
+              "ci_low": -0.0006156769692155298,
+              "ci_high": -0.000397879187299173,
+              "frac_improved": 1.0,
+              "n_resamples": 1000,
+              "n_games_resampled": 1312
+            },
+            "date_clustered": {
+              "point_delta": -0.0005060478053651452,
+              "ci_low": -0.000609261221023602,
+              "ci_high": -0.00041213272162639314,
+              "frac_improved": 1.0,
+              "n_resamples": 500,
+              "n_dates_resampled": 167
+            }
+          },
+          "dependence_lift": {
+            "mean_naive_p": 0.04700894403640503,
+            "mean_winner_p": 0.05970043316034284,
+            "lift_ratio": 1.2699803066009985
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "GOAL_POINT": {
+      "combo": {
+        "name": "GOAL_POINT",
+        "kind": "logical",
+        "field_a": "actual_goals",
+        "x_a": 1,
+        "field_b": "actual_points",
+        "x_b": 1,
+        "label_a": "GOAL_1_PLUS",
+        "label_b": "POINT_1_PLUS"
+      },
+      "winner_candidate": "D_structural_conditional",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 6772.0,
+          "kind": "logical",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.12986750563508845,
+            "log_loss": 0.446258667586976,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 21679,
+                "mean_predicted": 0.023318318496425152,
+                "mean_actual": 0.07707920107016006
+              },
+              {
+                "band": "5%-10%",
+                "n": 12517,
+                "mean_predicted": 0.07139287237536869,
+                "mean_actual": 0.17847727091156027
+              },
+              {
+                "band": "10%-20%",
+                "n": 7393,
+                "mean_predicted": 0.1418513809560489,
+                "mean_actual": 0.2660624915460571
+              },
+              {
+                "band": "20%-30%",
+                "n": 2104,
+                "mean_predicted": 0.22950710355576498,
+                "mean_actual": 0.34980988593155893
+              },
+              {
+                "band": "30%-50%",
+                "n": 383,
+                "mean_predicted": 0.3220611706380217,
+                "mean_actual": 0.4281984334203655
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.1296221041448909,
+            "log_loss": 0.42734154645744027,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 44076,
+                "mean_predicted": 0.1475708039503493,
+                "mean_actual": 0.1536437063254379
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.12383403896864566,
+            "log_loss": 0.40581307666094363,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4,
+                "mean_predicted": 0.04938057014768485,
+                "mean_actual": 0.25
+              },
+              {
+                "band": "5%-10%",
+                "n": 7713,
+                "mean_predicted": 0.08518524494778776,
+                "mean_actual": 0.05730584727084144
+              },
+              {
+                "band": "10%-20%",
+                "n": 26067,
+                "mean_predicted": 0.14496607919218746,
+                "mean_actual": 0.13534353780642192
+              },
+              {
+                "band": "20%-30%",
+                "n": 9685,
+                "mean_predicted": 0.24066785152818307,
+                "mean_actual": 0.2644295302013423
+              },
+              {
+                "band": "30%-50%",
+                "n": 607,
+                "mean_predicted": 0.32426599080043356,
+                "mean_actual": 0.3953871499176277
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.12162789621185867,
+            "log_loss": 0.3969546968315725,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4690,
+                "mean_predicted": 0.03720121006100639,
+                "mean_actual": 0.04456289978678039
+              },
+              {
+                "band": "5%-10%",
+                "n": 8758,
+                "mean_predicted": 0.07411297240630736,
+                "mean_actual": 0.06279972596483216
+              },
+              {
+                "band": "10%-20%",
+                "n": 17186,
+                "mean_predicted": 0.14979195502691114,
+                "mean_actual": 0.13964855114628186
+              },
+              {
+                "band": "20%-30%",
+                "n": 9378,
+                "mean_predicted": 0.2441936938198394,
+                "mean_actual": 0.2382171038600981
+              },
+              {
+                "band": "30%-50%",
+                "n": 4064,
+                "mean_predicted": 0.3533321404098136,
+                "mean_actual": 0.3393208661417323
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.12162789621185867,
+            "log_loss": 0.3969546968315725,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4690,
+                "mean_predicted": 0.03720121006100639,
+                "mean_actual": 0.04456289978678039
+              },
+              {
+                "band": "5%-10%",
+                "n": 8758,
+                "mean_predicted": 0.07411297240630736,
+                "mean_actual": 0.06279972596483216
+              },
+              {
+                "band": "10%-20%",
+                "n": 17186,
+                "mean_predicted": 0.14979195502691114,
+                "mean_actual": 0.13964855114628186
+              },
+              {
+                "band": "20%-30%",
+                "n": 9378,
+                "mean_predicted": 0.2441936938198394,
+                "mean_actual": 0.2382171038600981
+              },
+              {
+                "band": "30%-50%",
+                "n": 4064,
+                "mean_predicted": 0.3533321404098136,
+                "mean_actual": 0.3393208661417323
+              }
+            ]
+          },
+          "winner_candidate": "D_structural_conditional",
+          "bootstrap_winner_vs_naive": "NOT_APPLICABLE_LOGICAL_IDENTITY",
+          "dependence_lift": {
+            "mean_naive_p": 0.06929127062007105,
+            "mean_winner_p": 0.16162696038390487,
+            "lift_ratio": 2.332573193384156
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 6844.0,
+          "kind": "logical",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 0,
+          "A_naive_independence": {
+            "brier": 0.13208902636137917,
+            "log_loss": 0.4533382565083152,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 21499,
+                "mean_predicted": 0.02405838127351449,
+                "mean_actual": 0.08153867621749848
+              },
+              {
+                "band": "5%-10%",
+                "n": 12521,
+                "mean_predicted": 0.07185101315352249,
+                "mean_actual": 0.17562495008385912
+              },
+              {
+                "band": "10%-20%",
+                "n": 7559,
+                "mean_predicted": 0.14349663304346152,
+                "mean_actual": 0.2753009657362085
+              },
+              {
+                "band": "20%-30%",
+                "n": 1748,
+                "mean_predicted": 0.22979205014616075,
+                "mean_actual": 0.35812356979405036
+              },
+              {
+                "band": "30%-50%",
+                "n": 450,
+                "mean_predicted": 0.32109368049324055,
+                "mean_actual": 0.4111111111111111
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.13152193925221198,
+            "log_loss": 0.4320705199800121,
+            "calibration": [
+              {
+                "band": "10%-20%",
+                "n": 43777,
+                "mean_predicted": 0.14758414512221757,
+                "mean_actual": 0.1563378029558901
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.12551187765907956,
+            "log_loss": 0.4100156366374657,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 44,
+                "mean_predicted": 0.048809934507700596,
+                "mean_actual": 0.045454545454545456
+              },
+              {
+                "band": "5%-10%",
+                "n": 7414,
+                "mean_predicted": 0.08489412410353045,
+                "mean_actual": 0.058537901267871596
+              },
+              {
+                "band": "10%-20%",
+                "n": 26183,
+                "mean_predicted": 0.14596227866760322,
+                "mean_actual": 0.13600427758469236
+              },
+              {
+                "band": "20%-30%",
+                "n": 9527,
+                "mean_predicted": 0.24123571056403595,
+                "mean_actual": 0.273853259158182
+              },
+              {
+                "band": "30%-50%",
+                "n": 609,
+                "mean_predicted": 0.3280130690568822,
+                "mean_actual": 0.39080459770114945
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.12351995094678599,
+            "log_loss": 0.4022862270473545,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4213,
+                "mean_predicted": 0.0383544656395479,
+                "mean_actual": 0.03726560645620698
+              },
+              {
+                "band": "5%-10%",
+                "n": 8640,
+                "mean_predicted": 0.07476146425978715,
+                "mean_actual": 0.07453703703703704
+              },
+              {
+                "band": "10%-20%",
+                "n": 17279,
+                "mean_predicted": 0.1486477284855175,
+                "mean_actual": 0.13681347300190982
+              },
+              {
+                "band": "20%-30%",
+                "n": 9566,
+                "mean_predicted": 0.24083928795767492,
+                "mean_actual": 0.23447627012335354
+              },
+              {
+                "band": "30%-50%",
+                "n": 4079,
+                "mean_predicted": 0.34798982104621257,
+                "mean_actual": 0.35204707036038246
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.12351995094678599,
+            "log_loss": 0.4022862270473545,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 4213,
+                "mean_predicted": 0.0383544656395479,
+                "mean_actual": 0.03726560645620698
+              },
+              {
+                "band": "5%-10%",
+                "n": 8640,
+                "mean_predicted": 0.07476146425978715,
+                "mean_actual": 0.07453703703703704
+              },
+              {
+                "band": "10%-20%",
+                "n": 17279,
+                "mean_predicted": 0.1486477284855175,
+                "mean_actual": 0.13681347300190982
+              },
+              {
+                "band": "20%-30%",
+                "n": 9566,
+                "mean_predicted": 0.24083928795767492,
+                "mean_actual": 0.23447627012335354
+              },
+              {
+                "band": "30%-50%",
+                "n": 4079,
+                "mean_predicted": 0.34798982104621257,
+                "mean_actual": 0.35204707036038246
+              }
+            ]
+          },
+          "winner_candidate": "D_structural_conditional",
+          "bootstrap_winner_vs_naive": "NOT_APPLICABLE_LOGICAL_IDENTITY",
+          "dependence_lift": {
+            "mean_naive_p": 0.06961960353033593,
+            "mean_winner_p": 0.16217030915996647,
+            "lift_ratio": 2.3293770854254094
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    },
+    "ASSIST_POINT": {
+      "combo": {
+        "name": "ASSIST_POINT",
+        "kind": "logical",
+        "field_a": "actual_assists",
+        "x_a": 1,
+        "field_b": "actual_points",
+        "x_b": 1,
+        "label_a": "ASSIST_1_PLUS",
+        "label_b": "POINT_1_PLUS"
+      },
+      "winner_candidate": "D_structural_conditional",
+      "by_season": {
+        "20242025": {
+          "n": 44076,
+          "n_positive": 10679.0,
+          "kind": "logical",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 4388,
+          "A_naive_independence": {
+            "brier": 0.1949421862668149,
+            "log_loss": 0.6230886823339473,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 12440,
+                "mean_predicted": 0.03382743801355637,
+                "mean_actual": 0.14003215434083602
+              },
+              {
+                "band": "5%-10%",
+                "n": 15053,
+                "mean_predicted": 0.07237172768568496,
+                "mean_actual": 0.20454394472862553
+              },
+              {
+                "band": "10%-20%",
+                "n": 12404,
+                "mean_predicted": 0.14101365882648825,
+                "mean_actual": 0.31522089648500484
+              },
+              {
+                "band": "20%-30%",
+                "n": 3627,
+                "mean_predicted": 0.23734833335939723,
+                "mean_actual": 0.445822994210091
+              },
+              {
+                "band": "30%-50%",
+                "n": 552,
+                "mean_predicted": 0.3476265656542149,
+                "mean_actual": 0.5996376811594203
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.1830810467884477,
+            "log_loss": 0.5523062202341236,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 44076,
+                "mean_predicted": 0.2341209455045342,
+                "mean_actual": 0.24228605136582268
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.17359029589117747,
+            "log_loss": 0.5274002651472882,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 442,
+                "mean_predicted": 0.09040173872167573,
+                "mean_actual": 0.08597285067873303
+              },
+              {
+                "band": "10%-20%",
+                "n": 15195,
+                "mean_predicted": 0.15924839031696433,
+                "mean_actual": 0.1487331358999671
+              },
+              {
+                "band": "20%-30%",
+                "n": 16273,
+                "mean_predicted": 0.24667386707642017,
+                "mean_actual": 0.2316720948810914
+              },
+              {
+                "band": "30%-50%",
+                "n": 11779,
+                "mean_predicted": 0.37288092446177107,
+                "mean_actual": 0.3707445453773665
+              },
+              {
+                "band": "50%-100%",
+                "n": 387,
+                "mean_predicted": 0.5313172874154255,
+                "mean_actual": 0.6304909560723514
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.17480448178755054,
+            "log_loss": 0.5310138392997054,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 2522,
+                "mean_predicted": 0.09549827867831777,
+                "mean_actual": 0.1308485329103886
+              },
+              {
+                "band": "10%-20%",
+                "n": 13132,
+                "mean_predicted": 0.16187380806286591,
+                "mean_actual": 0.1606762107828206
+              },
+              {
+                "band": "20%-30%",
+                "n": 17178,
+                "mean_predicted": 0.2478848216505448,
+                "mean_actual": 0.23070206077541042
+              },
+              {
+                "band": "30%-50%",
+                "n": 11118,
+                "mean_predicted": 0.36144659969258464,
+                "mean_actual": 0.3783953948551898
+              },
+              {
+                "band": "50%-100%",
+                "n": 126,
+                "mean_predicted": 0.5166795688459683,
+                "mean_actual": 0.5476190476190477
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.17480448178755054,
+            "log_loss": 0.5310138392997054,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 2522,
+                "mean_predicted": 0.09549827867831777,
+                "mean_actual": 0.1308485329103886
+              },
+              {
+                "band": "10%-20%",
+                "n": 13132,
+                "mean_predicted": 0.16187380806286591,
+                "mean_actual": 0.1606762107828206
+              },
+              {
+                "band": "20%-30%",
+                "n": 17178,
+                "mean_predicted": 0.2478848216505448,
+                "mean_actual": 0.23070206077541042
+              },
+              {
+                "band": "30%-50%",
+                "n": 11118,
+                "mean_predicted": 0.36144659969258464,
+                "mean_actual": 0.3783953948551898
+              },
+              {
+                "band": "50%-100%",
+                "n": 126,
+                "mean_predicted": 0.5166795688459683,
+                "mean_actual": 0.5476190476190477
+              }
+            ]
+          },
+          "winner_candidate": "D_structural_conditional",
+          "bootstrap_winner_vs_naive": "NOT_APPLICABLE_LOGICAL_IDENTITY",
+          "dependence_lift": {
+            "mean_naive_p": 0.09783352933933835,
+            "mean_winner_p": 0.24295316938193298,
+            "lift_ratio": 2.4833323608232827
+          },
+          "winner_frechet_violations": 0
+        },
+        "20252026": {
+          "n": 43777,
+          "n_positive": 10820.0,
+          "kind": "logical",
+          "frechet_violations": 0,
+          "coherence_clipped_count": 4515,
+          "A_naive_independence": {
+            "brier": 0.19746299216501179,
+            "log_loss": 0.627929573921628,
+            "calibration": [
+              {
+                "band": "0%-5%",
+                "n": 11996,
+                "mean_predicted": 0.03393546645373794,
+                "mean_actual": 0.1401300433477826
+              },
+              {
+                "band": "5%-10%",
+                "n": 14519,
+                "mean_predicted": 0.07267634998677272,
+                "mean_actual": 0.20442179213444453
+              },
+              {
+                "band": "10%-20%",
+                "n": 12795,
+                "mean_predicted": 0.14080761164540695,
+                "mean_actual": 0.31676436107854633
+              },
+              {
+                "band": "20%-30%",
+                "n": 3904,
+                "mean_predicted": 0.2369628333233311,
+                "mean_actual": 0.45645491803278687
+              },
+              {
+                "band": "30%-50%",
+                "n": 563,
+                "mean_predicted": 0.35392462914994616,
+                "mean_actual": 0.5968028419182948
+              }
+            ]
+          },
+          "B_shrunk_empirical_joint": {
+            "brier": 0.18563716021476925,
+            "log_loss": 0.5579839657669438,
+            "calibration": [
+              {
+                "band": "20%-30%",
+                "n": 43777,
+                "mean_predicted": 0.23421879011513594,
+                "mean_actual": 0.24716175160472395
+              }
+            ]
+          },
+          "C_conditional_empirical": {
+            "brier": 0.1752809132815841,
+            "log_loss": 0.5313316608414098,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 489,
+                "mean_predicted": 0.08878548557434914,
+                "mean_actual": 0.10224948875255624
+              },
+              {
+                "band": "10%-20%",
+                "n": 14609,
+                "mean_predicted": 0.15926777524642083,
+                "mean_actual": 0.1495653364364433
+              },
+              {
+                "band": "20%-30%",
+                "n": 16404,
+                "mean_predicted": 0.2469183156957898,
+                "mean_actual": 0.232626188734455
+              },
+              {
+                "band": "30%-50%",
+                "n": 11874,
+                "mean_predicted": 0.3718590062216844,
+                "mean_actual": 0.38116894054236145
+              },
+              {
+                "band": "50%-100%",
+                "n": 401,
+                "mean_predicted": 0.5380731917511449,
+                "mean_actual": 0.6059850374064838
+              }
+            ]
+          },
+          "D_structural_conditional": {
+            "brier": 0.17647059136559592,
+            "log_loss": 0.5346559923261373,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 2441,
+                "mean_predicted": 0.09540964524193843,
+                "mean_actual": 0.1356001638672675
+              },
+              {
+                "band": "10%-20%",
+                "n": 12353,
+                "mean_predicted": 0.16206850778961204,
+                "mean_actual": 0.1577754391645754
+              },
+              {
+                "band": "20%-30%",
+                "n": 17012,
+                "mean_predicted": 0.24865353859549322,
+                "mean_actual": 0.23142487655772395
+              },
+              {
+                "band": "30%-50%",
+                "n": 11818,
+                "mean_predicted": 0.3618551106452166,
+                "mean_actual": 0.3817058723980369
+              },
+              {
+                "band": "50%-100%",
+                "n": 153,
+                "mean_predicted": 0.5232575403215353,
+                "mean_actual": 0.6013071895424836
+              }
+            ]
+          },
+          "E_gaussian_copula": {
+            "brier": 0.17647059136559592,
+            "log_loss": 0.5346559923261373,
+            "calibration": [
+              {
+                "band": "5%-10%",
+                "n": 2441,
+                "mean_predicted": 0.09540964524193843,
+                "mean_actual": 0.1356001638672675
+              },
+              {
+                "band": "10%-20%",
+                "n": 12353,
+                "mean_predicted": 0.16206850778961204,
+                "mean_actual": 0.1577754391645754
+              },
+              {
+                "band": "20%-30%",
+                "n": 17012,
+                "mean_predicted": 0.24865353859549322,
+                "mean_actual": 0.23142487655772395
+              },
+              {
+                "band": "30%-50%",
+                "n": 11818,
+                "mean_predicted": 0.3618551106452166,
+                "mean_actual": 0.3817058723980369
+              },
+              {
+                "band": "50%-100%",
+                "n": 153,
+                "mean_predicted": 0.5232575403215353,
+                "mean_actual": 0.6013071895424836
+              }
+            ]
+          },
+          "winner_candidate": "D_structural_conditional",
+          "bootstrap_winner_vs_naive": "NOT_APPLICABLE_LOGICAL_IDENTITY",
+          "dependence_lift": {
+            "mean_naive_p": 0.10024153412855334,
+            "mean_winner_p": 0.24719563516507628,
+            "lift_ratio": 2.466000119751397
+          },
+          "winner_frechet_violations": 0
+        }
+      }
+    }
+  },
+  "triple_results": {
+    "SOG3_GOAL_POINT": {
+      "labels": [
+        "SOG_3_PLUS",
+        "GOAL_1_PLUS",
+        "POINT_1_PLUS"
+      ],
+      "redundant_leg_detected": "POINT_1_PLUS",
+      "reduces_to": "SOG3_GOAL",
+      "note": "Detected POINT_1_PLUS as fully redundant (implied by another leg) -- this three-way combination carries NO additional information beyond SOG3_GOAL, and is scored identically to it, not double-counted."
+    },
+    "SOG3_ASSIST_POINT": {
+      "labels": [
+        "SOG_3_PLUS",
+        "ASSIST_1_PLUS",
+        "POINT_1_PLUS"
+      ],
+      "redundant_leg_detected": "POINT_1_PLUS",
+      "reduces_to": "SOG3_ASSIST",
+      "note": "Detected POINT_1_PLUS as fully redundant (implied by another leg) -- this three-way combination carries NO additional information beyond SOG3_ASSIST, and is scored identically to it, not double-counted."
+    }
+  },
+  "points_coherence": {
+    "20242025": {
+      "n": 44076,
+      "mean_diff": -0.045981857659797475,
+      "abs_mean_diff": 0.06449998591087805
+    },
+    "20252026": {
+      "n": 43777,
+      "mean_diff": -0.04952616965315491,
+      "abs_mean_diff": 0.06699794068553971
+    }
+  },
+  "monte_carlo_verification": {
+    "mu_sog_used": 1.7041232915914146,
+    "goal_rate_used": 0.10172754381770827,
+    "assist_rate_used": 0.17132000452961235,
+    "n_samples": 20000,
+    "goal_1plus": {
+      "monte_carlo": 0.15615,
+      "analytic": 0.15916200960893928,
+      "abs_diff": 0.00301200960893927
+    },
+    "assist_1plus": {
+      "monte_carlo": 0.2489,
+      "analytic": 0.25319443088244836,
+      "abs_diff": 0.004294430882448352
+    },
+    "goals_le_sog_violations": 0,
+    "points_equals_goals_plus_assists_violations": 0
+  },
+  "freeze_manifest": {
+    "experiment_id": "joint_scoring_dependence_v1",
+    "marginal_model_versions": {
+      "player_sog": "headline_stage from research/player_sog_results.json (frozen, unchanged)",
+      "goals": "locked candidate E from research/player_goals_results.json (frozen, unchanged)",
+      "assists": "M4_plus_h2h from research/player_assists_results.json (frozen, unchanged)",
+      "points": "D_empirical_distribution (shrunk empirical baseline) from research/player_points_results.json -- NOT the GLM, per Part 4"
+    },
+    "threshold_matrix": [
+      "SOG2_GOAL",
+      "SOG3_GOAL",
+      "SOG4_GOAL",
+      "SOG2_ASSIST",
+      "SOG3_ASSIST",
+      "SOG3_POINT",
+      "SOG4_POINT",
+      "GOAL_POINT",
+      "ASSIST_POINT",
+      "SOG3_GOAL_POINT",
+      "SOG3_ASSIST_POINT"
+    ],
+    "logical_implication_map": {
+      "GOAL_1_PLUS": [
+        "POINT_1_PLUS",
+        "SOG_1_PLUS"
+      ],
+      "ASSIST_1_PLUS": [
+        "POINT_1_PLUS"
+      ]
+    },
+    "conditional_goal_model": "Goals | SOG=n ~ Binomial(n, shrunk goal-per-shot rate), TUNING-fit, shrunk toward league rate by shot volume (k=150)",
+    "assist_point_conditional_methodology": "Assists/Points | SOG=n ~ Binomial(n, shrunk per-shot conversion rate) -- same architecture as Goals, tested fresh (not assumed to transfer)",
+    "marginal_reconciliation_policy": "Frechet clipping against FROZEN marginals applied to every structural probability from the start (Part 11/23) -- the coherence bug found in the prior joint slice is not repeated here",
+    "frechet_policy": "clip_to_frechet(structural, p_a, p_b) using the frozen marginals actually used for pricing, never the structural model's own internal marginal",
+    "shrinkage": {
+      "conversion_rate_k_shots": 150,
+      "empirical_joint_k": 2000
+    },
+    "confidence_methodology": "NOT redesigned -- marginal confidence labels untouched (Part 41)",
+    "joint_conservative_methodology": "RESEARCH -- not yet operationalized (Part 43)",
+    "code_hashes": {
+      "run_joint_scoring_dependence_model.py": "f30e81a527920d8d24d482ff1be6fbecc095bdda6b3d541e987dfe74ad241f12",
+      "joint_scoring_dependence/joint_models.py": "da15153766ba2a004718c4fdb3d4885b95f62d1c7f15facbb6fe815b9651472d",
+      "joint_scoring_dependence/marginal_provenance.py": "908cbfb0d65fac3fae0392a3705ecaae566efc4d4add77a8cbaad2ae69525c00",
+      "joint_scoring_dependence/build_joint_scoring_corpus.py": "8aca310c31bb0954aa9356ddf03bd2fe4f3fda1d807e3f2cbea892cb2366ce9a"
+    },
+    "timestamp_utc": "2026-08-29T15:46:27Z"
+  },
+  "representative_examples": {
+    "high_volume_shooter_anytime_goal": {
+      "game_id": 2025020506,
+      "game_date": "2025-12-13",
+      "player_id": "8477492",
+      "p_sog_marginal": 0.7869762814217474,
+      "p_event_marginal": 0.4252469443833591,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.33465925897677656,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.3678767158647712,
+      "dependence_lift": 1.0992575462862055,
+      "actual_sog": 3.0,
+      "actual_goals": 1.0,
+      "actual_assists": 1.0,
+      "actual_points": 2.0
+    },
+    "low_volume_shooter_anytime_goal": {
+      "game_id": 2025020105,
+      "game_date": "2025-10-21",
+      "player_id": "8477527",
+      "p_sog_marginal": 0.00011104195005506856,
+      "p_event_marginal": 0.04087963633102065,
+      "p_point_marginal_if_logical": null,
+      "naive": 4.539354535738561e-06,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 3.054324393458874e-05,
+      "dependence_lift": 6.728543385214853,
+      "actual_sog": 1.0,
+      "actual_goals": 1.0,
+      "actual_assists": 2.0,
+      "actual_points": 3.0
+    },
+    "sog_and_assist": {
+      "game_id": 2025020506,
+      "game_date": "2025-12-13",
+      "player_id": "8477492",
+      "p_sog_marginal": 0.7869762814217474,
+      "p_event_marginal": 0.47829838645063183,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.3764094855789401,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.3817764592838597,
+      "dependence_lift": 1.014258338088013,
+      "actual_sog": 3.0,
+      "actual_goals": 1.0,
+      "actual_assists": 1.0,
+      "actual_points": 2.0
+    },
+    "sog_and_point": {
+      "game_id": 2025020506,
+      "game_date": "2025-12-13",
+      "player_id": "8477492",
+      "p_sog_marginal": 0.7869762814217474,
+      "p_event_marginal": 0.7738582429908532,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.6090080824165086,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.629160392653353,
+      "dependence_lift": 1.0330903822439945,
+      "actual_sog": 3.0,
+      "actual_goals": 1.0,
+      "actual_assists": 1.0,
+      "actual_points": 2.0
+    },
+    "goal_and_point_structural_identity": {
+      "note": "P(Goal>=1 AND Point>=1) = P(Goal>=1) exactly",
+      "p_goal": 0.27369403265992864,
+      "p_point": 0.5772434258797213
+    },
+    "assist_and_point_structural_identity": {
+      "note": "P(Assist>=1 AND Point>=1) = P(Assist>=1) exactly",
+      "p_assist": 0.2987571793070276,
+      "p_point": 0.5772434258797213
+    },
+    "high_dependence_lift": {
+      "game_id": 2025020969,
+      "game_date": "2026-03-03",
+      "player_id": "8481593",
+      "p_sog_marginal": 0.00015727638929252663,
+      "p_event_marginal": 0.034102527084782674,
+      "p_point_marginal_if_logical": null,
+      "naive": 5.363522325645213e-06,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 3.7538103344281204e-05,
+      "dependence_lift": 6.998778240335842,
+      "actual_sog": 0.0,
+      "actual_goals": 0.0,
+      "actual_assists": 0.0,
+      "actual_points": 0.0
+    },
+    "low_dependence_lift": {
+      "game_id": 2025020506,
+      "game_date": "2025-12-13",
+      "player_id": "8477492",
+      "p_sog_marginal": 0.7869762814217474,
+      "p_event_marginal": 0.4252469443833591,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.33465925897677656,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.3678767158647712,
+      "dependence_lift": 1.0992575462862055,
+      "actual_sog": 3.0,
+      "actual_goals": 1.0,
+      "actual_assists": 1.0,
+      "actual_points": 2.0
+    },
+    "model_hit": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8477409",
+      "p_sog_marginal": 0.5187673652181992,
+      "p_event_marginal": 0.3265289322164405,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.16939255383343482,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.21245896799544345,
+      "dependence_lift": 1.2542403027015945,
+      "actual_sog": 5.0,
+      "actual_goals": 1.0,
+      "actual_assists": 0.0,
+      "actual_points": 1.0
+    },
+    "model_miss": {
+      "game_id": 2025020001,
+      "game_date": "2025-10-07",
+      "player_id": "8473419",
+      "p_sog_marginal": 0.40916344784441194,
+      "p_event_marginal": 0.27369403265992864,
+      "p_point_marginal_if_logical": null,
+      "naive": 0.11198559405757749,
+      "winner_candidate": "E_gaussian_copula",
+      "winner_probability": 0.15159943057914171,
+      "dependence_lift": 1.3537404686284624,
+      "actual_sog": 4.0,
+      "actual_goals": 0.0,
+      "actual_assists": 0.0,
+      "actual_points": 0.0
+    }
+  }
+}

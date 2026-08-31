@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NHL Engine — UX Prototype</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="demo-banner">⚠ UX PROTOTYPE — DEMO DATA ONLY — no real players, no real NHL predictions, no real DraftKings odds, no real results</div>
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">N</div>
+      <div>
+        <div class="brand-name">NHL Engine</div>
+        <div class="brand-sub">UX Prototype v1</div>
+      </div>
+    </div>
+
+    <div class="nav-group-label">Operate</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="today"><span class="nav-icon">☀</span> Today</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="games"><span class="nav-icon">🗓</span> Games</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="player-props"><span class="nav-icon">🎯</span> Player Props</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="goalies"><span class="nav-icon">🧤</span> Goalies</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="combinations"><span class="nav-icon">🔗</span> Combinations</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="market-movement"><span class="nav-icon">📈</span> Market Movement</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="players"><span class="nav-icon">🧑‍🤝‍🧑</span> Players</div>
+
+    <div class="nav-group-label">Track &amp; Monitor</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="ledger"><span class="nav-icon">📒</span> Bet / Observation Ledger</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="model-health"><span class="nav-icon">🩺</span> Model Health</div>
+
+    <div class="nav-group-label">Research</div>
+    <div class="nav-item" role="button" tabindex="0" data-route="research"><span class="nav-icon">🧪</span> Research</div>
+  </aside>
+
+  <main class="main">
+    <div id="view-root"></div>
+    <div class="footer-note">
+      NHL Betting Intelligence Engine — UX Prototype. Static HTML/CSS/JS, no backend, no network calls.
+      All data on this page is fabricated for layout review only. See WEB_PROTOTYPE_REVIEW_CHECKLIST.md for the review guide.
+    </div>
+  </main>
+</div>
+
+<div class="drawer-backdrop" id="drawer-backdrop">
+  <div class="drawer" id="drawer-content"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

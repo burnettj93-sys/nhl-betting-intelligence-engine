@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/797f03124f9bb08624b199c28f621c61/odds",
+    "event_id": "797f03124f9bb08624b199c28f621c61",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "0dfc69b8c7cbc8f1dca611da0cd0a77c56dcfa55b67fcdbcfa7706bd32910e03",
+    "retrieved_at_utc": "2026-08-30T13:01:29Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "St Louis Blues",
+    "bookmakers": [],
+    "commence_time": "2026-10-03T01:10:00Z",
+    "home_team": "Dallas Stars",
+    "id": "797f03124f9bb08624b199c28f621c61",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

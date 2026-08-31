@@ -1,0 +1,44 @@
+{
+  "correlations": {
+    "five_v_five_sog_vs_five_v_five_goals": 0.22302565851548536,
+    "penalties_drawn_vs_pp_opportunities": 0.7827737400069059,
+    "penalties_taken_vs_sh_seconds": 0.6853347424655334,
+    "penalties_taken_vs_total_goals": 0.06339452760870005,
+    "pp_opportunities_vs_penalties_taken": 0.32292576216404084,
+    "pp_opportunities_vs_pp_goals": 0.3796013663264946,
+    "pp_opportunities_vs_total_goals": 0.09583756791832158,
+    "pp_shots_vs_pp_goals": 0.3726232338840371
+  },
+  "count_family_fits": {
+    "penalties_taken_per_team_game": {
+      "mean": 3.6941692073170733,
+      "variance": 4.07853307502742,
+      "variance_to_mean_ratio": 1.1040460915945685
+    },
+    "pp_goals_per_team_game": {
+      "mean": 0.6055640243902439,
+      "variance": 0.5696489196813652,
+      "variance_to_mean_ratio": 0.9406914822176855
+    },
+    "pp_opportunities_per_team_game": {
+      "mean": 3.039348323170732,
+      "variance": 2.5456125326343835,
+      "variance_to_mean_ratio": 0.8375520874747026
+    }
+  },
+  "pp_role_predictability": {
+    "method": "rolling N-game mean PP TOI (research/player_goals/player_game_goals.jsonl pp.icetime_seconds) vs next-game PP TOI, Pearson r",
+    "n_pairs_window_10": 108854,
+    "n_players_with_15plus_games": 1200,
+    "window_10_games_r": 0.57880377653279,
+    "window_20_games_r": 0.5707,
+    "window_3_games_r": 0.5398,
+    "window_5_games_r": 0.5656
+  },
+  "sh_scoring_sparsity": {
+    "assessment": "INSUFFICIENT_DATA for a player-level SH-scoring probability model -- roughly 0.074 SH goals per team per game league-wide means an individual player recording a SH goal is a single-digit-per-season event even for players with heavy PK ice time.",
+    "implied_rate_per_team_per_game": 0.07364710365853659,
+    "total_games": 5248,
+    "total_sh_goals_scored_4_seasons": 773
+  }
+}

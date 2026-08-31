@@ -1,0 +1,77 @@
+{
+  "bucket_boundaries": {
+    "B": {
+      "hi": 3.0,
+      "lo": 2.955922190054112
+    },
+    "C_pooled": {
+      "hi": -0.08379159921869062,
+      "lo": -0.0982516797213735
+    },
+    "D_assists": {
+      "hi": -0.05323026367464967,
+      "lo": -0.0619493823277919
+    },
+    "D_points": {
+      "hi": -0.08684043826054488,
+      "lo": -0.09242357279992808
+    }
+  },
+  "confidence_features": {
+    "B": [
+      "history_len (continuous)",
+      "toi_cv (continuous)",
+      "stat_cv (continuous)",
+      "opponent_window_games (continuous)",
+      "appearance_rate (continuous)"
+    ],
+    "C_and_D": [
+      "probability_region_decile (Part 9)",
+      "sample_size_bucket (Part 7)",
+      "toi_cv_role_bucket (Part 8)"
+    ]
+  },
+  "dev_n": 88184,
+  "dev_season": 20232024,
+  "experiment_id": "confidence_framework_v1",
+  "fold1_season": 20242025,
+  "fold2_season_final_check": 20252026,
+  "prob_bins": 10,
+  "raw_model_treatment": "read-only re-scoring of already-locked weights, no refitting",
+  "sample_buckets": [
+    [
+      0,
+      10
+    ],
+    [
+      10,
+      25
+    ],
+    [
+      25,
+      50
+    ],
+    [
+      50,
+      Infinity
+    ]
+  ],
+  "source_code_hashes": {
+    "research/confidence_lab/reliability.py": "9c8bdf32a9e9f587",
+    "research/run_confidence_diagnostics.py": "fd39ff89167378de"
+  },
+  "toi_cv_buckets": [
+    [
+      0.0,
+      0.15
+    ],
+    [
+      0.15,
+      0.35
+    ],
+    [
+      0.35,
+      Infinity
+    ]
+  ]
+}

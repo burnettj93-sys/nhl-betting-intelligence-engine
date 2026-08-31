@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/485b295347cb22f002e014cb87813ed7/odds",
+    "event_id": "485b295347cb22f002e014cb87813ed7",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "4e08afe87f08941ef4bb949a9f32795bafe03c61a4bc8ca222dbcecec520c1cb",
+    "retrieved_at_utc": "2026-08-30T13:01:27Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Montr\u00e9al Canadiens",
+    "bookmakers": [],
+    "commence_time": "2026-09-29T23:10:00Z",
+    "home_team": "Toronto Maple Leafs",
+    "id": "485b295347cb22f002e014cb87813ed7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

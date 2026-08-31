@@ -1,0 +1,107 @@
+[
+  {
+    "signal": "PLAYER_GOALS_1PLUS__COLD_AND_TOI_DECLINE",
+    "validation_status": "VALIDATED_OVERLAY",
+    "base_model": "Goals 1+ (locked candidate E, VALIDATED marginal)",
+    "context_state": "COLD_AND_TOI_DECLINE",
+    "adjustment_type": "B_FIXED_LOGIT_OFFSET",
+    "frozen_parameters": {
+      "offset": -0.18000000000000016,
+      "dev_log_loss": 0.3872443565549755
+    },
+    "adjustment_magnitude": {
+      "mean_abs_change": 0.022206798821184388,
+      "median_abs_change": 0.022237325637660205,
+      "p05_change": 0.0099650304030868,
+      "p95_change": 0.03454387915116419
+    },
+    "adjustment_reasonably_small": true,
+    "confidence_inheritance": "HIGH/MEDIUM only -- LOW confidence inherits the base market's WATCH_ONLY ceiling from decision_policy v3 and the overlay cannot override it (see research.player_props.decision_policy.gate_low_confidence)",
+    "sample_size": {
+      "dev_n": 2176,
+      "20242025": 2010,
+      "20252026": 2053
+    },
+    "validation_seasons": [
+      20242025,
+      20252026
+    ],
+    "bootstrap_results": {
+      "20242025": {
+        "brier_improves": true,
+        "log_loss_improves": true,
+        "calibration_improves": true,
+        "game_bootstrap_clears": true,
+        "date_bootstrap_agrees": true,
+        "player_bootstrap_ok": true,
+        "no_new_coherence_violations": true
+      },
+      "20252026": {
+        "brier_improves": true,
+        "log_loss_improves": true,
+        "calibration_improves": true,
+        "game_bootstrap_clears": true,
+        "date_bootstrap_agrees": true,
+        "player_bootstrap_ok": true,
+        "no_new_coherence_violations": true
+      }
+    },
+    "logical_coherence_behavior": "Non-destructive clip: adjusted P(Point>=1) is raised to match adjusted P(Goal>=1) whenever GOAL_1_PLUS implies POINT_1_PLUS and the independently-fit overlays would otherwise violate that ordering (verified 0 violations remaining post-fix, both seasons).",
+    "operational_status": "SHADOW_VALIDATED"
+  },
+  {
+    "signal": "PLAYER_POINTS_1PLUS__COLD_AND_TOI_DECLINE",
+    "validation_status": "VALIDATED_OVERLAY",
+    "base_model": "Points 1+ (shrunk empirical baseline, EMPIRICAL_BASELINE_REMAINS_CHAMPION)",
+    "context_state": "COLD_AND_TOI_DECLINE",
+    "adjustment_type": "D_BAYESIAN_CONTEXT_BLEND",
+    "frozen_parameters": {
+      "shift": -0.04152401270487006,
+      "mean_raw": 0.2884465116531053,
+      "mean_actual": 0.24337040205303678,
+      "shrink_weight": 0.9211977935382191,
+      "n_dev": 2338,
+      "k_bayes": 200,
+      "dev_log_loss": 0.5284457153977918
+    },
+    "adjustment_magnitude": {
+      "mean_abs_change": 0.04152401270487005,
+      "median_abs_change": 0.04152401270487005,
+      "p05_change": 0.04152401270487005,
+      "p95_change": 0.04152401270487005
+    },
+    "adjustment_reasonably_small": true,
+    "confidence_inheritance": "HIGH/MEDIUM only -- LOW confidence inherits the base market's WATCH_ONLY ceiling from decision_policy v3 and the overlay cannot override it (see research.player_props.decision_policy.gate_low_confidence)",
+    "sample_size": {
+      "dev_n": 2338,
+      "20242025": 2281,
+      "20252026": 2380
+    },
+    "validation_seasons": [
+      20242025,
+      20252026
+    ],
+    "bootstrap_results": {
+      "20242025": {
+        "brier_improves": true,
+        "log_loss_improves": true,
+        "calibration_improves": true,
+        "game_bootstrap_clears": true,
+        "date_bootstrap_agrees": true,
+        "player_bootstrap_ok": true,
+        "no_new_coherence_violations": true
+      },
+      "20252026": {
+        "brier_improves": true,
+        "log_loss_improves": true,
+        "calibration_improves": true,
+        "game_bootstrap_clears": true,
+        "date_bootstrap_agrees": true,
+        "player_bootstrap_ok": true,
+        "no_new_coherence_violations": true
+      }
+    },
+    "logical_coherence_behavior": "Non-destructive clip: adjusted P(Point>=1) is raised to match adjusted P(Goal>=1) whenever GOAL_1_PLUS implies POINT_1_PLUS and the independently-fit overlays would otherwise violate that ordering (verified 0 violations remaining post-fix, both seasons).",
+    "operational_status": "SHADOW_VALIDATED"
+  }
+]

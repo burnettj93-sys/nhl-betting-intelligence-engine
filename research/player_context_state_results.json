@@ -1,0 +1,812 @@
+{
+  "config": {
+    "warmup_season": 20222023,
+    "tuning_season": 20232024,
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "min_state_support": 200
+  },
+  "props": {
+    "sog": {
+      "cold_cutoff": -0.3483066942682158,
+      "hot_cutoff": 0.23767165187711958,
+      "toi_decline_cutoff": -0.03815681323203801,
+      "examples_by_season_n": {
+        "20232024": 43582,
+        "20242025": 43715,
+        "20252026": 43372
+      },
+      "by_season": {
+        "20242025": {
+          "n": 43715,
+          "by_state": {
+            "COLD": {
+              "n": 9149,
+              "mean_prob_residual": -0.015389710375029293,
+              "mean_count_residual": -0.0602146857319755,
+              "mean_actual_1plus_rate": 0.6986555907749481,
+              "mean_predicted_1plus_rate": 0.7140453011499774
+            },
+            "NORMAL": {
+              "n": 25362,
+              "mean_prob_residual": -0.007596359816892589,
+              "mean_count_residual": 0.00181099882912508,
+              "mean_actual_1plus_rate": 0.7623610125384434,
+              "mean_predicted_1plus_rate": 0.7699573723553359
+            },
+            "HOT": {
+              "n": 9204,
+              "mean_prob_residual": 0.013468096531513613,
+              "mean_count_residual": 0.0648376421031606,
+              "mean_actual_1plus_rate": 0.7307692307692307,
+              "mean_predicted_1plus_rate": 0.7173011342377171
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.0077933505581367045,
+            "ci_low": -0.017865440644140716,
+            "ci_high": 0.0022814034212529817,
+            "frac_negative": 0.939,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": 0.021064456348406202,
+            "ci_low": 0.011123280643563577,
+            "ci_high": 0.03076078678890145,
+            "frac_negative": 0.0,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.7063790331123515,
+            "cold_actual_1plus_rate_at_target_game": 0.6986555907749481,
+            "rebounded_to_or_above_baseline": false
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 6665,
+            "cold_toi_stable_mean_prob_residual": -0.005975900167519499,
+            "cold_toi_declining_n": 2484,
+            "cold_toi_declining_mean_prob_residual": -0.04064858518704732
+          },
+          "multi_signal": {
+            "n": 2484,
+            "mean_prob_residual": -0.04064858518704732
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.03305222537015473,
+            "ci_low": -0.05142089721500895,
+            "ci_high": -0.013591359374847232,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1097,
+            "n_games_b": 1312
+          }
+        },
+        "20252026": {
+          "n": 43372,
+          "by_state": {
+            "COLD": {
+              "n": 8970,
+              "mean_prob_residual": -0.019267016566538803,
+              "mean_count_residual": -0.043805449069008115,
+              "mean_actual_1plus_rate": 0.6892976588628763,
+              "mean_predicted_1plus_rate": 0.708564675429415
+            },
+            "NORMAL": {
+              "n": 25320,
+              "mean_prob_residual": -0.008562936039876205,
+              "mean_count_residual": -0.00295402216304832,
+              "mean_actual_1plus_rate": 0.7575434439178516,
+              "mean_predicted_1plus_rate": 0.7661063799577278
+            },
+            "HOT": {
+              "n": 9082,
+              "mean_prob_residual": 0.009876052831510678,
+              "mean_count_residual": 0.06415218429233872,
+              "mean_actual_1plus_rate": 0.7248403435366659,
+              "mean_predicted_1plus_rate": 0.7149642907051553
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.010704080526662598,
+            "ci_low": -0.020892503286955598,
+            "ci_high": -0.00017619290350346511,
+            "frac_negative": 0.978,
+            "n_resamples": 1000,
+            "n_games_a": 1309,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": 0.018438988871386883,
+            "ci_low": 0.0084983217573831,
+            "ci_high": 0.029144272265961075,
+            "frac_negative": 0.001,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.6999999996448287,
+            "cold_actual_1plus_rate_at_target_game": 0.6892976588628763,
+            "rebounded_to_or_above_baseline": false
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 6568,
+            "cold_toi_stable_mean_prob_residual": -0.01794763404264487,
+            "cold_toi_declining_n": 2402,
+            "cold_toi_declining_mean_prob_residual": -0.022874720320466925
+          },
+          "multi_signal": {
+            "n": 2402,
+            "mean_prob_residual": -0.022874720320466925
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.01431178428059072,
+            "ci_low": -0.03409894071261753,
+            "ci_high": 0.004913495658416085,
+            "frac_negative": 0.917,
+            "n_resamples": 1000,
+            "n_games_a": 1101,
+            "n_games_b": 1312
+          }
+        }
+      },
+      "arena_effects": {
+        "n_arenas": 32,
+        "arena_raw_mean_range": 0.07117350703005261,
+        "league_mean_residual": -0.0033026351665304023,
+        "eval_generalization_corr": 0.012726555940510314,
+        "eval_n_pairs": 87087
+      }
+    },
+    "goals": {
+      "cold_cutoff": -11.512925464970229,
+      "hot_cutoff": 0.6931471805599452,
+      "toi_decline_cutoff": -0.03717969361038698,
+      "examples_by_season_n": {
+        "20232024": 38030,
+        "20242025": 37563,
+        "20252026": 37723
+      },
+      "by_season": {
+        "20242025": {
+          "n": 37563,
+          "by_state": {
+            "COLD": {
+              "n": 9416,
+              "mean_prob_residual": -0.012500426581498443,
+              "mean_count_residual": -0.01468758128474624,
+              "mean_actual_1plus_rate": 0.15218776550552252,
+              "mean_predicted_1plus_rate": 0.16468819208702096
+            },
+            "NORMAL": {
+              "n": 19762,
+              "mean_prob_residual": -0.006622374635642839,
+              "mean_count_residual": -0.010489839537687524,
+              "mean_actual_1plus_rate": 0.18849306750328915,
+              "mean_predicted_1plus_rate": 0.19511544213893198
+            },
+            "HOT": {
+              "n": 8385,
+              "mean_prob_residual": -0.0058272398334835865,
+              "mean_count_residual": -0.007872804099720068,
+              "mean_actual_1plus_rate": 0.14406678592725106,
+              "mean_predicted_1plus_rate": 0.14989402576073463
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.005878051945855604,
+            "ci_low": -0.014592298329211868,
+            "ci_high": 0.0027495260641465747,
+            "frac_negative": 0.915,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": 0.0007951348021592525,
+            "ci_low": -0.00790594761329954,
+            "ci_high": 0.008828954788359178,
+            "frac_negative": 0.438,
+            "n_resamples": 1000,
+            "n_games_a": 1309,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.1505346253801238,
+            "cold_actual_1plus_rate_at_target_game": 0.15218776550552252,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 7406,
+            "cold_toi_stable_mean_prob_residual": -0.005720903439855333,
+            "cold_toi_declining_n": 2010,
+            "cold_toi_declining_mean_prob_residual": -0.03748010239593072
+          },
+          "multi_signal": {
+            "n": 2010,
+            "mean_prob_residual": -0.03748010239593072
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.030857727760287883,
+            "ci_low": -0.04598644766732297,
+            "ci_high": -0.016164796749788154,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1009,
+            "n_games_b": 1312
+          }
+        },
+        "20252026": {
+          "n": 37723,
+          "by_state": {
+            "COLD": {
+              "n": 9242,
+              "mean_prob_residual": -0.005224106452274515,
+              "mean_count_residual": -0.004545099939252725,
+              "mean_actual_1plus_rate": 0.159056481281108,
+              "mean_predicted_1plus_rate": 0.1642805877333825
+            },
+            "NORMAL": {
+              "n": 20327,
+              "mean_prob_residual": -0.002854947819445229,
+              "mean_count_residual": -0.0031545362725150902,
+              "mean_actual_1plus_rate": 0.19023958282087863,
+              "mean_predicted_1plus_rate": 0.19309453064032386
+            },
+            "HOT": {
+              "n": 8154,
+              "mean_prob_residual": -0.012984327326108668,
+              "mean_count_residual": -0.016815605189564115,
+              "mean_actual_1plus_rate": 0.13392200147167035,
+              "mean_predicted_1plus_rate": 0.146906328797779
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.0023691586328292856,
+            "ci_low": -0.011336182360142532,
+            "ci_high": 0.006610672854175053,
+            "frac_negative": 0.74,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": -0.01012937950666344,
+            "ci_low": -0.018741033341761953,
+            "ci_high": -0.002015081616055542,
+            "frac_negative": 0.995,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.1539773091685379,
+            "cold_actual_1plus_rate_at_target_game": 0.159056481281108,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 7189,
+            "cold_toi_stable_mean_prob_residual": 0.001606347587055386,
+            "cold_toi_declining_n": 2053,
+            "cold_toi_declining_mean_prob_residual": -0.029142340299689345
+          },
+          "multi_signal": {
+            "n": 2053,
+            "mean_prob_residual": -0.029142340299689345
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.026287392480244115,
+            "ci_low": -0.041979657733149295,
+            "ci_high": -0.010466463003915075,
+            "frac_negative": 0.999,
+            "n_resamples": 1000,
+            "n_games_a": 1032,
+            "n_games_b": 1312
+          }
+        }
+      },
+      "arena_effects": {
+        "n_arenas": 32,
+        "arena_raw_mean_range": 0.04225890420377216,
+        "league_mean_residual": -0.009849230064325074,
+        "eval_generalization_corr": 0.0011925941384196518,
+        "eval_n_pairs": 75286
+      }
+    },
+    "assists": {
+      "cold_cutoff": -11.512925464970229,
+      "hot_cutoff": 0.4700036292457356,
+      "toi_decline_cutoff": -0.03759585480404137,
+      "examples_by_season_n": {
+        "20232024": 42184,
+        "20242025": 42320,
+        "20252026": 42069
+      },
+      "by_season": {
+        "20242025": {
+          "n": 42320,
+          "by_state": {
+            "COLD": {
+              "n": 9578,
+              "mean_prob_residual": -0.00448282043221203,
+              "mean_count_residual": -0.0027564093206252855,
+              "mean_actual_1plus_rate": 0.19325537690540823,
+              "mean_predicted_1plus_rate": 0.19773819733762027
+            },
+            "NORMAL": {
+              "n": 22871,
+              "mean_prob_residual": 0.0006906091234234604,
+              "mean_count_residual": -0.002180006185836079,
+              "mean_actual_1plus_rate": 0.28044248174544184,
+              "mean_predicted_1plus_rate": 0.2797518726220184
+            },
+            "HOT": {
+              "n": 9871,
+              "mean_prob_residual": -0.006829624472699995,
+              "mean_count_residual": -0.011996880651304593,
+              "mean_actual_1plus_rate": 0.22267247492655254,
+              "mean_predicted_1plus_rate": 0.22950209939925253
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.005173429555635491,
+            "ci_low": -0.015665123436228168,
+            "ci_high": 0.005412262402416983,
+            "frac_negative": 0.83,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": -0.007520233596123456,
+            "ci_low": -0.018120998549854883,
+            "ci_high": 0.003841570286992829,
+            "frac_negative": 0.911,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.17548425935520537,
+            "cold_actual_1plus_rate_at_target_game": 0.19325537690540823,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 7366,
+            "cold_toi_stable_mean_prob_residual": -0.0016931771832056225,
+            "cold_toi_declining_n": 2212,
+            "cold_toi_declining_mean_prob_residual": -0.01377238289703174
+          },
+          "multi_signal": {
+            "n": 2212,
+            "mean_prob_residual": -0.01377238289703174
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.014462992020455201,
+            "ci_low": -0.029962199617361282,
+            "ci_high": 0.001700345765911783,
+            "frac_negative": 0.96,
+            "n_resamples": 1000,
+            "n_games_a": 1070,
+            "n_games_b": 1312
+          }
+        },
+        "20252026": {
+          "n": 42069,
+          "by_state": {
+            "COLD": {
+              "n": 9205,
+              "mean_prob_residual": -0.003686522359781714,
+              "mean_count_residual": -0.0022724179897496356,
+              "mean_actual_1plus_rate": 0.19728408473655623,
+              "mean_predicted_1plus_rate": 0.20097060709633793
+            },
+            "NORMAL": {
+              "n": 23191,
+              "mean_prob_residual": 0.0013516121740064547,
+              "mean_count_residual": 0.0010050046171139768,
+              "mean_actual_1plus_rate": 0.2854124444827735,
+              "mean_predicted_1plus_rate": 0.284060832308767
+            },
+            "HOT": {
+              "n": 9673,
+              "mean_prob_residual": -0.008952481136038106,
+              "mean_count_residual": -0.01356002812150488,
+              "mean_actual_1plus_rate": 0.22340535511216789,
+              "mean_predicted_1plus_rate": 0.232357836248206
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.005038134533788169,
+            "ci_low": -0.015783759547211215,
+            "ci_high": 0.005937647270455153,
+            "frac_negative": 0.821,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": -0.010304093310044561,
+            "ci_low": -0.021094949057533896,
+            "ci_high": 6.631408717622765e-05,
+            "frac_negative": 0.975,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.1795881869317963,
+            "cold_actual_1plus_rate_at_target_game": 0.19728408473655623,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 6924,
+            "cold_toi_stable_mean_prob_residual": 0.0026511263141881605,
+            "cold_toi_declining_n": 2281,
+            "cold_toi_declining_mean_prob_residual": -0.022924522981687637
+          },
+          "multi_signal": {
+            "n": 2281,
+            "mean_prob_residual": -0.022924522981687637
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.02427613515569409,
+            "ci_low": -0.040651676515010005,
+            "ci_high": -0.0071554376865338295,
+            "frac_negative": 0.999,
+            "n_resamples": 1000,
+            "n_games_a": 1073,
+            "n_games_b": 1312
+          }
+        }
+      },
+      "arena_effects": {
+        "n_arenas": 32,
+        "arena_raw_mean_range": 0.04654174413009789,
+        "league_mean_residual": -0.0029956479020308937,
+        "eval_generalization_corr": 0.04653784191122624,
+        "eval_n_pairs": 84389
+      }
+    },
+    "points": {
+      "cold_cutoff": -0.916290731874155,
+      "hot_cutoff": 0.4054651081081643,
+      "toi_decline_cutoff": -0.038104018453206656,
+      "examples_by_season_n": {
+        "20232024": 43225,
+        "20242025": 43284,
+        "20252026": 42996
+      },
+      "by_season": {
+        "20242025": {
+          "n": 43284,
+          "by_state": {
+            "COLD": {
+              "n": 9001,
+              "mean_prob_residual": -0.028717000228760975,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.26763692923008553,
+              "mean_predicted_1plus_rate": 0.29635392945884653
+            },
+            "NORMAL": {
+              "n": 24734,
+              "mean_prob_residual": -0.0016589477205603714,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.40054176437292793,
+              "mean_predicted_1plus_rate": 0.4022007120934883
+            },
+            "HOT": {
+              "n": 9549,
+              "mean_prob_residual": -0.012206792367457473,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.31542569902607603,
+              "mean_predicted_1plus_rate": 0.3276324913935335
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.027058052508200602,
+            "ci_low": -0.03973316542215504,
+            "ci_high": -0.014507378489836322,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1308,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": -0.010547844646897103,
+            "ci_low": -0.02285221657098957,
+            "ci_high": 0.003072287880914322,
+            "frac_negative": 0.942,
+            "n_resamples": 1000,
+            "n_games_a": 1310,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.23568762421282222,
+            "cold_actual_1plus_rate_at_target_game": 0.26763692923008553,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 6720,
+            "cold_toi_stable_mean_prob_residual": -0.021896130088397907,
+            "cold_toi_declining_n": 2281,
+            "cold_toi_declining_mean_prob_residual": -0.04881180397415327
+          },
+          "multi_signal": {
+            "n": 2281,
+            "mean_prob_residual": -0.04881180397415327
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.047152856253592904,
+            "ci_low": -0.0659848674416959,
+            "ci_high": -0.02846309677675489,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1051,
+            "n_games_b": 1312
+          }
+        },
+        "20252026": {
+          "n": 42996,
+          "by_state": {
+            "COLD": {
+              "n": 8702,
+              "mean_prob_residual": -0.024744022513533838,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.27499425419443807,
+              "mean_predicted_1plus_rate": 0.29973827670797193
+            },
+            "NORMAL": {
+              "n": 25177,
+              "mean_prob_residual": 0.0009425365415155412,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.40207332088811215,
+              "mean_predicted_1plus_rate": 0.4011307843465966
+            },
+            "HOT": {
+              "n": 9117,
+              "mean_prob_residual": -0.009065110079311937,
+              "mean_count_residual": null,
+              "mean_actual_1plus_rate": 0.3198420533070089,
+              "mean_predicted_1plus_rate": 0.3289071633863208
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.02568655905504938,
+            "ci_low": -0.03880457385971804,
+            "ci_high": -0.013257203658382226,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": -0.010007646620827478,
+            "ci_low": -0.02333770096489625,
+            "ci_high": 0.002546735447289809,
+            "frac_negative": 0.936,
+            "n_resamples": 1000,
+            "n_games_a": 1309,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.24321434398398953,
+            "cold_actual_1plus_rate_at_target_game": 0.27499425419443807,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 6322,
+            "cold_toi_stable_mean_prob_residual": -0.01700773113752183,
+            "cold_toi_declining_n": 2380,
+            "cold_toi_declining_mean_prob_residual": -0.0452939527988901
+          },
+          "multi_signal": {
+            "n": 2380,
+            "mean_prob_residual": -0.0452939527988901
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.04623648934040564,
+            "ci_low": -0.06411544211662495,
+            "ci_high": -0.026930732453416185,
+            "frac_negative": 1.0,
+            "n_resamples": 1000,
+            "n_games_a": 1077,
+            "n_games_b": 1312
+          }
+        }
+      },
+      "arena_effects": {
+        "n_arenas": 32,
+        "arena_raw_mean_range": 0.0605100760926673,
+        "league_mean_residual": -0.010848115144708102,
+        "eval_generalization_corr": 0.02006890314729552,
+        "eval_n_pairs": 86280
+      }
+    },
+    "blocks": {
+      "cold_cutoff": -0.5596157879354224,
+      "hot_cutoff": 0.34484048629172953,
+      "toi_decline_cutoff": -0.03815681323203801,
+      "examples_by_season_n": {
+        "20232024": 43550,
+        "20242025": 43667,
+        "20252026": 43351
+      },
+      "by_season": {
+        "20242025": {
+          "n": 43667,
+          "by_state": {
+            "COLD": {
+              "n": 9201,
+              "mean_prob_residual": -0.007359517797191718,
+              "mean_count_residual": -0.031934908334271504,
+              "mean_actual_1plus_rate": 0.4425605912400826,
+              "mean_predicted_1plus_rate": 0.44992010903727436
+            },
+            "NORMAL": {
+              "n": 25990,
+              "mean_prob_residual": -0.01165595684412293,
+              "mean_count_residual": -0.02778396445059417,
+              "mean_actual_1plus_rate": 0.5542901115813774,
+              "mean_predicted_1plus_rate": 0.5659460684255003
+            },
+            "HOT": {
+              "n": 8476,
+              "mean_prob_residual": 0.005788713895127984,
+              "mean_count_residual": 0.014694775016393522,
+              "mean_actual_1plus_rate": 0.46495988673902783,
+              "mean_predicted_1plus_rate": 0.45917117284389986
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": 0.0042964390469312115,
+            "ci_low": -0.007556800883294124,
+            "ci_high": 0.015346421576772955,
+            "frac_negative": 0.244,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": 0.017444670739250913,
+            "ci_low": 0.006452966044000707,
+            "ci_high": 0.030203497965709317,
+            "frac_negative": 0.0,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.4306444042622538,
+            "cold_actual_1plus_rate_at_target_game": 0.4425605912400826,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 7048,
+            "cold_toi_stable_mean_prob_residual": -0.0020493626417782836,
+            "cold_toi_declining_n": 2153,
+            "cold_toi_declining_mean_prob_residual": -0.024742691756947356
+          },
+          "multi_signal": {
+            "n": 2153,
+            "mean_prob_residual": -0.024742691756947356
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.013086734912824426,
+            "ci_low": -0.033087991217685575,
+            "ci_high": 0.007166964856732877,
+            "frac_negative": 0.886,
+            "n_resamples": 1000,
+            "n_games_a": 1025,
+            "n_games_b": 1312
+          }
+        },
+        "20252026": {
+          "n": 43351,
+          "by_state": {
+            "COLD": {
+              "n": 9716,
+              "mean_prob_residual": -0.01699042636962793,
+              "mean_count_residual": -0.048603230828111146,
+              "mean_actual_1plus_rate": 0.4191025113215315,
+              "mean_predicted_1plus_rate": 0.4360929376911594
+            },
+            "NORMAL": {
+              "n": 25012,
+              "mean_prob_residual": -0.014808100633557088,
+              "mean_count_residual": -0.03764317830153825,
+              "mean_actual_1plus_rate": 0.5337837837837838,
+              "mean_predicted_1plus_rate": 0.5485918844173409
+            },
+            "HOT": {
+              "n": 8623,
+              "mean_prob_residual": -0.0023992191815317013,
+              "mean_count_residual": -0.007006413571494799,
+              "mean_actual_1plus_rate": 0.4510031311608489,
+              "mean_predicted_1plus_rate": 0.4534023503423806
+            }
+          },
+          "cold_vs_normal_bootstrap": {
+            "point_delta": -0.0021823257360708403,
+            "ci_low": -0.013223127662594213,
+            "ci_high": 0.00900933495629716,
+            "frac_negative": 0.657,
+            "n_resamples": 1000,
+            "n_games_a": 1312,
+            "n_games_b": 1312
+          },
+          "hot_vs_normal_bootstrap": {
+            "point_delta": 0.012408881452025386,
+            "ci_low": 0.0004080360856945405,
+            "ci_high": 0.02371653018042199,
+            "frac_negative": 0.019,
+            "n_resamples": 1000,
+            "n_games_a": 1311,
+            "n_games_b": 1312
+          },
+          "regression_to_mean_check": {
+            "cold_baseline_implied_1plus_rate": 0.4141276862568526,
+            "cold_actual_1plus_rate_at_target_game": 0.4191025113215315,
+            "rebounded_to_or_above_baseline": true
+          },
+          "role_change_confounding": {
+            "cold_toi_stable_n": 7391,
+            "cold_toi_stable_mean_prob_residual": -0.015048621832998316,
+            "cold_toi_declining_n": 2325,
+            "cold_toi_declining_mean_prob_residual": -0.02316327683424276
+          },
+          "multi_signal": {
+            "n": 2325,
+            "mean_prob_residual": -0.02316327683424276
+          },
+          "multi_signal_vs_normal_bootstrap": {
+            "point_delta": -0.008355176200685674,
+            "ci_low": -0.029047925393260076,
+            "ci_high": 0.011379874032219635,
+            "frac_negative": 0.791,
+            "n_resamples": 1000,
+            "n_games_a": 1075,
+            "n_games_b": 1312
+          }
+        }
+      },
+      "arena_effects": {
+        "n_arenas": 32,
+        "arena_raw_mean_range": 0.07161445828110648,
+        "league_mean_residual": -0.004146365579299429,
+        "eval_generalization_corr": 0.013349301831316242,
+        "eval_n_pairs": 87018
+      }
+    }
+  },
+  "freeze_manifest": {
+    "experiment_id": "player_context_state_v1",
+    "cold_state_definition": "recent-5 actual rate vs baseline-20 actual rate, log-ratio, bottom 20% (TUNING-fit) -- expectation-relative, not raw production (Part 3)",
+    "hot_state_definition": "top 20% of the same TUNING-fit form-ratio distribution -- symmetric control (Part 5), not assumed to create OVER value",
+    "multi_signal_state": "COLD_AND_TOI_DECLINE requires BOTH the COLD production state AND a TOI log-ratio at or below the TUNING-fit 20th percentile (Part 4)",
+    "media_sentiment_component": "NOT BUILT -- no legitimate, timestamped, legally-accessible historical media/news corpus exists in this project (verified directly: no media/news/sentiment files anywhere in the repository). Fabricating one would violate this project's core data-integrity principle. Disclosed as a first-class finding, not a silent omission -- see report Section E/L/U.",
+    "arena_effect_methodology": "arena = home-team identity of the game (real, disclosed proxy -- no separate venue dataset exists). PLAYER-ARENA -> ARENA -> 0 hierarchical shrinkage (k_arena=300, k_player_arena=20), TUNING-fit, EVAL-checked via correlation with real held-out residuals (descriptive, not a formal walk-forward prediction -- Part 15/16's framing is measurement, not a per-game predictive claim)",
+    "sample_floor": 200,
+    "prop_families": [
+      "sog",
+      "goals",
+      "assists",
+      "points",
+      "blocks"
+    ],
+    "under_direction_hypothesis": "NEGATIVE_CONTEXT -> MODEL OVERPREDICTION (mean prob_residual < 0 for COLD relative to NORMAL) -- tested, not assumed; Part 24's competing regression-to-mean hypothesis tested explicitly and not suppressed",
+    "code_hashes": {
+      "run_player_context_state_model.py": "0b4da4a67e6bd22f128c5af10b05f78f07e4e8fee9a32103399ad20e19410851",
+      "player_context_state/context_state.py": "06a5bb0d93a2da6558dac4a59c7e904a2d4325963203b5e48a8b0d179f47ef1c",
+      "player_context_state/arena_effects.py": "2d897a0961871a00dcf04a0c2657cb69d448f206ca7963ef495c5383ff41d9bf",
+      "player_context_state/marginal_provenance.py": "cdcab46eb5cec23f910ac1ec70482746409c6addedbc9eb7c48972adac542f54"
+    },
+    "timestamp_utc": "2026-08-29T21:17:58Z"
+  }
+}

@@ -1,0 +1,323 @@
+{
+  "back_to_back_stats": {
+    "by_season": {
+      "20222023": {
+        "n": 404,
+        "same_goalie_pct": 12.13
+      },
+      "20232024": {
+        "n": 353,
+        "same_goalie_pct": 6.23
+      },
+      "20242025": {
+        "n": 394,
+        "same_goalie_pct": 9.64
+      },
+      "20252026": {
+        "n": 426,
+        "same_goalie_pct": 8.69
+      }
+    },
+    "mean_game1_icetime_seconds_when_goalie_changes": 3566.6,
+    "mean_game1_icetime_seconds_when_same_goalie_repeats": 3449.4,
+    "same_goalie_both_games": 146,
+    "same_goalie_pct": 9.26,
+    "starter_changed_pct": 90.74,
+    "total_back_to_backs": 1577
+  },
+  "baseline_results_true_holdout": {
+    "A_season_leader": {
+      "accuracy": 0.5876349362119725,
+      "n": 5095,
+      "no_pick_count": 0
+    },
+    "B_last_game_starter": {
+      "accuracy": 0.4276741903827282,
+      "n": 5095,
+      "no_pick_count": 0
+    },
+    "C_recent_leader_10": {
+      "accuracy": 0.5901768172888016,
+      "n": 5090,
+      "no_pick_count": 5
+    },
+    "D_b2b_aware": {
+      "accuracy": 0.6557409224730127,
+      "n": 5095,
+      "no_pick_count": 0
+    }
+  },
+  "clear_starter_team_eval": {
+    "back_to_back_buckets": {
+      "b2b": {
+        "accuracy": 0.8456375838926175,
+        "n": 298
+      },
+      "non_b2b": {
+        "accuracy": 0.7383891828336273,
+        "n": 1701
+      }
+    },
+    "brier": 0.3731444959578432,
+    "confidence_buckets": {
+      "HIGH": {
+        "accuracy": 0.7933227344992051,
+        "n": 1258
+      },
+      "LOW": {
+        "accuracy": 0.5431034482758621,
+        "n": 116
+      },
+      "MEDIUM": {
+        "accuracy": 0.7152,
+        "n": 625
+      }
+    },
+    "log_loss": 0.6099249211557648,
+    "n": 1999,
+    "season_breakdown": {
+      "20242025": {
+        "accuracy": 0.7526978417266187,
+        "brier": 0.3707884275836522,
+        "log_loss": 0.6039242272543393,
+        "n": 1112
+      },
+      "20252026": {
+        "accuracy": 0.7564825253664036,
+        "brier": 0.37609821414510375,
+        "log_loss": 0.6174477752914866,
+        "n": 887
+      }
+    },
+    "top1_accuracy": 0.7543771885942971
+  },
+  "config": {
+    "candidate_window": 20,
+    "eval_seasons": [
+      20242025,
+      20252026
+    ],
+    "feature_names": [
+      "started_previous_game",
+      "consecutive_start_count",
+      "recent_start_share_10",
+      "season_start_share",
+      "back_to_back_after_playing_previous_night"
+    ],
+    "min_history_games": 5,
+    "tuning_season": 20232024,
+    "warmup_season": 20222023
+  },
+  "corpus_size": 10421,
+  "examples_by_season_n": {
+    "20222023": 2397,
+    "20232024": 2548,
+    "20242025": 2539,
+    "20252026": 2556
+  },
+  "excluded_examples": {
+    "actual_not_in_candidates": 216,
+    "insufficient_history": 165
+  },
+  "fitted_weights": {
+    "back_to_back_after_playing_previous_night": -2.8974532575447163,
+    "consecutive_start_count": -0.0038749875505630534,
+    "recent_start_share_10": 2.135976504120843,
+    "season_start_share": 0.8873520153300344,
+    "started_previous_game": -0.24494661816822513
+  },
+  "model_eval_true_holdout": {
+    "back_to_back_buckets": {
+      "b2b": {
+        "accuracy": 0.8089171974522293,
+        "n": 785
+      },
+      "non_b2b": {
+        "accuracy": 0.6503480278422273,
+        "n": 4310
+      }
+    },
+    "brier": 0.4454965580708417,
+    "confidence_buckets": {
+      "HIGH": {
+        "accuracy": 0.7701357466063349,
+        "n": 2210
+      },
+      "LOW": {
+        "accuracy": 0.5142428785607196,
+        "n": 667
+      },
+      "MEDIUM": {
+        "accuracy": 0.6280432822362488,
+        "n": 2218
+      }
+    },
+    "log_loss": 0.7233252949850882,
+    "n": 5095,
+    "season_breakdown": {
+      "20242025": {
+        "accuracy": 0.6900354470263883,
+        "brier": 0.43791392047348804,
+        "log_loss": 0.7183138833498244,
+        "n": 2539
+      },
+      "20252026": {
+        "accuracy": 0.6596244131455399,
+        "brier": 0.4530287634150053,
+        "log_loss": 0.7283033756352988,
+        "n": 2556
+      }
+    },
+    "top1_accuracy": 0.6747791952894995
+  },
+  "model_eval_tuning_season_in_sample": {
+    "back_to_back_buckets": {
+      "b2b": {
+        "accuracy": 0.7921686746987951,
+        "n": 332
+      },
+      "non_b2b": {
+        "accuracy": 0.6398916967509025,
+        "n": 2216
+      }
+    },
+    "brier": 0.4585401173623791,
+    "confidence_buckets": {
+      "HIGH": {
+        "accuracy": 0.7415929203539823,
+        "n": 1130
+      },
+      "LOW": {
+        "accuracy": 0.4627659574468085,
+        "n": 376
+      },
+      "MEDIUM": {
+        "accuracy": 0.6420345489443378,
+        "n": 1042
+      }
+    },
+    "log_loss": 0.7409920357139106,
+    "n": 2548,
+    "season_breakdown": {
+      "20232024": {
+        "accuracy": 0.6597331240188383,
+        "brier": 0.4585401173623801,
+        "log_loss": 0.7409920357139101,
+        "n": 2548
+      }
+    },
+    "top1_accuracy": 0.6597331240188383
+  },
+  "sequence_conditional_probabilities": {
+    "P(next==last | last two starts ALTERNATED)": {
+      "n": 5913,
+      "p": 0.3641
+    },
+    "P(next==last | last two starts were the SAME goalie)": {
+      "n": 4442,
+      "p": 0.5144
+    },
+    "b2b_examples_in_eval_set": 785
+  },
+  "starter_hierarchy_role_counts": {
+    "1B / TANDEM": 63,
+    "BACKUP-HEAVY / UNCLEAR": 1,
+    "PRIMARY STARTER": 32
+  },
+  "starter_hierarchy_sample": {
+    "ANA_20232024": {
+      "n_games": 81,
+      "role": "1B / TANDEM",
+      "season": 20232024,
+      "team": "ANA",
+      "top_goalie": "8476434",
+      "top_share": 0.543
+    },
+    "ANA_20242025": {
+      "n_games": 81,
+      "role": "1B / TANDEM",
+      "season": 20242025,
+      "team": "ANA",
+      "top_goalie": "8480843",
+      "top_share": 0.617
+    },
+    "ANA_20252026": {
+      "n_games": 82,
+      "role": "PRIMARY STARTER",
+      "season": 20252026,
+      "team": "ANA",
+      "top_goalie": "8480843",
+      "top_share": 0.659
+    },
+    "ARI_20232024": {
+      "n_games": 82,
+      "role": "1B / TANDEM",
+      "season": 20232024,
+      "team": "ARI",
+      "top_goalie": "8478971",
+      "top_share": 0.573
+    },
+    "BOS_20232024": {
+      "n_games": 82,
+      "role": "1B / TANDEM",
+      "season": 20232024,
+      "team": "BOS",
+      "top_goalie": "8480280",
+      "top_share": 0.512
+    },
+    "BOS_20242025": {
+      "n_games": 81,
+      "role": "PRIMARY STARTER",
+      "season": 20242025,
+      "team": "BOS",
+      "top_goalie": "8480280",
+      "top_share": 0.691
+    }
+  },
+  "tandem_team_eval": {
+    "back_to_back_buckets": {
+      "b2b": {
+        "accuracy": 0.7864476386036962,
+        "n": 487
+      },
+      "non_b2b": {
+        "accuracy": 0.5929474894595631,
+        "n": 2609
+      }
+    },
+    "brier": 0.49221224675426667,
+    "confidence_buckets": {
+      "HIGH": {
+        "accuracy": 0.7394957983193278,
+        "n": 952
+      },
+      "LOW": {
+        "accuracy": 0.5081669691470054,
+        "n": 551
+      },
+      "MEDIUM": {
+        "accuracy": 0.5938480853735091,
+        "n": 1593
+      }
+    },
+    "log_loss": 0.7965447224026648,
+    "n": 3096,
+    "season_breakdown": {
+      "20242025": {
+        "accuracy": 0.6412053258584443,
+        "brier": 0.4902219429636738,
+        "log_loss": 0.8074528445118268,
+        "n": 1427
+      },
+      "20252026": {
+        "accuracy": 0.6081485919712403,
+        "brier": 0.49391396245778685,
+        "log_loss": 0.7872182453207148,
+        "n": 1669
+      }
+    },
+    "top1_accuracy": 0.6233850129198967
+  },
+  "test_suite_returncode": 0,
+  "test_suite_stderr_tail": "............................................................................................................................................................................................................................................................................................................................................................................................................................................................................................\n----------------------------------------------------------------------\nRan 476 tests in 14.050s\n\nOK"
+}

@@ -1,0 +1,54 @@
+{
+  "seasons": [
+    "20222023",
+    "20232024",
+    "20242025",
+    "20252026"
+  ],
+  "per_season": {
+    "20222023": {
+      "games": 1312,
+      "regulation_games_with_gwg": 1010,
+      "ot_games_with_gwg": 207,
+      "shootout_games_no_player_gwg": 95,
+      "games_with_no_gwg": 95,
+      "empty_net_gwg_cases": 12,
+      "multi_lead_change_games": 122,
+      "total_invariant_violations": 0,
+      "derivation_failures": 0
+    },
+    "20232024": {
+      "games": 1312,
+      "regulation_games_with_gwg": 1040,
+      "ot_games_with_gwg": 190,
+      "shootout_games_no_player_gwg": 82,
+      "games_with_no_gwg": 82,
+      "empty_net_gwg_cases": 11,
+      "multi_lead_change_games": 113,
+      "total_invariant_violations": 0,
+      "derivation_failures": 0
+    },
+    "20242025": {
+      "games": 1312,
+      "regulation_games_with_gwg": 1041,
+      "ot_games_with_gwg": 194,
+      "shootout_games_no_player_gwg": 77,
+      "games_with_no_gwg": 77,
+      "empty_net_gwg_cases": 12,
+      "multi_lead_change_games": 109,
+      "total_invariant_violations": 0,
+      "derivation_failures": 0
+    },
+    "20252026": {
+      "games": 1312,
+      "regulation_games_with_gwg": 986,
+      "ot_games_with_gwg": 207,
+      "shootout_games_no_player_gwg": 119,
+      "games_with_no_gwg": 119,
+      "empty_net_gwg_cases": 14,
+      "multi_lead_change_games": 125,
+      "total_invariant_violations": 0,
+      "derivation_failures": 0
+    }
+  }
+}

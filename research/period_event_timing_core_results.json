@@ -1,0 +1,149 @@
+{
+  "built_at_seconds": 4.225280046463013,
+  "first_goal_seconds_mean": 664.7029759633728,
+  "first_goal_seconds_median": 486,
+  "first_team_to_score_counts": {
+    "AWAY": 2505,
+    "HOME": 2737,
+    "NONE": 6
+  },
+  "games_processed": 5248,
+  "games_with_zero_goals": 6,
+  "goal_counts_by_period_and_score_state": {
+    "1|LEADING_1": 1590,
+    "1|LEADING_2PLUS": 466,
+    "1|TIED": 5115,
+    "1|TRAILING_1": 1649,
+    "1|TRAILING_2PLUS": 454,
+    "2|LEADING_1": 2236,
+    "2|LEADING_2PLUS": 1786,
+    "2|TIED": 2883,
+    "2|TRAILING_1": 2243,
+    "2|TRAILING_2PLUS": 1831,
+    "3|LEADING_1": 2187,
+    "3|LEADING_2PLUS": 3101,
+    "3|TIED": 1749,
+    "3|TRAILING_1": 1778,
+    "3|TRAILING_2PLUS": 2455,
+    "OT|TIED": 798
+  },
+  "goal_counts_by_strength_type": {
+    "EMPTY_NET": 2660,
+    "EVEN": 22415,
+    "OTHER": 117,
+    "PP": 6356,
+    "SH": 773
+  },
+  "goalie_pulls_by_reason": {
+    "DELAYED_PENALTY_EXTRA_ATTACKER": 2689,
+    "OTHER": 2870
+  },
+  "home_first_goal_rate": 0.5221289584128196,
+  "n_trailing_pulls_analyzed": 2870,
+  "period_goal_counts": {
+    "1": 9274,
+    "2": 10979,
+    "3": 11270,
+    "OT": 798
+  },
+  "period_goal_rate_per_game": {
+    "1": 1.7671493902439024,
+    "2": 2.0920350609756095,
+    "3": 2.147484756097561,
+    "OT": 0.1520579268292683
+  },
+  "period_sog_counts": {
+    "1": 90206,
+    "2": 95473,
+    "3": 87159,
+    "OT": 3594
+  },
+  "period_sog_rate_per_game": {
+    "1": 17.188643292682926,
+    "2": 18.192263719512194,
+    "3": 16.608041158536587,
+    "OT": 0.6848323170731707
+  },
+  "scoreless_through_probability": {
+    "10min": 0.4178734756097561,
+    "15min": 0.2690548780487805,
+    "5min": 0.6594893292682927,
+    "end_of_p1": 0.16920731707317074
+  },
+  "trailing_pull_timing_by_score_differential": {
+    "-1": {
+      "mean_seconds_remaining": 271.9948224852071,
+      "median_seconds_remaining": 109,
+      "n": 1352
+    },
+    "-2": {
+      "mean_seconds_remaining": 273.23590333716913,
+      "median_seconds_remaining": 175,
+      "n": 869
+    },
+    "-3": {
+      "mean_seconds_remaining": 325.0502092050209,
+      "median_seconds_remaining": 259,
+      "n": 239
+    },
+    "-4": {
+      "mean_seconds_remaining": 875.3,
+      "median_seconds_remaining": 713,
+      "n": 20
+    },
+    "-6": {
+      "mean_seconds_remaining": 319.0,
+      "median_seconds_remaining": 319,
+      "n": 1
+    },
+    "-8": {
+      "mean_seconds_remaining": 907.0,
+      "median_seconds_remaining": 907,
+      "n": 1
+    },
+    "0": {
+      "mean_seconds_remaining": 2168.6622807017543,
+      "median_seconds_remaining": 2403,
+      "n": 228
+    },
+    "1": {
+      "mean_seconds_remaining": 1918.8118811881188,
+      "median_seconds_remaining": 1908,
+      "n": 101
+    },
+    "2": {
+      "mean_seconds_remaining": 1468.657894736842,
+      "median_seconds_remaining": 1320,
+      "n": 38
+    },
+    "3": {
+      "mean_seconds_remaining": 1429.090909090909,
+      "median_seconds_remaining": 1371,
+      "n": 11
+    },
+    "4": {
+      "mean_seconds_remaining": 1133.3333333333333,
+      "median_seconds_remaining": 855,
+      "n": 9
+    },
+    "5": {
+      "mean_seconds_remaining": 2509.0,
+      "median_seconds_remaining": 2509,
+      "n": 1
+    }
+  },
+  "within_period_goal_bins_5min": {
+    "0": 2148,
+    "1": 2335,
+    "2": 2376,
+    "3": 2415,
+    "4": 2645,
+    "5": 2873,
+    "6": 2765,
+    "7": 2696,
+    "8": 2369,
+    "9": 2444,
+    "10": 2355,
+    "11": 4102
+  }
+}

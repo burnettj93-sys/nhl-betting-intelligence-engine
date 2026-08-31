@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4cfafb524b2107d73365ce0709b59dd8/odds",
+    "event_id": "4cfafb524b2107d73365ce0709b59dd8",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "495",
+    "requests_used_header": "5",
+    "response_checksum_sha256": "09c0db73896971966d5b1876f325b941ab666ba18229fe607786a0d33d4c2214",
+    "retrieved_at_utc": "2026-08-30T13:01:28Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Buffalo Sabres",
+    "bookmakers": [],
+    "commence_time": "2026-10-01T23:10:00Z",
+    "home_team": "Columbus Blue Jackets",
+    "id": "4cfafb524b2107d73365ce0709b59dd8",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

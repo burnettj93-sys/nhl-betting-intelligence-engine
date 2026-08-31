@@ -1,0 +1,53 @@
+{
+  "seasons": [
+    20222023,
+    20232024,
+    20242025,
+    20252026
+  ],
+  "per_season": {
+    "20222023": {
+      "season": 20222023,
+      "games_in_authoritative_schedule": 1312,
+      "games_already_archived_before_run": 1312,
+      "games_requested_this_run": 0,
+      "games_retrieved_total": 1312,
+      "games_missing": [],
+      "retries": 0,
+      "failures": []
+    },
+    "20232024": {
+      "season": 20232024,
+      "games_in_authoritative_schedule": 1312,
+      "games_already_archived_before_run": 1312,
+      "games_requested_this_run": 0,
+      "games_retrieved_total": 1312,
+      "games_missing": [],
+      "retries": 0,
+      "failures": []
+    },
+    "20242025": {
+      "season": 20242025,
+      "games_in_authoritative_schedule": 1312,
+      "games_already_archived_before_run": 1312,
+      "games_requested_this_run": 0,
+      "games_retrieved_total": 1312,
+      "games_missing": [],
+      "retries": 0,
+      "failures": []
+    },
+    "20252026": {
+      "season": 20252026,
+      "games_in_authoritative_schedule": 1312,
+      "games_already_archived_before_run": 1312,
+      "games_requested_this_run": 0,
+      "games_retrieved_total": 1312,
+      "games_missing": [],
+      "retries": 0,
+      "failures": []
+    }
+  },
+  "total_games_retrieved": 5248,
+  "total_missing": 0,
+  "total_failures": 0
+}
