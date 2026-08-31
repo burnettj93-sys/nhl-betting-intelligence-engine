@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import ast
 import datetime as dt
+import inspect
+import io
 import json
 import os
 import tempfile
@@ -499,6 +501,87 @@ class TestGitignoreCoverage(unittest.TestCase):
             text = f.read()
         self.assertIn("data/raw/moneypuck/**/*.csv", text)
         self.assertIn("data/raw/moneypuck/**/*.zip", text)
+
+
+
+# --------------------------------------------------------------------------
+# 30. Same-Day Demo sprint (2026-08-30): regression guard against tests
+# mutating the real data/raw/moneypuck/ staging directory. Real root
+# cause: archive_and_promote()'s `out_root: Path = RAW_ROOT` default was
+# bound at function-definition time, so mock.patch.object(mpd,
+# "RAW_ROOT", tmp) -- the pattern every existing test in this file
+# uses -- had NO EFFECT on it. 501 confirmed-synthetic files (content
+# literally "hello"/"world", checksum "xxxx...", source_url "http://x")
+# were found accumulated since 2026-08-23 and deleted; zero real
+# MoneyPuck captures were ever present in that directory.
+# --------------------------------------------------------------------------
+class TestMoneyPuckStagingIsolation(unittest.TestCase):
+    def _snapshot(self):
+        if not os.path.isdir(mpd.RAW_ROOT):
+            return set()
+        return {os.path.relpath(os.path.join(root, f), mpd.RAW_ROOT)
+                for root, _, files in os.walk(mpd.RAW_ROOT) for f in files}
+
+    def test_archive_and_promote_out_root_default_is_none_not_a_bound_path(self):
+        sig = inspect.signature(mpd.archive_and_promote)
+        self.assertIsNone(sig.parameters["out_root"].default,
+                           "archive_and_promote's out_root default must be None (resolved fresh "
+                           "inside the function body), never a Path bound at import time -- a "
+                           "bound default silently defeats mock.patch on RAW_ROOT")
+
+    def test_write_manifest_accepts_a_raw_root_override(self):
+        sig = inspect.signature(mpd._write_manifest)
+        self.assertIn("raw_root", sig.parameters,
+                       "_write_manifest must accept an explicit override -- previously it always "
+                       "wrote to the real RAW_ROOT regardless of any out_root passed elsewhere")
+
+    def test_mock_patching_raw_root_actually_redirects_archive_and_promote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(mpd, "RAW_ROOT", Path(tmp)):
+                check_result = {"dataset": "skater", "season": 2024, "checked_at_utc": "2026-01-01T00:00:00",
+                                 "checksum": "real-checksum", "byte_size": 5, "content": b"hello",
+                                 "url": "https://example.com/real"}
+                result = mpd.archive_and_promote(check_result)
+            self.assertTrue(result["archived_path"].startswith(os.path.relpath(tmp, REPO_ROOT)) or
+                             tmp.replace(REPO_ROOT + "/", "") in result["archived_path"] or
+                             os.path.isabs(result["archived_path"]) is False,
+                             f"archived_path {result['archived_path']!r} should reflect the patched tmp root")
+            # Direct, unambiguous check: the manifest must actually exist under tmp, not RAW_ROOT.
+            self.assertTrue(os.path.exists(os.path.join(tmp, "skater", "2024", "manifest.json")))
+
+    def test_running_the_archive_writing_test_classes_leaves_real_staging_dir_unchanged(self):
+        # Targets specifically the test classes that call archive_and_promote()/
+        # ingest_local_file() -- never the whole module (which would include
+        # THIS test itself, recursively re-running it).
+        before = self._snapshot()
+        loader = unittest.TestLoader()
+        suite = unittest.TestSuite()
+        for cls_name in ("TestMoneyPuckChangeDetection", "TestArchiveAndProvenance",
+                         "TestNoPartialPromotion", "TestDashboardNoNetworkOnRerun"):
+            suite.addTests(loader.loadTestsFromName(f"tests.test_operational_daily_sync.{cls_name}"))
+        runner = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0)
+        result = runner.run(suite)
+        after = self._snapshot()
+        self.assertTrue(result.wasSuccessful())
+        self.assertEqual(before, after,
+                          f"real MoneyPuck staging dir changed during test run -- added: "
+                          f"{after - before}, removed: {before - after}")
+
+    def test_no_known_synthetic_content_remains_in_real_staging_dir(self):
+        if not os.path.isdir(mpd.RAW_ROOT):
+            return
+        for root, _, files in os.walk(mpd.RAW_ROOT):
+            for fname in files:
+                path = os.path.join(root, fname)
+                with open(path, "rb") as f:
+                    content = f.read()
+                self.assertNotIn(content, (b"hello", b"world"),
+                                  f"{path} carries known synthetic test fixture content")
+                if fname == "manifest.json":
+                    with open(path) as f:
+                        manifest = json.load(f)
+                    self.assertNotEqual(manifest.get("source_url"), "http://x",
+                                        f"{path} carries a known synthetic placeholder source_url")
 
 
 if __name__ == "__main__":

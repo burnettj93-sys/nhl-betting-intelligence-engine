@@ -53,20 +53,22 @@ def _looks_like_license_gate(response: requests.Response) -> bool:
     return "license" in final_url.lower() or "data_license" in final_url.lower()
 
 
-def manifest_path(dataset: str, season: int) -> Path:
-    return RAW_ROOT / dataset / str(season) / "manifest.json"
+def manifest_path(dataset: str, season: int, raw_root: Path | None = None) -> Path:
+    if raw_root is None:
+        raw_root = RAW_ROOT
+    return raw_root / dataset / str(season) / "manifest.json"
 
 
-def load_manifest(dataset: str, season: int) -> dict | None:
-    path = manifest_path(dataset, season)
+def load_manifest(dataset: str, season: int, raw_root: Path | None = None) -> dict | None:
+    path = manifest_path(dataset, season, raw_root)
     if not path.exists():
         return None
     with open(path) as f:
         return json.load(f)
 
 
-def _write_manifest(dataset: str, season: int, manifest: dict) -> None:
-    path = manifest_path(dataset, season)
+def _write_manifest(dataset: str, season: int, manifest: dict, raw_root: Path | None = None) -> None:
+    path = manifest_path(dataset, season, raw_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump(manifest, f, indent=2, sort_keys=True)
@@ -137,11 +139,30 @@ def check_dataset(dataset: str, season: int, session: requests.Session | None = 
 
 
 def archive_and_promote(check_result: dict, filename: str | None = None,
-                         out_root: Path = RAW_ROOT) -> dict:
+                         out_root: Path | None = None) -> dict:
     """Part 6/9: archive the changed raw file immutably, then promote it
     as the new accepted snapshot (updates the manifest). Only ever
     called for a check_result with status == "UPDATED". Returns
-    {"archived_path", "promoted": True}."""
+    {"archived_path", "promoted": True}.
+
+    `out_root` defaults to None rather than the module-level RAW_ROOT
+    directly (Same-Day Demo sprint, Part 57/58 fix): a mutable default
+    is bound ONCE, at function-definition time, to whatever RAW_ROOT
+    equaled at that moment -- the exact same real, confirmed bug class
+    already fixed in research/live_sog_pricing/archive.py last sprint.
+    Every test call site that only did mock.patch.object(RAW_ROOT, tmp)
+    (never passing out_root= explicitly) had this silently have NO
+    EFFECT, writing real synthetic test content into the real
+    data/raw/moneypuck/ staging directory every run since at least
+    2026-08-23 -- 501 confirmed-synthetic files (content literally
+    "hello"/"world", checksum "xxxx...", source_url "http://x") were
+    found and deleted this sprint; zero real MoneyPuck captures were
+    ever present. _write_manifest() previously had NO override
+    parameter at all, so even the one call site that DID pass out_root=
+    explicitly still polluted the real manifest.json -- both are fixed
+    together here."""
+    if out_root is None:
+        out_root = RAW_ROOT
     dataset, season = check_result["dataset"], check_result["season"]
     ts = check_result["checked_at_utc"].replace(":", "").replace("-", "")
     fname = filename or f"{dataset}_{season}." + ("zip" if dataset != "team" else "csv")
@@ -165,7 +186,7 @@ def archive_and_promote(check_result: dict, filename: str | None = None,
         "source_url": check_result["url"],
         "archived_file": display_path,
         "provenance_type": "LIVE_OBSERVED",
-    })
+    }, raw_root=out_root)
     return {"archived_path": display_path, "promoted": True}
 
 

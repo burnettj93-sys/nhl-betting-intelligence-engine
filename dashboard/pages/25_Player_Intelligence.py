@@ -16,6 +16,7 @@ import streamlit as st
 
 from dashboard import components as comp
 from dashboard import demo_data as dd
+from dashboard import eligible_bets as eb
 from dashboard import formatting as fmt
 from dashboard import player_intelligence_view as piv
 
@@ -52,9 +53,12 @@ opps = piv.player_opportunities(player_id)
 h1, h2, h3, h4 = st.columns(4)
 h1.markdown(f"### {player.name}")
 h1.caption(f"{player.team} · {player.position}")
+if h1.button(f"Open {player.team} — Team Intelligence Hub", key="pi_team_link"):
+    st.session_state["selected_team"] = player.team
+    st.switch_page("pages/31_Team_Intelligence.py")
 h2.metric("Next Opponent", player.opponent)
 h2.caption(f"{dd.SIMULATED_DATE} (simulated)")
-if h2.button(f"Open {player.opponent} — Team Intelligence", key="pi_opponent_link"):
+if h2.button(f"Open {player.opponent} — Team Intelligence Hub", key="pi_opponent_link"):
     st.session_state["selected_team"] = player.opponent
     st.switch_page("pages/31_Team_Intelligence.py")
 _activity = dd.player_activity_status(player.player_id, player.team, player.opponent)
@@ -107,7 +111,8 @@ m4.metric("Point 1+ P", fmt.format_probability(points_o["raw_probability"]) if p
 
 # --- Tabs (Part 41/42/44) ---
 st.divider()
-tab_next, tab_next5, tab_markets = st.tabs(["Next Game", "Next 5 Games", "Markets"])
+tab_next, tab_next5, tab_markets, tab_all_eligible = st.tabs(
+    ["Next Game", "Next 5 Games", "Markets", "All Eligible Bets"])
 
 with tab_next:
     st.caption(f"vs {player.opponent} · {dd.SIMULATED_DATE} (simulated)")
@@ -159,6 +164,21 @@ with tab_markets:
         st.dataframe(rows, width='stretch')
     else:
         comp.render_empty_state("MODEL_NOT_OPERATIONAL", "No supported markets found for this player.")
+
+with tab_all_eligible:
+    st.caption("Every model-supported threshold for this player, across the full validated range "
+               "(e.g. SOG 2+/3+/4+/5+, not just one) -- extends the single-threshold view above "
+               "without changing it.")
+    all_player_opps = [o for o in eb.all_opportunities() if o["player_id"] == player_id]
+    if not all_player_opps:
+        comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES")
+    else:
+        for o in sorted(all_player_opps, key=lambda o: (o["market"], o["threshold"])):
+            ec1, ec2, ec3, ec4 = st.columns([2, 1, 1, 1])
+            ec1.markdown(f"**{o['market']} {o['threshold']}**")
+            ec2.caption(f"Model {fmt.format_probability(o['coherent_probability'])}")
+            ec3.caption(f"Edge {fmt.format_edge(o['conservative_edge'])}")
+            ec4.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
 
 # --- Performance / Context (Parts 51-57) ---
 st.divider()

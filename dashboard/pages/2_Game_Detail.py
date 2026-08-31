@@ -25,8 +25,14 @@ def _load_predictions() -> list[dict]:
     return da.compute_baseline_predictions()
 
 
-@st.cache_resource(show_spinner=False)
 def _moneypuck_conn():
+    # Deliberately NOT @st.cache_resource: a cached sqlite3.Connection can
+    # get reused from a different script-run thread than the one that
+    # created it (sqlite3 connections aren't thread-safe by default),
+    # which raised "SQLite objects created in a thread can only be used
+    # in that same thread" under Streamlit AppTest's per-run threading.
+    # This call is cheap (one sqlite3.connect + schema check) and only
+    # happens once per page load, so recomputing it is free.
     try:
         return da.get_moneypuck_connection()
     except da.DataAvailabilityError:
@@ -84,145 +90,227 @@ if _selected_game_id and str(_selected_game_id).startswith("demo-"):
 
     st.divider()
 
-    # Win model (Section 28)
-    st.markdown("#### Win Model")
-    win = gdv.demo_win_model(game.away, game.home)
-    if win is None:
-        st.caption("Real Elo ratings unavailable for one or both teams in the historical corpus.")
-    else:
-        wc1, wc2 = st.columns(2)
-        wc1.metric(f"{game.away} Win P", fmt.format_probability(win["away_win_p"]))
-        wc2.metric(f"{game.home} Win P", fmt.format_probability(win["home_win_p"]))
-        st.caption("Real Elo ratings (as of the end of the real historical corpus) applied to this "
-                   "simulated matchup via the unmodified logistic win-probability formula. Fair "
-                   "moneyline intentionally not shown -- no real sportsbook moneyline exists for this game.")
+    from dashboard import eligible_bets as eb
+    from dashboard import conviction as cv
 
-    # Team SOG (Section 29)
-    st.markdown("#### Team SOG")
-    tc1, tc2 = st.columns(2)
-    for col, team, is_home in ((tc1, game.away, False), (tc2, game.home, True)):
-        proj = gdv.team_sog_projection(team, is_home)
-        with col:
-            st.markdown(f"**{team}**")
-            if proj:
-                st.metric("Expected SOG", f"{proj.get('expected_sog', 0):.1f}" if proj.get("expected_sog") else "—")
-            else:
-                st.caption("Not available.")
+    game_all_opps = eb.eligible_bets_for_game(game.away, game.home)
+    game_actionable = game_all_opps["actionable"]
+    game_research = game_all_opps["research_only"]
+    legacy_game_opps = [o for o in dd.build_demo_opportunities() if o["team"] in (game.away, game.home)]
 
-    st.divider()
+    tab_preview, tab_bets, tab_props, tab_stats, tab_trends, tab_model = st.tabs(
+        ["PREVIEW", "BETS", "PLAYER PROPS", "STATS", "BETTING TRENDS", "MODEL"]
+    )
 
-    # Starters / goalie saves (Sections 30/31)
-    st.markdown("#### Starters & Goalie Saves")
-    goalies = [g_ for g_ in dd.build_demo_goalies() if g_["team"] in (game.away, game.home)]
-    if not goalies:
-        st.caption("No real goalie identity mapped for either team in the demo roster.")
-    for g_ in goalies:
-        gc1, gc2, gc3 = st.columns(3)
-        gc1.markdown(f"**{g_['name']}** ({g_['team']})")
-        gc1.caption(f"Starter: {g_['starter_status'].replace('_', ' ')} ({g_['starter_probability']*100:.0f}%) "
-                    f"— Model Confidence: {g_['confidence']} (separate dimension)")
-        gc2.metric("Expected Saves", f"{g_['expected_saves']:.1f}" if g_["expected_saves"] else "—")
-        with gc3:
-            for k, v in g_["thresholds"].items():
-                st.markdown(comp.label_badge(f"{k} {v.replace('_', ' ')}", "input" if v == "VALIDATED" else "unavailable"),
-                            unsafe_allow_html=True)
+    # ---- PREVIEW ------------------------------------------------------
+    with tab_preview:
+        st.markdown("#### Win Model")
+        win = gdv.demo_win_model(game.away, game.home)
+        if win is None:
+            st.caption("Real Elo ratings unavailable for one or both teams in the historical corpus.")
+        else:
+            wc1, wc2 = st.columns(2)
+            wc1.metric(f"{game.away} Win P", fmt.format_probability(win["away_win_p"]))
+            wc2.metric(f"{game.home} Win P", fmt.format_probability(win["home_win_p"]))
+            st.caption("Real Elo ratings (as of the end of the real historical corpus) applied to this "
+                       "simulated matchup via the unmodified logistic win-probability formula. Fair "
+                       "moneyline intentionally not shown -- no real sportsbook moneyline exists for this game.")
 
-    st.divider()
-
-    # Top player props (Section 32)
-    st.markdown("#### Top Player Opportunities")
-    game_opps = [o for o in dd.build_demo_opportunities() if o["team"] in (game.away, game.home)]
-    top = sorted(game_opps, key=lambda o: (-{"BET": 3, "WATCH": 2, "WAIT": 1, "PASS": 0}[o["decision"]],
-                                            -o["conservative_edge"]))[:6]
-    for o in top:
-        if st.button(f"Open {o['player']} — Player Intelligence", key=f"gd_player_{o['player_id']}_{o['prop']}"):
-            st.session_state["selected_player_id"] = o["player_id"]
-            st.switch_page("pages/25_Player_Intelligence.py")
-        comp.render_opportunity_card({
-            "player": o["player"], "team": o["team"], "opponent": o["opponent"], "market": o["market"],
-            "threshold": o["threshold"], "decision": o["decision"], "confidence": o["confidence"],
-            "raw_probability": o["raw_probability"], "context_adjusted_probability": o["context_adjusted_probability"],
-            "conservative_probability": o["conservative_probability"],
-            "market_no_vig_probability": o["market_no_vig_probability"], "fair_odds": o["fair_odds"],
-            "current_odds": o["current_odds"], "max_acceptable_price": o["max_acceptable_price"],
-            "conservative_edge": o["conservative_edge"], "ev": o["ev"], "context_state": o["context_state"],
-            "context_raw": o["raw_probability"], "context_adjusted": o["context_adjusted_probability"],
-            "context_delta": o["context_adjusted_probability"] - o["raw_probability"],
-            "drivers": [], "risks": [o["decision_reason"]],
-        })
-
-    with st.expander(f"Full game prop table ({len(game_opps)} rows)"):
-        gf1, gf2, gf3 = st.columns(3)
-        team_f = gf1.selectbox("Team", ["ALL", game.away, game.home], key="gd_team_filter")
-        decision_f = gf2.selectbox("Decision", ["ALL", "BET", "WATCH", "WAIT", "PASS"], key="gd_decision_filter")
-        conf_f = gf3.selectbox("Confidence", ["ALL", "HIGH", "MEDIUM", "LOW"], key="gd_conf_filter")
-        filtered = game_opps
-        if team_f != "ALL":
-            filtered = [o for o in filtered if o["team"] == team_f]
-        if decision_f != "ALL":
-            filtered = [o for o in filtered if o["decision"] == decision_f]
-        if conf_f != "ALL":
-            filtered = [o for o in filtered if o["confidence"] == conf_f]
-        table = [{"Decision": o["decision"], "Player": o["player"], "Market": o["market"],
-                  "Threshold": o["threshold"], "Conservative P": fmt.format_probability(o["conservative_probability"]),
-                  "Current": fmt.format_american_odds(o["current_odds"]), "Confidence": o["confidence"]}
-                 for o in filtered]
-        st.dataframe(table, width="stretch")
-
-    # Combinations (Track 2): same-game combos scoped to this game's rosters,
-    # reusing the real joint-dependence logic from the Combinations page.
-    st.markdown("#### Combinations")
-    _joint_results = da.load_json_safely("research/joint_scoring_dependence_results.json")
-    if _joint_results is None:
-        st.caption("Joint scoring dependence results not found.")
-    else:
-        combos = gdv.game_combinations(_selected_game_id, _joint_results["rho_by_name"])
-        if not combos:
-            st.caption("No qualifying same-game combinations for this matchup's demo roster.")
-        for c in combos:
-            oa, ob = c["leg_a"], c["leg_b"]
-            legs_label = (f"{c['player']} {oa['market']} {oa['threshold']} + "
-                          f"{c['player']} {ob['market']} {ob['threshold']}")
-            with st.container(border=True):
-                st.markdown(f"**{legs_label}**")
-                if c["redundant"]:
-                    st.warning(f"{oa['market']} 1+ already implies {ob['market']} 1+ — the joint "
-                               f"probability equals the smaller leg's own probability exactly, not "
-                               f"the product of the two legs.")
+        st.markdown("#### Team SOG")
+        tc1, tc2 = st.columns(2)
+        for col, team, is_home in ((tc1, game.away, False), (tc2, game.home, True)):
+            proj = gdv.team_sog_projection(team, is_home)
+            with col:
+                st.markdown(f"**{team}**")
+                if proj:
+                    st.metric("Expected SOG", f"{proj.get('expected_sog', 0):.1f}" if proj.get("expected_sog") else "—")
                 else:
-                    comp.render_status_banner("VALIDATED", f"Joint model: {c['dependence_name']}")
-                cc1, cc2, cc3 = st.columns(3)
-                cc1.metric("Naive Independent P", fmt.format_probability(c["naive"]) if not c["redundant"] else "n/a")
-                cc2.metric("Validated Joint P", fmt.format_probability(c["validated"]))
-                cc3.metric("Dependence Effect", fmt.format_pp_delta(c["validated"] - c["naive"]) if not c["redundant"] else "—")
-        st.caption("PROBABILITY MODEL: VALIDATED &nbsp;|&nbsp; PRICE: SIMULATED (UX review only) "
-                   "&nbsp;|&nbsp; POLICY: DEMO ONLY — NOT OPERATIONAL", unsafe_allow_html=False)
+                    st.caption("Not available.")
+        if win and all(gdv.team_sog_projection(t, h) for t, h in ((game.away, False), (game.home, True))):
+            away_sog = gdv.team_sog_projection(game.away, False).get("expected_sog")
+            home_sog = gdv.team_sog_projection(game.home, True).get("expected_sog")
+            if away_sog and home_sog:
+                st.caption(f"DERIVED DEMO INSIGHT (sum of two individually-projected team SOG values, "
+                           f"NOT a validated betting market): combined expected SOG ≈ {away_sog + home_sog:.1f}. "
+                           f"There is no validated GAME_TOTAL_SHOTS market in this engine.")
 
-    st.divider()
+        st.markdown("#### Top Conviction — this game")
+        game_conviction = [o for o in cv.top_conviction(eb.all_opportunities())
+                            if o["team"] in (game.away, game.home)]
+        if not game_conviction:
+            st.caption("No Top Conviction opportunity for this game on today's simulated slate.")
+        else:
+            for o in game_conviction:
+                st.caption(f"{o['player']} ({o['team']}) — {o['market']} {o['threshold']}: "
+                           f"{fmt.format_probability(o['coherent_probability'])} model, "
+                           f"edge {fmt.format_edge(o['conservative_edge'])}")
 
-    # Context players (Section 34)
-    context_players = gdv.game_context_players(_selected_game_id)
-    if context_players:
-        st.markdown("#### Context Active")
-        for o in context_players:
-            plain = comp.CONTEXT_STATE_PLAIN_LABEL.get(o["context_state"], o["context_state"])
-            st.caption(f"{o['player']} ({o['team']}) — {plain}")
+        context_players = gdv.game_context_players(_selected_game_id)
+        if context_players:
+            st.markdown("#### Context Active")
+            for o in context_players:
+                plain = comp.CONTEXT_STATE_PLAIN_LABEL.get(o["context_state"], o["context_state"])
+                st.caption(f"{o['player']} ({o['team']}) — {plain}")
 
-    st.divider()
+        st.markdown("#### Waiting On")
+        reasons = gdv.game_wait_reasons(_selected_game_id)
+        if not reasons:
+            st.caption("Nothing outstanding.")
+        else:
+            for r in reasons:
+                st.caption(f"- {r}")
 
-    # WAIT reasons (Section 37)
-    st.markdown("#### Waiting On")
-    reasons = gdv.game_wait_reasons(_selected_game_id)
-    if not reasons:
-        st.caption("Nothing outstanding.")
-    else:
-        for r in reasons:
-            st.caption(f"- {r}")
+    # ---- BETS -----------------------------------------------------------
+    with tab_bets:
+        st.markdown(f"#### All eligible bets — {game.away} @ {game.home}")
+        if not game_actionable:
+            comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES")
+        else:
+            sorted_rows = sorted(game_actionable, key=lambda o: -cv.conviction_score(o))
+            for o in sorted_rows:
+                with st.container(border=True):
+                    r1, r2, r3, r4 = st.columns([2, 1, 1, 1])
+                    if r1.button(f"{o['player']} ({o['team']}) — {o['market']} {o['threshold']}",
+                                 key=f"gdbets_{o['market_id']}_{o['player_id']}"):
+                        st.session_state["selected_player_id"] = o["player_id"]
+                        st.switch_page("pages/25_Player_Intelligence.py")
+                    r2.caption(f"Model {fmt.format_probability(o['coherent_probability'])}")
+                    r3.caption(f"Edge {fmt.format_edge(o['conservative_edge'])}")
+                    r4.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
 
-    # Data freshness (Section 38)
-    st.markdown("#### Data Freshness")
-    st.caption("Schedule: SIMULATED · Roster: real (demo roster) · Starter: SIMULATED · "
-               "Model: real frozen output · Odds: SIMULATED")
+        # Combinations (Track 2): same-game combos scoped to this game's rosters,
+        # reusing the real joint-dependence logic from the Combinations page.
+        st.markdown("#### Combinations")
+        _joint_results = da.load_json_safely("research/joint_scoring_dependence_results.json")
+        if _joint_results is None:
+            st.caption("Joint scoring dependence results not found.")
+        else:
+            combos = gdv.game_combinations(_selected_game_id, _joint_results["rho_by_name"])
+            if not combos:
+                st.caption("No qualifying same-game combinations for this matchup's demo roster.")
+            for c in combos:
+                oa, ob = c["leg_a"], c["leg_b"]
+                legs_label = (f"{c['player']} {oa['market']} {oa['threshold']} + "
+                              f"{c['player']} {ob['market']} {ob['threshold']}")
+                with st.container(border=True):
+                    st.markdown(f"**{legs_label}**")
+                    if c["redundant"]:
+                        st.warning(f"{oa['market']} 1+ already implies {ob['market']} 1+ — the joint "
+                                   f"probability equals the smaller leg's own probability exactly, not "
+                                   f"the product of the two legs.")
+                    else:
+                        comp.render_status_banner("VALIDATED", f"Joint model: {c['dependence_name']}")
+                    cc1, cc2, cc3 = st.columns(3)
+                    cc1.metric("Naive Independent P", fmt.format_probability(c["naive"]) if not c["redundant"] else "n/a")
+                    cc2.metric("Validated Joint P", fmt.format_probability(c["validated"]))
+                    cc3.metric("Dependence Effect", fmt.format_pp_delta(c["validated"] - c["naive"]) if not c["redundant"] else "—")
+            st.caption("PROBABILITY MODEL: VALIDATED &nbsp;|&nbsp; PRICE: SIMULATED (UX review only) "
+                       "&nbsp;|&nbsp; POLICY: DEMO ONLY — NOT OPERATIONAL", unsafe_allow_html=False)
+
+        if game_research:
+            with st.expander(f"Research-only / not actionable — {len(game_research)}"):
+                for o in game_research:
+                    st.caption(f"{o['player']} — {o['market']} {o['threshold']}: "
+                               f"{o.get('decision_reason', 'not actionable')}")
+
+    # ---- PLAYER PROPS -----------------------------------------------------
+    with tab_props:
+        st.markdown("#### Starters & Goalie Saves")
+        goalies = [g_ for g_ in dd.build_demo_goalies() if g_["team"] in (game.away, game.home)]
+        if not goalies:
+            st.caption("No real goalie identity mapped for either team in the demo roster.")
+        for g_ in goalies:
+            gc1, gc2, gc3 = st.columns(3)
+            gc1.markdown(f"**{g_['name']}** ({g_['team']})")
+            gc1.caption(f"Starter: {g_['starter_status'].replace('_', ' ')} ({g_['starter_probability']*100:.0f}%) "
+                        f"— Model Confidence: {g_['confidence']} (separate dimension)")
+            gc2.metric("Expected Saves", f"{g_['expected_saves']:.1f}" if g_["expected_saves"] else "—")
+            with gc3:
+                for k, v in g_["thresholds"].items():
+                    st.markdown(comp.label_badge(f"{k} {v.replace('_', ' ')}", "input" if v == "VALIDATED" else "unavailable"),
+                                unsafe_allow_html=True)
+
+        st.markdown("#### Top Player Opportunities")
+        top = sorted(legacy_game_opps, key=lambda o: (-{"BET": 3, "WATCH": 2, "WAIT": 1, "PASS": 0}[o["decision"]],
+                                                        -o["conservative_edge"]))[:6]
+        for o in top:
+            if st.button(f"Open {o['player']} — Player Intelligence", key=f"gd_player_{o['player_id']}_{o['prop']}"):
+                st.session_state["selected_player_id"] = o["player_id"]
+                st.switch_page("pages/25_Player_Intelligence.py")
+            comp.render_opportunity_card({
+                "player": o["player"], "team": o["team"], "opponent": o["opponent"], "market": o["market"],
+                "threshold": o["threshold"], "decision": o["decision"], "confidence": o["confidence"],
+                "raw_probability": o["raw_probability"], "context_adjusted_probability": o["context_adjusted_probability"],
+                "conservative_probability": o["conservative_probability"],
+                "market_no_vig_probability": o["market_no_vig_probability"], "fair_odds": o["fair_odds"],
+                "current_odds": o["current_odds"], "max_acceptable_price": o["max_acceptable_price"],
+                "conservative_edge": o["conservative_edge"], "ev": o["ev"], "context_state": o["context_state"],
+                "context_raw": o["raw_probability"], "context_adjusted": o["context_adjusted_probability"],
+                "context_delta": o["context_adjusted_probability"] - o["raw_probability"],
+                "drivers": [], "risks": [o["decision_reason"]],
+            })
+
+        with st.expander(f"Full game prop table ({len(game_actionable) + len(game_research)} rows)"):
+            all_game_rows = game_actionable + game_research
+            gf1, gf2, gf3 = st.columns(3)
+            team_f = gf1.selectbox("Team", ["ALL", game.away, game.home], key="gd_team_filter")
+            decision_f = gf2.selectbox("Decision", ["ALL", "BET", "WATCH", "WAIT", "PASS", "RESEARCH_ONLY"], key="gd_decision_filter")
+            conf_f = gf3.selectbox("Confidence", ["ALL", "HIGH", "MEDIUM", "LOW"], key="gd_conf_filter")
+            filtered = all_game_rows
+            if team_f != "ALL":
+                filtered = [o for o in filtered if o["team"] == team_f]
+            if decision_f != "ALL":
+                filtered = [o for o in filtered if o["decision"] == decision_f]
+            if conf_f != "ALL":
+                filtered = [o for o in filtered if o["confidence"] == conf_f]
+            table = [{"Decision": o["decision"], "Player": o["player"], "Market": o["market"],
+                      "Threshold": o["threshold"], "Conservative P": fmt.format_probability(o["conservative_probability"]),
+                      "Current": fmt.format_american_odds(o.get("current_odds")), "Confidence": o["confidence"]}
+                     for o in filtered]
+            st.dataframe(table, width="stretch")
+
+    # ---- STATS --------------------------------------------------------------
+    with tab_stats:
+        st.markdown("#### Player Availability")
+        for team_name in (game.away, game.home):
+            st.markdown(f"**{team_name}**")
+            team_players = {o["player_id"]: o["player"] for o in legacy_game_opps if o["team"] == team_name}
+            if not team_players:
+                st.caption("No roster mapped for this team in the demo roster.")
+            for pid, name in team_players.items():
+                activity = dd.player_activity_status(pid, team_name, game.home if team_name == game.away else game.away)
+                st.caption(f"{name}: {activity.get('status', 'UNKNOWN')} ({activity.get('reason', 'UNKNOWN')})")
+        st.caption("No verified injury feed exists in this engine — availability is PROJECTED_ACTIVE / "
+                   "PROJECTED_INACTIVE / UNKNOWN only, never a fabricated diagnosis.")
+
+    # ---- BETTING TRENDS -------------------------------------------------------
+    with tab_trends:
+        st.markdown("#### Simulated Market Movement")
+        movement = dd.build_demo_market_movement(legacy_game_opps)
+        if not movement:
+            st.caption("No movement snapshots for this game's demo roster.")
+        else:
+            st.dataframe([{"Player": m["player"], "Market": m["market"],
+                           "Opening (sim)": fmt.format_american_odds(m["opening"]),
+                           "Current (sim)": fmt.format_american_odds(m["current"]),
+                           "Model Fair": fmt.format_american_odds(m["model_fair"]),
+                           "Direction": m["direction"]} for m in movement], width="stretch")
+        st.caption("SIMULATED MARKET (DEMO ONLY) — deterministic synthetic movement, never a real "
+                   "sportsbook line history.")
+
+    # ---- MODEL --------------------------------------------------------------
+    with tab_model:
+        st.markdown("#### Readiness detail")
+        st.caption(f"Model: {game.model_ready} · Starters: {game.starter_ready} · Markets: {game.market_ready}")
+        if game.warnings:
+            for w in game.warnings:
+                st.caption(f"- {w}")
+        st.markdown("#### Data Freshness")
+        st.caption("Schedule: SIMULATED · Roster: real (demo roster) · Starter: SIMULATED · "
+                   "Model: real frozen output · Odds: SIMULATED")
+        st.caption("Every model probability shown for this game is the real, frozen production "
+                   "model's own output for real NHL player identities on a simulated near-future "
+                   "schedule. Prices are SIMULATED MARKET (DEMO ONLY).")
 
     comp.render_provenance_panel()
     st.stop()

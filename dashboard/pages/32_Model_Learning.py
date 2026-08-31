@@ -30,11 +30,19 @@ st.caption("Prospective self-audit: real settled predictions only. Never mutates
            "model, decision_policy, or shadow-overlay coefficient from this page.")
 
 if not pl.DB_PATH.exists():
-    comp.render_empty_state(
-        "NOT_OPERATIONAL",
-        "No prospective observations have been recorded yet this preseason -- this page will "
-        "populate once real 2026-27 predictions are settled. This is the expected state before "
-        "the season starts, not an error.")
+    comp.render_status_banner(
+        "WAITING",
+        "WAITING FOR 2026-27 RESULTS",
+        "No real 2026-27 predictions have been recorded and settled yet (sample = 0). This is "
+        "the expected state before the season starts, not an error -- this page populates itself "
+        "automatically once real games are played and settled.")
+    st.caption(
+        "How this works: once real results exist, this page re-scores the production model and "
+        "every registered challenger daily against those settled outcomes (Brier score, "
+        "shadow-vs-production comparison, improvement queue). That daily re-scoring is read-only "
+        "reporting -- it NEVER automatically changes the production model, decision_policy, or any "
+        "shadow-overlay coefficient. Promoting a challenger or adjusting production logic always "
+        "requires a separate, explicit, human-authorized change.")
     st.stop()
 
 conn = pl.get_conn(pl.DB_PATH)
