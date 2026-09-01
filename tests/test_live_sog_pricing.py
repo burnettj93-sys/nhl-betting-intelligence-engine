@@ -121,6 +121,57 @@ class TestApiKeyHandling(unittest.TestCase):
         self.assertIn("not configured", result.error)
 
 
+class TestStreamlitCloudSecretsFallback(unittest.TestCase):
+    """Streamlit Cloud deployment support (2026-08-31): no .env file
+    exists on a Cloud deployment, so the key must also be readable from
+    st.secrets (the app owner's own Secrets panel entry) -- but only as
+    a FALLBACK, never overriding a locally-configured env/.env value,
+    and NEVER raising when no secrets.toml exists at all (every local
+    dev machine and every test run in this suite has no secrets.toml)."""
+
+    def setUp(self):
+        from research.live_sog_pricing import env_config
+        self.env_config = env_config
+        self._orig_env_path = env_config.ENV_PATH
+        env_config.ENV_PATH = env_config.Path("/nonexistent/.env")
+        self._orig_key = os.environ.pop("THE_ODDS_API_KEY", None)
+
+    def tearDown(self):
+        self.env_config.ENV_PATH = self._orig_env_path
+        if self._orig_key is not None:
+            os.environ["THE_ODDS_API_KEY"] = self._orig_key
+
+    def test_no_env_and_no_streamlit_secrets_returns_none_not_an_exception(self):
+        # This IS the real state of every test run and most local dev
+        # setups -- no secrets.toml exists, streamlit.secrets access
+        # must fail closed to None, never propagate an exception.
+        self.assertIsNone(self.env_config.get_the_odds_api_key())
+
+    def test_falls_back_to_streamlit_secrets_when_no_env_key(self):
+        import streamlit as st
+        with mock.patch.object(st, "secrets", {"THE_ODDS_API_KEY": "fake-cloud-key-for-test-only"}):
+            self.assertEqual(self.env_config.get_the_odds_api_key(), "fake-cloud-key-for-test-only")
+
+    def test_environment_variable_takes_priority_over_streamlit_secrets(self):
+        import streamlit as st
+        os.environ["THE_ODDS_API_KEY"] = "env-var-key"
+        with mock.patch.object(st, "secrets", {"THE_ODDS_API_KEY": "secrets-panel-key"}):
+            self.assertEqual(self.env_config.get_the_odds_api_key(), "env-var-key")
+
+    def test_streamlit_secrets_access_raising_is_swallowed_not_propagated(self):
+        # Reproduces the real failure mode: some Streamlit versions raise
+        # (e.g. StreamlitSecretNotFoundError / FileNotFoundError) when
+        # `st.secrets` is touched with no secrets.toml AND no Cloud-
+        # managed secrets configured -- _from_streamlit_secrets() must
+        # swallow this, not let it propagate out of get_the_odds_api_key().
+        import streamlit as st
+        broken_secrets = mock.Mock()
+        broken_secrets.get.side_effect = FileNotFoundError("no secrets.toml found")
+        with mock.patch.object(st, "secrets", broken_secrets):
+            result = self.env_config.get_the_odds_api_key()
+        self.assertIsNone(result)
+
+
 # --------------------------------------------------------------------------
 # 3/4. NHL events parsing, DraftKings bookmaker filtering.
 # --------------------------------------------------------------------------

@@ -43,6 +43,15 @@ research/player_goals/player_game_goals.jsonl
 # precedent as every other raw-provenance file in this project.
 .env
 
+# Streamlit's own local secrets file (its analog of .env, read via
+# st.secrets -- see research/live_sog_pricing/env_config.py). On a real
+# Streamlit Cloud deployment the key lives in that app's own Secrets
+# panel, never in a committed file; this entry only guards against
+# someone creating a LOCAL .streamlit/secrets.toml to test that path.
+# .streamlit/config.toml (theme/server settings, no secret in it) stays
+# tracked -- this ignores only the secrets.toml sibling.
+.streamlit/secrets.toml
+
 # Daily operational MoneyPuck snapshot archive -- large, reproducible
 # (re-downloadable via operational/moneypuck_daily.py, or reproducible
 # from a manually-supplied local file), same pattern as every other raw

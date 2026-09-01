@@ -336,6 +336,44 @@ file is reported clearly in the app itself (e.g. `REAL NHL CORPUS: NOT
 FOUND`, with the exact command to build it) — it never fabricates data
 or crashes with a raw traceback.
 
+**Deploying to Streamlit Community Cloud:**
+
+1. Push this repo to GitHub (a `.env` containing `THE_ODDS_API_KEY` is
+   gitignored and will never be pushed — see `research/live_sog_pricing/env_config.py`).
+2. On [share.streamlit.io](https://share.streamlit.io), create a new app
+   pointing at this GitHub repo, branch `master`, main file path
+   `dashboard/app.py`.
+3. (Optional — only needed for the *live* DraftKings re-check under
+   "Live Model Edges" to work; everything else on the dashboard works
+   without it.) In the app's own **Settings → Secrets** panel, add:
+   ```toml
+   THE_ODDS_API_KEY = "your-real-key-here"
+   ```
+   `env_config.py` checks the environment/`.env` first, then falls back
+   to `st.secrets["THE_ODDS_API_KEY"]` — this is the only place that
+   fallback is read from, matching the same never-log/never-hardcode
+   guarantee `tests/test_live_sog_pricing.py::TestApiKeyHandling` and
+   `TestStreamlitCloudSecretsFallback` already test for the local path.
+4. `.streamlit/config.toml` (dark theme, headless server) is already
+   tracked and takes effect automatically — no extra setup.
+
+**What's different about a fresh Cloud deploy vs. your local clone:**
+the raw MoneyPuck/play-by-play corpora referenced above are
+intentionally gitignored (large, regenerable — see this file's own
+`.gitignore` comments), so they won't exist on a fresh Cloud checkout.
+Pages that depend on them (MoneyPuck research-context panels,
+play-by-play status) will honestly show their existing "not found /
+not available" state rather than fail — this is the same graceful
+degradation this dashboard already uses locally when a file hasn't
+been built yet, not a deployment-specific bug. `nhl.db` (the real
+historical corpus + Elo ratings the core pages need) and the archived
+real DraftKings evidence under `data/raw/the_odds_api/live/` **are**
+tracked and come along fine. The operational ledgers
+(`operational/paper_bankroll.db`, `operational/prospective_observations.db`)
+are also gitignored and start empty on a fresh deploy, same as a fresh
+local clone — by design, since this is public demo/research code, not
+a store of real recorded bets.
+
 **Pages:**
 1. **Game Slate** — browse any real historical NHL date; current (Elo-only)
    model win probability per game, confidence heuristic, model drivers.
