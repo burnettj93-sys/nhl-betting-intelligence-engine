@@ -25,17 +25,25 @@ research/moneypuck_ingestion/research_moneypuck.db
 # stay tracked.
 research/goalie_intelligence/raw/*.csv
 research/player_sog/raw/*.csv
-research/player_sog/player_game_sog.jsonl
 
-# Same pattern for the blocked-shots and assists corpora -- both built
-# from the SAME already-archived research/player_sog/raw/*.csv skater
-# files (no separate download), reproducible via
-# research/player_blocks/build_blocks_corpus.py and
-# research/player_assists/build_assists_corpus.py.
-research/player_blocks/player_game_blocks.jsonl
-research/player_assists/player_game_assists.jsonl
-research/player_points/player_game_points.jsonl
-research/player_goals/player_game_goals.jsonl
+# research/player_sog/player_game_sog.jsonl, .../player_blocks/,
+# .../player_assists/, .../player_points/, .../player_goals/ used to be
+# ignored here (each 60-112MB, over GitHub's 100MB file limit anyway) --
+# a public Streamlit Cloud deploy has no way to build them (the raw CSVs
+# above are also ignored), so dashboard/demo_data.py's ShadowContextStack
+# crashed with a raw FileNotFoundError on every demo page (Today, Team
+# Hub, Player Intelligence, eligible bets, Combinations, ...) on a fresh
+# clone -- a REAL, reproduced deployment failure (2026-09-01), not
+# hypothetical. Each is now TRACKED, but as a real, unmodified-content
+# SUBSET: every row for the 47 real player_ids dashboard.demo_data's own
+# roster-selection logic actually uses, plus every row for the 12 demo
+# teams' full latest-season roster (so that same selection logic
+# re-derives the identical 47 IDs if re-run against this file, rather
+# than being hand-pinned to today's specific list) -- ~14% of the full
+# corpus, ~9-16MB per file. No row is edited or fabricated; every kept
+# row is byte-identical to the source. The full, unfiltered corpus stays
+# local-only (regenerate via the same build_*_corpus.py scripts) for
+# actual model research/backtesting, which needs the whole league.
 
 # Secrets -- The Odds API key (research/live_sog_pricing/). Never commit.
 # Raw captured live-odds JSON under data/raw/the_odds_api/ is intentionally
@@ -77,9 +85,17 @@ operational/live_multimarket_board_cache.json
 # that produced them.
 research/real_nhl_pbp/research_pbp.db
 research/real_nhl_pbp/raw/**/*.json
-research/player_sog_period/player_game_period_sog.jsonl
 research/joint_shot_workload/joint_shot_workload.jsonl
 research/joint_scoring_dependence/joint_scoring.jsonl
+
+# research/player_sog_period/player_game_period_sog.jsonl was ignored
+# here too -- unlike joint_shot_workload/joint_scoring above (whose
+# dashboard pages already degrade to an honest "not available" state
+# with no file present, confirmed via a real deploy-simulation sweep of
+# all 33 pages), 14_Player_SOG_By_Period_Research.py crashed outright
+# with no such handling. At 68MB it's under GitHub's 100MB limit as-is,
+# so this one is tracked in FULL (not filtered) -- see the player_sog
+# corpus comment above for the same underlying deploy failure.
 
 # Prospective observation store (Preseason Operationalization sprint) --
 # real operational data once the season starts, not a reproducible research
@@ -118,15 +134,19 @@ operational/special_teams_history.db
 research/special_teams_role_transitions_table.jsonl
 research/team_game_special_teams_table.jsonl
 
-# Preseason Engine Freeze sprint (2026-08-30): five more derived per-
-# game/per-player corpora (3-7MB each) found during this same audit,
-# structurally identical in kind to the already-ignored
-# research/player_sog/player_game_sog.jsonl and siblings above (a
-# pre-existing inconsistency this freeze corrects, not new policy) --
-# all reproducible via their own real build scripts.
-research/goalie_saves/goalie_game_saves.jsonl
-research/goalie_saves/team_game_sog.jsonl
-research/team_sog/team_game_sog.jsonl
-research/team_goals_period/team_game_period_goals.jsonl
-research/goalie_intelligence/actual_starters.jsonl
-research/goalie_intelligence/goalie_appearances.jsonl
+# The six derived per-game corpora that used to be ignored here (3-7MB
+# each, found during the Preseason Engine Freeze sprint's repo audit)
+# are now TRACKED IN FULL: research/goalie_saves/goalie_game_saves.jsonl
+# and team_game_sog.jsonl, research/team_sog/team_game_sog.jsonl,
+# research/team_goals_period/team_game_period_goals.jsonl,
+# research/goalie_intelligence/actual_starters.jsonl and
+# goalie_appearances.jsonl -- each one small enough to commit as-is, and
+# each one a real, reproduced Streamlit Cloud deploy crash (2026-09-01)
+# without it: dashboard.demo_data.build_demo_goalies() and 4 research
+# pages (6, 16, 17, plus indirectly 21/25/27/2/31/33 which all pull
+# goalie data) all raised a raw FileNotFoundError on a fresh clone. See
+# the player_sog comment above for the same underlying failure mode and
+# how it was found (a full 33-page deploy-simulation sweep, not a guess).
+# research/team_game_special_teams_table.jsonl (line 136 above) stays
+# ignored -- unlike the six files above, no page crashed without it in
+# that same sweep, so it was left alone rather than committed on spec.

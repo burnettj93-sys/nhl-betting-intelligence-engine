@@ -158,7 +158,10 @@ class Test13MarginalRecovery(unittest.TestCase):
         stack = ShadowContextStack()
         rows = [r for r in stack.ctx.goals.rows if r["season"] == 20242025]
         rows.sort(key=lambda r: r["game_date"])
-        sample = rows[3000]
+        # index 3000 (not len(rows)-1) when the full research corpus is
+        # present locally -- see .gitignore's comment on the committed
+        # public-repo corpus being a smaller real subset by default.
+        sample = rows[min(3000, len(rows) - 1)]
         result = stack.predict(sample["player_id"], sample["team"], sample["opponent"],
                                 sample["game_date"], sample["season"])
         for stage in (result["goals"], result["points"]):
@@ -214,7 +217,10 @@ class Test18ContextOnlyTargetState(unittest.TestCase):
         stack = ShadowContextStack()
         rows = [r for r in stack.ctx.goals.rows if r["season"] == 20242025]
         rows.sort(key=lambda r: r["game_date"])
-        sample = rows[3000]
+        # index 3000 (not len(rows)-1) when the full research corpus is
+        # present locally -- see .gitignore's comment on the committed
+        # public-repo corpus being a smaller real subset by default.
+        sample = rows[min(3000, len(rows) - 1)]
         result = stack.predict(sample["player_id"], sample["team"], sample["opponent"],
                                 sample["game_date"], sample["season"])
         g = result["goals"]
@@ -390,7 +396,11 @@ class Test39PitTargetExclusion(unittest.TestCase):
     def test_history_excludes_target_row(self):
         stack = ShadowContextStack()
         rows = stack.ctx.goals.rows
-        sample = [r for r in rows if r["season"] == 20242025][3000]
+        season_rows = [r for r in rows if r["season"] == 20242025]
+        # index 3000 (not len(season_rows)-1) when the full research
+        # corpus is present locally -- see .gitignore's comment on the
+        # committed public-repo corpus being a smaller real subset by default.
+        sample = season_rows[min(3000, len(season_rows) - 1)]
         history = stack.ctx.goals.index.history_as_of(sample["player_id"], sample["game_date"])
         self.assertNotIn(sample["game_id"], [h["game_id"] for h in history])
 
@@ -400,7 +410,11 @@ class Test40TargetToiExclusion(unittest.TestCase):
     def test_history_rows_all_precede_target_date(self):
         stack = ShadowContextStack()
         rows = stack.ctx.goals.rows
-        sample = [r for r in rows if r["season"] == 20242025][3000]
+        season_rows = [r for r in rows if r["season"] == 20242025]
+        # index 3000 (not len(season_rows)-1) when the full research
+        # corpus is present locally -- see .gitignore's comment on the
+        # committed public-repo corpus being a smaller real subset by default.
+        sample = season_rows[min(3000, len(season_rows) - 1)]
         history = stack.ctx.goals.index.history_as_of(sample["player_id"], sample["game_date"])
         self.assertTrue(all(h["game_date"] < sample["game_date"] for h in history))
 
@@ -419,7 +433,11 @@ class Test42ChronologyBoundary(unittest.TestCase):
     def test_history_as_of_uses_strict_less_than(self):
         stack = ShadowContextStack()
         rows = stack.ctx.goals.rows
-        sample = [r for r in rows if r["season"] == 20242025][3000]
+        season_rows = [r for r in rows if r["season"] == 20242025]
+        # index 3000 (not len(season_rows)-1) when the full research
+        # corpus is present locally -- see .gitignore's comment on the
+        # committed public-repo corpus being a smaller real subset by default.
+        sample = season_rows[min(3000, len(season_rows) - 1)]
         same_date_history = stack.ctx.goals.index.history_as_of(sample["player_id"], sample["game_date"])
         self.assertNotIn(sample["game_date"], [h["game_date"] for h in same_date_history])
 

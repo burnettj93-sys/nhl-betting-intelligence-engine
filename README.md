@@ -358,21 +358,49 @@ or crashes with a raw traceback.
    tracked and takes effect automatically — no extra setup.
 
 **What's different about a fresh Cloud deploy vs. your local clone:**
-the raw MoneyPuck/play-by-play corpora referenced above are
-intentionally gitignored (large, regenerable — see this file's own
-`.gitignore` comments), so they won't exist on a fresh Cloud checkout.
-Pages that depend on them (MoneyPuck research-context panels,
-play-by-play status) will honestly show their existing "not found /
-not available" state rather than fail — this is the same graceful
-degradation this dashboard already uses locally when a file hasn't
-been built yet, not a deployment-specific bug. `nhl.db` (the real
-historical corpus + Elo ratings the core pages need) and the archived
-real DraftKings evidence under `data/raw/the_odds_api/live/` **are**
-tracked and come along fine. The operational ledgers
-(`operational/paper_bankroll.db`, `operational/prospective_observations.db`)
-are also gitignored and start empty on a fresh deploy, same as a fresh
-local clone — by design, since this is public demo/research code, not
-a store of real recorded bets.
+
+The raw MoneyPuck/play-by-play/team-goals CSV dumps and the large
+special-teams role tables are intentionally gitignored (large,
+regenerable — see `.gitignore`'s own comments) and won't exist on a
+fresh checkout. Pages that depend on them (MoneyPuck research-context
+panels, play-by-play status, the special-teams role panel on Player
+Intelligence) show their existing "not found / not available" state
+rather than fail — verified directly (see below), not assumed.
+
+The demo engine's own per-game corpora
+(`research/player_sog/player_game_sog.jsonl` and the four sibling
+files for blocks/assists/points/goals, plus the goalie-saves and
+period-SOG corpora) are **tracked**, but as a real, unmodified-content
+**subset** — every row for the ~47 real players and 4 goalies the demo
+roster (`dashboard/demo_data.py`) actually uses, not the full league.
+Two of the five (SOG, Goals) are individually over GitHub's 100MB
+per-file limit at full size anyway. If you're doing actual model
+research/refitting rather than running the demo, regenerate the full
+corpus locally with each file's own `build_*_corpus.py` script (see
+`research/player_sog/build_sog_corpus.py` and its siblings) — do not
+commit the full version back over the tracked subset.
+
+`nhl.db` (the real historical corpus + Elo ratings the core pages
+need) and the archived real DraftKings evidence under
+`data/raw/the_odds_api/live/` are tracked in full and come along fine.
+The operational ledgers (`operational/paper_bankroll.db`,
+`operational/prospective_observations.db`) are gitignored and start
+empty on a fresh deploy, same as a fresh local clone — by design,
+since this is public demo/research code, not a store of real recorded
+bets.
+
+**How this was actually verified, not assumed:** a real deploy of this
+repo to Streamlit Community Cloud (2026-09-01) crashed with a raw
+`FileNotFoundError` on nearly every page — the paragraph above
+describing graceful degradation used to be true only for the MoneyPuck/
+PBP pages, not the demo engine's own corpora. The fix was found and
+verified by simulating a fresh clone locally (temporarily hiding every
+path that's still gitignored today, then running all 33 dashboard
+pages through Streamlit's own `AppTest` harness) until zero pages threw
+an exception — not by guesswork. `tests/test_deploy_readiness.py` runs
+that same simulation as a permanent regression test, so a future page
+or data dependency that reintroduces this failure mode gets caught
+before it reaches a real deployment again.
 
 **Pages:**
 1. **Game Slate** — browse any real historical NHL date; current (Elo-only)
