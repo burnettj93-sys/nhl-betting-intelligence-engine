@@ -100,3 +100,46 @@ landing page for this demo.
   not a defect to explain away.
 - Do not place a real bet from this dashboard — there is no such control,
   and Paper Performance is explicitly theoretical.
+
+## Fantasy Hockey addendum (Yahoo Fantasy sprint, 2026-09-01)
+
+A second, separate demo path for the new Fantasy section — sidebar
+**Fantasy → Fantasy HQ**. This is a smaller, honestly-scoped path: only
+two of the ten steps originally envisioned for a full fantasy walkthrough
+actually exist yet.
+
+1. **Fantasy HQ.** Point out the **FANTASY DEMO MODE** banner: *"There's
+   no real Yahoo account connected yet — the owner's API access
+   application is still pending Yahoo's review. What you're looking at is
+   this engine's own real demo roster, scored against a real reference
+   league's actual scoring settings — never presented as anyone's live
+   roster."*
+
+2. **Today's Best Lineup.** Show the Starters/Bench split, produced by a
+   real greedy lineup optimizer respecting real Yahoo roster slot rules
+   (a real bug — goalies landing in Util slots — was found and fixed here
+   this sprint).
+
+3. **League Scoring.** Read the caption aloud: *"Only Goals, Assists,
+   SOG, Blocks, and Saves are real projections here — PIM, Hits, Power
+   Play Points, Wins, Goals Against, and Shutouts are honestly absent,
+   because this engine has no validated projection model for them yet.
+   Nothing here is fabricated to look complete."*
+
+4. **What Should I Do Today?** The three highest-value START
+   recommendations, each with its reason.
+
+5. **Fantasy Settings.** Click **Connect Yahoo Fantasy** from Fantasy HQ,
+   or open Fantasy Settings from the sidebar directly. Show the
+   **OWNER_AUTH_REQUIRED** badge and the Fantasy System Health list: *"Every
+   row that isn't real yet says so directly — roster sync, matchup sync,
+   and available-player sync are all explicitly marked
+   NOT_IMPLEMENTED_THIS_SPRINT, not faked."*
+
+**What does not exist yet, and should not be demoed as if it did:**
+Current Matchup, Trade Analyzer, Best Waiver Add/Stream ranked against a
+real player pool, League Power Rankings, Draft Center, and a Fantasy
+Performance page. If asked live, say plainly that these are scoped for a
+future sprint and are blocked on either a real Yahoo connection or (for
+streaming specifically) a forward NHL schedule feed that doesn't exist
+anywhere in this project yet.

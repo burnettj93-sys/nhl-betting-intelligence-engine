@@ -64,6 +64,10 @@ pg = st.navigation({
         _p("13_Play_By_Play_Status.py", "Play-by-Play Status", "🧩"),
         _p("3_Team_Ratings.py", "Team Ratings", "📊"),
     ],
+    "Fantasy": [
+        _p("34_Fantasy_HQ.py", "Fantasy HQ", "🏆"),
+        _p("35_Fantasy_Settings.py", "Fantasy Settings", "🔌"),
+    ],
     "Research": [
         _p("24_Research_Hub.py", "Research Hub", "🧪"),
         _p("10_Prop_Registry.py", "Prop Registry", "📋"),

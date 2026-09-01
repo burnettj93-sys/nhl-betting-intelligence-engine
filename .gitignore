@@ -2,6 +2,14 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Yahoo Fantasy domain (2026-09-01 sprint) -- fantasy_store.db holds
+# real user OAuth refresh tokens and private league/roster snapshots;
+# fantasy_cache.db is a pure derived API-response cache. Neither is
+# ever committed -- see fantasy/storage/fantasy_schema.sql's own
+# privacy comments.
+fantasy/storage/fantasy_store.db
+fantasy/storage/fantasy_cache.db
+
 # Runtime logs from scheduled operational jobs (e.g. the launchd-run
 # daily odds pull) -- pure noise, not provenance data worth preserving.
 operational/logs/
