@@ -32,11 +32,13 @@ st.caption("Theoretical bankroll tracking: what would have happened if this engi
 state = ppv.full_dashboard_state()
 
 TRACK_LABEL = {"REAL_MARKET_PAPER": "Real-Market Paper (real DraftKings prices)",
-               "DEMO_PAPER": "Demo Paper (simulated prices)"}
+               "DEMO_PAPER": "Demo Paper (simulated prices)",
+               "GAME_PARLAY_PAPER": "Game Edge Parlay Paper (Part 49)"}
 
-tab_real, tab_demo = st.tabs([TRACK_LABEL["REAL_MARKET_PAPER"], TRACK_LABEL["DEMO_PAPER"]])
+tab_real, tab_demo, tab_parlay = st.tabs(
+    [TRACK_LABEL["REAL_MARKET_PAPER"], TRACK_LABEL["DEMO_PAPER"], TRACK_LABEL["GAME_PARLAY_PAPER"]])
 
-for tab, track in ((tab_real, "REAL_MARKET_PAPER"), (tab_demo, "DEMO_PAPER")):
+for tab, track in ((tab_real, "REAL_MARKET_PAPER"), (tab_demo, "DEMO_PAPER"), (tab_parlay, "GAME_PARLAY_PAPER")):
     with tab:
         data = state[track]
         summary, breakdowns, bets = data["summary"], data["breakdowns"], data["bets"]

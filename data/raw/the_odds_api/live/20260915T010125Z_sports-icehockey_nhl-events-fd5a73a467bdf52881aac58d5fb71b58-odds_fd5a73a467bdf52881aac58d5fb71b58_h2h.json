@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/fd5a73a467bdf52881aac58d5fb71b58/odds",
+    "event_id": "fd5a73a467bdf52881aac58d5fb71b58",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "485",
+    "requests_used_header": "15",
+    "response_checksum_sha256": "224f181acbb8f80a44446ba148bce45d6697c817a6c952cf150b431e4ea7a596",
+    "retrieved_at_utc": "2026-09-15T01:01:25Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Edmonton Oilers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Edmonton Oilers",
+                "price": -198
+              },
+              {
+                "name": "Vancouver Canucks",
+                "price": 164
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T02:10:00Z",
+    "home_team": "Vancouver Canucks",
+    "id": "fd5a73a467bdf52881aac58d5fb71b58",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/5b5466f836933f5fb3ed4b9f267cce75/odds",
+    "event_id": "5b5466f836933f5fb3ed4b9f267cce75",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "483",
+    "requests_used_header": "17",
+    "response_checksum_sha256": "8f1680e1fb6f98dd5b00a592f17c87afd078f42c0077b7ceeb94e5ab4e6bacf5",
+    "retrieved_at_utc": "2026-09-15T01:01:25Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Rangers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Detroit Red Wings",
+                "price": -142
+              },
+              {
+                "name": "New York Rangers",
+                "price": 120
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T22:40:00Z",
+    "home_team": "Detroit Red Wings",
+    "id": "5b5466f836933f5fb3ed4b9f267cce75",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

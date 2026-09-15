@@ -221,5 +221,196 @@ class Test06RunDailyPullOrchestration(unittest.TestCase):
         self.assertEqual(payload["summary"]["quotes_captured"], 0)
 
 
+# ---------------------------------------------------------------------
+# 7. Contract discovery (Part 15): a never-seen market key gets flagged
+# and archived, but never auto-verified.
+# ---------------------------------------------------------------------
+class Test07ContractDiscovery(unittest.TestCase):
+    def _odds_data(self, market_key, outcomes=None):
+        return {
+            "_retrieved_at_utc": "2026-09-15T00:00:00Z",
+            "bookmakers": [{"key": "draftkings", "last_update": "2026-09-15T00:00:00Z",
+                             "markets": [{"key": market_key, "last_update": "2026-09-15T00:00:00Z",
+                                          "outcomes": outcomes or [{"name": "Over", "price": -110}]}]}],
+        }
+
+    def test_never_seen_market_key_tagged_new_contract_candidate(self):
+        with mock.patch("operational.live_odds_daily_pull.NEW_CONTRACT_CANDIDATES_PATH",
+                         Path(tempfile.mkdtemp()) / "candidates.jsonl"):
+            quotes = lop._parse_event_odds_generic(EVENT_A, self._odds_data("player_totally_fake_test_market"))
+        self.assertEqual(quotes[0]["model_status"], "NEW_CONTRACT_CANDIDATE")
+
+    def test_never_seen_market_key_is_archived_append_only(self):
+        path = Path(tempfile.mkdtemp()) / "candidates.jsonl"
+        with mock.patch("operational.live_odds_daily_pull.NEW_CONTRACT_CANDIDATES_PATH", path):
+            lop._parse_event_odds_generic(EVENT_A, self._odds_data("player_totally_fake_test_market"))
+            lop._parse_event_odds_generic(EVENT_B, self._odds_data("player_another_fake_test_market"))
+        lines = path.read_text().strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        record = json.loads(lines[0])
+        self.assertEqual(record["market_key"], "player_totally_fake_test_market")
+        self.assertEqual(record["status"], "NEW_CONTRACT_CANDIDATE")
+        self.assertFalse(record["auto_verified"])
+
+    def test_known_unmodeled_market_never_flagged_as_new(self):
+        path = Path(tempfile.mkdtemp()) / "candidates.jsonl"
+        with mock.patch("operational.live_odds_daily_pull.NEW_CONTRACT_CANDIDATES_PATH", path):
+            lop._parse_event_odds_generic(EVENT_A, self._odds_data("team_totals"))
+        self.assertFalse(path.exists())
+
+    def test_registry_mapped_market_never_flagged_as_new(self):
+        path = Path(tempfile.mkdtemp()) / "candidates.jsonl"
+        with mock.patch("operational.live_odds_daily_pull.NEW_CONTRACT_CANDIDATES_PATH", path):
+            lop._parse_event_odds_generic(EVENT_A, self._odds_data("player_shots_on_goal",
+                                                                    [{"name": "Over", "description": "X", "price": -110, "point": 2.5}]))
+        self.assertFalse(path.exists())
+
+
+# ---------------------------------------------------------------------
+# 8. Moneyline snapshot (Part 8) -- cheap, frequent, uses the real
+# verified h2h parser, never the unverified generic prop path.
+# ---------------------------------------------------------------------
+class Test08MoneylineSnapshot(unittest.TestCase):
+    def test_snapshot_parses_real_verified_h2h_shape_and_labels_it(self):
+        events_resp = _fake_response(json_data=[EVENT_B],
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        odds_resp = _fake_response(
+            json_data={"id": "evt-b", "home_team": "Florida Panthers", "away_team": "Carolina Hurricanes",
+                       "commence_time": "2026-09-29T23:00:00Z",
+                       "bookmakers": [{"key": "draftkings", "last_update": "2026-09-15T00:00:00Z",
+                                       "markets": [{"key": "h2h", "last_update": "2026-09-15T00:00:00Z",
+                                                    "outcomes": [{"name": "Florida Panthers", "price": -150},
+                                                                 {"name": "Carolina Hurricanes", "price": 130}]}]}]},
+            headers={"x-requests-remaining": "498", "x-requests-last": "1"})
+        cache_path = Path(tempfile.mkdtemp()) / "ml_cache.json"
+
+        with mock.patch("operational.live_odds_daily_pull.MONEYLINE_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull._now_utc",
+                         return_value=dt.datetime(2026, 9, 15, tzinfo=dt.timezone.utc)), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp, odds_resp]) as mock_get:
+            result = lop.run_moneyline_snapshot("morning")
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertTrue(result["ran"])
+        self.assertEqual(result["parsed_count"], 1)
+        self.assertEqual(result["credits_spent_this_run"], 1)
+        payload = json.loads(cache_path.read_text())
+        self.assertEqual(payload["rows"][0]["home_team_abbrev"], "FLA")
+        self.assertEqual(payload["rows"][0]["snapshot_label"], "morning")
+
+    def test_snapshot_never_queries_a_started_event(self):
+        events_resp = _fake_response(json_data=[EVENT_PAST],
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        cache_path = Path(tempfile.mkdtemp()) / "ml_cache.json"
+
+        with mock.patch("operational.live_odds_daily_pull.MONEYLINE_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull._now_utc",
+                         return_value=dt.datetime(2026, 9, 15, tzinfo=dt.timezone.utc)), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp]) as mock_get:
+            result = lop.run_moneyline_snapshot("morning")
+
+        self.assertEqual(mock_get.call_count, 1)  # events call only -- no odds call for a started event
+        self.assertEqual(result["events_queried"], 0)
+
+
+class Test08bAutoSnapshotLabel(unittest.TestCase):
+    def test_morning_hour(self):
+        self.assertEqual(lop._auto_snapshot_label(dt.datetime(2026, 9, 15, 12, 0, tzinfo=dt.timezone.utc)), "morning")
+
+    def test_afternoon_hour(self):
+        self.assertEqual(lop._auto_snapshot_label(dt.datetime(2026, 9, 15, 17, 0, tzinfo=dt.timezone.utc)), "afternoon")
+
+    def test_pregame_hour(self):
+        self.assertEqual(lop._auto_snapshot_label(dt.datetime(2026, 9, 15, 21, 0, tzinfo=dt.timezone.utc)), "pregame")
+
+    def test_late_hour(self):
+        self.assertEqual(lop._auto_snapshot_label(dt.datetime(2026, 9, 16, 1, 0, tzinfo=dt.timezone.utc)), "late")
+
+    def test_run_moneyline_snapshot_auto_derives_label_when_omitted(self):
+        events_resp = _fake_response(json_data=[], headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        cache_path = Path(tempfile.mkdtemp()) / "ml_cache.json"
+        with mock.patch("operational.live_odds_daily_pull.MONEYLINE_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull._now_utc",
+                         return_value=dt.datetime(2026, 9, 15, 12, 0, tzinfo=dt.timezone.utc)), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp]):
+            result = lop.run_moneyline_snapshot()
+        self.assertEqual(result["snapshot_label"], "morning")
+
+
+# ---------------------------------------------------------------------
+# 9. Two-stage targeted prop sweep (Part 11)
+# ---------------------------------------------------------------------
+class Test09TargetedPropSweep(unittest.TestCase):
+    def test_invalid_sweep_name_raises(self):
+        with self.assertRaises(ValueError):
+            lop.run_targeted_prop_sweep("third")
+
+    def test_events_in_window_filters_by_hours_until_commence(self):
+        now = dt.datetime(2026, 9, 29, 12, 0, tzinfo=dt.timezone.utc)
+        near = {"id": "near", "commence_time": "2026-09-29T15:30:00Z"}  # 3.5h out -- in first-sweep window
+        far = {"id": "far", "commence_time": "2026-09-29T23:00:00Z"}    # 11h out -- not in window
+        started = {"id": "started", "commence_time": "2026-09-29T11:00:00Z"}  # already started
+        result = lop._events_in_window([near, far, started], now, lop.FIRST_SWEEP_WINDOW_HOURS)
+        self.assertEqual([e["id"] for e in result], ["near"])
+
+    def test_first_sweep_queries_only_events_in_window_with_sog_and_saves_markets(self):
+        now = dt.datetime(2026, 9, 29, 12, 0, tzinfo=dt.timezone.utc)
+        near_event = {"id": "near", "commence_time": "2026-09-29T15:30:00Z",
+                      "home_team": "H", "away_team": "A"}
+        events_resp = _fake_response(json_data=[near_event],
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        odds_resp = _fake_response(
+            json_data={"id": "near", "home_team": "H", "away_team": "A", "bookmakers": []},
+            headers={"x-requests-remaining": "498", "x-requests-last": "2"})
+        cache_path = Path(tempfile.mkdtemp()) / "sweep_cache.json"
+
+        with mock.patch("operational.live_odds_daily_pull.SWEEP_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull._now_utc", return_value=now), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp, odds_resp]) as mock_get:
+            result = lop.run_targeted_prop_sweep("first")
+
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(result["events_queried"], 1)
+        # Confirm the actual odds call requested only SOG+Saves, not the full market list.
+        odds_call_params = mock_get.call_args_list[1].kwargs["params"]
+        self.assertEqual(odds_call_params["markets"], lop.FIRST_SWEEP_MARKETS)
+
+    def test_second_sweep_only_repulls_events_the_first_sweep_found_a_quote_for(self):
+        now = dt.datetime(2026, 9, 29, 14, 30, tzinfo=dt.timezone.utc)
+        had_quote = {"id": "had-quote", "commence_time": "2026-09-29T15:15:00Z",  # 45 min out
+                     "home_team": "H", "away_team": "A"}
+        no_quote = {"id": "no-quote", "commence_time": "2026-09-29T15:20:00Z"}     # ~50 min out
+        events_resp = _fake_response(json_data=[had_quote, no_quote],
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        odds_resp = _fake_response(
+            json_data={"id": "had-quote", "home_team": "H", "away_team": "A", "bookmakers": []},
+            headers={"x-requests-remaining": "498", "x-requests-last": "1"})
+        sweep_cache = Path(tempfile.mkdtemp()) / "sweep_cache.json"
+        sweep_cache.write_text(json.dumps({"rows": [{"event_id": "had-quote"}]}))
+
+        with mock.patch("operational.live_odds_daily_pull.SWEEP_CACHE_PATH", sweep_cache), \
+             mock.patch("operational.live_odds_daily_pull._now_utc", return_value=now), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp, odds_resp]) as mock_get:
+            result = lop.run_targeted_prop_sweep("second")
+
+        # Both events are in the raw time window, but "no-quote" was correctly
+        # excluded before any odds call for it -- only "had-quote" is re-pulled.
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(result["events_queried"], 1)
+        self.assertEqual(result["events_in_window"], 2)
+        queried_event_id = mock_get.call_args_list[1].args[0].rsplit("/", 2)[1]
+        self.assertEqual(queried_event_id, "had-quote")
+
+
 if __name__ == "__main__":
     unittest.main()

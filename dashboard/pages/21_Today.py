@@ -26,7 +26,9 @@ from dashboard import demo_data as dd
 from dashboard import eligible_bets as eb
 from dashboard import formatting as fmt
 from dashboard import live_dk as ldk
-from operational.system_health import build_system_health
+from operational.system_health import build_system_health, odds_collection_status
+from research.game_edge_parlay import engine as gep
+from research.generic_prop_pricing.provider_adapter import VERIFIED_CONTRACTS
 from operational.live_readiness import live_readiness
 from operational import prospective_ledger as pl
 
@@ -47,6 +49,15 @@ st.markdown(chip_html, unsafe_allow_html=True)
 failing = [item for item in health.values() if item["status"] == "ERROR"]
 if failing:
     st.error(" · ".join(f"{item['label']}: {item['message']}" for item in failing))
+
+_odds_status = odds_collection_status()
+oc1, oc2, oc3, oc4, oc5, oc6 = st.columns(6)
+oc1.metric("Odds last updated", (_odds_status["last_updated_utc"] or "—")[:16])
+oc2.metric("Credits remaining", _odds_status["credits_remaining"] if _odds_status["credits_remaining"] is not None else "—")
+oc3.metric("Next refresh", "scheduler-driven")
+oc4.metric("Verified DK contracts", len(VERIFIED_CONTRACTS))
+oc5.metric("Player prop quotes", _odds_status["player_prop_quotes"])
+oc6.metric("Tracked events", _odds_status["tracked_events"])
 
 with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
     try:
@@ -221,9 +232,35 @@ if combo_board["research"]:
             legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
             st.caption(f"{legs_desc} — JOINT DEPENDENCE NOT VALIDATED")
 
-# ---- 4. Best Player Props ------------------------------------------------
+# ---- 4. Game Parlays (Live Odds/Parlay/Post-Mortem activation sprint) ----
 st.divider()
-st.markdown("## 4 · Best Player Props")
+st.markdown("## 4 · Game Parlays")
+st.caption("One card per game — a 3-4 leg Game Edge Parlay only where one genuinely qualifies. "
+           "Never manufactured: most games on most nights correctly show NO QUALIFYING PARLAY.")
+for g in dd.build_demo_games():
+    parlay_result = gep.build_game_edge_parlay(opportunities, g.away, g.home)
+    with st.container(border=True):
+        st.markdown(f"**{g.away} @ {g.home}**")
+        if parlay_result["status"] == "NO_QUALIFYING_GAME_EDGE_PARLAY":
+            comp.render_empty_state("NO_QUALIFYING_GAME_EDGE_PARLAY", parlay_result["reason"])
+        else:
+            combo = parlay_result["combo"]
+            legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in combo.legs)
+            st.markdown(f"**{parlay_result['recommended_legs']}-leg:** {legs_desc}")
+            pc1, pc2, pc3, pc4 = st.columns(4)
+            pc1.metric("Joint P", fmt.format_probability(combo.joint_probability))
+            pc2.metric("Fair price", fmt.format_american_odds(combo.fair_combo_price))
+            pc3.metric("Est. combo price", fmt.format_american_odds(combo.estimated_combo_price))
+            pc4.metric("Edge", fmt.format_edge(combo.combo_edge))
+            st.caption("Estimated from individual leg prices — never presented as a real DraftKings "
+                       "parlay quote (no live SGP price has been observed).")
+            calibration = gep.calibration_snapshot(combo)
+            st.caption(f"Target ≈{calibration['target_joint_probability']:.0%} · "
+                       f"gap to target {calibration['gap_to_target']:+.1%}")
+
+# ---- 5. Best Player Props ------------------------------------------------
+st.divider()
+st.markdown("## 5 · Best Player Props")
 player_props = sorted(
     [o for o in opportunities if o["entity_kind"] == "PLAYER" and o.get("actionable", True)
      and o["decision"] in ("BET", "WATCH")],
@@ -236,17 +273,17 @@ else:
                    "Edge": fmt.format_edge(o["conservative_edge"]), "Action": o["decision"]}
                   for o in player_props], width='stretch')
 
-# ---- 5. Best Team Bets ----------------------------------------------------
+# ---- 6. Best Team Bets ----------------------------------------------------
 st.divider()
-st.markdown("## 5 · Best Team Bets")
+st.markdown("## 6 · Best Team Bets")
 st.caption("Team SOG has no live demo projection wired this sprint — shown as real historical "
            "context on each Team Hub's Overview tab, not as a priced bet here. Moneyline is not "
            "wired to a live demo projection for the simulated slate either — see the Model Learning "
            "page's own honest limitations.")
 
-# ---- 6. Goalie Opportunities ----------------------------------------------
+# ---- 7. Goalie Opportunities ----------------------------------------------
 st.divider()
-st.markdown("## 6 · Goalie Opportunities")
+st.markdown("## 7 · Goalie Opportunities")
 goalie_opps = sorted([o for o in eb.build_goalie_saves_opportunities() if o["actionable"]
                       and o["decision"] in ("BET", "WATCH")], key=lambda o: -cv.conviction_score(o))
 if not goalie_opps:
@@ -258,9 +295,9 @@ else:
         gcol2.caption(f"Model {fmt.format_probability(o['coherent_probability'])}")
         gcol3.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
 
-# ---- 7. Model Health -------------------------------------------------------
+# ---- 8. Model Health -------------------------------------------------------
 st.divider()
-st.markdown("## 7 · Model Health")
+st.markdown("## 8 · Model Health")
 mh1, mh2, mh3 = st.columns(3)
 if mh1.button("Open Model Health"):
     st.switch_page("pages/22_Model_Health.py")

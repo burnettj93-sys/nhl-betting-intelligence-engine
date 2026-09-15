@@ -44,6 +44,24 @@ def ensure_real_market_paper_bets_created(conn) -> list[dict]:
         conn, priced, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS")
 
 
+def ensure_game_edge_parlay_paper_bets_created(conn) -> list[dict]:
+    """Part 49/50: one $10 GAME_PARLAY_PAPER bet per game whose Game
+    Edge Parlay genuinely qualifies today -- never a non-qualifier
+    (create_game_edge_parlay_paper_bet() itself refuses those too, so
+    this is defense in depth, not the only gate)."""
+    from dashboard import demo_data as dd
+    from research.game_edge_parlay import engine as gep
+
+    opportunities = eb.all_opportunities()
+    results = []
+    for g in dd.build_demo_games():
+        result = gep.build_game_edge_parlay(opportunities, g.away, g.home)
+        if result["status"] == "QUALIFIED":
+            event_id = "demo-" + "-".join(sorted((g.away, g.home)))
+            results.append(pb.create_game_edge_parlay_paper_bet(conn, result, event_id=event_id))
+    return results
+
+
 def full_dashboard_state() -> dict:
     """One call for the Paper Performance page: ensures today's
     idempotent bet creation has run for both tracks, then returns each
@@ -52,6 +70,7 @@ def full_dashboard_state() -> dict:
     conn = pb.init_db()
     ensure_demo_paper_bets_created(conn)
     ensure_real_market_paper_bets_created(conn)
+    ensure_game_edge_parlay_paper_bets_created(conn)
     return {
         track: {
             "summary": pb.bankroll_summary(conn, track),

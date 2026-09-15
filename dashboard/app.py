@@ -59,6 +59,7 @@ pg = st.navigation({
         _p("22_Model_Health.py", "Model Health", "🩺"),
         _p("32_Model_Learning.py", "Model Learning", "🔄"),
         _p("33_Paper_Performance.py", "Paper Performance", "💰"),
+        _p("36_Morning_Review.py", "Morning Review", "🧭"),
         _p("23_Ledger.py", "Ledger", "📒"),
         _p("9_Data_Status.py", "Data Status", "🗂️"),
         _p("13_Play_By_Play_Status.py", "Play-by-Play Status", "🧩"),

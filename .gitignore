@@ -86,6 +86,12 @@ operational/data_readiness_cache.json
 # history to track on its own.
 operational/live_multimarket_board_cache.json
 
+# Same reasoning as the board cache above -- Live Odds/Parlay/Post-Mortem
+# activation sprint's two new caches (regenerated per run, fully
+# derivable from the TRACKED raw archive under data/raw/the_odds_api/live/).
+operational/moneyline_snapshot_cache.json
+operational/targeted_prop_sweep_cache.json
+
 # Preseason Master Consolidation storage audit (PRESEASON_ENGINE_READINESS_
 # REPORT.md Section AO): large, reproducible research artifacts that were
 # untracked but not yet covered by .gitignore -- same regenerable-blob

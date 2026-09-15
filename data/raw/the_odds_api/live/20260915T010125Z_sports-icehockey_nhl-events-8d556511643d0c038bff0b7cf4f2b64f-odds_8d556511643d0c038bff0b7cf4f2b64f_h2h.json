@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/8d556511643d0c038bff0b7cf4f2b64f/odds",
+    "event_id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "480",
+    "requests_used_header": "20",
+    "response_checksum_sha256": "aaf226e63358bb0e0ecf948e2af8e381c355c79e9443fbaca8b298972cc63ecd",
+    "retrieved_at_utc": "2026-09-15T01:01:25Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Sabres",
+                "price": -218
+              },
+              {
+                "name": "Chicago Blackhawks",
+                "price": 180
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-03T23:10:00Z",
+    "home_team": "Buffalo Sabres",
+    "id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

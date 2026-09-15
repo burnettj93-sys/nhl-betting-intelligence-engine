@@ -25,6 +25,12 @@ Real findings this was built against (verified live, not assumed):
     confirmed live from api-web.nhle.com/v1/schedule), found dynamically
     below rather than hardcoded, so this stays correct if the schedule
     the provider carries ever shifts.
+  - Live Odds Collection + Parlay + Post-Mortem activation sprint
+    (2026-09-15): re-confirmed live that 33 real NHL events are already
+    listed by The Odds API, earliest 2026-09-29 -- games are being
+    priced well before the preseason itself starts. The owner explicitly
+    authorized starting collection now rather than waiting for the old
+    2-day preseason lead window (see PRESEASON_LEAD_DAYS below).
 
 Credit management (per explicit user direction): games are queried
 soonest-puck-drop-first; a per-day credit budget is computed from the
@@ -79,12 +85,55 @@ DEFAULT_CYCLE_RESET_DAY = 1     # ASSUMPTION: calendar-month reset, used only to
                                 # confirm against the account dashboard if
                                 # this assumption turns out to be wrong.
 DEFAULT_SAFETY_FLOOR = 20      # never spend the account down to zero
-PRESEASON_LEAD_DAYS = 2         # "48 hours before the preseason starts"
+PRESEASON_LEAD_DAYS = 7         # Live Odds/Parlay/Post-Mortem activation sprint
+                                 # (2026-09-15): was 2 ("48 hours before the
+                                 # preseason starts"), bumped to 7 on explicit
+                                 # owner authorization to begin collection now
+                                 # rather than wait, backed by real evidence
+                                 # (33 NHL events already listed by The Odds
+                                 # API, earliest 2026-09-29 -- confirmed live,
+                                 # 0-credit call, same day this was changed).
 
 _ODDS_KEY_TO_MARKET_TYPE = {
     e.odds_api_market_key: e.market_type
     for e in prop_registry.REGISTRY if e.odds_api_market_key
 }
+
+# Market keys this project has already deliberately probed and knows
+# about, even though most have no internal model to compare against
+# (Part 17 warning: team_totals/alternate_team_totals are NOT assumed to
+# equal Team SOG -- see their real payload semantics before ever treating
+# them as such). A market key outside this set is genuinely new evidence
+# -- flagged, archived, and NEVER auto-verified (Part 15).
+_KNOWN_UNMODELED_MARKET_KEYS = frozenset({"team_totals", "alternate_team_totals", "spreads", "totals",
+                                           "h2h"})  # h2h IS modeled (MONEYLINE) but via the dedicated
+                                                    # run_moneyline_snapshot()/provider_adapter path, not
+                                                    # this generic prop parser -- known, not "new".
+NEW_CONTRACT_CANDIDATES_PATH = REPO_ROOT / "operational" / "new_contract_candidates.jsonl"
+
+
+def _flag_new_contract_candidate(market_key: str, market: dict, event: dict, retrieved_at_utc: str | None) -> None:
+    """Append-only, real-evidence log of a market key never seen before
+    by this pull job -- Part 15: 'archive, flag as NEW CONTRACT
+    CANDIDATE, but DO NOT auto-verify.' Verification still requires a
+    human to inspect the real payload, map participants, confirm
+    threshold/side/price semantics, and write a sanitized fixture +
+    regression test (see provider_adapter.py's own VERIFIED_CONTRACTS
+    workflow) -- nothing here does any of that automatically."""
+    NEW_CONTRACT_CANDIDATES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "flagged_at_utc": retrieved_at_utc,
+        "market_key": market_key,
+        "event_id": event.get("id"),
+        "home_team": event.get("home_team"),
+        "away_team": event.get("away_team"),
+        "sample_outcome_keys": sorted({k for o in market.get("outcomes", []) for k in o.keys()}),
+        "outcome_count": len(market.get("outcomes", [])),
+        "status": "NEW_CONTRACT_CANDIDATE",
+        "auto_verified": False,
+    }
+    with open(NEW_CONTRACT_CANDIDATES_PATH, "a") as f:
+        f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def _now_utc() -> dt.datetime:
@@ -198,6 +247,11 @@ def _parse_event_odds_generic(event: dict, odds_data: dict) -> list[dict]:
             market_key = market.get("key")
             entry_type = _ODDS_KEY_TO_MARKET_TYPE.get(market_key)
             entry = prop_registry.get(entry_type) if entry_type else None
+            if entry is None and market_key not in _ODDS_KEY_TO_MARKET_TYPE and market_key not in _KNOWN_UNMODELED_MARKET_KEYS:
+                model_status = "NEW_CONTRACT_CANDIDATE"
+                _flag_new_contract_candidate(market_key, market, event, odds_data.get("_retrieved_at_utc"))
+            else:
+                model_status = entry.model_status if entry else "NO_MODEL_THIS_MARKET"
             for outcome in market.get("outcomes", []):
                 quotes.append({
                     "event_id": event["id"], "home_team": event["home_team"],
@@ -207,7 +261,7 @@ def _parse_event_odds_generic(event: dict, odds_data: dict) -> list[dict]:
                     "player_or_side": outcome.get("description") or outcome.get("name"),
                     "outcome_name": outcome.get("name"), "point": outcome.get("point"),
                     "price_american": outcome.get("price"),
-                    "model_status": entry.model_status if entry else "NO_MODEL_THIS_MARKET",
+                    "model_status": model_status,
                     "retrieved_at_utc": odds_data.get("_retrieved_at_utc"),
                 })
     return quotes
@@ -300,6 +354,215 @@ def _write_board_cache(rows: list[dict], summary: dict) -> None:
     BOARD_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
 
 
-if __name__ == "__main__":
-    result = run_daily_pull()
+# ---------------------------------------------------------------------
+# Moneyline snapshots (Part 8): MONEYLINE is the one VERIFIED_CONTRACTS
+# market and is cheap, so this runs more often and separately from the
+# budget-gated player-prop sweep above. Reuses the real, regression-
+# tested h2h parser rather than the generic/unverified prop path.
+# ---------------------------------------------------------------------
+
+MONEYLINE_MARKET = "h2h"
+MONEYLINE_CACHE_PATH = REPO_ROOT / "operational" / "moneyline_snapshot_cache.json"
+MONEYLINE_MAX_EVENTS_PER_SNAPSHOT = 20  # league-wide, but still a real cap --
+                                        # Part 2's "do not blindly poll everything".
+
+
+def _auto_snapshot_label(now: dt.datetime) -> str:
+    """Derives a human-readable operational label from wall-clock hour
+    (America/Toronto) so the scheduler's plist doesn't need a separate
+    entry per time slot just to pass a different --label. Cosmetic only
+    -- see this function's caller's docstring for why the TRUE
+    first-observed/closing semantics never depend on this label."""
+    try:
+        from zoneinfo import ZoneInfo
+        local_hour = now.astimezone(ZoneInfo("America/Toronto")).hour
+    except Exception:  # noqa: BLE001 -- never let a tz-data issue break a real snapshot
+        local_hour = now.hour
+    if local_hour < 11:
+        return "morning"
+    if local_hour < 15:
+        return "afternoon"
+    if local_hour < 19:
+        return "pregame"
+    return "late"
+
+
+def run_moneyline_snapshot(snapshot_label: str | None = None,
+                            max_events: int = MONEYLINE_MAX_EVENTS_PER_SNAPSHOT) -> dict:
+    """League-wide moneyline snapshot. `snapshot_label` is operational
+    bookkeeping only (e.g. "morning"/"afternoon"/"pregame"/"closing" --
+    auto-derived from wall-clock hour if not given explicitly, so one
+    scheduled command works at every time slot) -- the TRUE
+    first-observed/closing semantics (Parts 21-22) are derived later
+    from the archive's own `retrieved_at_utc` timestamps (min/max per
+    event), never from this label, so a missed or renamed scheduled run
+    can't corrupt that history. Never queries an event whose
+    commence_time has already passed (Part 20)."""
+    now = _now_utc()
+    snapshot_label = snapshot_label or _auto_snapshot_label(now)
+    summary = {
+        "run_at_utc": now.isoformat(), "snapshot_label": snapshot_label, "ran": False,
+        "events_seen": 0, "events_queried": 0, "parsed_count": 0, "credits_spent_this_run": 0,
+        "remaining_quota_last_seen": None, "api_error": None,
+    }
+
+    r_events = client.get_nhl_events()
+    if not r_events.ok:
+        summary["api_error"] = r_events.error
+        return summary
+    archive.archive_result(r_events, event_id=None, market_filter=None, bookmaker_filter=None)
+    summary["ran"] = True
+    summary["remaining_quota_last_seen"] = int(r_events.requests_remaining or 0)
+
+    events = r_events.data
+    summary["events_seen"] = len(events)
+    future_events = _future_events_sorted(events, now)[:max_events]
+
+    from research.generic_prop_pricing import provider_adapter
+
+    rows = []
+    for event in future_events:
+        r_odds = client.get_event_odds(event["id"], markets=MONEYLINE_MARKET)
+        summary["events_queried"] += 1
+        if not r_odds.ok:
+            continue
+        archive.archive_result(r_odds, event_id=event["id"], market_filter=MONEYLINE_MARKET,
+                                bookmaker_filter="draftkings")
+        cost = int(r_odds.requests_last or 0)
+        summary["credits_spent_this_run"] += cost
+        summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        parsed = provider_adapter.parse_the_odds_api_h2h_market(r_odds.data)
+        if parsed["status"] == "PARSED":
+            summary["parsed_count"] += 1
+            m = parsed["market"]
+            rows.append({
+                "event_id": m.event_id, "home_team_abbrev": m.home_team_abbrev,
+                "away_team_abbrev": m.away_team_abbrev, "home_price": m.home_price,
+                "away_price": m.away_price, "commence_time_utc": m.commence_time_utc,
+                "captured_at_utc": r_odds.retrieved_at_utc, "snapshot_label": snapshot_label,
+            })
+
+    payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": rows}
+    MONEYLINE_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    return summary
+
+
+# ---------------------------------------------------------------------
+# Two-stage targeted prop sweep (Part 11): first sweep narrows to
+# SOG+Saves only (Part 9's primary priority) for events now inside the
+# ~3-4h pre-puck-drop window; second sweep re-pulls only events the
+# first sweep already found a live quote for, ~45-75 minutes out.
+# ---------------------------------------------------------------------
+
+FIRST_SWEEP_MARKETS = "player_shots_on_goal,player_total_saves"
+FIRST_SWEEP_WINDOW_HOURS = (3.0, 4.5)
+SECOND_SWEEP_WINDOW_HOURS = (0.75, 1.25)
+SWEEP_CACHE_PATH = REPO_ROOT / "operational" / "targeted_prop_sweep_cache.json"
+
+
+def _events_in_window(events: list[dict], now: dt.datetime, window_hours: tuple[float, float]) -> list[dict]:
+    lo, hi = window_hours
+    out = []
+    for e in events:
+        try:
+            commence = dt.datetime.fromisoformat(e["commence_time"].replace("Z", "+00:00"))
+        except (KeyError, ValueError):
+            continue
+        if commence <= now:
+            continue  # never poll a started/past event (Part 20)
+        hours_until = (commence - now).total_seconds() / 3600.0
+        if lo <= hours_until <= hi:
+            out.append(e)
+    return sorted(out, key=lambda e: e["commence_time"])
+
+
+def _load_json_cache(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def run_targeted_prop_sweep(sweep: str) -> dict:
+    """`sweep` is `"first"` or `"second"`. First sweep: every event
+    currently 3-4.5h from puck drop, SOG+Saves only. Second sweep: every
+    event currently 45-75 minutes from puck drop, re-pulled only if the
+    first sweep's own cache shows it produced at least one real quote
+    for that event (Part 11's "re-pull only if... meaningful edge /
+    starter certainty resolving / Top Conviction candidate" -- approximated
+    here as "the market actually exists," the cheapest real signal
+    available without a live in-season model-scoring pass; see the
+    activation report's Known Limitations for the fuller pre-screening
+    this stops short of)."""
+    if sweep not in ("first", "second"):
+        raise ValueError(f"sweep must be 'first' or 'second', got {sweep!r}")
+
+    now = _now_utc()
+    summary = {
+        "run_at_utc": now.isoformat(), "sweep": sweep, "ran": False,
+        "events_in_window": 0, "events_queried": 0, "quotes_captured": 0,
+        "credits_spent_this_run": 0, "remaining_quota_last_seen": None, "api_error": None,
+    }
+
+    r_events = client.get_nhl_events()
+    if not r_events.ok:
+        summary["api_error"] = r_events.error
+        return summary
+    archive.archive_result(r_events, event_id=None, market_filter=None, bookmaker_filter=None)
+    summary["ran"] = True
+    summary["remaining_quota_last_seen"] = int(r_events.requests_remaining or 0)
+
+    window = FIRST_SWEEP_WINDOW_HOURS if sweep == "first" else SECOND_SWEEP_WINDOW_HOURS
+    candidates = _events_in_window(r_events.data, now, window)
+    summary["events_in_window"] = len(candidates)
+
+    if sweep == "second":
+        first_cache = _load_json_cache(SWEEP_CACHE_PATH) or {}
+        events_with_quotes = {r["event_id"] for r in first_cache.get("rows", [])}
+        candidates = [e for e in candidates if e["id"] in events_with_quotes]
+
+    board_rows = []
+    for event in candidates:
+        r_odds = client.get_event_odds(event["id"], markets=FIRST_SWEEP_MARKETS)
+        summary["events_queried"] += 1
+        if not r_odds.ok:
+            continue
+        archive.archive_result(r_odds, event_id=event["id"], market_filter=FIRST_SWEEP_MARKETS,
+                                bookmaker_filter="draftkings")
+        cost = int(r_odds.requests_last or 0)
+        summary["credits_spent_this_run"] += cost
+        summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        r_odds.data["_retrieved_at_utc"] = r_odds.retrieved_at_utc
+        quotes = _parse_event_odds_generic(event, r_odds.data)
+        summary["quotes_captured"] += len(quotes)
+        board_rows.extend(quotes)
+
+    payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": board_rows}
+    SWEEP_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    return summary
+
+
+def _main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mode", choices=("props", "moneyline", "sweep-first", "sweep-second"),
+                         default="props")
+    parser.add_argument("--label", default=None,
+                         help="operational label for --mode=moneyline (auto-derived from wall-clock hour if omitted)")
+    args = parser.parse_args()
+
+    if args.mode == "props":
+        result = run_daily_pull()
+    elif args.mode == "moneyline":
+        result = run_moneyline_snapshot(args.label)
+    elif args.mode == "sweep-first":
+        result = run_targeted_prop_sweep("first")
+    else:
+        result = run_targeted_prop_sweep("second")
+
     print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    _main()

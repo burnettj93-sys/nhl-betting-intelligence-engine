@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4cfafb524b2107d73365ce0709b59dd8/odds",
+    "event_id": "4cfafb524b2107d73365ce0709b59dd8",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "491",
+    "requests_used_header": "9",
+    "response_checksum_sha256": "727338f37d5edf92b1218831f1b4dfa1a21f280228b97c833e695dd59fb5283b",
+    "retrieved_at_utc": "2026-09-15T01:01:24Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Buffalo Sabres",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Buffalo Sabres",
+                "price": -110
+              },
+              {
+                "name": "Columbus Blue Jackets",
+                "price": -110
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-01T23:10:00Z",
+    "home_team": "Columbus Blue Jackets",
+    "id": "4cfafb524b2107d73365ce0709b59dd8",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

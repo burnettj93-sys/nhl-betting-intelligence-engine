@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.prop-sweep-first</string>
+
+    <!-- Part 11: "first sweep" ~3-4h before puck drop, SOG+Saves only.
+         Game puck-drop times vary by day, so a fixed clock schedule
+         can't reliably land inside that window -- this runs every 30
+         minutes instead, and the script itself (_events_in_window) is
+         the real gate: it makes one free events-list call and only
+         spends real credits if an event is actually in the window right
+         now, so a miss here costs nothing. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.live_odds_daily_pull</string>
+        <string>--mode=sweep-first</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/prop_sweep_first.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/prop_sweep_first.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 CREATE TABLE IF NOT EXISTS paper_bets (
     paper_bet_id            TEXT PRIMARY KEY,
     idempotency_key         TEXT NOT NULL UNIQUE,
-    track                   TEXT NOT NULL CHECK (track IN ('REAL_MARKET_PAPER', 'DEMO_PAPER')),
+    track                   TEXT NOT NULL CHECK (track IN ('REAL_MARKET_PAPER', 'DEMO_PAPER', 'GAME_PARLAY_PAPER')),
     is_combo                INTEGER NOT NULL DEFAULT 0,
     top_conviction          INTEGER NOT NULL DEFAULT 0,
 

@@ -145,6 +145,21 @@ if _selected_game_id and str(_selected_game_id).startswith("demo-"):
                            f"{fmt.format_probability(o['coherent_probability'])} model, "
                            f"edge {fmt.format_edge(o['conservative_edge'])}")
 
+        st.markdown("#### Game Edge Parlay")
+        from research.game_edge_parlay import engine as gep
+        _parlay_result = gep.build_game_edge_parlay(eb.all_opportunities(), game.away, game.home)
+        if _parlay_result["status"] == "NO_QUALIFYING_GAME_EDGE_PARLAY":
+            comp.render_empty_state("NO_QUALIFYING_GAME_EDGE_PARLAY", _parlay_result["reason"])
+        else:
+            _combo = _parlay_result["combo"]
+            _legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in _combo.legs)
+            st.markdown(f"**{_parlay_result['recommended_legs']}-leg:** {_legs_desc}")
+            gp1, gp2, gp3 = st.columns(3)
+            gp1.metric("Joint P", fmt.format_probability(_combo.joint_probability))
+            gp2.metric("Est. combo price", fmt.format_american_odds(_combo.estimated_combo_price))
+            gp3.metric("Edge", fmt.format_edge(_combo.combo_edge))
+            st.caption("Estimated from individual leg prices — never a real DraftKings parlay quote.")
+
         context_players = gdv.game_context_players(_selected_game_id)
         if context_players:
             st.markdown("#### Context Active")

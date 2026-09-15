@@ -159,6 +159,8 @@ EMPTY_STATE_MESSAGES = {
     "STALE_DATA": ("⚠", "Data is stale", "The underlying data source has not refreshed recently."),
     "MODEL_NOT_OPERATIONAL": ("🚧", "Model not operational", "This market has no validated model backing it yet."),
     "NO_QUALIFYING_OPPORTUNITIES": ("🔍", "No qualifying opportunities", "Try widening your filters."),
+    "NO_QUALIFYING_GAME_EDGE_PARLAY": ("🎯", "No qualifying Game Edge Parlay",
+                                       "No 3-4 leg combination in this game clears the real quality bar today."),
     "ERROR": ("❗", "Something went wrong", "See technical detail below."),
 }
 

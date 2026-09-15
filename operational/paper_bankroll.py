@@ -42,12 +42,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "operational" / "paper_bankroll.db"
 SCHEMA_PATH = REPO_ROOT / "operational" / "paper_bankroll_schema.sql"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2: Live Odds/Parlay/Post-Mortem activation sprint,
+                    # Part 49 -- added the GAME_PARLAY_PAPER track.
 
 PAPER_STARTING_BANKROLL = 500.00
 PAPER_BET_STAKE = 10.00  # 2% of the default starting bankroll -- fixed, never dynamic/Kelly
 
-TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER")
+TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER", "GAME_PARLAY_PAPER")
 PRICE_SOURCES = ("LIVE_DRAFTKINGS", "SIMULATED_DEMO")
 RESULT_STATES = ("PENDING", "WIN", "LOSS", "VOID", "UNRESOLVED")
 
@@ -68,6 +69,88 @@ def get_conn(db_path: Path = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+_V2_CREATE_PAPER_BETS = """
+CREATE TABLE paper_bets (
+    paper_bet_id            TEXT PRIMARY KEY,
+    idempotency_key         TEXT NOT NULL UNIQUE,
+    track                   TEXT NOT NULL CHECK (track IN ('REAL_MARKET_PAPER', 'DEMO_PAPER', 'GAME_PARLAY_PAPER')),
+    is_combo                INTEGER NOT NULL DEFAULT 0,
+    top_conviction          INTEGER NOT NULL DEFAULT 0,
+    event_id                TEXT,
+    game_date               TEXT,
+    player_id               TEXT,
+    player_name_snapshot    TEXT,
+    team                    TEXT,
+    opponent                TEXT,
+    market_id               TEXT NOT NULL,
+    market_family           TEXT,
+    threshold                TEXT,
+    side                     TEXT,
+    price_source             TEXT NOT NULL CHECK (price_source IN ('LIVE_DRAFTKINGS', 'SIMULATED_DEMO')),
+    legs_json                 TEXT,
+    entry_odds                REAL NOT NULL,
+    model_probability          REAL,
+    conservative_probability    REAL,
+    market_no_vig_probability    REAL,
+    edge                          REAL,
+    ev                             REAL,
+    confidence                      TEXT,
+    model_version                    TEXT,
+    prediction_checkpoint             TEXT,
+    stake                              REAL NOT NULL,
+    created_at_utc                      TEXT NOT NULL,
+    event_start_utc                      TEXT,
+    result_status                         TEXT NOT NULL DEFAULT 'PENDING'
+                                           CHECK (result_status IN ('PENDING', 'WIN', 'LOSS', 'VOID', 'UNRESOLVED')),
+    settled_at_utc                        TEXT,
+    profit_loss                           REAL,
+    closing_odds                          REAL,
+    closing_captured_at_utc               REAL,
+    clv                                   REAL,
+    notes                                 TEXT
+);
+"""
+
+_V2_CREATE_TRIGGER = """
+CREATE TRIGGER paper_bets_immutability
+BEFORE UPDATE ON paper_bets
+FOR EACH ROW
+WHEN
+    NEW.track IS NOT OLD.track OR
+    NEW.is_combo IS NOT OLD.is_combo OR
+    NEW.top_conviction IS NOT OLD.top_conviction OR
+    NEW.market_id IS NOT OLD.market_id OR
+    NEW.threshold IS NOT OLD.threshold OR
+    NEW.side IS NOT OLD.side OR
+    NEW.price_source IS NOT OLD.price_source OR
+    NEW.entry_odds IS NOT OLD.entry_odds OR
+    NEW.model_probability IS NOT OLD.model_probability OR
+    NEW.conservative_probability IS NOT OLD.conservative_probability OR
+    NEW.stake IS NOT OLD.stake OR
+    NEW.created_at_utc IS NOT OLD.created_at_utc OR
+    NEW.idempotency_key IS NOT OLD.idempotency_key
+BEGIN
+    SELECT RAISE(ABORT, 'paper_bets: entry fields are immutable after creation -- only settlement columns may change');
+END;
+"""
+
+
+def _migrate_v1_to_v2(conn: sqlite3.Connection) -> None:
+    """SQLite can't ALTER a CHECK constraint in place -- recreate the
+    table with the widened `track` constraint (adding GAME_PARLAY_PAPER,
+    Part 49) and copy every existing row across unchanged. Real,
+    reversible-by-backup, run once per database (guarded by
+    schema_version in init_db() below); this project's paper_bankroll.db
+    had exactly 6 real rows (all DEMO_PAPER, all PENDING) when this
+    migration was written."""
+    conn.execute("ALTER TABLE paper_bets RENAME TO paper_bets_v1")
+    conn.executescript(_V2_CREATE_PAPER_BETS)
+    conn.execute("INSERT INTO paper_bets SELECT * FROM paper_bets_v1")
+    conn.execute("DROP TABLE paper_bets_v1")
+    conn.executescript(_V2_CREATE_TRIGGER)
+    conn.commit()
+
+
 def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     conn = get_conn(db_path)
     with open(SCHEMA_PATH) as f:
@@ -75,6 +158,10 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     row = conn.execute("SELECT version FROM schema_version").fetchone()
     if row is None:
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+        conn.commit()
+    elif row["version"] < 2:
+        _migrate_v1_to_v2(conn)
+        conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
         conn.commit()
     return conn
 
@@ -239,6 +326,41 @@ def create_demo_combo_paper_bet(conn: sqlite3.Connection, combo: dict) -> dict:
         entry_odds=combo["simulated_combo_price"], is_combo=True, top_conviction=True,
         legs_json=legs_snapshot, model_probability=combo["joint_probability"],
         conservative_probability=combo["joint_probability"], edge=combo["combo_edge"],
+        prediction_checkpoint="FIRST_ACTIONABLE")
+
+
+def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: dict, *,
+                                       event_id: str, price_source: str = "SIMULATED_DEMO") -> dict:
+    """Part 49: GAME_PARLAY_PAPER track, kept fully separate from
+    DEMO_PAPER/REAL_MARKET_PAPER (Part 51). Part 50's hard rule is
+    enforced here, not just trusted of the caller: a non-"QUALIFIED"
+    result (research.game_edge_parlay.engine.build_game_edge_parlay's
+    own NO_QUALIFYING_GAME_EDGE_PARLAY output) raises rather than
+    silently placing a bet. `price_source` defaults to SIMULATED_DEMO
+    since the legs' own current_odds may themselves be simulated demo
+    prices or real DraftKings prices depending on what fed the parlay
+    engine -- the caller must say which, matching the honest labeling
+    already required by Part 47 (never an unlabeled "live" price)."""
+    if parlay_result.get("status") != "QUALIFIED":
+        raise InvalidPaperBetError(
+            "refusing to paper-bet a non-qualifying Game Edge Parlay result "
+            f"(status={parlay_result.get('status')!r}) -- Part 50: never paper-bet a non-qualifier")
+
+    combo = parlay_result["combo"]
+    legs = combo.legs
+    market_id = "GAME_EDGE_PARLAY:" + "+".join(
+        sorted(f"{l['player_id']}:{l.get('market_id') or l.get('market')}:{l.get('threshold')}" for l in legs))
+    legs_snapshot = json.dumps([
+        {"player_id": l.get("player_id"), "player": l.get("player"), "market": l.get("market"),
+         "threshold": l.get("threshold"), "current_odds": l.get("current_odds"),
+         "conservative_probability": l.get("conservative_probability")}
+        for l in legs
+    ])
+    return record_paper_bet(
+        conn, track="GAME_PARLAY_PAPER", price_source=price_source, market_id=market_id,
+        entry_odds=combo.estimated_combo_price, event_id=event_id, is_combo=True, top_conviction=False,
+        legs_json=legs_snapshot, model_probability=combo.joint_probability,
+        conservative_probability=combo.joint_probability, edge=combo.combo_edge,
         prediction_checkpoint="FIRST_ACTIONABLE")
 
 

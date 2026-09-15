@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4d301bd0ac75067598d134600a80918c/odds",
+    "event_id": "4d301bd0ac75067598d134600a80918c",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "486",
+    "requests_used_header": "14",
+    "response_checksum_sha256": "fecc9e60f1c36005afb639097bb34a92f6fba66021d616b32e8b8a773f3cc0b3",
+    "retrieved_at_utc": "2026-09-15T01:01:25Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Chicago Blackhawks",
+                "price": 164
+              },
+              {
+                "name": "Utah Mammoth",
+                "price": -198
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T01:10:00Z",
+    "home_team": "Utah Mammoth",
+    "id": "4d301bd0ac75067598d134600a80918c",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/13520f2d7e050ef0f37b2c8ba7ff4a53/odds",
+    "event_id": "13520f2d7e050ef0f37b2c8ba7ff4a53",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "492",
+    "requests_used_header": "8",
+    "response_checksum_sha256": "76dcd73b274aa9a095b8918cfde352a9f4bb8b02699729df86ef30d369e267e7",
+    "retrieved_at_utc": "2026-09-15T01:01:24Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Los Angeles Kings",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Colorado Avalanche",
+                "price": -180
+              },
+              {
+                "name": "Los Angeles Kings",
+                "price": 150
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-01T02:10:00Z",
+    "home_team": "Colorado Avalanche",
+    "id": "13520f2d7e050ef0f37b2c8ba7ff4a53",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

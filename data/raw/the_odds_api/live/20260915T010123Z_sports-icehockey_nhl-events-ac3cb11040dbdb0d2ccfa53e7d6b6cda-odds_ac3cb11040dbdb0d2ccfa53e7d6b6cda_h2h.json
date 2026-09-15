@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/ac3cb11040dbdb0d2ccfa53e7d6b6cda/odds",
+    "event_id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "497",
+    "requests_used_header": "3",
+    "response_checksum_sha256": "9fd07ed62730f447c3c2fcf46e5e57db896c62dd446412ec4e91d8fa179878e0",
+    "retrieved_at_utc": "2026-09-15T01:01:23Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Rangers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Boston Bruins",
+                "price": -135
+              },
+              {
+                "name": "New York Rangers",
+                "price": 114
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-30T00:10:00Z",
+    "home_team": "Boston Bruins",
+    "id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

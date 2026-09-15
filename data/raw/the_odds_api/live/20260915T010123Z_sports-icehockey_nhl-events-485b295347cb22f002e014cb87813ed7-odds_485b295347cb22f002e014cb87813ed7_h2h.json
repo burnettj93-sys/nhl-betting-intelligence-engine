@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/485b295347cb22f002e014cb87813ed7/odds",
+    "event_id": "485b295347cb22f002e014cb87813ed7",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "498",
+    "requests_used_header": "2",
+    "response_checksum_sha256": "61552b5a746a5e6c76ef5dcdca475d7527d362dec48abf3e64792c1dbfe5d165",
+    "retrieved_at_utc": "2026-09-15T01:01:23Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Montr\u00e9al Canadiens",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T01:00:40Z",
+            "outcomes": [
+              {
+                "name": "Montr\u00e9al Canadiens",
+                "price": -105
+              },
+              {
+                "name": "Toronto Maple Leafs",
+                "price": -115
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-29T23:10:00Z",
+    "home_team": "Toronto Maple Leafs",
+    "id": "485b295347cb22f002e014cb87813ed7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

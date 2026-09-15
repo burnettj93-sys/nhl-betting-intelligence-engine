@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.moneyline-snapshot</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.live_odds_daily_pull</string>
+        <string>--mode=moneyline</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <!-- Part 6/8: ~4 moneyline snapshots/day. The script auto-derives
+         the morning/afternoon/pregame/late label from wall-clock hour,
+         so all four entries below run the exact same command. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/moneyline_snapshot.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/moneyline_snapshot.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

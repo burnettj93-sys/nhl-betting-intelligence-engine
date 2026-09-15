@@ -294,6 +294,102 @@ def settlement_backlog_health() -> dict:
                              technical_detail=repr(e))
 
 
+_SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.daily-props-pull",
+                     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second")
+
+
+def live_odds_scheduler_health() -> dict:
+    """Part 75: LIVE_ODDS_SCHEDULER -- real launchd state via `launchctl
+    list`, a local OS query (never a network call, never an Odds API
+    credit -- Part 26's dashboard-safety rule is about the sportsbook
+    API specifically, not local process introspection). Never assumes
+    installed; checks every real job label."""
+    import subprocess
+    try:
+        result = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=5)
+        listed = result.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
+        return _health_item("UNKNOWN", "Live Odds Scheduler", None, f"could not query launchctl: {e}",
+                             "launchctl list", technical_detail=repr(e))
+    loaded = [label for label in _SCHEDULER_LABELS if label in listed]
+    if not loaded:
+        return _health_item("WAITING", "Live Odds Scheduler", None,
+                             "no scheduler jobs loaded -- activate per README's scheduler section",
+                             "launchctl list")
+    missing = [label for label in _SCHEDULER_LABELS if label not in loaded]
+    status = "OK" if not missing else "STALE"
+    message = f"{len(loaded)}/{len(_SCHEDULER_LABELS)} scheduler job(s) loaded"
+    if missing:
+        message += f" -- missing: {', '.join(missing)}"
+    return _health_item(status, "Live Odds Scheduler", dt.datetime.now(dt.timezone.utc).isoformat(),
+                         message, "launchctl list", technical_detail=", ".join(loaded))
+
+
+def _load_cache_safely(path: Path) -> dict | None:
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def odds_collection_status() -> dict:
+    """Part 25/75: ODDS LAST UPDATED / CREDITS REMAINING / TRACKED
+    EVENTS / PLAYER PROP COVERAGE -- read from the real cache files the
+    collector writes (never a live call). Combines the moneyline and
+    targeted-sweep caches since either may be the most recent."""
+    moneyline = _load_cache_safely(REPO_ROOT / "operational" / "moneyline_snapshot_cache.json")
+    props_board = _load_cache_safely(REPO_ROOT / "operational" / "live_multimarket_board_cache.json")
+    sweep = _load_cache_safely(REPO_ROOT / "operational" / "targeted_prop_sweep_cache.json")
+
+    candidates = [c for c in (moneyline, props_board, sweep) if c and c.get("generated_at_utc")]
+    if not candidates:
+        return {
+            "last_updated_utc": None, "credits_remaining": None, "tracked_events": 0,
+            "player_prop_quotes": 0, "status": "WAITING",
+        }
+    latest = max(candidates, key=lambda c: c["generated_at_utc"])
+    credits_remaining = (latest.get("summary") or {}).get("remaining_quota_last_seen")
+    tracked_events = (moneyline or {}).get("summary", {}).get("events_seen") or \
+        (props_board or {}).get("summary", {}).get("events_seen") or 0
+    prop_quotes = len((props_board or {}).get("rows", [])) + len((sweep or {}).get("rows", []))
+    return {
+        "last_updated_utc": latest["generated_at_utc"], "credits_remaining": credits_remaining,
+        "tracked_events": tracked_events, "player_prop_quotes": prop_quotes, "status": "OK",
+    }
+
+
+def new_contract_candidates_health() -> dict:
+    """Part 15/75: how many genuinely-new market keys have been flagged
+    (never auto-verified) since the collector started running."""
+    from operational.live_odds_daily_pull import NEW_CONTRACT_CANDIDATES_PATH
+    if not NEW_CONTRACT_CANDIDATES_PATH.exists():
+        return _health_item("OK", "New Contract Candidates", None, "0 flagged", str(NEW_CONTRACT_CANDIDATES_PATH))
+    try:
+        n = sum(1 for _ in open(NEW_CONTRACT_CANDIDATES_PATH))
+    except OSError as e:
+        return _health_item("ERROR", "New Contract Candidates", None, f"could not read: {e}",
+                             str(NEW_CONTRACT_CANDIDATES_PATH), technical_detail=repr(e))
+    return _health_item("OK", "New Contract Candidates", None, f"{n} flagged, none auto-verified",
+                         str(NEW_CONTRACT_CANDIDATES_PATH))
+
+
+def postmortem_status_health() -> dict:
+    """Part 75: POSTMORTEM_STATUS / LAST_POSTMORTEM -- the real
+    reports/daily/postmortem_*.md files this project's own
+    operational.daily_postmortem.write_report_markdown() writes."""
+    reports_dir = REPO_ROOT / "reports" / "daily"
+    if not reports_dir.exists():
+        return _health_item("WAITING", "Daily Post-Mortem", None, "no post-mortem has run yet", str(reports_dir))
+    reports = sorted(reports_dir.glob("postmortem_*.md"))
+    if not reports:
+        return _health_item("WAITING", "Daily Post-Mortem", None, "no post-mortem has run yet", str(reports_dir))
+    latest = reports[-1]
+    return _health_item("OK", "Daily Post-Mortem",
+                         dt.datetime.fromtimestamp(latest.stat().st_mtime, tz=dt.timezone.utc).isoformat(),
+                         f"latest report: {latest.name}", str(reports_dir))
+
+
 def build_system_health() -> dict:
     """The full SYSTEM_HEALTH object (Section 27): one entry per
     component, all real. Call this once per page render; each
@@ -317,4 +413,7 @@ def build_system_health() -> dict:
         "ODDS_ARCHIVE": odds_archive_freshness_health(),
         "CONTRACT_STATUS": contract_status_health(),
         "SETTLEMENT_BACKLOG": settlement_backlog_health(),
+        "LIVE_ODDS_SCHEDULER": live_odds_scheduler_health(),
+        "NEW_CONTRACT_CANDIDATES": new_contract_candidates_health(),
+        "DAILY_POSTMORTEM": postmortem_status_health(),
     }

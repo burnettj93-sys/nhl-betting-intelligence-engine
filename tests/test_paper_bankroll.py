@@ -389,5 +389,167 @@ class TestWindowedPerformance(TestPaperBankroll):
         self.assertIsInstance(w["season_to_date"]["avg_clv"], float)
 
 
+class TestGameParlayPaperTrack(TestPaperBankroll):
+    """Live Odds/Parlay/Post-Mortem activation sprint, Part 49: a third,
+    separate track for Game Edge Parlay paper bets."""
+
+    def test_game_parlay_paper_is_a_valid_track(self):
+        r = self._bet(track="GAME_PARLAY_PAPER", price_source="SIMULATED_DEMO", is_combo=True)
+        self.assertEqual(r["status"], "INSERTED")
+
+    def test_game_parlay_paper_accepts_either_price_source(self):
+        r1 = self._bet(track="GAME_PARLAY_PAPER", price_source="SIMULATED_DEMO", event_id="gp1")
+        r2 = self._bet(track="GAME_PARLAY_PAPER", price_source="LIVE_DRAFTKINGS", event_id="gp2")
+        self.assertEqual(r1["status"], "INSERTED")
+        self.assertEqual(r2["status"], "INSERTED")
+
+    def test_game_parlay_paper_bankroll_kept_separate_from_demo_and_real(self):
+        self._bet(track="DEMO_PAPER", price_source="SIMULATED_DEMO", event_id="d1")
+        r = self._bet(track="GAME_PARLAY_PAPER", price_source="SIMULATED_DEMO", event_id="gp1")
+        pb.settle_paper_bet(self.conn, r["paper_bet_id"], "WIN")
+        demo = pb.bankroll_summary(self.conn, "DEMO_PAPER")
+        parlay = pb.bankroll_summary(self.conn, "GAME_PARLAY_PAPER")
+        self.assertEqual(demo["bets"], 1)
+        self.assertEqual(parlay["bets"], 1)
+        self.assertGreater(parlay["current_bankroll"], pb.PAPER_STARTING_BANKROLL)
+        self.assertEqual(demo["current_bankroll"], pb.PAPER_STARTING_BANKROLL)  # untouched, still PENDING
+
+    def test_still_rejects_a_genuinely_unknown_track(self):
+        with self.assertRaises(pb.InvalidPaperBetError):
+            self._bet(track="NOT_A_REAL_TRACK", price_source="SIMULATED_DEMO")
+
+
+class TestGameEdgeParlayPaperBet(TestPaperBankroll):
+    """Part 49/50: create_game_edge_parlay_paper_bet()."""
+
+    def _qualified_result(self):
+        from research.game_edge_parlay.engine import ComboResult
+        legs = [
+            {"player_id": "p1", "player": "A", "market": "PLAYER_SOG", "market_id": "M1",
+             "threshold": "3+", "current_odds": -150, "conservative_probability": 0.7},
+            {"player_id": "p2", "player": "B", "market": "PLAYER_POINTS", "market_id": "M2",
+             "threshold": "1+", "current_odds": -150, "conservative_probability": 0.7},
+            {"player_id": "p3", "player": "C", "market": "PLAYER_ASSISTS", "market_id": "M3",
+             "threshold": "1+", "current_odds": -150, "conservative_probability": 0.7},
+        ]
+        combo = ComboResult(legs=legs, status="VALIDATED", joint_probability=0.6, pairwise=[],
+                             estimated_combo_price=180.0, fair_combo_price=165.0, combo_edge=0.04)
+        return {"status": "QUALIFIED", "recommended_legs": 3, "combo": combo, "alternative_3leg": None}
+
+    def test_qualified_result_creates_a_bet_in_the_game_parlay_track(self):
+        result = pb.create_game_edge_parlay_paper_bet(self.conn, self._qualified_result(), event_id="evt-1")
+        self.assertEqual(result["status"], "INSERTED")
+        summary = pb.bankroll_summary(self.conn, "GAME_PARLAY_PAPER")
+        self.assertEqual(summary["bets"], 1)
+        self.assertEqual(summary["pending"], 1)  # correctly still PENDING, no game has been played
+
+    def test_non_qualifying_result_is_refused(self):
+        with self.assertRaises(pb.InvalidPaperBetError):
+            pb.create_game_edge_parlay_paper_bet(
+                self.conn, {"status": "NO_QUALIFYING_GAME_EDGE_PARLAY", "reason": "x"}, event_id="evt-1")
+
+    def test_never_mixed_with_demo_paper_track(self):
+        self._bet(track="DEMO_PAPER")
+        pb.create_game_edge_parlay_paper_bet(self.conn, self._qualified_result(), event_id="evt-1")
+        demo_rows = pb.query_paper_bets(self.conn, track="DEMO_PAPER")
+        parlay_rows = pb.query_paper_bets(self.conn, track="GAME_PARLAY_PAPER")
+        self.assertEqual(len(demo_rows), 1)
+        self.assertEqual(len(parlay_rows), 1)
+
+    def test_is_combo_flag_set(self):
+        pb.create_game_edge_parlay_paper_bet(self.conn, self._qualified_result(), event_id="evt-1")
+        rows = pb.query_paper_bets(self.conn, track="GAME_PARLAY_PAPER")
+        self.assertEqual(rows[0]["is_combo"], 1)
+
+    def test_idempotent_on_the_same_qualifying_result(self):
+        r1 = pb.create_game_edge_parlay_paper_bet(self.conn, self._qualified_result(), event_id="evt-1")
+        r2 = pb.create_game_edge_parlay_paper_bet(self.conn, self._qualified_result(), event_id="evt-1")
+        self.assertEqual(r1["status"], "INSERTED")
+        self.assertEqual(r2["status"], "DUPLICATE")
+
+
+class TestSchemaV1ToV2Migration(unittest.TestCase):
+    """A real pre-sprint database (schema v1, `track` CHECK constraint
+    without GAME_PARLAY_PAPER) must upgrade in place, keeping every
+    existing row, when opened by the new init_db()."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "v1.db"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _create_v1_db(self):
+        import sqlite3
+        conn = sqlite3.connect(self.db_path)
+        conn.executescript("""
+            CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+            INSERT INTO schema_version (version) VALUES (1);
+            CREATE TABLE paper_bets (
+                paper_bet_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE,
+                track TEXT NOT NULL CHECK (track IN ('REAL_MARKET_PAPER', 'DEMO_PAPER')),
+                is_combo INTEGER NOT NULL DEFAULT 0, top_conviction INTEGER NOT NULL DEFAULT 0,
+                event_id TEXT, game_date TEXT, player_id TEXT, player_name_snapshot TEXT,
+                team TEXT, opponent TEXT, market_id TEXT NOT NULL, market_family TEXT,
+                threshold TEXT, side TEXT,
+                price_source TEXT NOT NULL CHECK (price_source IN ('LIVE_DRAFTKINGS', 'SIMULATED_DEMO')),
+                legs_json TEXT, entry_odds REAL NOT NULL, model_probability REAL,
+                conservative_probability REAL, market_no_vig_probability REAL, edge REAL, ev REAL,
+                confidence TEXT, model_version TEXT, prediction_checkpoint TEXT,
+                stake REAL NOT NULL, created_at_utc TEXT NOT NULL, event_start_utc TEXT,
+                result_status TEXT NOT NULL DEFAULT 'PENDING'
+                    CHECK (result_status IN ('PENDING', 'WIN', 'LOSS', 'VOID', 'UNRESOLVED')),
+                settled_at_utc TEXT, profit_loss REAL, closing_odds REAL,
+                closing_captured_at_utc REAL, clv REAL, notes TEXT
+            );
+            INSERT INTO paper_bets (paper_bet_id, idempotency_key, track, market_id, price_source,
+                entry_odds, stake, created_at_utc)
+            VALUES ('pre-existing-1', 'idem-1', 'DEMO_PAPER', 'PLAYER_POINTS_2PLUS',
+                'SIMULATED_DEMO', 150, 10.0, '2026-09-01T00:00:00Z');
+        """)
+        conn.commit()
+        conn.close()
+
+    def test_existing_row_survives_migration(self):
+        self._create_v1_db()
+        conn = pb.init_db(self.db_path)
+        row = conn.execute("SELECT * FROM paper_bets WHERE paper_bet_id = 'pre-existing-1'").fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row["track"], "DEMO_PAPER")
+        conn.close()
+
+    def test_schema_version_bumped_to_2(self):
+        self._create_v1_db()
+        conn = pb.init_db(self.db_path)
+        version = conn.execute("SELECT version FROM schema_version").fetchone()["version"]
+        self.assertEqual(version, 2)
+        conn.close()
+
+    def test_game_parlay_paper_insertable_after_migration(self):
+        self._create_v1_db()
+        conn = pb.init_db(self.db_path)
+        result = pb.record_paper_bet(conn, track="GAME_PARLAY_PAPER", price_source="SIMULATED_DEMO",
+                                      market_id="GAME_EDGE_PARLAY:x", entry_odds=250, event_id="evt-new",
+                                      created_at_utc="2026-09-15T00:00:00Z")
+        self.assertEqual(result["status"], "INSERTED")
+        conn.close()
+
+    def test_immutability_trigger_still_enforced_after_migration(self):
+        self._create_v1_db()
+        conn = pb.init_db(self.db_path)
+        with self.assertRaises(Exception):
+            conn.execute("UPDATE paper_bets SET entry_odds = 999 WHERE paper_bet_id = 'pre-existing-1'")
+        conn.close()
+
+    def test_running_init_db_twice_on_an_already_migrated_db_is_a_no_op(self):
+        self._create_v1_db()
+        pb.init_db(self.db_path).close()
+        conn = pb.init_db(self.db_path)  # second call must not re-migrate or error
+        row = conn.execute("SELECT * FROM paper_bets WHERE paper_bet_id = 'pre-existing-1'").fetchone()
+        self.assertIsNotNone(row)
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

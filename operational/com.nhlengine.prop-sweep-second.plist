@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.prop-sweep-second</string>
+
+    <!-- Part 11: "second sweep" ~45-75 min before puck drop, re-pulling
+         only events the first sweep already found a real quote for. A
+         narrower window than the first sweep, so this runs more often
+         (every 15 min) to reliably catch it. Free events-list call each
+         time; real credits spent only for an event actually re-pulled. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.live_odds_daily_pull</string>
+        <string>--mode=sweep-second</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/prop_sweep_second.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/prop_sweep_second.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
