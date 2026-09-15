@@ -7,12 +7,24 @@ clearly... do not crash dashboard"), and every method logs (via the
 returned `credits_used`/`credits_remaining` header fields) exactly what
 the request cost, so callers can be deliberate about spend.
 
-Three endpoints used, in increasing cost order:
+Four endpoints used, in increasing cost order:
   - GET /v4/sports                                    (no odds -> free)
   - GET /v4/sports/{sport}/events                      (no odds -> free)
+  - GET /v4/sports/{sport}/odds                         (COSTS CREDITS --
+    proportional to markets x regions requested, REGARDLESS of how many
+    events it returns. One call here returns odds for every currently-
+    listed event with that market posted. This is the correct endpoint
+    for a league-wide snapshot -- e.g. MONEYLINE -- see get_sport_odds().)
   - GET /v4/sports/{sport}/events/{event_id}/odds       (COSTS CREDITS --
-    proportional to markets x regions requested; call this only for a
-    specific event/market combination actually needed)
+    proportional to markets x regions requested, PER EVENT. Only
+    appropriate when a specific event/market combination is actually
+    needed one at a time, e.g. event-specific player-prop sweeps -- see
+    get_event_odds(). Live Odds API Cost Optimization Correction
+    (2026-09-15): a real moneyline snapshot mistakenly looped this
+    endpoint once per event (20 events -> 20 credits) instead of using
+    the sport-level endpoint above (~1 credit for the same 20 events) --
+    see ODDS_API_COST_OPTIMIZATION_CORRECTION_REPORT.md. Never use this
+    endpoint in a loop to build a league-wide snapshot again.
 These are the provider's own documented cost tiers -- this module does
 not assume a specific number and instead reads the real
 `x-requests-used` / `x-requests-remaining` response headers on every
@@ -106,6 +118,29 @@ def get_nhl_events() -> ApiResult:
     the correct way to discover events BEFORE spending credits on the
     per-event odds endpoint."""
     return _get(f"/sports/{SPORT_KEY}/events", {})
+
+
+def get_sport_odds(markets: str = "h2h", bookmakers: str = "draftkings",
+                    odds_format: str = "american", date_format: str = "iso") -> ApiResult:
+    """GET /v4/sports/icehockey_nhl/odds -- THE SPORT-LEVEL, CREDIT-COSTING
+    CALL. Per the provider's own documented cost model, this endpoint
+    charges (markets requested) x (regions requested) REGARDLESS of how
+    many events it returns -- unlike get_event_odds() below, querying
+    the entire league's currently-listed slate in one call costs the
+    same as querying a single event. `bookmakers=draftkings` (not
+    `regions=us`) is used for the same reason as get_event_odds(): the
+    provider's documented bookmaker filter is more precise than a
+    whole-region pull. Use this for any league-wide snapshot (e.g.
+    MONEYLINE) -- NEVER loop get_event_odds() once per event to build
+    one; that multiplies real cost by event count for the exact same
+    data this single call already returns. `.data` is a list of event
+    objects, each shaped identically to get_event_odds()'s single-event
+    `.data` (so the same per-event parser, e.g.
+    provider_adapter.parse_the_odds_api_h2h_market, works unchanged on
+    each item)."""
+    return _get(f"/sports/{SPORT_KEY}/odds",
+                {"markets": markets, "bookmakers": bookmakers,
+                 "oddsFormat": odds_format, "dateFormat": date_format})
 
 
 def get_event_odds(event_id: str, markets: str = "player_shots_on_goal,player_shots_on_goal_alternate",

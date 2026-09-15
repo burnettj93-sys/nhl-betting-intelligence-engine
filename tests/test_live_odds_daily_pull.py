@@ -271,16 +271,23 @@ class Test07ContractDiscovery(unittest.TestCase):
 # verified h2h parser, never the unverified generic prop path.
 # ---------------------------------------------------------------------
 class Test08MoneylineSnapshot(unittest.TestCase):
+    """Odds API Cost Optimization Correction (2026-09-15): this used to
+    loop client.get_event_odds() once per event -- a real 20-event run
+    genuinely cost 20 credits this way (confirmed live, see
+    ODDS_API_COST_OPTIMIZATION_CORRECTION_REPORT.md). Every test below
+    mocks the SPORT-LEVEL /sports/{sport}/odds response (a list of event
+    objects returned by ONE call), never a per-event odds loop."""
+
     def test_snapshot_parses_real_verified_h2h_shape_and_labels_it(self):
         events_resp = _fake_response(json_data=[EVENT_B],
                                       headers={"x-requests-remaining": "499", "x-requests-last": "0"})
-        odds_resp = _fake_response(
-            json_data={"id": "evt-b", "home_team": "Florida Panthers", "away_team": "Carolina Hurricanes",
-                       "commence_time": "2026-09-29T23:00:00Z",
-                       "bookmakers": [{"key": "draftkings", "last_update": "2026-09-15T00:00:00Z",
-                                       "markets": [{"key": "h2h", "last_update": "2026-09-15T00:00:00Z",
-                                                    "outcomes": [{"name": "Florida Panthers", "price": -150},
-                                                                 {"name": "Carolina Hurricanes", "price": 130}]}]}]},
+        sport_odds_resp = _fake_response(
+            json_data=[{"id": "evt-b", "home_team": "Florida Panthers", "away_team": "Carolina Hurricanes",
+                        "commence_time": "2026-09-29T23:00:00Z",
+                        "bookmakers": [{"key": "draftkings", "last_update": "2026-09-15T00:00:00Z",
+                                        "markets": [{"key": "h2h", "last_update": "2026-09-15T00:00:00Z",
+                                                     "outcomes": [{"name": "Florida Panthers", "price": -150},
+                                                                  {"name": "Carolina Hurricanes", "price": 130}]}]}]}],
             headers={"x-requests-remaining": "498", "x-requests-last": "1"})
         cache_path = Path(tempfile.mkdtemp()) / "ml_cache.json"
 
@@ -289,10 +296,14 @@ class Test08MoneylineSnapshot(unittest.TestCase):
                          return_value=dt.datetime(2026, 9, 15, tzinfo=dt.timezone.utc)), \
              mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
              mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
-             mock.patch("requests.get", side_effect=[events_resp, odds_resp]) as mock_get:
+             mock.patch("requests.get", side_effect=[events_resp, sport_odds_resp]) as mock_get:
             result = lop.run_moneyline_snapshot("morning")
 
-        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(mock_get.call_count, 2)  # 1 free /events + 1 paid /odds -- never per-event
+        # Confirm the odds call actually hit the sport-level path, not a per-event one.
+        odds_call_url = mock_get.call_args_list[1].args[0]
+        self.assertIn("/sports/icehockey_nhl/odds", odds_call_url)
+        self.assertNotIn("/events/", odds_call_url)
         self.assertTrue(result["ran"])
         self.assertEqual(result["parsed_count"], 1)
         self.assertEqual(result["credits_spent_this_run"], 1)
@@ -315,6 +326,55 @@ class Test08MoneylineSnapshot(unittest.TestCase):
 
         self.assertEqual(mock_get.call_count, 1)  # events call only -- no odds call for a started event
         self.assertEqual(result["events_queried"], 0)
+
+    def test_one_sport_level_call_covers_many_events_without_looping(self):
+        """The exact regression this correction sprint exists for: 5
+        future events must still cost exactly ONE HTTP request (and one
+        real credit charge) for the whole snapshot -- NOT 5 separate
+        per-event requests. Proves cost is independent of event count."""
+        many_events = [
+            {"id": f"evt-{i}", "commence_time": "2026-09-29T23:00:00Z",
+             "home_team": "Florida Panthers", "away_team": "Carolina Hurricanes"}
+            for i in range(5)
+        ]
+        events_resp = _fake_response(json_data=many_events,
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+        sport_odds_payload = [
+            {"id": f"evt-{i}", "home_team": "Florida Panthers", "away_team": "Carolina Hurricanes",
+             "commence_time": "2026-09-29T23:00:00Z",
+             "bookmakers": [{"key": "draftkings", "last_update": "2026-09-15T00:00:00Z",
+                             "markets": [{"key": "h2h", "last_update": "2026-09-15T00:00:00Z",
+                                          "outcomes": [{"name": "Florida Panthers", "price": -150},
+                                                       {"name": "Carolina Hurricanes", "price": 130}]}]}]}
+            for i in range(5)
+        ]
+        sport_odds_resp = _fake_response(json_data=sport_odds_payload,
+                                          headers={"x-requests-remaining": "498", "x-requests-last": "1"})
+        cache_path = Path(tempfile.mkdtemp()) / "ml_cache.json"
+
+        with mock.patch("operational.live_odds_daily_pull.MONEYLINE_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull._now_utc",
+                         return_value=dt.datetime(2026, 9, 15, tzinfo=dt.timezone.utc)), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", side_effect=[events_resp, sport_odds_resp]) as mock_get:
+            result = lop.run_moneyline_snapshot("morning")
+
+        # 1 free /events call + 1 paid /odds call = 2 total, regardless of 5 events.
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertEqual(result["credits_spent_this_run"], 1)
+        self.assertEqual(result["parsed_count"], 5)
+
+    def test_snapshot_is_never_gated_by_preseason_lead_days(self):
+        """Part 9 of the correction: a currently-listed moneyline must be
+        captured even when the event is far in the future -- this
+        function must never call should_run_today()/find_next_preseason_start()
+        the way run_daily_pull() does for the broad props sweep."""
+        import inspect
+        source = inspect.getsource(lop.run_moneyline_snapshot)
+        self.assertNotIn("should_run_today", source)
+        self.assertNotIn("find_next_preseason_start", source)
+        self.assertNotIn("lead_days", source)
 
 
 class Test08bAutoSnapshotLabel(unittest.TestCase):

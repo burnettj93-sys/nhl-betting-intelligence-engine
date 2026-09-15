@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/6b3f5ca8c7e1a314027966d8854d7989/odds",
+    "event_id": "6b3f5ca8c7e1a314027966d8854d7989",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "464",
+    "requests_used_header": "36",
+    "response_checksum_sha256": "5286df0facd359f4a071df3ae9fcd3bf9e08a18574d9ee4b25e8b274bac14fc3",
+    "retrieved_at_utc": "2026-09-15T12:00:09Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T12:00:08Z",
+            "outcomes": [
+              {
+                "name": "Florida Panthers",
+                "price": -142
+              },
+              {
+                "name": "San Jose Sharks",
+                "price": 120
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T02:10:00Z",
+    "home_team": "San Jose Sharks",
+    "id": "6b3f5ca8c7e1a314027966d8854d7989",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

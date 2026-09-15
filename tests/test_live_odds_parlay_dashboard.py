@@ -157,5 +157,31 @@ class TestBettingPagesStillWorkAfterSprint(unittest.TestCase):
         self.assertEqual(len(at.exception), 0)
 
 
+class TestDashboardNeverImportsThePaidApiClient(unittest.TestCase):
+    """Odds API Cost Optimization Correction (2026-09-15), Part 15: a
+    dashboard page load must cost 0 Odds API credits, always -- enforced
+    structurally here (no dashboard/operational-health module may import
+    the paid client or `requests` directly), not just by convention."""
+
+    _MODULES_TO_CHECK = (
+        os.path.join(REPO_ROOT, "operational", "system_health.py"),
+        os.path.join(REPO_ROOT, "operational", "daily_postmortem.py"),
+        os.path.join(REPO_ROOT, "research", "game_edge_parlay", "engine.py"),
+        _page("21_Today.py"),
+        _page("2_Game_Detail.py"),
+        _page("36_Morning_Review.py"),
+    )
+
+    def test_no_dashboard_module_imports_requests_or_the_odds_api_client(self):
+        for path in self._MODULES_TO_CHECK:
+            with open(path) as f:
+                src = f.read()
+            self.assertNotIn("import requests", src, f"{path} must never import requests directly")
+            self.assertNotIn("live_sog_pricing.client", src,
+                              f"{path} must never import the paid Odds API client")
+            self.assertNotIn("live_sog_pricing import client", src,
+                              f"{path} must never import the paid Odds API client")
+
+
 if __name__ == "__main__":
     unittest.main()

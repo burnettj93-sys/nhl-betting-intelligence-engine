@@ -397,7 +397,19 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
     from the archive's own `retrieved_at_utc` timestamps (min/max per
     event), never from this label, so a missed or renamed scheduled run
     can't corrupt that history. Never queries an event whose
-    commence_time has already passed (Part 20)."""
+    commence_time has already passed (Part 20).
+
+    Odds API Cost Optimization Correction (2026-09-15): this used to
+    loop client.get_event_odds() once PER EVENT to build a league-wide
+    snapshot -- a real 20-event run genuinely cost 20 credits this way
+    (confirmed live, one credit per event, see
+    ODDS_API_COST_OPTIMIZATION_CORRECTION_REPORT.md). Per the provider's
+    own documented cost model, ONE call to the sport-level
+    /sports/{sport}/odds endpoint (client.get_sport_odds()) returns odds
+    for every currently-listed event at a cost proportional only to
+    markets x regions requested -- NOT to event count. This function now
+    makes exactly one paid call (skipped entirely if there are no future
+    events to report), regardless of how many games are listed."""
     now = _now_utc()
     snapshot_label = snapshot_label or _auto_snapshot_label(now)
     summary = {
@@ -418,20 +430,32 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
     summary["events_seen"] = len(events)
     future_events = _future_events_sorted(events, now)[:max_events]
 
+    if not future_events:
+        # Nothing to report -- skip the paid sport-level call entirely
+        # rather than spend credits confirming an already-known empty set.
+        payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": []}
+        MONEYLINE_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
+        return summary
+
     from research.generic_prop_pricing import provider_adapter
 
+    r_odds = client.get_sport_odds(markets=MONEYLINE_MARKET, bookmakers="draftkings")
+    if not r_odds.ok:
+        summary["api_error"] = r_odds.error
+        return summary
+    archive.archive_result(r_odds, event_id=None, market_filter=MONEYLINE_MARKET,
+                            bookmaker_filter="draftkings")
+    cost = int(r_odds.requests_last or 0)
+    summary["credits_spent_this_run"] = cost
+    summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+
+    future_event_ids = {e["id"] for e in future_events}
     rows = []
-    for event in future_events:
-        r_odds = client.get_event_odds(event["id"], markets=MONEYLINE_MARKET)
+    for event_payload in r_odds.data:
+        if event_payload.get("id") not in future_event_ids:
+            continue  # league-wide response can include events outside our future/max_events window
         summary["events_queried"] += 1
-        if not r_odds.ok:
-            continue
-        archive.archive_result(r_odds, event_id=event["id"], market_filter=MONEYLINE_MARKET,
-                                bookmaker_filter="draftkings")
-        cost = int(r_odds.requests_last or 0)
-        summary["credits_spent_this_run"] += cost
-        summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
-        parsed = provider_adapter.parse_the_odds_api_h2h_market(r_odds.data)
+        parsed = provider_adapter.parse_the_odds_api_h2h_market(event_payload)
         if parsed["status"] == "PARSED":
             summary["parsed_count"] += 1
             m = parsed["market"]

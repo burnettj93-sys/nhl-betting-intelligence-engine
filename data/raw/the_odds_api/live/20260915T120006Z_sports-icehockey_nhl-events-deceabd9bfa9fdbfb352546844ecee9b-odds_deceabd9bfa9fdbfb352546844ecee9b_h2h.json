@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/deceabd9bfa9fdbfb352546844ecee9b/odds",
+    "event_id": "deceabd9bfa9fdbfb352546844ecee9b",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "475",
+    "requests_used_header": "25",
+    "response_checksum_sha256": "08917c63520922eea232116d024d6b977d58dbe7e961bc41ae17ca7ae28d7367",
+    "retrieved_at_utc": "2026-09-15T12:00:06Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T11:59:05Z",
+            "outcomes": [
+              {
+                "name": "Chicago Blackhawks",
+                "price": 205
+              },
+              {
+                "name": "Vegas Golden Knights",
+                "price": -250
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-30T02:40:00Z",
+    "home_team": "Vegas Golden Knights",
+    "id": "deceabd9bfa9fdbfb352546844ecee9b",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

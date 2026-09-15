@@ -197,6 +197,26 @@ class TestClientRequests(unittest.TestCase):
         self.assertEqual(params["bookmakers"], "draftkings")
         self.assertIn("player_shots_on_goal", params["markets"])
 
+    def test_get_sport_odds_hits_sport_level_path_not_a_specific_event(self):
+        """Odds API Cost Optimization Correction (2026-09-15): this is the
+        endpoint that returns odds for every currently-listed event in
+        ONE call -- must never be confused with get_event_odds() (which
+        is per-event and was mistakenly looped by run_moneyline_snapshot
+        before this correction)."""
+        fake_resp = mock.Mock(status_code=200, headers={})
+        fake_resp.json.return_value = [{"id": "e1", "bookmakers": []}, {"id": "e2", "bookmakers": []}]
+        with mock.patch.object(client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("requests.get", return_value=fake_resp) as mock_get:
+            result = client.get_sport_odds()
+        called_url = mock_get.call_args[0][0]
+        self.assertIn("/sports/icehockey_nhl/odds", called_url)
+        self.assertNotIn("/events/", called_url)
+        params = mock_get.call_args[1]["params"]
+        self.assertEqual(params["bookmakers"], "draftkings")
+        self.assertEqual(params["markets"], "h2h")
+        self.assertTrue(result.ok)
+        self.assertEqual(len(result.data), 2)  # both events returned from the ONE call
+
 
 # --------------------------------------------------------------------------
 # 5/6. Standard + alternate market parsing (real documented contract

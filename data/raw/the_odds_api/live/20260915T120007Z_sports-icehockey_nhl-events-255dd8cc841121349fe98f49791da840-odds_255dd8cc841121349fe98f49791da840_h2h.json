@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/255dd8cc841121349fe98f49791da840/odds",
+    "event_id": "255dd8cc841121349fe98f49791da840",
+    "http_status": 200,
+    "market_filter": "h2h",
+    "requests_last_header": "1",
+    "requests_remaining_header": "473",
+    "requests_used_header": "27",
+    "response_checksum_sha256": "6be8767d3606bab44cb645c836f7f591114f6911d13b146f94e2891a1d427282",
+    "retrieved_at_utc": "2026-09-15T12:00:07Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Pittsburgh Penguins",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "h2h",
+            "last_update": "2026-09-15T11:59:05Z",
+            "outcomes": [
+              {
+                "name": "Philadelphia Flyers",
+                "price": -135
+              },
+              {
+                "name": "Pittsburgh Penguins",
+                "price": 114
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-30T23:40:00Z",
+    "home_team": "Philadelphia Flyers",
+    "id": "255dd8cc841121349fe98f49791da840",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}
