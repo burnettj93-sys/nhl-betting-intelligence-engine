@@ -220,6 +220,64 @@ def check_real_recommendation_pipeline() -> dict:
     }
 
 
+def check_real_prop_pipeline() -> dict:
+    """Live SOG + Saves Production Certification block (2026-09-24), Part
+    39: the SOG/Saves analog of check_real_recommendation_pipeline(),
+    reported SEPARATELY per market rather than collapsed into one
+    misleading green status (the block's own explicit instruction).
+    PENDING_LIVE_CONTRACT is a distinct, real, non-failure state -- ONLY
+    true because DraftKings has never posted either market (see
+    docs/LIVE_SOG_SAVES_CERTIFICATION.md), not because anything here is
+    broken."""
+    try:
+        from operational import real_prop_orchestrator  # noqa: F401
+        from research.generic_prop_pricing import provider_adapter as pa
+        modules_import_cleanly = True
+        import_error = None
+    except Exception as exc:  # noqa: BLE001
+        modules_import_cleanly = False
+        import_error = f"{exc.__class__.__name__}: {exc}"
+        pa = None
+
+    def _market_status(market_family: str) -> str:
+        if not modules_import_cleanly:
+            return "NOT_READY"
+        return "READY" if pa.is_contract_verified("draftkings", market_family) else "PENDING_LIVE_CONTRACT"
+
+    real_sog_recorded = None
+    real_saves_recorded = None
+    query_error = None
+    try:
+        pl_conn = pl.init_db()
+        real_sog_recorded = pl_conn.execute(
+            "SELECT COUNT(*) c FROM predictions WHERE market_family = 'SOG'").fetchone()["c"]
+        real_saves_recorded = pl_conn.execute(
+            "SELECT COUNT(*) c FROM predictions WHERE market_family = 'GOALIE_SAVES'").fetchone()["c"]
+        pl_conn.close()
+    except Exception as exc:  # noqa: BLE001
+        query_error = f"{exc.__class__.__name__}: {exc}"
+
+    orchestration_status = "HEALTHY" if modules_import_cleanly and query_error is None else "NOT_OPERATIONAL"
+    return {
+        "orchestration_status": orchestration_status,
+        "orchestration_import_error": import_error,
+        "query_error": query_error,
+        "sog_status": _market_status("PLAYER_SOG"),
+        "saves_status": _market_status("GOALIE_SAVES"),
+        "real_sog_recommendations_recorded": real_sog_recorded,
+        "real_saves_recommendations_recorded": real_saves_recorded,
+        # Game Edge Parlay needs at least one market's contract verified
+        # to ever produce a real (not "no qualifying parlay") result --
+        # PARTIAL reflects "the adapter exists and is wired, but nothing
+        # can feed it yet", never a claim that the parlay engine itself
+        # is broken.
+        "game_edge_parlay_status": "PARTIAL" if modules_import_cleanly else "NOT_READY",
+        "note": ("PENDING_LIVE_CONTRACT is a real, expected, non-failure state -- see "
+                 "docs/LIVE_SOG_SAVES_CERTIFICATION.md for the exhaustive real-payload scan "
+                 "that established it. It becomes READY the day DraftKings first posts either market."),
+    }
+
+
 def check_yahoo() -> dict:
     """Never blocks overall betting readiness (per instruction) --
     purely informational."""
@@ -248,6 +306,7 @@ def build_readiness_report() -> dict:
     context = check_context()
     predictions = check_predictions()
     real_pipeline = check_real_recommendation_pipeline()
+    real_prop_pipeline = check_real_prop_pipeline()
     yahoo = check_yahoo()
 
     # Explicit, factual rules -- never a weighted/subjective score.
@@ -296,6 +355,16 @@ def build_readiness_report() -> dict:
             f"real recommendation pipeline NOT_OPERATIONAL: "
             f"{real_pipeline['orchestration_import_error'] or real_pipeline['query_error']}")
 
+    # Live SOG + Saves Production Certification block (2026-09-24), Part
+    # 39: a market genuinely PENDING_LIVE_CONTRACT (no real DraftKings
+    # payload has ever existed for it) is never a hard failure or even a
+    # warning -- that is the correct, honest, expected state today. Only
+    # the orchestration machinery itself failing is a real problem.
+    if real_prop_pipeline["orchestration_status"] != "HEALTHY":
+        hard_failures.append(
+            f"real prop (SOG/Saves) pipeline NOT_OPERATIONAL: "
+            f"{real_prop_pipeline['orchestration_import_error'] or real_prop_pipeline['query_error']}")
+
     if hard_failures:
         verdict = NOT_READY
     elif warnings:
@@ -311,7 +380,8 @@ def build_readiness_report() -> dict:
         "checks": {
             "databases": databases, "nhl": nhl, "odds": odds, "models": models,
             "pipeline": pipeline, "context": context, "predictions": predictions,
-            "real_recommendation_pipeline": real_pipeline, "yahoo": yahoo,
+            "real_recommendation_pipeline": real_pipeline, "real_prop_pipeline": real_prop_pipeline,
+            "yahoo": yahoo,
         },
     }
 

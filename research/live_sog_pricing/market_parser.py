@@ -27,6 +27,17 @@ import re
 
 STANDARD_MARKET_KEY = "player_shots_on_goal"
 ALTERNATE_MARKET_KEY = "player_shots_on_goal_alternate"
+# Live SOG + Saves Production Certification block (2026-09-24):
+# player_total_saves (research/player_props/registry.py's own documented
+# odds_api_market_key for GOALIE_SAVES) uses the identical documented
+# Odds API Over/Under outcome shape as player_shots_on_goal -- outcomes[].
+# name in ("Over", "Under"), .description = the named player (here, the
+# goalie), .point = the line, .price = American odds. Neither market has
+# ever been observed against a real payload (see
+# docs/LIVE_SOG_SAVES_CERTIFICATION.md); this constant exists so
+# parse_event_odds_response() can recognize it by the SAME already-tested
+# parser, never a second, duplicated one.
+SAVES_MARKET_KEY = "player_total_saves"
 
 _MILESTONE_RE = re.compile(r"^\s*(\d+)\s*\+\s*$")
 
@@ -40,20 +51,26 @@ class UnrecognizedOutcomeShapeError(ValueError):
 
 def parse_standard_market(event_id: str, home_team: str, away_team: str,
                            bookmaker: dict, market: dict) -> list[dict]:
-    """`market["key"] == "player_shots_on_goal"`. Returns one dict per
-    outcome (Over AND Under both kept -- see market_grouping.py for
-    pairing them into two-sided quotes)."""
+    """`market["key"] in (STANDARD_MARKET_KEY, SAVES_MARKET_KEY)` -- both
+    share the identical documented Over/Under outcome shape (Part 8 of
+    the Live SOG + Saves Production Certification block: "Saves uses the
+    identical Over/Under outcome shape", never re-verified as a separate
+    assumption). Returns one dict per outcome (Over AND Under both kept
+    -- see group_standard_two_sided() for pairing them into two-sided
+    quotes). `market_key` reflects the market's OWN real key (not a
+    hardcoded constant), so a caller can tell which family a quote came
+    from without re-inspecting the original payload."""
     quotes = []
     for outcome in market.get("outcomes", []):
         side = outcome.get("name")
         if side not in ("Over", "Under"):
             raise UnrecognizedOutcomeShapeError(
-                f"standard SOG market outcome name {side!r} is neither 'Over' nor 'Under'")
+                f"standard market outcome name {side!r} is neither 'Over' nor 'Under'")
         quotes.append({
             "provider_event_id": event_id, "home_team": home_team, "away_team": away_team,
             "bookmaker": bookmaker.get("key"), "bookmaker_title": bookmaker.get("title"),
             "bookmaker_last_update_utc": bookmaker.get("last_update"),
-            "market_key": STANDARD_MARKET_KEY, "market_last_update_utc": market.get("last_update"),
+            "market_key": market.get("key"), "market_last_update_utc": market.get("last_update"),
             "player_name_raw": outcome.get("description"), "side": side.upper(),
             "point": outcome.get("point"), "price_american": outcome.get("price"),
             "shape": "over_under",
@@ -93,35 +110,47 @@ def parse_alternate_market(event_id: str, home_team: str, away_team: str,
     return quotes
 
 
-def parse_event_odds_response(event_odds: dict) -> list[dict]:
+def parse_event_odds_response(event_odds: dict, standard_market_keys: tuple[str, ...] = (STANDARD_MARKET_KEY,)) -> list[dict]:
     """Top-level entry point: given one event's raw /odds response
-    (`client.get_event_odds()`'s `.data`), returns every SOG quote from
-    every requested market, across every bookmaker present (normally
-    just DraftKings, since that's the only bookmaker this project
-    requests -- Part: "DraftKings first")."""
+    (`client.get_event_odds()`'s `.data`), returns every quote from every
+    requested market, across every bookmaker present (normally just
+    DraftKings, since that's the only bookmaker this project requests --
+    Part: "DraftKings first").
+
+    `standard_market_keys` defaults to just SOG's own standard key
+    (unchanged existing behavior for every existing caller). Pass
+    `(STANDARD_MARKET_KEY, SAVES_MARKET_KEY)` to also recognize Saves
+    quotes in the same pass -- both share the identical documented
+    Over/Under shape parse_standard_market() already handles, so no new
+    parsing logic is needed, only recognizing the additional real key."""
     event_id = event_odds.get("id")
     home_team, away_team = event_odds.get("home_team"), event_odds.get("away_team")
     quotes = []
     for bookmaker in event_odds.get("bookmakers", []):
         for market in bookmaker.get("markets", []):
-            if market.get("key") == STANDARD_MARKET_KEY:
+            if market.get("key") in standard_market_keys:
                 quotes.extend(parse_standard_market(event_id, home_team, away_team, bookmaker, market))
             elif market.get("key") == ALTERNATE_MARKET_KEY:
                 quotes.extend(parse_alternate_market(event_id, home_team, away_team, bookmaker, market))
     return quotes
 
 
-def group_standard_two_sided(quotes: list[dict]) -> dict[tuple, dict]:
+def group_standard_two_sided(quotes: list[dict], market_key: str = STANDARD_MARKET_KEY) -> dict[tuple, dict]:
     """Groups standard-market Over/Under quotes into two-sided pairs,
     keyed by (provider_event_id, bookmaker, player_name_raw, point,
     market_last_update_utc) -- the market-coherence policy this slice
     requires: an Over and Under are only paired if they came from the
     SAME returned market object (same last_update), never stitched
     together across different snapshots. Returns
-    {key: {"over": quote_or_None, "under": quote_or_None}}."""
+    {key: {"over": quote_or_None, "under": quote_or_None}}.
+
+    `market_key` defaults to STANDARD_MARKET_KEY (SOG, unchanged existing
+    behavior) -- pass SAVES_MARKET_KEY to group Saves quotes from a
+    quotes list that also contains SOG quotes (parse_event_odds_response()
+    returns both families mixed together when both keys are requested)."""
     groups: dict[tuple, dict] = {}
     for q in quotes:
-        if q["market_key"] != STANDARD_MARKET_KEY:
+        if q["market_key"] != market_key:
             continue
         key = (q["provider_event_id"], q["bookmaker"], q["player_name_raw"], q["point"],
                q["market_last_update_utc"])

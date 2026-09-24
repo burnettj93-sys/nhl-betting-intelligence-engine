@@ -602,10 +602,22 @@ def _main() -> None:
             orchestrator_result = orchestrator.run_real_moneyline_recommendations()
             result["real_odds_bridge"] = bridge_result
             result["real_recommendation_orchestrator"] = orchestrator_result
-    elif args.mode == "sweep-first":
-        result = run_targeted_prop_sweep("first")
-    else:
-        result = run_targeted_prop_sweep("second")
+    elif args.mode in ("sweep-first", "sweep-second"):
+        result = run_targeted_prop_sweep("first" if args.mode == "sweep-first" else "second")
+        # Live SOG + Saves Production Certification block (2026-09-24),
+        # Part 34: reuses these ALREADY-scheduled, quota-disciplined,
+        # SOG/Saves-priority sweeps as the real orchestration trigger --
+        # no new job added. Only fires on a real, successful sweep (never
+        # on an API error); operational.real_prop_orchestrator reads the
+        # real archived payloads run_targeted_prop_sweep() itself just
+        # wrote via archive.archive_result(), so this never duplicates a
+        # network call. Every downstream write (prospective_ledger's
+        # idempotency key, paper_bankroll's idempotency key) is already
+        # independently idempotent.
+        if result.get("ran"):
+            from operational import real_prop_orchestrator as prop_orchestrator
+            result["real_sog_orchestrator"] = prop_orchestrator.run_real_sog_recommendations()
+            result["real_saves_orchestrator"] = prop_orchestrator.run_real_saves_recommendations()
 
     print(json.dumps(result, indent=2, sort_keys=True))
 
