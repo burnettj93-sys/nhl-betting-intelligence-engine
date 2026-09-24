@@ -538,5 +538,48 @@ class Test09RealRecommendationTrigger(unittest.TestCase):
         mock_orch.assert_not_called()
 
 
+# ---------------------------------------------------------------------
+# 10. Live SOG + Saves automation trigger (Part 34, 2026-09-24)
+# ---------------------------------------------------------------------
+class Test10RealPropTrigger(unittest.TestCase):
+    """sweep-first/sweep-second are the chosen automation trigger for the
+    real SOG/Saves orchestrator (Part 34) -- reusing these already-
+    scheduled, quota-disciplined, SOG/Saves-priority jobs rather than
+    adding new ones."""
+
+    def _run_main(self, mode):
+        with mock.patch("sys.argv", ["live_odds_daily_pull.py", "--mode", mode]), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True):
+            lop._main()
+
+    def test_successful_sweep_first_triggers_both_prop_orchestrators(self):
+        with mock.patch.object(lop, "run_targeted_prop_sweep", return_value={"ran": True}), \
+             mock.patch("operational.real_prop_orchestrator.run_real_sog_recommendations",
+                         return_value={"status": "SUCCESS"}) as mock_sog, \
+             mock.patch("operational.real_prop_orchestrator.run_real_saves_recommendations",
+                         return_value={"status": "SUCCESS"}) as mock_saves:
+            self._run_main("sweep-first")
+        mock_sog.assert_called_once()
+        mock_saves.assert_called_once()
+
+    def test_successful_sweep_second_triggers_both_prop_orchestrators(self):
+        with mock.patch.object(lop, "run_targeted_prop_sweep", return_value={"ran": True}), \
+             mock.patch("operational.real_prop_orchestrator.run_real_sog_recommendations",
+                         return_value={"status": "SUCCESS"}) as mock_sog, \
+             mock.patch("operational.real_prop_orchestrator.run_real_saves_recommendations",
+                         return_value={"status": "SUCCESS"}) as mock_saves:
+            self._run_main("sweep-second")
+        mock_sog.assert_called_once()
+        mock_saves.assert_called_once()
+
+    def test_api_error_never_triggers_the_prop_orchestrators(self):
+        with mock.patch.object(lop, "run_targeted_prop_sweep", return_value={"ran": False, "api_error": "boom"}), \
+             mock.patch("operational.real_prop_orchestrator.run_real_sog_recommendations") as mock_sog, \
+             mock.patch("operational.real_prop_orchestrator.run_real_saves_recommendations") as mock_saves:
+            self._run_main("sweep-first")
+        mock_sog.assert_not_called()
+        mock_saves.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

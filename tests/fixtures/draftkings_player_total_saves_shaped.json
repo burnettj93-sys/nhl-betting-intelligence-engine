@@ -1,0 +1,25 @@
+{
+  "_provenance": "SANITIZED, REALISTICALLY-SHAPED SYNTHETIC FIXTURE -- NOT a captured real payload. Built to match The Odds API's own officially documented player-prop outcome shape (identical Over/Under shape to player_shots_on_goal -- outcomes[].name = Over/Under, .description = player name, .point = line, .price = American odds), never independently re-verified against a real payload. An exhaustive scan of every real archived event file under data/raw/the_odds_api/live/ (2026-09-24) found DraftKings has NEVER returned a real player_total_saves market for any NHL event in this project's history -- see docs/LIVE_SOG_SAVES_CERTIFICATION.md. This fixture exists solely to test the orchestration/identity/pricing pipeline end-to-end; it is never treated as evidence that the contract itself is verified.",
+  "id": "fixture-saves-evt-1",
+  "sport_key": "icehockey_nhl",
+  "commence_time": "2026-10-15T23:00:00Z",
+  "home_team": "Toronto Maple Leafs",
+  "away_team": "Boston Bruins",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "last_update": "2026-10-15T18:00:00Z",
+      "markets": [
+        {
+          "key": "player_total_saves",
+          "last_update": "2026-10-15T18:00:00Z",
+          "outcomes": [
+            {"name": "Over", "description": "Jeremy Swayman", "point": 24.5, "price": -110},
+            {"name": "Under", "description": "Jeremy Swayman", "point": 24.5, "price": -110}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -122,5 +122,75 @@ class TestDemoRowsAreLabeledSimulated(unittest.TestCase):
             self.assertTrue(r["is_demo"])
 
 
+class TestRealPropOpportunityShapeAdapter(unittest.TestCase):
+    """Live SOG + Saves Production Certification block (2026-09-24),
+    Parts 19-22: the minimum shape adapter feeding real SOG/Saves
+    observations into the existing Top Conviction / Game Edge Parlay
+    engines, unmodified."""
+
+    def _sog_bet_row(self, **overrides):
+        row = {
+            "market_family": "SOG", "player_id": "8475166", "player_name_snapshot": "John Tavares",
+            "team": "TOR", "opponent": "BOS", "market_id": "PLAYER_SOG_4PLUS", "threshold": "4+",
+            "side": "OVER", "prospective_status": "BET", "confidence": "HIGH",
+            "conservative_probability": 0.60, "raw_probability": 0.65,
+            "market_no_vig_probability": 0.50, "odds_american": -115,
+        }
+        row.update(overrides)
+        return row
+
+    def test_bet_row_converts_to_a_valid_top_conviction_candidate(self):
+        from dashboard import conviction
+        opp = rrv.real_prop_observation_to_opportunity_shape(self._sog_bet_row())
+        self.assertEqual(opp["prop"], "sog")
+        self.assertEqual(opp["decision"], "BET")
+        self.assertGreater(opp["conservative_edge"], 0)
+        self.assertGreater(opp["ev"], 0)
+        ranked = conviction.top_conviction([opp])
+        self.assertEqual(len(ranked), 1)
+
+    def test_saves_market_family_maps_to_lowercase_saves_prop(self):
+        row = self._sog_bet_row(market_family="GOALIE_SAVES", market_id="GOALIE_SAVES_20PLUS", threshold="20+")
+        opp = rrv.real_prop_observation_to_opportunity_shape(row)
+        self.assertEqual(opp["prop"], "saves")
+
+    def test_unrecognized_market_family_returns_none(self):
+        row = self._sog_bet_row(market_family="MONEYLINE")
+        self.assertIsNone(rrv.real_prop_observation_to_opportunity_shape(row))
+
+    def test_wait_row_never_qualifies_for_top_conviction(self):
+        from dashboard import conviction
+        opp = rrv.real_prop_observation_to_opportunity_shape(self._sog_bet_row(prospective_status="WAIT"))
+        self.assertEqual(conviction.top_conviction([opp]), [])
+
+    def test_no_real_observations_yields_no_qualifying_game_edge_parlay(self):
+        """The real, current, honest state: zero real SOG/Saves
+        observations exist (no contract verified yet -- Part 33), so the
+        existing Game Edge Parlay engine correctly refuses to qualify a
+        parlay, never manufacturing one from nothing (Part 20/31)."""
+        from research.game_edge_parlay.engine import build_game_edge_parlay
+        result = build_game_edge_parlay([], "TOR", "BOS")
+        self.assertEqual(result["status"], "NO_QUALIFYING_GAME_EDGE_PARLAY")
+
+    def test_real_prop_recommendations_for_conviction_and_parlay_reads_isolated_ledger(self):
+        fd, path = tempfile.mkstemp(suffix=".db")
+        path = Path(path)
+        path.unlink()
+        pl_conn = pl.init_db(path)
+        try:
+            pl.record_model_observation(
+                pl_conn, event_start_utc=EVENT_START, created_at_utc=CUTOFF, prediction_cutoff_utc=CUTOFF,
+                game_id="1", game_date="2026-10-15", player_id="8475166", team="TOR", opponent="BOS",
+                market_id="PLAYER_SOG_4PLUS", market_family="SOG", threshold="4+", side="OVER",
+                raw_probability=0.45, conservative_probability=0.40, market_no_vig_probability=0.30,
+                odds_american=-115, prospective_status="BET")
+            opps = rrv.real_prop_recommendations_for_conviction_and_parlay(pl_conn=pl_conn)
+            self.assertEqual(len(opps), 1)
+            self.assertEqual(opps[0]["prop"], "sog")
+        finally:
+            pl_conn.close()
+            path.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     unittest.main()

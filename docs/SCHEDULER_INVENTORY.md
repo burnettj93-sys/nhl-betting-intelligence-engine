@@ -14,8 +14,8 @@
 | 6 | `moneyline-snapshot` | 08:00 / 13:00 / 17:00 / 20:00 daily (4×) | `python3 -m operational.live_odds_daily_pull --mode=moneyline` | The Odds API (moneyline, DraftKings only) | `operational/moneyline_snapshot_cache.json`; odds-API archive. **New this block (Part 22):** on a successful (`ran: True`) pull, ALSO triggers `operational.real_odds_bridge.sync_moneyline_odds_to_snapshots()` → `nhl.db.odds_snapshots`, then `operational.real_recommendation_orchestrator.run_real_moneyline_recommendations()` → `prospective_observations.db` + `paper_bankroll.db` (`REAL_MARKET_PAPER` track) | **Yes** (metered — one sport-level call, not per-event) |
 | 7 | `midday-schedule-refresh` | 13:00 daily | `python3 -m operational.nhl_sync --mode=midday` | NHL public schedule API | `nhl.db` (schedule revisions); `ingestion_health_cache.json["nhl_midday_schedule_refresh"]` | No |
 | 8 | `pregame-targeted-refresh` | every 30 min (`StartInterval=1800`) | `python3 -m operational.nhl_sync --mode=pregame` | NHL public roster/goalie API, windowed internally to games in the next few hours | `nhl.db` (roster/goalie status); `ingestion_health_cache.json["nhl_pregame_targeted_refresh"]` | No |
-| 9 | `prop-sweep-first` | every 30 min (`StartInterval=1800`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-first` | The Odds API, windowed internally to events 3–4.5h from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive | **Yes** (metered, windowed — most firings are no-ops) |
-| 10 | `prop-sweep-second` | every 15 min (`StartInterval=900`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-second` | The Odds API, only events the first sweep already found a quote for, windowed to 45–75 min from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive | **Yes** (metered, windowed) |
+| 9 | `prop-sweep-first` | every 30 min (`StartInterval=1800`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-first` | The Odds API, windowed internally to events 3–4.5h from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive. **New (Live SOG + Saves block, Part 34):** on a successful (`ran: True`) sweep, ALSO triggers `operational.real_prop_orchestrator.run_real_sog_recommendations()` and `run_real_saves_recommendations()` → `prospective_observations.db` + `paper_bankroll.db` (currently always a no-op in production: neither contract is verified yet — see `docs/LIVE_SOG_SAVES_CERTIFICATION.md`) | **Yes** (metered, windowed — most firings are no-ops) |
+| 10 | `prop-sweep-second` | every 15 min (`StartInterval=900`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-second` | The Odds API, only events the first sweep already found a quote for, windowed to 45–75 min from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive. **New (Part 34):** same real-prop-orchestrator trigger as row 9 | **Yes** (metered, windowed) |
 
 ## Overlap analysis
 
@@ -34,3 +34,11 @@
 ## No new jobs added
 
 Per Part 22's explicit instruction ("prefer integrating with existing odds/data workflow rather than creating dozens of new scheduled jobs"), the real recommendation pipeline's trigger reuses the **already-scheduled** `moneyline-snapshot` job (row 6) rather than adding an 11th job. This required editing only `operational/live_odds_daily_pull.py::_main()`'s `--mode=moneyline` branch.
+
+## `prop-sweep-first` / `prop-sweep-second` / `daily-props-pull` redundancy audit (Live SOG + Saves block, Part 34)
+
+Audited whether all three remain independently justified before wiring the new real SOG/Saves orchestrator trigger into rows 9-10. Conclusion: **all three are justified; none is redundant; none was removed or rescheduled.**
+- `daily-props-pull` (row 5) is a **broad** multi-market pull covering every prop family this project tracks (Goals, Assists, Points, etc., not only SOG/Saves), once daily.
+- `prop-sweep-first`/`prop-sweep-second` (rows 9-10) are **narrow**, SOG/Saves-**only** (`FIRST_SWEEP_MARKETS = "player_shots_on_goal,player_total_saves"`), windowed to the pregame hours the owner's own stated priority (SOG/Saves as the primary prop focus) calls for, and write to a separate cache from `daily-props-pull`.
+
+These serve genuinely different purposes (broad daily coverage vs. narrow high-priority pregame refresh) and no consolidation was made.
