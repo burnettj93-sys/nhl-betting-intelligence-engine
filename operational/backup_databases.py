@@ -42,6 +42,17 @@ CRITICAL_DATABASES = {
 
 RETENTION_COUNT = 14  # keep the last 14 backups per database (roughly 2 weeks at a daily cadence)
 
+# Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+# Part 9: the odds archive hygiene split -- routine operational odds
+# captures now write to this gitignored runtime location (research/
+# live_sog_pricing/archive.py::ARCHIVE_DIR), never data/raw/the_odds_api/
+# live/ (which keeps its existing, git-tracked, curated historical
+# evidence exactly as-is -- nothing there was moved or deleted). Backed
+# up here, in the same spirit as the CRITICAL_DATABASES above, since it
+# is real, accumulating, non-reproducible operational data.
+ODDS_ARCHIVE_DIR = REPO_ROOT / "operational" / "odds_archive" / "live"
+ODDS_ARCHIVE_RETENTION_COUNT = 7  # 7 rotated tarball snapshots (~1 week at a daily cadence)
+
 
 def backup_one(name: str, source_path: Path, *, backup_root: Path | None = None,
                 now: dt.datetime | None = None) -> dict:
@@ -87,9 +98,50 @@ def _apply_retention(target_dir: Path, name: str, *, keep: int = RETENTION_COUNT
         stale.unlink()
 
 
+def backup_odds_archive(*, source_dir: Path | None = None, backup_root: Path | None = None,
+                         now: dt.datetime | None = None) -> dict:
+    """Part 9: a plain directory snapshot (tar), not the SQLite online
+    backup API above -- the odds archive is a directory of small JSON
+    files, not a database. `source_dir` looked up fresh at call time
+    (never bound as a default at def-time -- see archive_result()'s own
+    documented bug/fix for exactly why that matters for mock.patch in
+    tests)."""
+    source_dir = source_dir if source_dir is not None else ODDS_ARCHIVE_DIR
+    backup_root = backup_root if backup_root is not None else BACKUP_ROOT
+    now = now or dt.datetime.now(dt.timezone.utc)
+    result = {"name": "odds_archive", "source_path": str(source_dir), "status": "SUCCESS",
+              "backup_path": None, "error": None}
+    if not source_dir.exists() or not any(source_dir.iterdir()):
+        result["status"] = "SKIPPED"
+        result["error"] = "no odds archive captures exist yet (nothing to back up)"
+        return result
+
+    target_dir = backup_root / "odds_archive"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = now.strftime("%Y%m%dT%H%M%SZ")
+    target_path = target_dir / f"odds_archive_{timestamp}.tar.gz"
+    try:
+        import tarfile
+        with tarfile.open(target_path, "w:gz") as tar:
+            tar.add(source_dir, arcname="live")
+        result["backup_path"] = str(target_path)
+    except Exception as exc:  # noqa: BLE001 -- one failure must not abort the whole batch
+        result["status"] = "FAILED"
+        result["error"] = f"{exc.__class__.__name__}: {exc}"
+        if target_path.exists():
+            target_path.unlink()
+        return result
+
+    backups = sorted(target_dir.glob("odds_archive_*.tar.gz"))
+    for stale in (backups[:-ODDS_ARCHIVE_RETENTION_COUNT] if len(backups) > ODDS_ARCHIVE_RETENTION_COUNT else []):
+        stale.unlink()
+    return result
+
+
 def run_all_backups(*, backup_root: Path | None = None, now: dt.datetime | None = None) -> dict:
     results = {name: backup_one(name, path, backup_root=backup_root, now=now)
                for name, path in CRITICAL_DATABASES.items()}
+    results["odds_archive"] = backup_odds_archive(backup_root=backup_root, now=now)
     failures = [r for r in results.values() if r["status"] == "FAILED"]
     overall_status = "FAILED" if failures else "SUCCESS"
     summary = {"status": overall_status, "results": results, "failure_count": len(failures)}

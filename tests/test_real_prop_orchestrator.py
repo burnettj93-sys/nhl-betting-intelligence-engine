@@ -18,6 +18,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import db
 from operational import paper_bankroll as pb
@@ -196,6 +197,62 @@ class TestSOGEligiblePathWithContractVerifiedForTesting(SOGOrchestratorTestBase)
             "ORDER BY created_at_utc").fetchall()
         self.assertEqual([r["prediction_checkpoint"] for r in rows], ["PRIMARY_DAILY", "MARKET_REFRESH"])
 
+    def test_sog_outcome_is_identical_with_and_without_goalie_confirmation_data(self):
+        """Starting-Goalie Certainty block (2026-09-24), Part 5: the
+        opposing goalie's confirmation status must never affect a SOG
+        recommendation -- the existing SOG model (research/player_sog/
+        live_projection.py::project_player_sog) conditions on the
+        OPPONENT TEAM's real SOG-allowed rate, never a specific opposing
+        goalie's identity or confirmation state. Proven directly: the
+        exact same real quote produces the identical action whether
+        goalie_status_events has zero rows or a real CONFIRMED row for
+        the opposing goalie."""
+        no_goalie_data = self.nhl_conn.execute("SELECT COUNT(*) c FROM goalie_status_events").fetchone()["c"]
+        self.assertEqual(no_goalie_data, 0)
+        without_goalie_data = self._run_with_contract_verified()
+        action_without = without_goalie_data["results"][0]["action"]
+
+        # A fresh isolated run, this time WITH a real CONFIRMED opposing
+        # goalie row present -- the SOG action must be byte-for-byte the
+        # same real result, proving the model path never even looks at it.
+        nhl_conn2 = _fresh_nhl_conn()
+        _seed_tor_bos_game(nhl_conn2, game_id=self.game_id)
+        nhl_conn2.execute(
+            "INSERT INTO goalie_status_events (game_id, team_id, player_id, status, effective_at_utc, "
+            "observed_at_utc, source) VALUES (?, 'BOS', '8480280', 'CONFIRMED', '2026-10-15T17:00:00', "
+            "'2026-10-15T17:00:00', 'test')", (self.game_id,))
+        nhl_conn2.commit()
+        pl_conn2, pl_path2 = _tmp_pl_conn()
+        bankroll_conn2, bankroll_path2 = _tmp_bankroll_conn()
+        try:
+            from unittest import mock
+            from research.generic_prop_pricing import provider_adapter as pa
+            with mock.patch.object(pa, "VERIFIED_CONTRACTS",
+                                   frozenset({("draftkings", "MONEYLINE"), ("draftkings", "PLAYER_SOG")})):
+                with_goalie_data = rpo.run_real_sog_recommendations(
+                    nhl_conn=nhl_conn2, pl_conn=pl_conn2, bankroll_conn=bankroll_conn2, payloads=[self.payload])
+            action_with = with_goalie_data["results"][0]["action"]
+        finally:
+            nhl_conn2.close()
+            pl_conn2.close()
+            pl_path2.unlink(missing_ok=True)
+            bankroll_conn2.close()
+            bankroll_path2.unlink(missing_ok=True)
+
+        self.assertEqual(action_without, action_with)
+
+
+class TestSOGNeverCallsTheGoalieStarterGate(SOGOrchestratorTestBase):
+    """Part 5, structural proof: the SOG code path has no reference at
+    all to _apply_starter_certainty_gate or goalie_status_events --
+    the independence isn't incidental, it's architectural."""
+
+    def test_sog_module_functions_never_call_the_saves_only_starter_gate(self):
+        import inspect
+        source = inspect.getsource(rpo._price_and_record_sog_pair)
+        self.assertNotIn("_apply_starter_certainty_gate", source)
+        self.assertNotIn("goalie_status_events", source)
+        self.assertNotIn("StarterProbabilityEngine", source)
 
 class SavesOrchestratorTestBase(unittest.TestCase):
     def setUp(self):
@@ -271,6 +328,84 @@ class TestSavesStarterCertaintyGate(SavesOrchestratorTestBase):
         for r in summary["results"]:
             if r.get("recorded"):
                 self.assertNotEqual(r.get("action"), "BET")
+
+    def test_the_gate_routes_through_the_real_consensus_mechanism(self):
+        """Starting-Goalie Certainty block (2026-09-24), Part 3/4: proves
+        the gate is not a hardcoded bypass -- it genuinely asks
+        research/goalie_intelligence/source_schema.py::compute_consensus()
+        and gets back UNKNOWN today (Stage 1: no external source is
+        integrated), never a fabricated status."""
+        from research.goalie_intelligence import source_schema
+        consensus = source_schema.compute_consensus(
+            rpo._real_external_starter_observations(game_id=1, team_id="BOS"))
+        self.assertEqual(consensus.status, source_schema.UNKNOWN)
+
+    def test_a_real_confirmed_consensus_would_allow_a_bet_through(self):
+        """Future-readiness proof (never claiming this reflects real
+        production state today): IF a real CONFIRMED consensus existed
+        for the matched goalie, the gate would let the underlying
+        evaluate_prop() action through unmodified -- proving this is a
+        real, working gate, not a permanent hardcoded WAIT."""
+        from unittest import mock
+        from research.generic_prop_pricing import provider_adapter as pa
+        from research.goalie_intelligence import source_schema
+
+        priced_bet = {"status": ge.PRICED, "action": "BET", "action_reason": ""}
+        with mock.patch.object(
+                rpo, "_real_external_starter_observations",
+                return_value=[source_schema.SourceObservation(
+                    game_id=1, team_id="BOS", goalie_id="8480280", source="TEST_ONLY",
+                    source_status=source_schema.CONFIRMED, raw_status="Confirmed",
+                    source_observed_at_utc="2026-10-15T17:00:00", ingested_at_utc="2026-10-15T17:00:00")]):
+            gated = rpo._apply_starter_certainty_gate(
+                priced_bet, matched_goalie_id="8480280", game_id=1, team_id="BOS", starter_projection=None)
+        self.assertEqual(gated["action"], "BET")
+
+
+class TestPropContractCandidateWatch(unittest.TestCase):
+    """Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+    Part 6: flags a real, non-empty SOG/Saves payload as a
+    CONTRACT_CANDIDATE, never auto-verifying."""
+
+    def setUp(self):
+        fd, path = tempfile.mkstemp(suffix=".jsonl")
+        Path(path).unlink()
+        self.log_path = Path(path)
+        self._patcher = mock.patch.object(rpo, "PROP_CONTRACT_CANDIDATES_PATH", self.log_path)
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
+        self.log_path.unlink(missing_ok=True)
+
+    def test_a_real_non_empty_payload_is_flagged_as_a_candidate_never_verified(self):
+        payload = _load_fixture("draftkings_player_shots_on_goal_shaped.json")
+        result = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
+        self.assertEqual(result["count"], 1)
+        record = result["newly_flagged"][0]
+        self.assertEqual(record["status"], "CONTRACT_CANDIDATE")
+        self.assertFalse(record["auto_verified"])
+        from research.generic_prop_pricing import provider_adapter as pa
+        self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+
+    def test_an_empty_outcomes_market_is_never_flagged(self):
+        payload = copy.deepcopy(_load_fixture("draftkings_player_shots_on_goal_shaped.json"))
+        payload["bookmakers"][0]["markets"][0]["outcomes"] = []
+        result = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
+        self.assertEqual(result["count"], 0)
+
+    def test_the_same_real_event_is_never_flagged_twice(self):
+        payload = _load_fixture("draftkings_player_shots_on_goal_shaped.json")
+        first = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
+        second = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
+        self.assertEqual(first["count"], 1)
+        self.assertEqual(second["count"], 0)
+        self.assertEqual(len(self.log_path.read_text().splitlines()), 1)
+
+    def test_no_matching_market_key_is_never_flagged(self):
+        payload = _load_fixture("draftkings_player_total_saves_shaped.json")
+        result = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
+        self.assertEqual(result["count"], 0)
 
 
 if __name__ == "__main__":

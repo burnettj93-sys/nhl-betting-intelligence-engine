@@ -1,10 +1,22 @@
 """
 Preserves every genuine The Odds API response used for development,
-unchanged, under data/raw/the_odds_api/live/ -- so parser/normalization
-work can be re-run against captured real payloads instead of spending
-API credits again. NEVER stores the API key (client.ApiResult never
-carries it in the first place -- see client.py's docstring).
-"""
+unchanged. NEVER stores the API key (client.ApiResult never carries it
+in the first place -- see client.py's docstring).
+
+Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24), Part
+9 (odds archive hygiene split -- implementing docs/
+ODDS_ARCHIVE_STORAGE_RECOMMENDATION.md's own recommendation, non-
+destructively): new routine captures now write to
+operational/odds_archive/live/ -- a gitignored, backed-up (operational/
+backup_databases.py::backup_odds_archive()) RUNTIME location, matching
+this project's existing pattern for other real, accumulating operational
+data (operational/prospective_observations.db, paper_bankroll.db, etc.).
+The prior location, data/raw/the_odds_api/live/, keeps every file it
+already had -- nothing was moved or deleted; it remains git-tracked,
+curated historical evidence. Newly-certified contract fixtures instead
+go to tests/fixtures/ (see operational/prop_contract_certification.py),
+the project's existing convention for curated, git-tracked regression
+fixtures."""
 from __future__ import annotations
 
 import hashlib
@@ -14,7 +26,7 @@ from pathlib import Path
 from research.live_sog_pricing.client import ApiResult
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
+ARCHIVE_DIR = REPO_ROOT / "operational" / "odds_archive" / "live"
 
 
 def _checksum(payload_json_text: str) -> str:

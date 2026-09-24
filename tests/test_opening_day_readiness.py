@@ -119,6 +119,20 @@ class TestRealPropPipelineCheck(unittest.TestCase):
         self.assertEqual(result["saves_status"], "PENDING_LIVE_CONTRACT")
         self.assertEqual(result["game_edge_parlay_status"], "PARTIAL")
 
+    def test_saves_starter_data_and_actionability_report_separately_from_market_contract(self):
+        """Starting-Goalie Certainty + Prop Contract Watch block
+        (2026-09-24), Part 11: these are three DIFFERENT questions and
+        must never collapse into one status."""
+        result = odr.check_real_prop_pipeline()
+        self.assertEqual(result["saves_starter_data_status"], "PARTIAL")
+        self.assertEqual(result["saves_actionability_status"], "WAIT_ONLY")
+
+    def test_orchestration_import_failure_marks_saves_starter_fields_not_ready_too(self):
+        with mock.patch("builtins.__import__", side_effect=ImportError("boom")):
+            result = odr.check_real_prop_pipeline()
+        self.assertEqual(result["saves_starter_data_status"], "NOT_READY")
+        self.assertEqual(result["saves_actionability_status"], "NOT_READY")
+
     def test_a_verified_contract_reports_ready_not_pending(self):
         from research.generic_prop_pricing import provider_adapter as pa
         with mock.patch.object(pa, "VERIFIED_CONTRACTS",

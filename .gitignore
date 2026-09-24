@@ -195,3 +195,26 @@ research/team_game_special_teams_table.jsonl
 # against the same (already-tracked-elsewhere or intentionally
 # untracked) underlying data.
 reports/daily/
+
+# Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+# Part 9: the odds-archive hygiene split (docs/
+# ODDS_ARCHIVE_STORAGE_RECOMMENDATION.md). Routine real Odds API captures
+# now write here (research/live_sog_pricing/archive.py::ARCHIVE_DIR)
+# instead of accumulating indefinitely in git history under
+# data/raw/the_odds_api/live/ (which keeps every file it already had --
+# nothing was moved or deleted, and it remains the git-tracked home for
+# curated evidence and newly-certified contract fixtures). Backed up via
+# operational/backup_databases.py::backup_odds_archive(), same as the
+# other real, accumulating operational data above.
+operational/odds_archive/
+
+# Real, machine-generated log of a KNOWN-but-never-observed prop market
+# key actually returning a real quote for the first time (operational/
+# real_prop_orchestrator.py::flag_prop_contract_candidate_if_observed())
+# -- append-only evidence for a human to review before manually updating
+# research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS.
+# Regenerable from the real archive at any time; not meaningful commit
+# history (the operational/new_contract_candidates.jsonl this mirrors
+# has never actually been committed either, just never had an explicit
+# rule written for it until now).
+operational/prop_contract_candidates.jsonl

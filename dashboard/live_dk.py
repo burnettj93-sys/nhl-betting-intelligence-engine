@@ -31,7 +31,16 @@ from research.generic_prop_pricing import provider_adapter as pa
 from research.live_sog_pricing import archive
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
+# ARCHIVE_DIR mirrors archive.ARCHIVE_DIR (the current runtime capture
+# location) -- kept as its own module attribute, as before, so existing
+# tests can mock.patch.object(dashboard.live_dk, "ARCHIVE_DIR", ...) to
+# redirect it. Starting-Goalie Certainty + Prop Contract Watch block
+# (2026-09-24), Part 9: LEGACY_ARCHIVE_DIR (the pre-hygiene-split,
+# git-tracked evidence directory) is scanned ADDITIONALLY below, so this
+# real, already-tested MONEYLINE display never silently misses a real
+# capture made either before or after the split.
+ARCHIVE_DIR = archive.ARCHIVE_DIR
+LEGACY_ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
 
 LIVE_SOURCE_LABEL = "LIVE — DRAFTKINGS"
 SIMULATED_SOURCE_LABEL = "SIMULATED — DEMO ONLY"
@@ -74,20 +83,21 @@ def _iter_archived_h2h_markets():
     player-prop probes that found nothing, from this and prior sprints)
     naturally falls out via parse_the_odds_api_h2h_market() returning
     DATA_UNAVAILABLE, never crashes, never guessed."""
-    if not ARCHIVE_DIR.exists():
-        return
-    for path in sorted(ARCHIVE_DIR.glob("*.json")):
-        try:
-            loaded = archive.load_archived(path)
-        except (OSError, ValueError):
+    for archive_dir in (ARCHIVE_DIR, LEGACY_ARCHIVE_DIR):
+        if not archive_dir.exists():
             continue
-        event = loaded.get("response")
-        if not isinstance(event, dict):
-            continue
-        result = pa.parse_the_odds_api_h2h_market(event)
-        if result["status"] != "PARSED":
-            continue
-        yield event.get("id"), result["market"], loaded.get("meta", {}).get("retrieved_at_utc")
+        for path in sorted(archive_dir.glob("*.json")):
+            try:
+                loaded = archive.load_archived(path)
+            except (OSError, ValueError):
+                continue
+            event = loaded.get("response")
+            if not isinstance(event, dict):
+                continue
+            result = pa.parse_the_odds_api_h2h_market(event)
+            if result["status"] != "PARSED":
+                continue
+            yield event.get("id"), result["market"], loaded.get("meta", {}).get("retrieved_at_utc")
 
 
 def load_latest_verified_moneyline_markets() -> dict[str, dict]:

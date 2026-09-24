@@ -75,12 +75,70 @@ from research.live_sog_pricing import event_mapping, market_parser, player_mappi
 from research.live_sog_pricing.normalized_market_adapter import quote_to_normalized_market
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
+# Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+# Part 9: routine real captures now land in the gitignored runtime
+# archive (research/live_sog_pricing/archive.py::ARCHIVE_DIR); the old
+# git-tracked evidence directory is scanned too so real captures written
+# there before this split (including any still-recent ones from this
+# same real day) are never silently missed.
+RUNTIME_ARCHIVE_DIR = REPO_ROOT / "operational" / "odds_archive" / "live"
+LEGACY_ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
 
 SOG_MARKET_ID = "PLAYER_SOG"
 SAVES_MARKET_ID = "GOALIE_SAVES"
 SOG_VALIDATED_THRESHOLDS = (2, 3, 4, 5)     # PLAYER_SOG_FOUNDATION_REPORT.md Section AI
 SAVES_VALIDATED_THRESHOLDS = (20, 25)       # GOALIE_SAVES_VALIDATION_REPORT.md
+
+PROP_CONTRACT_CANDIDATES_PATH = REPO_ROOT / "operational" / "prop_contract_candidates.jsonl"
+
+
+def flag_prop_contract_candidate_if_observed(market_key: str, payloads: list[dict]) -> dict:
+    """Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+    Part 6: distinct from operational/live_odds_daily_pull.py::
+    _flag_new_contract_candidate() (which flags a market key never
+    requested/recognized at all) -- this flags the different real event
+    Part 6 asks for: a market key this project ALREADY knows about
+    (PLAYER_SOG/GOALIE_SAVES are already in research/player_props/
+    registry.py) actually returning a real, non-empty outcome list for
+    the FIRST time. NEVER marks a contract VERIFIED -- only
+    provider_adapter.py's own VERIFIED_CONTRACTS, updated by a human
+    after real certification (Part 7), does that. Idempotent: appends at
+    most once per real (market_key, event_id) pair ever seen, checked
+    against this function's own append-only log."""
+    already_flagged = set()
+    if PROP_CONTRACT_CANDIDATES_PATH.exists():
+        for line in PROP_CONTRACT_CANDIDATES_PATH.read_text().splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            already_flagged.add((rec.get("market_key"), rec.get("event_id")))
+
+    newly_flagged = []
+    for payload in payloads:
+        event_id = payload.get("id")
+        for bookmaker in payload.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                if market.get("key") != market_key or not market.get("outcomes"):
+                    continue
+                key = (market_key, event_id)
+                if key in already_flagged:
+                    continue
+                record = {
+                    "flagged_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+                    "market_key": market_key, "event_id": event_id,
+                    "home_team": payload.get("home_team"), "away_team": payload.get("away_team"),
+                    "bookmaker": bookmaker.get("key"),
+                    "sample_outcome_keys": sorted({k for o in market["outcomes"] for k in o.keys()}),
+                    "outcome_count": len(market["outcomes"]),
+                    "status": "CONTRACT_CANDIDATE", "auto_verified": False,
+                }
+                PROP_CONTRACT_CANDIDATES_PATH.parent.mkdir(parents=True, exist_ok=True)
+                with open(PROP_CONTRACT_CANDIDATES_PATH, "a") as f:
+                    f.write(json.dumps(record, sort_keys=True) + "\n")
+                already_flagged.add(key)
+                newly_flagged.append(record)
+    return {"newly_flagged": newly_flagged, "count": len(newly_flagged)}
 
 
 def _real_nhl_schedule(conn) -> list[dict]:
@@ -123,40 +181,43 @@ def _build_goalie_identity_index() -> dict[str, list[dict]]:
 
 def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
                               max_age_hours: float = 24.0, now: dt.datetime | None = None) -> list[dict]:
-    """Reads every real archived Odds API event-odds response
-    (data/raw/the_odds_api/live/*.json, written by the already-scheduled
-    operational.live_odds_daily_pull prop-sweep jobs -- Part 15/34) whose
-    real `meta.market_filter` requested `market_key` and whose real
-    `meta.retrieved_at_utc` is within `max_age_hours`. Returns each
-    file's raw `response` payload (the exact shape market_parser.py
-    expects) -- never a demo/simulated payload. An empty result is the
-    normal, expected outcome when nothing real has been captured
-    recently, or (today) ever."""
+    """Reads every real archived Odds API event-odds response whose real
+    `meta.market_filter` requested `market_key` and whose real
+    `meta.retrieved_at_utc` is within `max_age_hours`. Scans BOTH
+    RUNTIME_ARCHIVE_DIR (where routine captures land since the Part 9
+    hygiene split, 2026-09-24) and LEGACY_ARCHIVE_DIR (the pre-split,
+    git-tracked evidence directory -- still scanned so a real capture
+    written there right before/during the split is never silently
+    missed). Returns each file's raw `response` payload (the exact shape
+    market_parser.py expects) -- never a demo/simulated payload. An
+    empty result is the normal, expected outcome when nothing real has
+    been captured recently, or (today) ever."""
     now = now or dt.datetime.now(dt.timezone.utc)
     payloads = []
-    if not ARCHIVE_DIR.is_dir():
-        return payloads
-    for path in ARCHIVE_DIR.glob("*.json"):
-        try:
-            doc = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+    for archive_dir in (RUNTIME_ARCHIVE_DIR, LEGACY_ARCHIVE_DIR):
+        if not archive_dir.is_dir():
             continue
-        meta = doc.get("meta") or {}
-        if market_key not in (meta.get("market_filter") or ""):
-            continue
-        resp = doc.get("response")
-        if not isinstance(resp, dict):
-            continue
-        retrieved_at = meta.get("retrieved_at_utc")
-        if not retrieved_at:
-            continue
-        try:
-            captured = dt.datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if (now - captured).total_seconds() > max_age_hours * 3600.0:
-            continue
-        payloads.append(resp)
+        for path in archive_dir.glob("*.json"):
+            try:
+                doc = json.loads(path.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            meta = doc.get("meta") or {}
+            if market_key not in (meta.get("market_filter") or ""):
+                continue
+            resp = doc.get("response")
+            if not isinstance(resp, dict):
+                continue
+            retrieved_at = meta.get("retrieved_at_utc")
+            if not retrieved_at:
+                continue
+            try:
+                captured = dt.datetime.fromisoformat(retrieved_at.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if (now - captured).total_seconds() > max_age_hours * 3600.0:
+                continue
+            payloads.append(resp)
     return payloads
 
 
@@ -244,6 +305,8 @@ def run_real_sog_recommendations(nhl_conn=None, pl_conn=None, bankroll_conn=None
         payloads = payloads if payloads is not None else _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY)
         payloads = payloads[:max_events]
         summary["payloads_scanned"] = len(payloads)
+        summary["contract_watch"] = flag_prop_contract_candidate_if_observed(
+            market_parser.STANDARD_MARKET_KEY, payloads)
 
         for event_payload in payloads:
             quotes = market_parser.parse_event_odds_response(event_payload)
@@ -383,28 +446,63 @@ def _price_and_record_sog_pair(nhl_conn, pl_conn, bankroll_conn, event_payload, 
 # ---------------------------------------------------------------------
 
 NO_STARTER_CONFIRMATION_SOURCE = (
-    "no real starter-confirmation source exists yet (docs/CONTEXT_DATA_DEPENDENCY_AUDIT.md) -- "
+    "no real starter-confirmation source exists yet (docs/STARTING_GOALIE_SOURCE_AUDIT.md) -- "
     "a projected/expected starter is never treated as a confirmed one for Saves, matching the "
     "identical goalie-confirmation discipline pricing/engine.py already enforces for MONEYLINE"
 )
 
 
-def _apply_starter_certainty_gate(priced: dict, *, matched_goalie_id: str,
-                                   starter_projection: dict | None) -> dict:
-    """Part 12: Saves is especially starter-sensitive, and this project
-    has no real CONFIRMED-starter source for ANY market yet (Part 13,
-    docs/CONTEXT_DATA_DEPENDENCY_AUDIT.md). A PROJECTED starter -- even
-    the model's own top-ranked candidate -- is never assumed to be a
-    CONFIRMED one, so this gate ALWAYS overrides a would-be BET/WATCH to
-    WAIT today; it mirrors, rather than duplicates, pricing/engine.py's
-    own MONEYLINE goalie-confirmation gate (WAIT unless CONFIRMED). Never
-    touches a PASS (nothing to wait on) or an already-gated status
+def _real_external_starter_observations(*, game_id, team_id: str) -> list:
+    """Starting-Goalie Certainty block (2026-09-24), Part 3/4: routes
+    through research/goalie_intelligence/source_schema.py's own real
+    consensus/confirmation-override mechanism (Parts 11-18 of the prior
+    Goalie Intelligence Foundation sprint) rather than a second, ad-hoc
+    gate. Returns real external SourceObservation objects -- always
+    empty today, because Stage 2 (a licensed/permitted live source) has
+    never been integrated (see docs/STARTING_GOALIE_SOURCE_AUDIT.md's
+    real source-contract review: Daily Faceoff blocks automated access,
+    RotoWire's real API is a paid license, Goalie Post/Frozen Tools
+    signal reference-only use). `source_schema.record_observation()`
+    always raises ExternalSourceUnavailableError for exactly this
+    reason -- caught here, not propagated, since "no source integrated"
+    is the real, current, expected state, not an error condition for
+    this orchestrator."""
+    from research.goalie_intelligence import source_schema
+    try:
+        source_schema.record_observation()
+    except source_schema.ExternalSourceUnavailableError:
+        pass
+    return []
+
+
+def _apply_starter_certainty_gate(priced: dict, *, matched_goalie_id: str, game_id,
+                                   team_id: str, starter_projection: dict | None) -> dict:
+    """Part 3/4: Saves is especially starter-sensitive. This project's
+    real, existing consensus mechanism (research/goalie_intelligence/
+    source_schema.py::compute_consensus()) is the authoritative source of
+    truth for starter certainty -- reused here UNCHANGED, never
+    duplicated. Only a real CONFIRMED consensus (status ==
+    source_schema.CONFIRMED) may allow a would-be BET/WATCH through;
+    every other consensus status (today, always UNKNOWN -- no external
+    source is integrated yet) overrides to WAIT, mirroring pricing/
+    engine.py's own MONEYLINE goalie-confirmation gate. Never touches a
+    PASS (nothing to wait on) or an already-gated status
     (NOT_MODEL_VALIDATED/CONTRACT_NOT_VERIFIED/DATA_UNAVAILABLE). The
-    real starter_projection is still recorded in the reason for
-    diagnostic visibility, even though it can never itself satisfy the
-    gate."""
+    model's own internal starter PROJECTION (StarterProbabilityEngine)
+    is recorded in the reason for diagnostic visibility, but -- per
+    source_schema.py's own explicit design -- a projection, however
+    accurate, is never treated as a confirmation (Part 4: "do not invent
+    statistical justification")."""
     if priced["status"] != ge.PRICED or priced["action"] not in ("BET", "WATCH"):
         return priced
+
+    from research.goalie_intelligence import source_schema
+    observations = _real_external_starter_observations(game_id=game_id, team_id=team_id)
+    consensus = source_schema.compute_consensus(observations)
+
+    if consensus.status == source_schema.CONFIRMED and str(consensus.leading_goalie_id) == str(matched_goalie_id):
+        return priced
+
     top_candidate = None
     if starter_projection and starter_projection.get("candidates"):
         top_candidate = max(starter_projection["candidates"], key=lambda c: c[1])
@@ -413,8 +511,8 @@ def _apply_starter_certainty_gate(priced: dict, *, matched_goalie_id: str,
     gated["action"] = "WAIT"
     gated["action_reason"] = (
         f"would otherwise be {priced['action']} ({priced['action_reason'] or 'edge/EV clear'}), but "
-        f"{NO_STARTER_CONFIRMATION_SOURCE} (model-projected top starter: "
-        f"{'this goalie' if is_top_projected else 'a different goalie'})")
+        f"starter consensus is {consensus.status} (not CONFIRMED) -- {NO_STARTER_CONFIRMATION_SOURCE} "
+        f"(model-projected top starter: {'this goalie' if is_top_projected else 'a different goalie'})")
     return gated
 
 
@@ -457,6 +555,8 @@ def run_real_saves_recommendations(nhl_conn=None, pl_conn=None, bankroll_conn=No
         payloads = payloads if payloads is not None else _recent_archive_payloads(market_parser.SAVES_MARKET_KEY)
         payloads = payloads[:max_events]
         summary["payloads_scanned"] = len(payloads)
+        summary["contract_watch"] = flag_prop_contract_candidate_if_observed(
+            market_parser.SAVES_MARKET_KEY, payloads)
 
         for event_payload in payloads:
             quotes = market_parser.parse_event_odds_response(
@@ -547,8 +647,8 @@ def _price_and_record_saves_pair(pl_conn, bankroll_conn, event_payload, pair, sc
         return {"status": priced["status"], "reason": priced.get("reason"), "player_id": goalie_id,
                 "recorded": False}
 
-    priced = _apply_starter_certainty_gate(priced, matched_goalie_id=goalie_id,
-                                            starter_projection=starter_projection)
+    priced = _apply_starter_certainty_gate(priced, matched_goalie_id=goalie_id, game_id=mapping["game_id"],
+                                            team_id=team, starter_projection=starter_projection)
 
     checkpoint = _checkpoint_for(pl_conn, game_id=str(mapping["game_id"]), player_id=goalie_id,
                                   market_id=f"{SAVES_MARKET_ID}_{threshold}PLUS", threshold=f"{threshold}+",
