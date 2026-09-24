@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3a9af73961ea2f2322255a6fca4d421e/odds",
+    "event_id": "3a9af73961ea2f2322255a6fca4d421e",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "414",
+    "requests_used_header": "86",
+    "response_checksum_sha256": "56192dc40712c8b8a69cad44fb2d06954166d7cbd460b2f2c30d2798eb5dc3a6",
+    "retrieved_at_utc": "2026-09-23T12:15:13Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Boston Bruins",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:52Z",
+            "outcomes": [
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2200
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 0.5,
+                "price": 900
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 1.5,
+                "price": -360
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 1.5,
+                "price": 250
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 2.5,
+                "price": -130
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 2.5,
+                "price": -110
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 3.5,
+                "price": 195
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 3.5,
+                "price": -270
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 4.5,
+                "price": 440
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 4.5,
+                "price": -750
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1100
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 5.5,
+                "price": -3500
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 0.5,
+                "price": -6000
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1300
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 1.5,
+                "price": -650
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 1.5,
+                "price": 400
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 2.5,
+                "price": -225
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 2.5,
+                "price": 165
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 3.5,
+                "price": 105
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 3.5,
+                "price": -145
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 4.5,
+                "price": 240
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 4.5,
+                "price": -340
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 5.5,
+                "price": 575
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1050
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-04T00:10:00Z",
+    "home_team": "Minnesota Wild",
+    "id": "3a9af73961ea2f2322255a6fca4d421e",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

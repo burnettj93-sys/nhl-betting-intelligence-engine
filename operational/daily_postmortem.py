@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from operational import challenger_registry as cr
+from operational import ingestion_health
 from operational import paper_bankroll as pb
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -353,3 +354,57 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
     ]
     path.write_text("\n".join(lines))
     return path
+
+
+def main() -> None:
+    """CLI entry point (Production Readiness Audit, Phase 6): the Morning
+    Review dashboard page deliberately never writes a report file (a page
+    view must be a pure read, per that page's own docstring/test) -- this
+    is the intentional counterpart that DOES persist one, for a scheduled
+    job to run each morning after settlement completes. Never raises past
+    the caller for a normal "nothing settled yet" result -- that's the
+    honest, expected state until real games actually settle (see
+    run_daily_postmortem()'s own WAITING_FOR_SETTLED_DATA handling)."""
+    from operational import deployment_mode as dm
+    if not dm.require_active_scheduler_or_exit("daily_postmortem"):
+        return
+
+    # Real Recommendation Pipeline block (2026-09-24), Part 24: never let
+    # a scheduled postmortem report a misleadingly "complete" day if the
+    # 07:15 settlement run hasn't actually confirmed success yet -- DEFER
+    # (never a retry loop) and let the next scheduled postmortem run pick
+    # it up once settlement recovers.
+    settlement_ready, settlement_reason = ingestion_health.dependency_ready(
+        "settlement", max_age_hours=30.0)
+    if not settlement_ready:
+        print(f"DEFERRED: upstream settlement not ready ({settlement_reason}) -- "
+              f"skipping this postmortem run rather than reporting an incomplete day as final.")
+        ingestion_health.record_run("postmortem", {"status": "DEFERRED", "reason": settlement_reason})
+        return
+
+    conn = pb.init_db()
+    report = run_daily_postmortem(conn)
+    path = write_report_markdown(report)
+    scoreboard = report.get("scoreboard", {}).get("tracks", {})
+    print(f"Daily post-mortem written to {path}")
+    for track, data in scoreboard.items():
+        s = data["bankroll_summary"]
+        print(f"  {track}: {s['bets']} bet(s), {s['wins']}W-{s['losses']}L-{s['voids']}V, "
+              f"bankroll ${s['current_bankroll']:,.2f}")
+    if report["investigate"]:
+        print(f"  {len(report['investigate'])} pattern(s) flagged for review.")
+    if report["software_bug_candidates"]:
+        print(f"  {len(report['software_bug_candidates'])} bug-fix candidate(s) generated -- "
+              f"review before acting, nothing is auto-applied.")
+    if report["challenger_ideas"]:
+        print(f"  {len(report['challenger_ideas'])} challenger idea(s) generated -- "
+              f"review before acting, nothing is auto-promoted.")
+    # P0.1 (2026-09-24 hardening block): this job never raises for a
+    # normal "nothing settled yet" run (see this function's own
+    # docstring) -- reaching this line at all is SUCCESS for health-
+    # tracking purposes; a real failure would have raised before here.
+    ingestion_health.record_run("postmortem", {"status": "SUCCESS", "report_path": str(path)})
+
+
+if __name__ == "__main__":
+    main()

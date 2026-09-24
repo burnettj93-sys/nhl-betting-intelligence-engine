@@ -36,23 +36,31 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 # ---------------------------------------------------------------------
-# Token storage (TokenStore interface expected by fantasy.yahoo.client)
+# Token storage -- REPLACED (2026-09-24 Yahoo compliance rebuild).
 # ---------------------------------------------------------------------
+# These used to write access_token/refresh_token as PLAIN TEXT columns
+# to yahoo_tokens -- not encrypted, and (confirmed via a real audit
+# before any change) never actually reached by any working flow: the
+# old dashboard page built an authorization URL but had no callback
+# handler that ever called save_token(). Tokens now belong in
+# fantasy/yahoo/token_store.py::EncryptedFileTokenStore (AES-256-GCM,
+# adapted from ~/yahoo-fantasy-cockpit's proven implementation). These
+# two now raise rather than silently writing plaintext secrets again.
 
-def save_token(conn: sqlite3.Connection, user_key: str, access_token: str, refresh_token: str,
-               expires_at_epoch: float) -> None:
-    conn.execute(
-        "INSERT INTO yahoo_tokens (user_key, access_token, refresh_token, expires_at_epoch, updated_at_utc) "
-        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_key) DO UPDATE SET "
-        "access_token=excluded.access_token, refresh_token=excluded.refresh_token, "
-        "expires_at_epoch=excluded.expires_at_epoch, updated_at_utc=excluded.updated_at_utc",
-        (user_key, access_token, refresh_token, expires_at_epoch, _now_utc()),
-    )
-    conn.commit()
+class _PlaintextTokenStorageRemoved(RuntimeError):
+    pass
 
 
-def load_token_row(conn: sqlite3.Connection, user_key: str) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM yahoo_tokens WHERE user_key = ?", (user_key,)).fetchone()
+def save_token(*_args, **_kwargs):
+    raise _PlaintextTokenStorageRemoved(
+        "fantasy_store.save_token() stored tokens as plain text and is no longer used -- "
+        "use fantasy.yahoo.token_store.EncryptedFileTokenStore instead.")
+
+
+def load_token_row(*_args, **_kwargs):
+    raise _PlaintextTokenStorageRemoved(
+        "fantasy_store.load_token_row() read plaintext tokens and is no longer used -- "
+        "use fantasy.yahoo.token_store.EncryptedFileTokenStore instead.")
 
 
 def disconnect(conn: sqlite3.Connection, user_key: str) -> None:
@@ -86,69 +94,35 @@ def load_selection(conn: sqlite3.Connection, user_key: str) -> sqlite3.Row | Non
 
 
 # ---------------------------------------------------------------------
-# Append-only snapshots (Part 18/19)
+# Append-only snapshots -- REMOVED (2026-09-24 Yahoo compliance rebuild).
 # ---------------------------------------------------------------------
+# These persisted actual Yahoo Fantasy Information (league settings,
+# roster contents, standings) to disk -- squarely what the signed API
+# agreement's Section 2.c.vii prohibits ("shall not store, cache or
+# index the Yahoo Fantasy Information"). Confirmed via a real audit
+# before any change: every one of these tables held zero rows, so
+# nothing is being deleted here, only the ability to write more. The
+# compliant replacement (Phase 9/10) is transient: fetch from Yahoo,
+# compute, display, discard -- see fantasy/yahoo/diagnostic.py for the
+# pattern. Do not resurrect a snapshot table for Yahoo-sourced data.
 
-def record_league_settings_snapshot(conn: sqlite3.Connection, user_key: str, league_key: str,
-                                     settings_json: dict, settings_hash: str) -> None:
-    conn.execute(
-        "INSERT INTO league_settings_snapshots (user_key, league_key, settings_json, settings_hash, observed_at_utc) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (user_key, league_key, json.dumps(settings_json), settings_hash, _now_utc()),
-    )
-    conn.commit()
-
-
-def latest_league_settings_snapshot(conn: sqlite3.Connection, user_key: str, league_key: str) -> dict | None:
-    row = conn.execute(
-        "SELECT settings_json, settings_hash, observed_at_utc FROM league_settings_snapshots "
-        "WHERE user_key = ? AND league_key = ? ORDER BY observed_at_utc DESC LIMIT 1",
-        (user_key, league_key),
-    ).fetchone()
-    if row is None:
-        return None
-    return {"settings": json.loads(row["settings_json"]), "settings_hash": row["settings_hash"],
-            "observed_at_utc": row["observed_at_utc"]}
+class _FantasyInformationPersistenceRemoved(RuntimeError):
+    pass
 
 
-def record_roster_snapshot(conn: sqlite3.Connection, user_key: str, league_key: str, team_key: str,
-                            roster_json: list) -> None:
-    conn.execute(
-        "INSERT INTO roster_snapshots (user_key, league_key, team_key, roster_json, observed_at_utc) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (user_key, league_key, team_key, json.dumps(roster_json), _now_utc()),
-    )
-    conn.commit()
+def _snapshot_removed(*_args, **_kwargs):
+    raise _FantasyInformationPersistenceRemoved(
+        "Persisting Yahoo Fantasy Information (league settings/roster/standings snapshots) is "
+        "prohibited by the signed API Access and Use Agreement (Section 2.c.vii). Fetch fresh from "
+        "Yahoo for each use instead -- see fantasy/yahoo/diagnostic.py.")
 
 
-def latest_roster_snapshot(conn: sqlite3.Connection, user_key: str, team_key: str) -> dict | None:
-    row = conn.execute(
-        "SELECT roster_json, observed_at_utc FROM roster_snapshots "
-        "WHERE user_key = ? AND team_key = ? ORDER BY observed_at_utc DESC LIMIT 1",
-        (user_key, team_key),
-    ).fetchone()
-    if row is None:
-        return None
-    return {"roster": json.loads(row["roster_json"]), "observed_at_utc": row["observed_at_utc"]}
-
-
-def record_standings_snapshot(conn: sqlite3.Connection, user_key: str, league_key: str, standings_json: list) -> None:
-    conn.execute(
-        "INSERT INTO standings_snapshots (user_key, league_key, standings_json, observed_at_utc) VALUES (?, ?, ?, ?)",
-        (user_key, league_key, json.dumps(standings_json), _now_utc()),
-    )
-    conn.commit()
-
-
-def latest_standings_snapshot(conn: sqlite3.Connection, user_key: str, league_key: str) -> dict | None:
-    row = conn.execute(
-        "SELECT standings_json, observed_at_utc FROM standings_snapshots "
-        "WHERE user_key = ? AND league_key = ? ORDER BY observed_at_utc DESC LIMIT 1",
-        (user_key, league_key),
-    ).fetchone()
-    if row is None:
-        return None
-    return {"standings": json.loads(row["standings_json"]), "observed_at_utc": row["observed_at_utc"]}
+record_league_settings_snapshot = _snapshot_removed
+latest_league_settings_snapshot = _snapshot_removed
+record_roster_snapshot = _snapshot_removed
+latest_roster_snapshot = _snapshot_removed
+record_standings_snapshot = _snapshot_removed
+latest_standings_snapshot = _snapshot_removed
 
 
 # ---------------------------------------------------------------------

@@ -25,6 +25,7 @@ sprint:
 from __future__ import annotations
 
 from dashboard import demo_data as dd
+from dashboard.live_dk import SIMULATED_SOURCE_LABEL
 from research.live_sog_pricing.pricing import decide, zone
 from research.player_props import decision_policy
 from pricing import odds_math as pm
@@ -154,6 +155,12 @@ def _row(player, prop, threshold, raw_p, adj_p, coherent_p, conservative_p, cont
         "context_adjusted_probability": adj_p, "coherent_probability": coherent_p,
         "conservative_probability": conservative_p, "context_state": context_state,
         "actionable": True, "entity_kind": "PLAYER", "confidence": confidence,
+        # Real Recommendation Pipeline block (2026-09-24), Part 2/12: this
+        # entire module is demo/simulated data (dd.simulate_two_sided_market
+        # above) -- every row it produces must be unambiguously labeled as
+        # such, reusing the canonical label dashboard/live_dk.py already
+        # defines for the real counterpart, never a new, inconsistent label.
+        "source": SIMULATED_SOURCE_LABEL, "is_demo": True,
     }
     row.update(priced)
     return row
@@ -198,6 +205,7 @@ def build_goalie_saves_opportunities() -> list[dict]:
                 "conservative_probability": raw_p * 0.9, "context_state": None,
                 "actionable": actionable, "entity_kind": "GOALIE",
                 "confidence": g["confidence"], "starter_certainty": g["starter_probability"],
+                "source": SIMULATED_SOURCE_LABEL, "is_demo": True,
             }
             if actionable:
                 priced = _price_and_decide("saves", g["goalie_id"], "GOALIE_SAVES", raw_p, row["conservative_probability"],

@@ -72,8 +72,14 @@ def build_readiness_report(nhl_sync_result: dict, moneypuck_sync_result: dict | 
     whatever manifest already exists on disk."""
     now = now or dt.datetime.now(dt.timezone.utc)
 
-    nhl_schedule_status = "CURRENT" if nhl_sync_result.get("status") == "OK" else "STALE"
-    nhl_results_status = "CURRENT" if nhl_sync_result.get("status") == "OK" else "STALE"
+    # Reliability fix (2026-09-24): schedule/boxscore data is CURRENT as
+    # long as the critical path succeeded, even if roster sync alone
+    # degraded (PARTIAL_SUCCESS) -- roster health is surfaced separately
+    # via nhl_sync_result["components"]["roster"], never conflated with
+    # game-result freshness.
+    _nhl_ok = nhl_sync_result.get("status") in ("SUCCESS", "PARTIAL_SUCCESS", "OK")
+    nhl_schedule_status = "CURRENT" if _nhl_ok else "STALE"
+    nhl_results_status = "CURRENT" if _nhl_ok else "STALE"
 
     mp_status = {}
     for dataset in ("team", "skater", "goalie"):

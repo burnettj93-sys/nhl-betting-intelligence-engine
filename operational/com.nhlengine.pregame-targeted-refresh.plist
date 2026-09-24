@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.pregame-targeted-refresh</string>
+
+    <!-- Intraday Refresh Architecture (P0.1, docs/INTRADAY_REFRESH_SCHEDULE.md
+         Part D): fires every 30 minutes, but operational.nhl_sync
+         --mode=pregame internally checks whether any game's scheduled
+         start falls inside a 3.0-4.5 hour puck-drop-relative window
+         (teams_playing_in_window()) -- most firings find nothing
+         in-window and make zero roster API calls at all. Only the
+         teams actually playing within that window get a targeted
+         roster refresh, never a full-league sweep. Same StartInterval
+         pattern already used by the odds engine's own prop sweeps
+         (com.nhlengine.prop-sweep-first/second). -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.nhl_sync</string>
+        <string>--mode=pregame</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/pregame_targeted_refresh.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/pregame_targeted_refresh.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

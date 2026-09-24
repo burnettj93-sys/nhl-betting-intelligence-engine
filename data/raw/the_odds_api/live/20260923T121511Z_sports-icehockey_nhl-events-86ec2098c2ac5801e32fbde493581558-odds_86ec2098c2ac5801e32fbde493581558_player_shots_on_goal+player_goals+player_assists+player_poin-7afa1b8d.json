@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/86ec2098c2ac5801e32fbde493581558/odds",
+    "event_id": "86ec2098c2ac5801e32fbde493581558",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "430",
+    "requests_used_header": "70",
+    "response_checksum_sha256": "f911ece7a43a37d3e2bdcf11c63a243c14895fcb55f3ef5b48fb4617559a50eb",
+    "retrieved_at_utc": "2026-09-23T12:15:11Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Islanders",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:15:06Z",
+            "outcomes": [
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 1.5,
+                "price": -525
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 1.5,
+                "price": 340
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 2.5,
+                "price": -175
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 2.5,
+                "price": 135
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 3.5,
+                "price": 135
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 3.5,
+                "price": -175
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 4.5,
+                "price": 320
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 4.5,
+                "price": -485
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 5.5,
+                "price": 750
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1600
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 1.5,
+                "price": -505
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 1.5,
+                "price": 330
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 2.5,
+                "price": -175
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 2.5,
+                "price": 135
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 3.5,
+                "price": 135
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 3.5,
+                "price": -175
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 4.5,
+                "price": 300
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 4.5,
+                "price": -450
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Over",
+                "point": 5.5,
+                "price": 700
+              },
+              {
+                "description": "Toronto Maple Leafs",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1400
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-30T23:40:00Z",
+    "home_team": "Toronto Maple Leafs",
+    "id": "86ec2098c2ac5801e32fbde493581558",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

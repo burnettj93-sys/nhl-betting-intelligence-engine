@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3e2c8a883cae029144e27e4fca5ae9e8/odds",
+    "event_id": "3e2c8a883cae029144e27e4fca5ae9e8",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "415",
+    "requests_used_header": "85",
+    "response_checksum_sha256": "fca66b4d101648d5a384ae4cd881bcfb7f27bb594d5f3d87c1504b61fffcb32f",
+    "retrieved_at_utc": "2026-09-23T12:15:13Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New Jersey Devils",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:15:09Z",
+            "outcomes": [
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 1.5,
+                "price": -475
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 1.5,
+                "price": 310
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 2.5,
+                "price": -160
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 2.5,
+                "price": 120
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 3.5,
+                "price": 150
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 3.5,
+                "price": -200
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 4.5,
+                "price": 360
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 4.5,
+                "price": -575
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Over",
+                "point": 5.5,
+                "price": 900
+              },
+              {
+                "description": "New Jersey Devils",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2200
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 1.5,
+                "price": -525
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 1.5,
+                "price": 340
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 2.5,
+                "price": -175
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 2.5,
+                "price": 135
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 3.5,
+                "price": 130
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 3.5,
+                "price": -170
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 4.5,
+                "price": 300
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 4.5,
+                "price": -450
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Over",
+                "point": 5.5,
+                "price": 700
+              },
+              {
+                "description": "New York Islanders",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1400
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-03T23:40:00Z",
+    "home_team": "New York Islanders",
+    "id": "3e2c8a883cae029144e27e4fca5ae9e8",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

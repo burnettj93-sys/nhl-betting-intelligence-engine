@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4cfafb524b2107d73365ce0709b59dd8/odds",
+    "event_id": "4cfafb524b2107d73365ce0709b59dd8",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "428",
+    "requests_used_header": "72",
+    "response_checksum_sha256": "46afe94830a8f0513f7d7f7c3a0b6807124e110b92b20c8bae0bc7ee94f450b9",
+    "retrieved_at_utc": "2026-09-23T12:15:11Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Buffalo Sabres",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:25Z",
+            "outcomes": [
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 1.5,
+                "price": -505
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 1.5,
+                "price": 330
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 2.5,
+                "price": -170
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 2.5,
+                "price": 130
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 3.5,
+                "price": 140
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 3.5,
+                "price": -180
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 4.5,
+                "price": 330
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 4.5,
+                "price": -505
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 5.5,
+                "price": 800
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1800
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 1.5,
+                "price": -505
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 1.5,
+                "price": 330
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 2.5,
+                "price": -170
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 2.5,
+                "price": 130
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 3.5,
+                "price": 135
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 3.5,
+                "price": -175
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 4.5,
+                "price": 310
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 4.5,
+                "price": -475
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Over",
+                "point": 5.5,
+                "price": 750
+              },
+              {
+                "description": "Columbus Blue Jackets",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1600
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-01T23:10:00Z",
+    "home_team": "Columbus Blue Jackets",
+    "id": "4cfafb524b2107d73365ce0709b59dd8",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

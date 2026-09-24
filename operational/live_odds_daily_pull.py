@@ -569,6 +569,10 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
 def _main() -> None:
     import argparse
 
+    from operational import deployment_mode as dm
+    if not dm.require_active_scheduler_or_exit("live_odds_daily_pull"):
+        return
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("props", "moneyline", "sweep-first", "sweep-second"),
                          default="props")
@@ -580,6 +584,24 @@ def _main() -> None:
         result = run_daily_pull()
     elif args.mode == "moneyline":
         result = run_moneyline_snapshot(args.label)
+        # Real Recommendation Pipeline block (2026-09-24), Part 22: the
+        # chosen automation trigger is "a fresh real moneyline snapshot
+        # just landed" -- reusing this ALREADY-scheduled job rather than
+        # adding a new one. Only fires on a real, successful pull (never
+        # on an API error, and harmlessly a no-op when there were zero
+        # future events to report); every downstream step
+        # (real_odds_bridge's odds_snapshots UNIQUE index,
+        # prospective_ledger's idempotency key, paper_bankroll's
+        # idempotency key) is already independently idempotent, so an
+        # overlapping/duplicate scheduler run can re-execute this safely
+        # without ever duplicating a logical prediction or paper bet.
+        if result.get("ran"):
+            from operational import real_odds_bridge
+            from operational import real_recommendation_orchestrator as orchestrator
+            bridge_result = real_odds_bridge.sync_moneyline_odds_to_snapshots()
+            orchestrator_result = orchestrator.run_real_moneyline_recommendations()
+            result["real_odds_bridge"] = bridge_result
+            result["real_recommendation_orchestrator"] = orchestrator_result
     elif args.mode == "sweep-first":
         result = run_targeted_prop_sweep("first")
     else:

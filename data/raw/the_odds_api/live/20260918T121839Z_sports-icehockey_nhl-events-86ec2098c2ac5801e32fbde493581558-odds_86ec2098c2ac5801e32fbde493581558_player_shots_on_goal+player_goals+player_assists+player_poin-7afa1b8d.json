@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/86ec2098c2ac5801e32fbde493581558/odds",
+    "event_id": "86ec2098c2ac5801e32fbde493581558",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "0",
+    "requests_remaining_header": "447",
+    "requests_used_header": "53",
+    "response_checksum_sha256": "4a3cc3278320095d9bc71a0901b8aa2bba55dc0521d88a46246023556e1039c9",
+    "retrieved_at_utc": "2026-09-18T12:18:39Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Islanders",
+    "bookmakers": [],
+    "commence_time": "2026-09-30T23:40:00Z",
+    "home_team": "Toronto Maple Leafs",
+    "id": "86ec2098c2ac5801e32fbde493581558",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

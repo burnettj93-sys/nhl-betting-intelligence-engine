@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.daily-settlement</string>
+
+    <!-- Production Readiness Audit (2026-09-24), P0 item 2: settlement
+         (operational.settle_daily_observations) already exists, is
+         idempotent, and already defers any observation whose game isn't
+         FINAL yet -- it had simply never been scheduled. Runs 15 minutes
+         after daily-nhl-sync (07:00) so the day's final game data has a
+         chance to land first; idempotent regardless, so a late-running
+         sync job can't cause a double-settlement. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.settle_daily_observations</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>15</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_settlement.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_settlement.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

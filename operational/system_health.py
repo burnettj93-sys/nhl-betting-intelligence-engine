@@ -295,15 +295,23 @@ def settlement_backlog_health() -> dict:
 
 
 _SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.daily-props-pull",
-                     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second")
+                     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second",
+                     # P0.1 (2026-09-24 hardening block): the odds scheduler was extended with
+                     # 5 more real jobs (NHL sync full/midday/pregame, settlement, post-mortem) --
+                     # this health check must reflect the FULL real scheduler, not just its
+                     # original 4 odds-only jobs.
+                     "com.nhlengine.daily-nhl-sync", "com.nhlengine.midday-schedule-refresh",
+                     "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement",
+                     "com.nhlengine.daily-postmortem", "com.nhlengine.database-backup")
 
 
 def live_odds_scheduler_health() -> dict:
-    """Part 75: LIVE_ODDS_SCHEDULER -- real launchd state via `launchctl
-    list`, a local OS query (never a network call, never an Odds API
-    credit -- Part 26's dashboard-safety rule is about the sportsbook
-    API specifically, not local process introspection). Never assumes
-    installed; checks every real job label."""
+    """Part 75 (extended P0.1): LIVE_ODDS_SCHEDULER -- real launchd state
+    via `launchctl list`, a local OS query (never a network call, never
+    an Odds API credit -- Part 26's dashboard-safety rule is about the
+    sportsbook API specifically, not local process introspection). Never
+    assumes installed; checks every real job label, odds and NHL-sync/
+    settlement/post-mortem alike."""
     import subprocess
     try:
         result = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=5)

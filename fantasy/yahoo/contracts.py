@@ -177,6 +177,28 @@ NOT_VERIFIED_THIS_SESSION flag, to be confirmed against a real sanitized
 fixture the moment OWNER_AUTH_REQUIRED is resolved (Part 150).
 
 ================================================================
+USERS COLLECTION -- VERIFIED (2026-09-24, Yahoo Compliance/Reliability
+hardening pass, fetched live from https://sports.yahoo.com/developer/docs/)
+================================================================
+The `use_login=1` filter on the `users` collection resolves to "the
+user who is currently logged in" -- i.e. whoever the access token
+belongs to. This is THE entry point for "my identity / my leagues /
+my team" without needing to already know a league_key or team_key --
+exactly what the connection-certification diagnostic needs.
+
+    GET /fantasy/v2/users;use_login=1
+        -> the authenticated user's own user resource (guid).
+    GET /fantasy/v2/users;use_login=1/games;game_keys={game_key}
+        -> the games (seasons) this user has participated in, filtered
+           to game_key (e.g. "nhl" resolves to the current season, per
+           the GAME RESOURCE section above).
+    GET /fantasy/v2/users;use_login=1/games;game_keys={game_key}/leagues
+        -> this user's own leagues within that game -- chained/scoped,
+           per Yahoo's own "sub-resources scoped by their parent" model.
+    GET /fantasy/v2/users;use_login=1/games;game_keys={game_key}/teams
+        -> this user's own team(s) within that game.
+
+================================================================
 TEAM / ROSTER / PLAYER RESOURCES -- NOT_VERIFIED_THIS_SESSION
 ================================================================
 Not independently re-fetched from live Yahoo docs this session (see
@@ -221,6 +243,10 @@ VERIFIED_ENDPOINTS = {
     "league_metadata": "/league/{league_key}/metadata",
     "league_settings": "/league/{league_key}/settings",
     "league_standings": "/league/{league_key}/standings",
+    "my_identity": "/users;use_login=1",
+    "my_games": "/users;use_login=1/games;game_keys={game_key}",
+    "my_leagues": "/users;use_login=1/games;game_keys={game_key}/leagues",
+    "my_teams": "/users;use_login=1/games;game_keys={game_key}/teams",
 }
 
 NOT_VERIFIED_THIS_SESSION_ENDPOINTS = {

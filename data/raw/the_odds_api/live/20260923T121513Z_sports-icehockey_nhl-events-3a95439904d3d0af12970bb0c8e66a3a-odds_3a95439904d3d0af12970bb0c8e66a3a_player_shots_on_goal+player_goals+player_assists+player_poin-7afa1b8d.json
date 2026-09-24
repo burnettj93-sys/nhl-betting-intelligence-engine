@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/3a95439904d3d0af12970bb0c8e66a3a/odds",
+    "event_id": "3a95439904d3d0af12970bb0c8e66a3a",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "409",
+    "requests_used_header": "91",
+    "response_checksum_sha256": "cfe9f45603e12f9f9459cea5ca1c855f20a2b0458e2b293d683443445d97e446",
+    "retrieved_at_utc": "2026-09-23T12:15:13Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:52Z",
+            "outcomes": [
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 0.5,
+                "price": -4500
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1200
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 1.5,
+                "price": -575
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 1.5,
+                "price": 360
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 2.5,
+                "price": -190
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 2.5,
+                "price": 145
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 3.5,
+                "price": 130
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 3.5,
+                "price": -170
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 4.5,
+                "price": 300
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 4.5,
+                "price": -450
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 5.5,
+                "price": 750
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1600
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 1.5,
+                "price": -430
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 1.5,
+                "price": 290
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 2.5,
+                "price": -150
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 2.5,
+                "price": 110
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 3.5,
+                "price": 155
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 3.5,
+                "price": -210
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 4.5,
+                "price": 350
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 4.5,
+                "price": -550
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Over",
+                "point": 5.5,
+                "price": 850
+              },
+              {
+                "description": "Los Angeles Kings",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2000
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-07T02:40:00Z",
+    "home_team": "Los Angeles Kings",
+    "id": "3a95439904d3d0af12970bb0c8e66a3a",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

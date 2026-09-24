@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/797f03124f9bb08624b199c28f621c61/odds",
+    "event_id": "797f03124f9bb08624b199c28f621c61",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "419",
+    "requests_used_header": "81",
+    "response_checksum_sha256": "b5f1e1ec58035448a957b088e9c1ce556c24ef0c58d74aa9cde85652c2168cc2",
+    "retrieved_at_utc": "2026-09-23T12:15:12Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "St Louis Blues",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:54Z",
+            "outcomes": [
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 0.5,
+                "price": -6000
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1300
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 1.5,
+                "price": -725
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 1.5,
+                "price": 430
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 2.5,
+                "price": -240
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 2.5,
+                "price": 175
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 3.5,
+                "price": -105
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 3.5,
+                "price": -135
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 4.5,
+                "price": 230
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 4.5,
+                "price": -325
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Over",
+                "point": 5.5,
+                "price": 550
+              },
+              {
+                "description": "Dallas Stars",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1000
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 0.5,
+                "price": -1400
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 0.5,
+                "price": 700
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 1.5,
+                "price": -270
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 1.5,
+                "price": 195
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 2.5,
+                "price": 105
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 2.5,
+                "price": -145
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 3.5,
+                "price": 265
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 3.5,
+                "price": -385
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 4.5,
+                "price": 625
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 4.5,
+                "price": -1200
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1500
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 5.5,
+                "price": -9000
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-03T01:10:00Z",
+    "home_team": "Dallas Stars",
+    "id": "797f03124f9bb08624b199c28f621c61",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

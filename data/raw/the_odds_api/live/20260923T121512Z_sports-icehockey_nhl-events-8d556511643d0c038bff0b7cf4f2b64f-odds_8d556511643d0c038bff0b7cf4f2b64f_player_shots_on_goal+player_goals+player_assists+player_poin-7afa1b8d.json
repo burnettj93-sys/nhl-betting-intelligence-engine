@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/8d556511643d0c038bff0b7cf4f2b64f/odds",
+    "event_id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "418",
+    "requests_used_header": "82",
+    "response_checksum_sha256": "1e5ed855133cdcf781ca5f4d86c36883fc64fa2360e86f3c77557dfcf360a32b",
+    "retrieved_at_utc": "2026-09-23T12:15:12Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:52Z",
+            "outcomes": [
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 0.5,
+                "price": -10000
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1600
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 1.5,
+                "price": -875
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 1.5,
+                "price": 490
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 2.5,
+                "price": -280
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 2.5,
+                "price": 200
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 3.5,
+                "price": -120
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 3.5,
+                "price": -120
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 4.5,
+                "price": 200
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 4.5,
+                "price": -280
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Over",
+                "point": 5.5,
+                "price": 470
+              },
+              {
+                "description": "Buffalo Sabres",
+                "name": "Under",
+                "point": 5.5,
+                "price": -825
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 0.5,
+                "price": -1600
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 0.5,
+                "price": 750
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 1.5,
+                "price": -290
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 1.5,
+                "price": 210
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 2.5,
+                "price": -105
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 2.5,
+                "price": -135
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 3.5,
+                "price": 245
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 3.5,
+                "price": -350
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 4.5,
+                "price": 575
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 4.5,
+                "price": -1050
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1300
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 5.5,
+                "price": -6000
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-03T23:10:00Z",
+    "home_team": "Buffalo Sabres",
+    "id": "8d556511643d0c038bff0b7cf4f2b64f",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

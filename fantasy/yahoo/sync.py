@@ -1,4 +1,21 @@
 """
+DEPRECATED as of the 2026-09-24 Yahoo compliance rebuild -- do not call
+run_full_sync() or either step function. They call
+fantasy_store.record_league_settings_snapshot()/record_standings_snapshot(),
+which now raise (see fantasy/storage/fantasy_store.py): persisting
+Yahoo Fantasy Information to disk is exactly what the signed API
+Access and Use Agreement's Section 2.c.vii prohibits. Confirmed via a
+real audit before any change that this module was never actually
+invoked by any dashboard page or scheduled job -- nothing real breaks
+by it now raising. The compliant replacement is transient, per-request
+fetch (fantasy/yahoo/diagnostic.py's pattern), not a "sync and store"
+orchestration -- a real rebuild of this module's ORCHESTRATION idea
+(without ever persisting the Yahoo response itself) is Phase 10 scope,
+deliberately not done in this pass ("do not build draft/waiver/
+streaming UI before the connection diagnostic passes").
+
+Original docstring, preserved for context:
+
 Daily fantasy sync orchestration (Part 129/130) -- a plain callable
 function, NOT an installed scheduler (explicit instruction: "Do NOT
 install an automatic scheduler unless explicitly authorized" -- none

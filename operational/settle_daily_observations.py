@@ -27,6 +27,9 @@ import datetime as dt
 import json
 
 import db
+from operational import clv_resolver
+from operational import closing_price_lookup
+from operational import ingestion_health
 from operational import outcome_resolver as resolver
 from operational import prospective_ledger as pl
 from operational import prospective_recording as pr
@@ -87,6 +90,29 @@ def _result_status_for(resolution: dict, record_type: str) -> str | None:
     return "UNRESOLVED"
 
 
+def _resolve_real_closing_price(official_conn, obs: dict) -> tuple[float | None, str | None]:
+    """Real Recommendation Pipeline block (2026-09-24), Parts 14-16: the
+    automated closing-price lookup that CLOSED_LOOP_CERTIFICATION
+    previously reported as PARTIAL/missing. Only attempted for MONEYLINE
+    (the only market with real archived DraftKings price history in
+    odds_snapshots today -- Part 6/21: never fabricate a prop close that
+    doesn't exist yet). Returns (None, None) -- never raises -- whenever
+    no valid real close exists (game/side never had real market data, or
+    every real snapshot lands at/after event_start_utc); CLV then stays
+    genuinely unavailable rather than a fabricated 0.0 (Part 16)."""
+    if obs.get("market_id") != "MONEYLINE" or obs.get("odds_american") is None:
+        return None, None
+    selection = obs.get("side") or obs.get("team")
+    if not selection or not obs.get("game_id") or not obs.get("event_start_utc"):
+        return None, None
+    result = closing_price_lookup.resolve_real_moneyline_closing_price(
+        official_conn, game_id=obs["game_id"], selection=selection,
+        event_start_utc=obs["event_start_utc"])
+    if result["status"] != clv_resolver.RESOLVED:
+        return None, None
+    return result["closing_odds"], result["closing_captured_at_utc"]
+
+
 def run_settlement_batch(ledger_conn, official_conn=None) -> dict:
     """The real batch: find eligible unresolved observations, resolve
     each against official data, call settle_prediction(), and produce a
@@ -113,9 +139,12 @@ def run_settlement_batch(ledger_conn, official_conn=None) -> dict:
             summary["still_pending_game_not_final"] += 1
             continue
 
+        closing_odds, closing_captured_at_utc = _resolve_real_closing_price(official_conn, obs)
+
         pr.settle_completed_observation(
             ledger_conn, obs["prediction_id"], actual_outcome=resolution["actual_value"],
-            result_status=result_status, notes=_audit_notes(resolution))
+            result_status=result_status, closing_odds=closing_odds,
+            closing_captured_at_utc=closing_captured_at_utc, notes=_audit_notes(resolution))
 
         if result_status == "WIN":
             summary["settled_win"] += 1
@@ -130,6 +159,23 @@ def run_settlement_batch(ledger_conn, official_conn=None) -> dict:
 
 
 def main() -> None:
+    from operational import deployment_mode as dm
+    if not dm.require_active_scheduler_or_exit("settle_daily_observations"):
+        return
+
+    # Real Recommendation Pipeline block (2026-09-24), Part 24: the
+    # morning workflow (07:00 sync -> 07:15 settlement -> 07:30
+    # postmortem -> 07:45 backup) was previously only clock-scheduled --
+    # if the 07:00 NHL sync failed or never ran, settlement would still
+    # fire at 07:15 against a stale/incomplete schedule. DEFER (never
+    # retry-loop) when the upstream sync isn't confirmed healthy; the
+    # next scheduled settlement run picks it up once sync recovers.
+    sync_ready, sync_reason = ingestion_health.dependency_ready("nhl_sync_full", max_age_hours=30.0)
+    if not sync_ready:
+        print(f"DEFERRED: upstream nhl_sync_full not ready ({sync_reason}) -- skipping this settlement run.")
+        ingestion_health.record_run("settlement", {"status": "DEFERRED", "reason": sync_reason})
+        return
+
     conn = pl.init_db()
     summary = run_settlement_batch(conn)
     print(f"{summary['total_candidates']} PENDING observation(s) past their event start.")
@@ -140,6 +186,11 @@ def main() -> None:
         print(f"  {len(summary['errors'])} error(s):")
         for e in summary["errors"][:20]:
             print(f"    {e['prediction_id']}: {e['error']}")
+    # P0.1 (2026-09-24 hardening block): record this run's outcome for the
+    # admin/data-health surface -- FAILED only on a real per-row settlement
+    # error, never merely because there was nothing PENDING to settle yet.
+    health_status = "FAILED" if summary["errors"] else "SUCCESS"
+    ingestion_health.record_run("settlement", {**summary, "status": health_status})
 
 
 if __name__ == "__main__":

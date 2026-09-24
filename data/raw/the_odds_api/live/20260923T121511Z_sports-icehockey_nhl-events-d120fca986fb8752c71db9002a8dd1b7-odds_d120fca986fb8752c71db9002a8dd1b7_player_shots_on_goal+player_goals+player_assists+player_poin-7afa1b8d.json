@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/d120fca986fb8752c71db9002a8dd1b7/odds",
+    "event_id": "d120fca986fb8752c71db9002a8dd1b7",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "425",
+    "requests_used_header": "75",
+    "response_checksum_sha256": "55675aa08ce70ab7616e70b1b1468bcbe71eae0f81484b37858c289b34d30426",
+    "retrieved_at_utc": "2026-09-23T12:15:11Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Seattle Kraken",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:13:29Z",
+            "outcomes": [
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 1.5,
+                "price": -450
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 1.5,
+                "price": 300
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 2.5,
+                "price": -155
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 2.5,
+                "price": 115
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 3.5,
+                "price": 150
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 3.5,
+                "price": -200
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 4.5,
+                "price": 350
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 4.5,
+                "price": -550
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Over",
+                "point": 5.5,
+                "price": 850
+              },
+              {
+                "description": "Calgary Flames",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2000
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 1.5,
+                "price": -425
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 1.5,
+                "price": 285
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 2.5,
+                "price": -150
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 2.5,
+                "price": 110
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 3.5,
+                "price": 165
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 3.5,
+                "price": -225
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 4.5,
+                "price": 390
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 4.5,
+                "price": -630
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1000
+              },
+              {
+                "description": "Seattle Kraken",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2800
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T01:10:00Z",
+    "home_team": "Calgary Flames",
+    "id": "d120fca986fb8752c71db9002a8dd1b7",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

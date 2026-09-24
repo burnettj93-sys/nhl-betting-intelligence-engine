@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/4d301bd0ac75067598d134600a80918c/odds",
+    "event_id": "4d301bd0ac75067598d134600a80918c",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "424",
+    "requests_used_header": "76",
+    "response_checksum_sha256": "a50acc99a02947e53e4a7fcf101a83e96cf46e725db6ffc1c0d14ec18eb47c73",
+    "retrieved_at_utc": "2026-09-23T12:15:11Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Chicago Blackhawks",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:40Z",
+            "outcomes": [
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 0.5,
+                "price": -1600
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 0.5,
+                "price": 750
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 1.5,
+                "price": -285
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 1.5,
+                "price": 205
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 2.5,
+                "price": -105
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 2.5,
+                "price": -135
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 3.5,
+                "price": 250
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 3.5,
+                "price": -360
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 4.5,
+                "price": 575
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 4.5,
+                "price": -1050
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1400
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 5.5,
+                "price": -8000
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 0.5,
+                "price": -8000
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1400
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 1.5,
+                "price": -750
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 1.5,
+                "price": 440
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 2.5,
+                "price": -245
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 2.5,
+                "price": 180
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 3.5,
+                "price": -105
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 3.5,
+                "price": -135
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 4.5,
+                "price": 230
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 4.5,
+                "price": -325
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Over",
+                "point": 5.5,
+                "price": 540
+              },
+              {
+                "description": "Utah Mammoth",
+                "name": "Under",
+                "point": 5.5,
+                "price": -975
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T01:10:00Z",
+    "home_team": "Utah Mammoth",
+    "id": "4d301bd0ac75067598d134600a80918c",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

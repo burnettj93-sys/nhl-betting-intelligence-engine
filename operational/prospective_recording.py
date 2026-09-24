@@ -57,14 +57,30 @@ def latest_checkpoint_row(conn, *, game_id, player_id, market_id, threshold, sid
     (predictions are append-only by design -- nothing here "overwrites"
     anything at the DB level), and a caller that wants the canonical
     daily number must ask for checkpoint="PRIMARY_DAILY" explicitly
-    rather than getting whichever row happens to be newest."""
-    clauses = ["game_id = ?", "player_id = ?", "market_id = ?", "threshold = ?"]
+    rather than getting whichever row happens to be newest.
+
+    Real Recommendation Pipeline block (2026-09-24): a team-level market
+    (e.g. MONEYLINE) has no player_id -- it's legitimately NULL, not an
+    unset filter. SQL's `col = ?` is always false when the bound
+    parameter is NULL (NULL is never equal to anything, including
+    itself), so a plain equality clause here could NEVER match a real
+    player_id=None row, meaning this function silently returned None
+    for every team-level market's checkpoint lookup -- which then made
+    record_observation()'s own PRIMARY_DAILY-must-exist-first guard
+    always raise CheckpointOrderingError for a legitimate second
+    (MARKET_REFRESH) observation of the same team-level market. Never
+    caught before because every existing caller (record_sog_board_row,
+    record_context_eligible_observation) always supplies a real
+    player_id. Each column below now uses `IS ?` (SQLite treats `IS` as
+    NULL-safe equality) instead of `=`, so a None filter value correctly
+    matches a NULL column."""
+    clauses = ["game_id IS ?", "player_id IS ?", "market_id IS ?", "threshold IS ?"]
     params = [game_id, player_id, market_id, threshold]
     if side is not None:
-        clauses.append("side = ?")
+        clauses.append("side IS ?")
         params.append(side)
     if checkpoint is not None:
-        clauses.append("prediction_checkpoint = ?")
+        clauses.append("prediction_checkpoint IS ?")
         params.append(checkpoint)
     row = conn.execute(
         f"SELECT * FROM predictions WHERE {' AND '.join(clauses)} "

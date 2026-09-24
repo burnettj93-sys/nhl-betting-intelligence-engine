@@ -22,14 +22,17 @@ class TestUserIsolation(unittest.TestCase):
         self.conn.close()
         self._tmpdir.cleanup()
 
-    def test_user_a_cannot_read_user_b_token(self):
-        fantasy_store.save_token(self.conn, "user_a", "token_a", "refresh_a", 9999999999.0)
-        fantasy_store.save_token(self.conn, "user_b", "token_b", "refresh_b", 9999999999.0)
-        row_a = fantasy_store.load_token_row(self.conn, "user_a")
-        row_b = fantasy_store.load_token_row(self.conn, "user_b")
-        self.assertEqual(row_a["access_token"], "token_a")
-        self.assertEqual(row_b["access_token"], "token_b")
-        self.assertNotEqual(row_a["access_token"], row_b["access_token"])
+    def test_token_functions_are_removed_not_silently_reused(self):
+        """Yahoo compliance rebuild (2026-09-24): save_token/load_token_row
+        used to store tokens as PLAIN TEXT and modeled multiple users --
+        both wrong for the actual architecture (single ADMIN-only Yahoo
+        connection, tokens encrypted at rest). See
+        fantasy/yahoo/token_store.py and tests/test_yahoo_token_store.py
+        for the real replacement and its own coverage."""
+        with self.assertRaises(fantasy_store._PlaintextTokenStorageRemoved):
+            fantasy_store.save_token(self.conn, "user_a", "token_a", "refresh_a", 9999999999.0)
+        with self.assertRaises(fantasy_store._PlaintextTokenStorageRemoved):
+            fantasy_store.load_token_row(self.conn, "user_a")
 
     def test_user_a_cannot_read_user_b_league_selection(self):
         fantasy_store.save_selection(self.conn, "user_a", "nhl", "nhl.l.1", "nhl.l.1.t.1")
@@ -39,23 +42,23 @@ class TestUserIsolation(unittest.TestCase):
         self.assertEqual(sel_a["league_key"], "nhl.l.1")
         self.assertEqual(sel_b["league_key"], "nhl.l.2")
 
-    def test_user_a_cannot_read_user_b_roster_snapshot(self):
-        fantasy_store.record_roster_snapshot(self.conn, "user_a", "nhl.l.1", "nhl.l.1.t.1", [{"name": "Player A"}])
-        fantasy_store.record_roster_snapshot(self.conn, "user_b", "nhl.l.2", "nhl.l.2.t.5", [{"name": "Player B"}])
-        roster_a = fantasy_store.latest_roster_snapshot(self.conn, "user_a", "nhl.l.1.t.1")
-        roster_b_attempt = fantasy_store.latest_roster_snapshot(self.conn, "user_a", "nhl.l.2.t.5")
-        self.assertEqual(roster_a["roster"][0]["name"], "Player A")
-        self.assertIsNone(roster_b_attempt)  # user_a querying user_b's team_key gets nothing
-
-    def test_disconnect_only_removes_that_users_tokens(self):
-        fantasy_store.save_token(self.conn, "user_a", "t", "r", 9999999999.0)
-        fantasy_store.save_token(self.conn, "user_b", "t", "r", 9999999999.0)
-        fantasy_store.disconnect(self.conn, "user_a")
-        self.assertIsNone(fantasy_store.load_token_row(self.conn, "user_a"))
-        self.assertIsNotNone(fantasy_store.load_token_row(self.conn, "user_b"))
+    def test_roster_settings_and_standings_snapshots_are_removed(self):
+        """Yahoo compliance rebuild (2026-09-24): these persisted actual
+        Yahoo Fantasy Information (roster/settings/standings contents) --
+        prohibited outright by the signed agreement's Section 2.c.vii.
+        There is no compliant replacement that persists this data; the
+        replacement is transient per-request fetch (fantasy/yahoo/
+        diagnostic.py), so there's nothing to redirect these to."""
+        with self.assertRaises(fantasy_store._FantasyInformationPersistenceRemoved):
+            fantasy_store.record_roster_snapshot(self.conn, "user_a", "nhl.l.1", "nhl.l.1.t.1", [{"name": "Player A"}])
+        with self.assertRaises(fantasy_store._FantasyInformationPersistenceRemoved):
+            fantasy_store.latest_roster_snapshot(self.conn, "user_a", "nhl.l.1.t.1")
+        with self.assertRaises(fantasy_store._FantasyInformationPersistenceRemoved):
+            fantasy_store.record_league_settings_snapshot(self.conn, "user_a", "nhl.l.1", {}, "hash")
+        with self.assertRaises(fantasy_store._FantasyInformationPersistenceRemoved):
+            fantasy_store.record_standings_snapshot(self.conn, "user_a", "nhl.l.1", [])
 
     def test_disconnect_preserves_recommendation_history(self):
-        fantasy_store.save_token(self.conn, "user_a", "t", "r", 9999999999.0)
         fantasy_store.record_recommendation(self.conn, user_key="user_a", league_key="L", team_key="T",
                                              player_id="P1", recommendation_type="START", reason="test",
                                              projection=None, confidence="HIGH")
@@ -68,9 +71,23 @@ class TestNoGlobalUserState(unittest.TestCase):
     """Every fantasy_store.py function requires an explicit user_key
     parameter -- there is no function that reads/writes without one."""
 
+    # Yahoo compliance rebuild (2026-09-24): these module-level names are
+    # now bound to a shared guard function (raises unconditionally,
+    # *_args/**_kwargs signature) rather than a real per-user accessor --
+    # see fantasy/storage/fantasy_store.py's own comments. They're
+    # excluded here deliberately, not because the user_key discipline
+    # stopped mattering, but because there is no real function body left
+    # to check it against.
+    _REMOVED_FUNCTION_NAMES = frozenset({
+        "save_token", "load_token_row",
+        "record_league_settings_snapshot", "latest_league_settings_snapshot",
+        "record_roster_snapshot", "latest_roster_snapshot",
+        "record_standings_snapshot", "latest_standings_snapshot",
+    })
+
     def test_every_public_function_requires_user_key_argument(self):
         for name, func in inspect.getmembers(fantasy_store, inspect.isfunction):
-            if name.startswith("_") or name in ("get_connection",):
+            if name.startswith("_") or name in ("get_connection",) or name in self._REMOVED_FUNCTION_NAMES:
                 continue
             sig = inspect.signature(func)
             self.assertIn("user_key", sig.parameters,

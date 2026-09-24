@@ -15,22 +15,32 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import auth
 from dashboard import components as comp
 from dashboard import demo_data as dd
 from fantasy.league.demo_league import build_demo_league_settings
 from fantasy.league.scoring import points_value
 from fantasy.projections.fantasy_projection import project_goalie_categories, project_skater_categories
 from fantasy.recommendations.lineup_optimizer import RosterPlayer, optimize_lineup, start_sit_recommendation
-from fantasy.storage import fantasy_store
 from fantasy.yahoo import oauth as yoauth
+from fantasy.yahoo.token_store import EncryptedFileTokenStore
+
+# P0.7 (2026-09-24 hardening block): server-side enforcement, not just a
+# hidden nav link -- a USER-role (or logged-out) session's script
+# execution stops on the next line, before any Yahoo/fantasy logic runs.
+auth.require_admin()
 
 st.title("Fantasy HQ")
 comp.render_model_status_header()
 
 creds = yoauth.load_app_credentials()
-_session_user_key = st.session_state.get("_fantasy_session_user_key", "local-dev-session")
-_conn = fantasy_store.get_connection()
-_connected = fantasy_store.load_token_row(_conn, _session_user_key) is not None
+# Yahoo compliance rebuild (2026-09-24): connection state now comes from
+# the encrypted token store, not fantasy_store's old plaintext table --
+# see docs/YAHOO_COMPLIANCE_REBUILD.md. This page still only shows demo
+# data either way (Part above): real Yahoo-sourced roster/settings
+# content must never be persisted, so it is never read into this page
+# from a snapshot table -- only fetched transiently by the diagnostic.
+_connected = EncryptedFileTokenStore().get() is not None
 
 if not _connected:
     st.markdown(

@@ -15,6 +15,24 @@ WATCH = "WATCH"
 INVESTIGATE = "INVESTIGATE"
 HALT = "HALT"
 
+# Reliability fix (2026-09-24): NO_DATA/INSUFFICIENT_SAMPLE are
+# deliberately NOT part of _SEVERITY_ORDER/combine_status(). They are
+# not a severity level to be combined with WATCH/INVESTIGATE/HALT --
+# they mean "there is not enough real settled data to say ANYTHING
+# meaningful yet," which must short-circuit past the whole
+# combine_status() pipeline the same way HALT already does in
+# check_run_order(), never blend with an unrelated structural signal
+# (e.g. a verified-contract drift-monitoring gap) into something that
+# LOOKS like a real reading. See daily_model_review.py::run_daily_review()
+# and docs/MODEL_REVIEW_ZERO_DATA_FIX.md for the real bug this closed:
+# a review with exactly 0 real settled predictions was displaying
+# "ENGINE STATUS: WATCH" -- true only because a verified DraftKings
+# moneyline contract exists and its own drift monitoring isn't built
+# yet (check_contract_status() below), which has nothing to do with
+# whether there was any data to review at all.
+NO_DATA = "NO_DATA"
+INSUFFICIENT_SAMPLE = "INSUFFICIENT_SAMPLE"
+
 _SEVERITY_ORDER = {NORMAL: 0, WATCH: 1, INVESTIGATE: 2, HALT: 3}
 
 

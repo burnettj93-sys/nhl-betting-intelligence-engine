@@ -9,7 +9,14 @@ def format_sync_report(nhl_result: dict, moneypuck_result: dict | None,
     lines = ["NHL DAILY SYNC", ""]
 
     lines.append("Schedule:")
-    lines.append("PASS" if nhl_result.get("status") == "OK" else f"FAIL — {nhl_result.get('error')}")
+    _nhl_status = nhl_result.get("status")
+    if _nhl_status == "SUCCESS":
+        lines.append("PASS")
+    elif _nhl_status == "PARTIAL_SUCCESS":
+        lines.append(f"PARTIAL — roster sync {nhl_result.get('roster_status')} "
+                      f"({len(nhl_result.get('roster_failed_teams', []))} team(s) failed)")
+    else:
+        lines.append(f"FAIL — {nhl_result.get('error')}")
     lines.append(f"{nhl_result.get('games_seen', 0)} games in window "
                  f"({nhl_result.get('window_start')}..{nhl_result.get('window_end')})")
     lines.append("")

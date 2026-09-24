@@ -90,7 +90,7 @@ class TestNHLSyncIdempotency(unittest.TestCase):
         session = _FakeSession(_empty_schedule_response("2026-08-26"))
         today = dt.date(2026, 8, 27)
         result = nhl_sync.run_nhl_sync(conn=conn, today=today, session=session, sync_current_rosters=False)
-        self.assertEqual(result["status"], "OK")
+        self.assertEqual(result["status"], "SUCCESS")
         self.assertEqual(result["games_seen"], 0)
         n_games = conn.execute("SELECT COUNT(*) c FROM games").fetchone()["c"]
         self.assertEqual(n_games, 0)
@@ -118,10 +118,18 @@ class TestNHLSyncIdempotency(unittest.TestCase):
 
 
 class TestNHLSyncWindow(unittest.TestCase):
-    def test_default_window_is_yesterday_through_tomorrow(self):
+    def test_default_window_covers_yesterday_through_the_forward_horizon(self):
+        """Real Recommendation Pipeline block (2026-09-24): the forward
+        side was widened from +1 day to SCHEDULE_FORWARD_DAYS -- a real
+        gap found when nhl.db's schedule never reached far enough
+        forward to contain a game DraftKings had already priced (real
+        events observed up to ~9 days out). Backward stays at 1 day."""
         start, end = nhl_sync.default_sync_window(dt.date(2026, 8, 27))
         self.assertEqual(start, dt.date(2026, 8, 26))
-        self.assertEqual(end, dt.date(2026, 8, 28))
+        self.assertEqual(end, dt.date(2026, 8, 27) + dt.timedelta(days=nhl_sync.SCHEDULE_FORWARD_DAYS))
+
+    def test_forward_horizon_comfortably_exceeds_the_furthest_real_event_observed(self):
+        self.assertGreaterEqual(nhl_sync.SCHEDULE_FORWARD_DAYS, 10)
 
     def test_sync_failure_is_reported_not_raised(self):
         conn = _fresh_conn()
@@ -130,8 +138,41 @@ class TestNHLSyncWindow(unittest.TestCase):
                 raise RuntimeError("network down")
         result = nhl_sync.run_nhl_sync(conn=conn, today=dt.date(2026, 8, 27),
                                         session=_BrokenSession(), sync_current_rosters=False)
-        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["status"], "FAILED")
+        self.assertEqual(result["components"]["schedule_boxscore"], "FAILED")
         self.assertIn("network down", result["error"])
+
+
+class TestNHLSyncRosterDegradationIsNonCritical(unittest.TestCase):
+    """Reliability fix (2026-09-24): a roster-sync failure must degrade
+    the overall run to PARTIAL_SUCCESS, never FAILED, and must never
+    discard the schedule/boxscore data that already committed
+    successfully -- this is the exact real failure mode a live dry run
+    of this job reproduced (a 429 from the roster endpoint made the
+    whole run report as a hard failure)."""
+
+    def test_roster_429_degrades_to_partial_success_but_keeps_game_data(self):
+        class _RosterFailsSession(_FakeSession):
+            def get(self, url, timeout=15):
+                if "/roster/" in url:
+                    return _FakeResponse(status_code=429)
+                return super().get(url, timeout=timeout)
+
+        conn = _fresh_conn()
+        session = _RosterFailsSession(_one_game_schedule_response("2026-08-26", 2026020001, final=True))
+        today = dt.date(2026, 8, 27)
+
+        with mock.patch("ingest.nhl_api.time.sleep"), \
+             mock.patch("ingest.nhl_api._log_retry_event"), \
+             mock.patch("ingest.nhl_api.MAX_RETRIES", 0):
+            result = nhl_sync.run_nhl_sync(conn=conn, today=today, session=session)
+
+        self.assertEqual(result["status"], "PARTIAL_SUCCESS")
+        self.assertEqual(result["components"]["schedule_boxscore"], "SUCCESS")
+        self.assertEqual(result["components"]["roster"], "FAILED")
+        self.assertEqual(result["games_finalized"], 1)  # game data survives the roster failure
+        n_games = conn.execute("SELECT COUNT(*) c FROM games").fetchone()["c"]
+        self.assertEqual(n_games, 1)
 
 
 # --------------------------------------------------------------------------
@@ -419,10 +460,12 @@ class TestSyncDailyExitBehavior(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp) / "readiness.json"
             with mock.patch.object(sync_daily.nhl_sync, "run_nhl_sync",
-                                    return_value={"status": "FAIL", "error": "boom",
+                                    return_value={"status": "FAILED", "error": "boom",
                                                    "window_start": "x", "window_end": "y",
                                                    "games_seen": 0, "games_finalized": 0,
-                                                   "teams_roster_synced": 0, "players_removed_this_pass": 0}), \
+                                                   "teams_roster_synced": 0, "players_removed_this_pass": 0,
+                                                   "components": {"schedule_boxscore": "FAILED", "roster": "SKIPPED"},
+                                                   "roster_status": "SKIPPED", "roster_failed_teams": []}), \
                  mock.patch.object(sync_daily.mpd, "run_moneypuck_sync",
                                     return_value={"season": 2026, "datasets": {}}), \
                  mock.patch.object(sync_daily.db, "get_conn", return_value=mock.Mock(close=lambda: None)):
@@ -435,9 +478,11 @@ class TestSyncDailyExitBehavior(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_path = Path(tmp) / "readiness.json"
             with mock.patch.object(sync_daily.nhl_sync, "run_nhl_sync",
-                                    return_value={"status": "OK", "window_start": "x", "window_end": "y",
+                                    return_value={"status": "SUCCESS", "window_start": "x", "window_end": "y",
                                                    "games_seen": 0, "games_finalized": 0,
-                                                   "teams_roster_synced": 0, "players_removed_this_pass": 0}), \
+                                                   "teams_roster_synced": 0, "players_removed_this_pass": 0,
+                                                   "components": {"schedule_boxscore": "SUCCESS", "roster": "SKIPPED"},
+                                                   "roster_status": "SKIPPED", "roster_failed_teams": []}), \
                  mock.patch.object(sync_daily.mpd, "run_moneypuck_sync",
                                     return_value={"season": 2026, "datasets": {}}), \
                  mock.patch.object(sync_daily.db, "get_conn", return_value=mock.Mock(close=lambda: None)):

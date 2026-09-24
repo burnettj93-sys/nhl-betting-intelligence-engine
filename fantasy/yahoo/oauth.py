@@ -155,7 +155,20 @@ def _post_token_request(creds: YahooAppCredentials, body: dict) -> TokenResponse
     try:
         return TokenResponse(
             access_token=data["access_token"],
-            refresh_token=data["refresh_token"],
+            # Reliability fix (Yahoo compliance/hardening pass, 2026-09-24):
+            # a refresh_token IS guaranteed present on the initial
+            # authorization_code exchange, but Yahoo's own docs say a
+            # /get_token call with grant_type=refresh_token "may" issue a
+            # new one without guaranteeing it every time. This used to be
+            # a hard data["refresh_token"] access, which would raise
+            # YahooOAuthError on any refresh call where Yahoo omitted it --
+            # a real, previously-uncaught correctness bug (this exact
+            # field-omission behavior is why yahoo-fantasy-cockpit's own
+            # proven implementation never does a bare dict access here
+            # either). An empty string here means "no new refresh token
+            # was issued this call" -- the caller must keep using the
+            # previous one, never treat "" as a real token.
+            refresh_token=data.get("refresh_token") or "",
             token_type=data.get("token_type", "bearer"),
             expires_at_epoch=received_at + float(data.get("expires_in", 3600)),
         )

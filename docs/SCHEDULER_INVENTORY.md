@@ -1,0 +1,36 @@
+# Scheduler Inventory
+
+**Date:** 2026-09-24 (Real Recommendation Pipeline block, Part 23). **Method:** direct read of every loaded `~/Library/LaunchAgents/com.nhlengine.*.plist` on this machine (`PlistBuddy -c "Print"`), cross-checked against each target script's own source. **10 jobs loaded**, matching the block's own stated count.
+
+## Inventory
+
+| # | Label | Schedule | Command | Reads | Writes | Paid API? |
+|---|---|---|---|---|---|---|
+| 1 | `daily-nhl-sync` | 07:00 daily | `python3 sync_daily.py` | NHL public schedule/roster/boxscore API | `nhl.db` (games, rosters, results); `ingestion_health_cache.json["nhl_sync_full"]` | No (free NHL API) |
+| 2 | `daily-settlement` | 07:15 daily | `python3 -m operational.settle_daily_observations` | `prospective_observations.db` (PENDING rows); `nhl.db` (FINAL results, **and now** `odds_snapshots` for closing price, Parts 14-16); `ingestion_health_cache.json["nhl_sync_full"]` (new dependency check, Part 24) | `prospective_observations.db` (settlement columns only — immutable trigger protects prediction fields); `ingestion_health_cache.json["settlement"]` | No |
+| 3 | `daily-postmortem` | 07:30 daily | `python3 -m operational.daily_postmortem` | `paper_bankroll.db`; `ingestion_health_cache.json["settlement"]` (new dependency check, Part 24) | A dated Markdown report file; `ingestion_health_cache.json["postmortem"]` | No |
+| 4 | `database-backup` | 07:45 daily | `python3 -m operational.backup_databases` | `nhl.db`, `prospective_observations.db`, `paper_bankroll.db`, `auth_store.db` | Timestamped backup copies; `ingestion_health_cache.json["database_backups"]` | No |
+| 5 | `daily-props-pull` | 08:15 daily | `python3 -m operational.live_odds_daily_pull --mode=props` | The Odds API (player props) | `research/live_sog_pricing` archive files; odds-API credit ledger | **Yes** (metered) |
+| 6 | `moneyline-snapshot` | 08:00 / 13:00 / 17:00 / 20:00 daily (4×) | `python3 -m operational.live_odds_daily_pull --mode=moneyline` | The Odds API (moneyline, DraftKings only) | `operational/moneyline_snapshot_cache.json`; odds-API archive. **New this block (Part 22):** on a successful (`ran: True`) pull, ALSO triggers `operational.real_odds_bridge.sync_moneyline_odds_to_snapshots()` → `nhl.db.odds_snapshots`, then `operational.real_recommendation_orchestrator.run_real_moneyline_recommendations()` → `prospective_observations.db` + `paper_bankroll.db` (`REAL_MARKET_PAPER` track) | **Yes** (metered — one sport-level call, not per-event) |
+| 7 | `midday-schedule-refresh` | 13:00 daily | `python3 -m operational.nhl_sync --mode=midday` | NHL public schedule API | `nhl.db` (schedule revisions); `ingestion_health_cache.json["nhl_midday_schedule_refresh"]` | No |
+| 8 | `pregame-targeted-refresh` | every 30 min (`StartInterval=1800`) | `python3 -m operational.nhl_sync --mode=pregame` | NHL public roster/goalie API, windowed internally to games in the next few hours | `nhl.db` (roster/goalie status); `ingestion_health_cache.json["nhl_pregame_targeted_refresh"]` | No |
+| 9 | `prop-sweep-first` | every 30 min (`StartInterval=1800`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-first` | The Odds API, windowed internally to events 3–4.5h from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive | **Yes** (metered, windowed — most firings are no-ops) |
+| 10 | `prop-sweep-second` | every 15 min (`StartInterval=900`) | `python3 -m operational.live_odds_daily_pull --mode=sweep-second` | The Odds API, only events the first sweep already found a quote for, windowed to 45–75 min from puck drop | `targeted_prop_sweep_cache.json`; odds-API archive | **Yes** (metered, windowed) |
+
+## Overlap analysis
+
+- **No two jobs write the same table concurrently by schedule design** except the real-purpose cascade in row 6 (moneyline-snapshot → bridge → orchestrator), which is a **single process, sequential, in-order call chain** — not a race between two independently-scheduled jobs.
+- **07:00 → 07:15 → 07:30 → 07:45** (sync → settlement → postmortem → backup) is a real dependency chain. Before this block, each stage was purely clock-scheduled with no awareness of the prior stage's outcome (see Part 24 fix below).
+- **`pregame-targeted-refresh` (every 30 min) and `midday-schedule-refresh` (13:00 daily)** both touch `nhl.db`'s schedule/roster tables. Both go through `ingest/nhl_api.py`'s own idempotent `_append_*_if_changed` helpers (append-only, revision-numbered), so a genuine overlap produces at most a redundant append-check, never a corrupt write — this predates this block and was not modified.
+- **`moneyline-snapshot` (4×/day) and `prop-sweep-first`/`prop-sweep-second` (every 15–30 min)** all call the same third-party Odds API client, but request *different* markets/endpoints (moneyline vs. props) and write to different cache files — no shared-state race.
+- **Locking/idempotency protection:** every write path in this project relies on either (a) a UNIQUE index + `INSERT OR IGNORE`/idempotency-key check-then-insert (odds_snapshots, prospective ledger, paper_bankroll), or (b) an explicit revision-numbered append-only table (`game_schedule_events`, `game_result_events`, etc.), never a raw overwrite. No new locking mechanism was introduced or found necessary in this block.
+
+## Dangerous overlap found and fixed this block (Part 24)
+
+**Before this block:** `settle_daily_observations` and `daily_postmortem` were purely `StartCalendarInterval`-scheduled with **no check of the upstream job's actual outcome**. A failed or still-running 07:00 sync would not stop 07:15 settlement from running against a stale/incomplete schedule; a failed settlement would not stop 07:30 postmortem from generating a report that looked complete.
+
+**Fix:** `operational/ingestion_health.py::dependency_ready(component, max_age_hours)` — a single yes/no check (never a retry loop) — is now called at the top of `settle_daily_observations.main()` (checks `nhl_sync_full`) and `daily_postmortem.main()` (checks `settlement`). On a failed check, the job **DEFERS**: it records `status="DEFERRED"` (which never counts as a success for future dependency checks — see `_FAILURE_STATUSES`) and exits without doing its normal work. The next scheduled run of that same job re-checks and proceeds once the dependency recovers. See `tests/test_morning_workflow_dependency.py` for the full test matrix (11 tests).
+
+## No new jobs added
+
+Per Part 22's explicit instruction ("prefer integrating with existing odds/data workflow rather than creating dozens of new scheduled jobs"), the real recommendation pipeline's trigger reuses the **already-scheduled** `moneyline-snapshot` job (row 6) rather than adding an 11th job. This required editing only `operational/live_odds_daily_pull.py::_main()`'s `--mode=moneyline` branch.

@@ -64,6 +64,24 @@ class TestTokenExchange(unittest.TestCase):
         self.assertEqual(called_body["refresh_token"], "old-refresh-token")
         self.assertEqual(token.access_token, "AT2")
 
+    def test_refresh_response_omitting_refresh_token_does_not_raise(self):
+        """Reliability fix (Yahoo compliance/hardening pass, 2026-09-24):
+        Yahoo's own docs say a refresh call "may" issue a new
+        refresh_token without guaranteeing one every time. This used to
+        be a hard data["refresh_token"] access that raised
+        YahooOAuthError whenever Yahoo omitted the field on a genuinely
+        successful refresh -- a real, previously-uncaught bug. The
+        caller (fantasy/yahoo/client.py) is responsible for falling back
+        to the previous refresh token when this comes back empty."""
+        creds = _creds()
+        fake_resp = self._mock_response(json_data={
+            "access_token": "AT2", "token_type": "bearer", "expires_in": 3600,
+        })  # no refresh_token field at all
+        with mock.patch("fantasy.yahoo.oauth.requests.post", return_value=fake_resp):
+            token = oauth.refresh_access_token(creds, "old-refresh-token")
+        self.assertEqual(token.access_token, "AT2")
+        self.assertEqual(token.refresh_token, "")
+
     def test_client_secret_sent_via_basic_auth_header_not_url(self):
         creds = _creds()
         fake_resp = self._mock_response(json_data={

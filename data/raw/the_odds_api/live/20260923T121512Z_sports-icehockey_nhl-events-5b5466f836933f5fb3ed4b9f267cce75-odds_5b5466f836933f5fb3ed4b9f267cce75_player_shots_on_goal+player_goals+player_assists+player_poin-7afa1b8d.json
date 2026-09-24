@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/5b5466f836933f5fb3ed4b9f267cce75/odds",
+    "event_id": "5b5466f836933f5fb3ed4b9f267cce75",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "421",
+    "requests_used_header": "79",
+    "response_checksum_sha256": "c95048814220a14301968e274d71b8110ad1104ebfda93f7f7f7bb50bfb9dcd7",
+    "retrieved_at_utc": "2026-09-23T12:15:12Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Rangers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:13:16Z",
+            "outcomes": [
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 0.5,
+                "price": -4500
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1200
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 1.5,
+                "price": -550
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 1.5,
+                "price": 350
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 2.5,
+                "price": -190
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 2.5,
+                "price": 145
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 3.5,
+                "price": 120
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 3.5,
+                "price": -160
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 4.5,
+                "price": 275
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 4.5,
+                "price": -410
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Over",
+                "point": 5.5,
+                "price": 675
+              },
+              {
+                "description": "Detroit Red Wings",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1350
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 1.5,
+                "price": -440
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 1.5,
+                "price": 295
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 2.5,
+                "price": -150
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 2.5,
+                "price": 110
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 3.5,
+                "price": 165
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 3.5,
+                "price": -225
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 4.5,
+                "price": 390
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 4.5,
+                "price": -630
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 5.5,
+                "price": 900
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2200
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T22:40:00Z",
+    "home_team": "Detroit Red Wings",
+    "id": "5b5466f836933f5fb3ed4b9f267cce75",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/6b3f5ca8c7e1a314027966d8854d7989/odds",
+    "event_id": "6b3f5ca8c7e1a314027966d8854d7989",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "422",
+    "requests_used_header": "78",
+    "response_checksum_sha256": "19848151f9088138128cc4ed125093e408b9bcf3efdc871a3d2160ac773c0e1c",
+    "retrieved_at_utc": "2026-09-23T12:15:12Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:24Z",
+            "outcomes": [
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 0.5,
+                "price": -6000
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1300
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 1.5,
+                "price": -650
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 1.5,
+                "price": 400
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 2.5,
+                "price": -215
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 2.5,
+                "price": 160
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 3.5,
+                "price": 110
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 3.5,
+                "price": -150
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 4.5,
+                "price": 265
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 4.5,
+                "price": -385
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 5.5,
+                "price": 650
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1300
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 1.5,
+                "price": -475
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 1.5,
+                "price": 310
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 2.5,
+                "price": -160
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 2.5,
+                "price": 120
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 3.5,
+                "price": 145
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 3.5,
+                "price": -190
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 4.5,
+                "price": 320
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 4.5,
+                "price": -485
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Over",
+                "point": 5.5,
+                "price": 750
+              },
+              {
+                "description": "San Jose Sharks",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1600
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T02:10:00Z",
+    "home_team": "San Jose Sharks",
+    "id": "6b3f5ca8c7e1a314027966d8854d7989",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

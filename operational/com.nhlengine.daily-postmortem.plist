@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.daily-postmortem</string>
+
+    <!-- Production Readiness Audit (2026-09-24), P0 item 2: the daily
+         post-mortem already exists (operational.daily_postmortem) and
+         was previously reachable only by opening the Morning Review
+         dashboard page, which deliberately never persists a report.
+         This is the new CLI entry point (main(), added this pass) that
+         DOES persist one, to reports/daily/postmortem_YYYY-MM-DD.md.
+         Runs 15 minutes after daily-settlement (07:15) so settlement has
+         a chance to finish first; correctness doesn't depend on strict
+         ordering (this just reads whatever is settled so far), but the
+         requested workflow is sync -> settle -> postmortem. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.daily_postmortem</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>30</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_postmortem.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_postmortem.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

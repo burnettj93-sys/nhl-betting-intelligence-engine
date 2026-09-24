@@ -3,3 +3,10 @@ requests>=2.31
 # Dashboard (dashboard/) -- Streamlit brings in Altair (charting) and
 # pandas (dataframes) as its own dependencies automatically.
 streamlit>=1.36
+
+# Yahoo compliance/reliability hardening pass (2026-09-24): AES-256-GCM
+# encryption for OAuth token-at-rest storage (fantasy/yahoo/crypto.py,
+# token_store.py) -- the API agreement permits persisting tokens
+# securely, but never Yahoo Fantasy Information itself; "securely" means
+# encrypted at rest, not a plaintext SQL column (the previous state).
+cryptography>=42.0

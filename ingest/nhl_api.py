@@ -47,11 +47,28 @@ What this does NOT cover (see README "not yet built"):
 from __future__ import annotations
 
 import datetime as dt
+import json as _json
 import time
+from pathlib import Path
 
 from ingest.timestamps import normalize_utc_timestamp
 
 BASE_URL = "https://api-web.nhle.com/v1"
+
+# Reliability fix (Production Readiness Audit, 2026-09-24 -> 2026-09-25
+# hardening pass): a real dry run of operational.nhl_sync hit a genuine
+# 429 from /v1/roster/{team}/current partway through a roster batch --
+# there was previously NO retry/backoff anywhere in this module, so that
+# single transient rate-limit response killed the entire daily sync's
+# reported status even though schedule/boxscore data for every game in
+# the window had already committed successfully. See
+# tests/test_nhl_api_retry.py for the reproduction and
+# docs/RELIABILITY_429_FIX.md for the full writeup.
+MAX_RETRIES = 4
+BASE_RETRY_DELAY_SECONDS = 1.0
+MAX_RETRY_DELAY_SECONDS = 30.0
+_RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+RETRY_LOG_PATH = Path(__file__).resolve().parent.parent / "operational" / "logs" / "nhl_api_retry_log.jsonl"
 
 
 class NHLApiSchemaError(RuntimeError):
@@ -59,8 +76,102 @@ class NHLApiSchemaError(RuntimeError):
     fail loudly rather than silently ingesting partial/wrong data."""
 
 
-def _get_json(session, url: str) -> dict:
-    resp = session.get(url, timeout=15)
+def _log_retry_event(*, url: str, status_code: int, attempt: int, delay_seconds: float,
+                      outcome: str, retry_after_header: str | None,
+                      log_path: Path | None = None) -> None:
+    """Append-only structured (JSONL) record of every retry/backoff
+    decision this module makes -- never printed/raised, purely
+    observability, matching this project's existing append-only-JSONL
+    convention (e.g. operational/new_contract_candidates.jsonl). Never
+    raises past the caller: a logging failure must not turn a successful
+    retry into a failed sync."""
+    log_path = log_path or RETRY_LOG_PATH
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "logged_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "url": url, "status_code": status_code, "attempt": attempt,
+            "delay_seconds": round(delay_seconds, 2), "outcome": outcome,
+            "retry_after_header": retry_after_header,
+        }
+        with open(log_path, "a") as f:
+            f.write(_json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def _retry_delay_seconds(resp, attempt: int, base_delay: float) -> tuple[float, str | None]:
+    """Honors a real `Retry-After` header (integer seconds form -- the
+    HTTP-date form is deliberately not parsed here, since the NHL API has
+    never been observed to send it; falls through to exponential backoff
+    if the header is absent or not a plain integer) over a computed
+    exponential backoff (`base_delay * 2**attempt`, capped at
+    MAX_RETRY_DELAY_SECONDS). Returns (delay, raw_header_value_or_None)."""
+    header_value = None
+    try:
+        header_value = resp.headers.get("Retry-After") if hasattr(resp, "headers") else None
+    except AttributeError:
+        header_value = None
+    if header_value is not None:
+        try:
+            return max(float(header_value), 0.0), header_value
+        except (TypeError, ValueError):
+            pass  # not a plain integer -- fall back to exponential backoff below
+    return min(base_delay * (2 ** attempt), MAX_RETRY_DELAY_SECONDS), header_value
+
+
+def _get_json(session, url: str, *, max_retries: int | None = None,
+               base_delay: float | None = None,
+               log_path: Path | None = None) -> dict:
+    """Endpoint-specific error handling (spec: "retries, exponential
+    backoff, Retry-After support where supplied, reasonable maximum
+    retries"): a 429 or 5xx is retried up to `max_retries` times: real
+    rate-limiting and transient server errors are exactly the class of
+    failure a retry can fix. Any other 4xx (400/401/403/404/...) is NOT
+    retried -- those indicate a request that will never succeed no
+    matter how many times it's repeated, and retrying them would only
+    waste quota/time. Every retry attempt and the final exhausted-retry
+    failure are both logged via _log_retry_event(); a request that
+    succeeds on the first try logs nothing at all.
+
+    `max_retries`/`base_delay` default to None rather than the module
+    constants MAX_RETRIES/BASE_RETRY_DELAY_SECONDS directly -- this
+    project's own well-documented footgun (see archive_result()'s and
+    _credits_spent_since()'s identical fix in the sibling live-odds
+    module): a default bound directly to a module constant is captured
+    ONCE at function-definition time, so mock.patch("ingest.nhl_api.
+    MAX_RETRIES", ...) in a test would silently have NO effect. Looking
+    the constants up by name inside the function body, only when the
+    caller didn't pass an explicit value, is what makes that patch
+    actually work."""
+    if max_retries is None:
+        max_retries = MAX_RETRIES
+    if base_delay is None:
+        base_delay = BASE_RETRY_DELAY_SECONDS
+    last_resp = None
+    for attempt in range(max_retries + 1):
+        resp = session.get(url, timeout=15)
+        last_resp = resp
+        # getattr with a 200 default: several existing test doubles across
+        # this suite model raise_for_status()/json() but never set
+        # status_code at all (implicitly "it succeeded") -- defaulting to
+        # 200 here preserves that behavior exactly rather than requiring
+        # every fake response in the test suite to grow a new attribute
+        # just to keep working.
+        status_code = getattr(resp, "status_code", 200)
+        if status_code in _RETRYABLE_STATUS_CODES:
+            delay, retry_after = _retry_delay_seconds(resp, attempt, base_delay)
+            if attempt < max_retries:
+                _log_retry_event(url=url, status_code=status_code, attempt=attempt,
+                                  delay_seconds=delay, outcome="RETRYING",
+                                  retry_after_header=retry_after, log_path=log_path)
+                time.sleep(delay)
+                continue
+            _log_retry_event(url=url, status_code=status_code, attempt=attempt,
+                              delay_seconds=delay, outcome="RETRIES_EXHAUSTED",
+                              retry_after_header=retry_after, log_path=log_path)
+        break
+    resp = last_resp
     resp.raise_for_status()
     data = resp.json()
     if not isinstance(data, dict):
@@ -568,21 +679,50 @@ def ingest_current_roster_identities(conn, session, teams: list[str],
     is captured FRESH (dt.datetime.utcnow()) for EACH team's own
     fetch_current_team_roster() response, right after that specific call
     returns, never once up front for the whole batch. Pass it explicitly
-    only for deterministic tests/historical-backfill fixtures."""
+    only for deterministic tests/historical-backfill fixtures.
+
+    Reliability fix (2026-09-24 hardening pass): a per-team failure
+    (after _get_json's own retries are exhausted) no longer aborts the
+    whole batch. Each team's write is committed individually the moment
+    it succeeds, so a later team's failure can never roll back an
+    earlier team's already-durable roster sync -- previously the single
+    `conn.commit()` at the end of the loop meant one team raising midway
+    silently discarded every prior team's in-progress transaction.
+    Returns `status`: "SUCCESS" (every team processed), "PARTIAL_SUCCESS"
+    (some processed, some failed), or "FAILED" (every team failed / no
+    teams processed) -- see docs/RELIABILITY_429_FIX.md."""
     explicit_override = (normalize_utc_timestamp(observed_at_utc)
                           if observed_at_utc is not None else None)
     players_removed_total = 0
+    teams_processed = 0
+    failed_teams: list[dict] = []
     for team in teams:
-        roster = fetch_current_team_roster(session, team)
-        this_call_observed_at = (
-            explicit_override if explicit_override is not None
-            else normalize_utc_timestamp(dt.datetime.utcnow().isoformat()))
-        result = sync_current_team_roster(conn, team, roster, this_call_observed_at)
+        try:
+            roster = fetch_current_team_roster(session, team)
+            this_call_observed_at = (
+                explicit_override if explicit_override is not None
+                else normalize_utc_timestamp(dt.datetime.utcnow().isoformat()))
+            result = sync_current_team_roster(conn, team, roster, this_call_observed_at)
+            conn.commit()  # durable per-team -- a later team's failure can't roll this back
+        except Exception as exc:  # noqa: BLE001 — a single team's failure must not abort the batch
+            failed_teams.append({"team": team, "error": f"{exc.__class__.__name__}: {exc}"})
+            continue
         players_removed_total += result["players_removed"]
+        teams_processed += 1
         time.sleep(0.2)
-    conn.commit()
+
+    if not failed_teams:
+        status = "SUCCESS"
+    elif teams_processed > 0:
+        status = "PARTIAL_SUCCESS"
+    else:
+        status = "FAILED"
+
     return {
-        "teams_processed": len(teams),
+        "status": status,
+        "teams_processed": teams_processed,
+        "teams_failed": len(failed_teams),
+        "failed_teams": failed_teams,
         "players_total": conn.execute("SELECT COUNT(*) c FROM players").fetchone()["c"],
         "players_removed_this_pass": players_removed_total,
     }

@@ -14,6 +14,7 @@ import streamlit as st
 
 from dashboard import components as comp
 from dashboard import data_status_view as dv
+from operational import ingestion_health
 
 st.title("Data Status")
 comp.render_model_status_header()
@@ -42,7 +43,8 @@ st.caption(f"Last sync generated at (UTC): {readiness['generated_at_utc']}")
 
 STATUS_COLOR = {"CURRENT": "#3ecf8e", "PROJECTED": "#3ecf8e", "NO_CHANGE": "#3ecf8e",
                  "STALE": "#e8b84f", "NOT_REFRESHED": "#e8b84f",
-                 "UNAVAILABLE": "#f0654f", "REQUIRES_PERMISSION": "#f0654f"}
+                 "UNAVAILABLE": "#f0654f", "REQUIRES_PERMISSION": "#f0654f",
+                 "SUCCESS": "#3ecf8e", "PARTIAL_SUCCESS": "#e8b84f", "FAILED": "#f0654f"}
 
 
 def badge(status: str) -> str:
@@ -73,5 +75,26 @@ st.json(nhl)
 if mp:
     st.markdown("### Last MoneyPuck sync detail")
     st.json(mp)
+
+st.divider()
+st.markdown("### Scheduled ingestion job health")
+st.caption("P0.1 (2026-09-24 hardening block): last attempt, last success, status, and data age per "
+           "scheduled component -- read from a local cache only, same no-network-call rule as the "
+           "rest of this page. A component with no row here has never run since this cache was last "
+           "cleared, not necessarily an error.")
+health = ingestion_health.load_health()
+if not health:
+    st.caption("No scheduled job has recorded a run yet.")
+else:
+    for component, row in sorted(health.items()):
+        age_hours = ingestion_health.component_age_hours(row)
+        age_text = f"{age_hours:.1f}h ago" if age_hours is not None else "never succeeded"
+        c1, c2, c3, c4 = st.columns([2, 1, 2, 2])
+        c1.markdown(f"**{component}**")
+        c2.markdown(badge(row.get("last_status", "UNKNOWN")), unsafe_allow_html=True)
+        c3.caption(f"Last attempt: {row.get('last_attempt_utc', '—')}")
+        c4.caption(f"Last success: {row.get('last_success_utc', 'never')} ({age_text})")
+        if row.get("last_detail"):
+            st.caption(f"　　{row['last_detail']}")
 
 comp.render_provenance_panel()

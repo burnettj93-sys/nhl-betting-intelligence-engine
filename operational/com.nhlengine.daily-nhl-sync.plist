@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.daily-nhl-sync</string>
+
+    <!-- Production Readiness Audit (2026-09-24), P0 item 1: real NHL
+         schedule/boxscore/roster data had never been scheduled at all --
+         nhl.db's most recent row was 2025-11-27 despite real preseason
+         games being played since 2026-09-19. sync_daily.py (root) is the
+         pre-existing "Part 13: THE daily operational sync command" entry
+         point -- runs nhl_sync + moneypuck_daily + crosscheck + readiness
+         cache in one call. Runs before the 08:00 moneyline snapshot so
+         settlement/post-mortem have real, current game data to work from
+         each morning. KNOWN ISSUE (found via this same audit's manual
+         dry run): the current-roster sub-step has no retry/backoff and
+         can fail the whole run's status on a transient 429 from the NHL
+         API even though schedule/boxscore data still committed
+         successfully first -- tracked as a P1 reliability fix, not fixed
+         here. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>sync_daily.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_nhl_sync.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/daily_nhl_sync.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

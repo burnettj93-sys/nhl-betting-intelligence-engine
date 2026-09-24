@@ -115,6 +115,39 @@ JUSTIFIED_EXCEPTIONS = {
     # or backtest.py, and never feeds a pregame decision.
     ("operational/outcome_resolver.py", "player_game_stats"),
     ("operational/outcome_resolver.py", "goalie_game_stats"),
+    # Real Recommendation Pipeline block (2026-09-24):
+    # operational/real_recommendation_orchestrator.py's SELECT re-reads
+    # ONE already-point-in-time-safe row BY ITS OWN ROW ID -- the exact
+    # id that pricing/engine.py::evaluate_moneyline_for_game() already
+    # returned via features/point_in_time.py::latest_draftkings_two_sided()
+    # (report.odds_snapshot_id_selection). It fetches that row's own
+    # captured_at_utc purely to build an idempotency/checkpoint key for
+    # the ledger write -- it never independently searches odds_snapshots
+    # for "what price existed at this time", so it can never bypass
+    # point_in_time.py's own freshness/staleness gating; the pricing
+    # decision itself was already made entirely through point_in_time.py.
+    ("operational/real_recommendation_orchestrator.py", "odds_snapshots"),
+    # operational/closing_price_lookup.py is POST-HOC settlement-time
+    # closing-price resolution, called only after a game is FINAL (via
+    # settle_daily_observations.py) -- the same category of exception as
+    # outcome_resolver.py above. It answers "what was the real closing
+    # price" for CLV, never "what was known at prediction_time_utc" for a
+    # pricing decision, and it deliberately reads the FULL raw archived
+    # price history (not point-in-time gated) because
+    # operational/clv_resolver.py::find_closing_price() -- the existing,
+    # already-tested CLV mechanism this module feeds -- does its own
+    # separate strict filtering (captured_at_utc < event_start_utc, Part
+    # 44) over that full history. This module never touches
+    # models/combined_model.py, pricing/engine.py, or backtest.py, and
+    # never feeds a pregame decision.
+    ("operational/closing_price_lookup.py", "odds_snapshots"),
+    # opening_day_readiness.py::check_real_recommendation_pipeline()
+    # (Part 26, 2026-09-24) runs a single human-facing COUNT(*) health
+    # diagnostic ("how many real odds rows exist") -- the same category
+    # of exception as demo_setup.py/validate.py above: a summary
+    # printout for an operator, never a prediction, decision, or
+    # point-in-time reconstruction.
+    ("opening_day_readiness.py", "odds_snapshots"),
 }
 
 # a SELECT keyword must appear within this many characters before the

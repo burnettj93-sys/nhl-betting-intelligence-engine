@@ -35,6 +35,14 @@ from operational import paper_bankroll as pb
 from operational import prospective_ledger as pl
 from operational import rejected_research_check as rrc
 
+# Reliability fix (2026-09-24): a small, explicit, documented minimum --
+# same order of magnitude as this project's own established evidence
+# gates elsewhere (challenger_registry.MIN_REPEATED_OCCURRENCES=5). Below
+# this, a Brier score or shadow-vs-production comparison is statistical
+# noise, not a real reading; the review must say so honestly rather than
+# report a number that happens to be computable.
+MIN_SAMPLE_FOR_REVIEW = 5
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DAILY_REPORTS_DIR = REPO_ROOT / "reports" / "daily"
 
@@ -335,14 +343,49 @@ def run_daily_review(ledger_conn, *, now_utc: dt.datetime | None = None,
     recommendation = daily_recommendation(contract_status["status"], queue, promo_candidates)
     engine_status = ese.combine_status([run_order["status"], contract_status["status"]])
 
+    # Reliability fix (2026-09-24, docs/MODEL_REVIEW_ZERO_DATA_FIX.md):
+    # zero (or near-zero) real settled predictions must produce an
+    # explicit, honest top-level engine_status -- NOT whatever
+    # combine_status() above happened to compute from run_order/
+    # contract_status, neither of which reflects sample size at all. The
+    # real bug this closes: a review with exactly 0 real rows displayed
+    # "ENGINE STATUS: WATCH" purely because a verified DraftKings
+    # moneyline contract exists and ITS OWN drift-monitoring isn't built
+    # yet (check_contract_status()) -- a real, permanent, structural
+    # signal with nothing to do with whether there was any data to
+    # review today. This override wins regardless of what combine_status
+    # produced; every other field below (recommendation, promotion
+    # candidates, rejected-research count, paper performance) is still
+    # computed normally, since those reflect module-level state
+    # (challenger registry, rejected-research log, a separate paper
+    # ledger) that is meaningful independent of today's prediction
+    # sample size -- only the ROWS-dependent scoring output becomes
+    # untrustworthy at low sample size, which `incomplete=True` signals
+    # to callers (write_daily_report() and the dashboard page both
+    # already stop before rendering it).
+    sample_size = len(rows)
+    incomplete = False
+    reason = None
+    if sample_size == 0:
+        engine_status = ese.NO_DATA
+        incomplete = True
+        reason = ("no real settled predictions exist yet -- expected before real games are played "
+                  "and settled, not an error")
+    elif sample_size < MIN_SAMPLE_FOR_REVIEW:
+        engine_status = ese.INSUFFICIENT_SAMPLE
+        incomplete = True
+        reason = (f"only {sample_size} real settled prediction(s) exist -- below the minimum of "
+                  f"{MIN_SAMPLE_FOR_REVIEW} needed for a meaningful daily review")
+
     paper_performance = None
     if paper_conn is not None:
         paper_performance = {track: pb.windowed_performance(paper_conn, track, now_utc.strftime("%Y-%m-%dT%H:%M:%S.%fZ"))
                               for track in pb.TRACKS}
 
-    return {
+    result = {
         "generated_at_utc": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "engine_status": engine_status,
+        "sample_size": sample_size,
         "scores_by_window": scores,
         "shadow_vs_production": shadow,
         "large_miss_review": misses,
@@ -361,6 +404,10 @@ def run_daily_review(ledger_conn, *, now_utc: dt.datetime | None = None,
         "rejected_research_entries_on_file": len(rrc.all_rejected_entries()),
         "paper_performance": paper_performance,
     }
+    if incomplete:
+        result["incomplete"] = True
+        result["reason"] = reason
+    return result
 
 
 def write_daily_report(result: dict, *, report_date: str, out_dir: Path = DAILY_REPORTS_DIR) -> Path:

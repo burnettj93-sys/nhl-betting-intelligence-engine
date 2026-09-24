@@ -11,7 +11,7 @@ write path to accidentally call.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import requests
@@ -65,9 +65,16 @@ class YahooFantasyClient:
             return None
         if token.is_expired():
             try:
-                token = refresh_access_token(self._creds, token.refresh_token)
+                refreshed = refresh_access_token(self._creds, token.refresh_token)
             except YahooOAuthError:
                 return None
+            if not refreshed.refresh_token:
+                # Yahoo's docs: a refresh call "may" issue a new refresh
+                # token but doesn't guarantee one every time -- keep using
+                # the previous one rather than persisting an empty string
+                # that would break every subsequent refresh.
+                refreshed = replace(refreshed, refresh_token=token.refresh_token)
+            token = refreshed
             self._tokens.save(token)
         return token
 

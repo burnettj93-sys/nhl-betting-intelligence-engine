@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/6cac1fc86136075a23655625562fd8dc/odds",
+    "event_id": "6cac1fc86136075a23655625562fd8dc",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "413",
+    "requests_used_header": "87",
+    "response_checksum_sha256": "2e9b75d71529b65b30cedd6ff92a230971eed702e29d8f390bbccb55d9287e1b",
+    "retrieved_at_utc": "2026-09-23T12:15:13Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Florida Panthers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:26Z",
+            "outcomes": [
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 0.5,
+                "price": -6000
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1300
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 1.5,
+                "price": -650
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 1.5,
+                "price": 400
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 2.5,
+                "price": -210
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 2.5,
+                "price": 155
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 3.5,
+                "price": 105
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 3.5,
+                "price": -145
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 4.5,
+                "price": 240
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 4.5,
+                "price": -340
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Over",
+                "point": 5.5,
+                "price": 530
+              },
+              {
+                "description": "Anaheim Ducks",
+                "name": "Under",
+                "point": 5.5,
+                "price": -950
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 0.5,
+                "price": -8000
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1400
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 1.5,
+                "price": -775
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 1.5,
+                "price": 450
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 2.5,
+                "price": -245
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 2.5,
+                "price": 180
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 3.5,
+                "price": -105
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 3.5,
+                "price": -135
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 4.5,
+                "price": 225
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 4.5,
+                "price": -320
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Over",
+                "point": 5.5,
+                "price": 510
+              },
+              {
+                "description": "Florida Panthers",
+                "name": "Under",
+                "point": 5.5,
+                "price": -920
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-05T00:10:00Z",
+    "home_team": "Anaheim Ducks",
+    "id": "6cac1fc86136075a23655625562fd8dc",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/ac3cb11040dbdb0d2ccfa53e7d6b6cda/odds",
+    "event_id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "432",
+    "requests_used_header": "68",
+    "response_checksum_sha256": "eb1434dcf35d220ce3766d71be063bc52e3cb6b19387cb9be1392d0bb32628e2",
+    "retrieved_at_utc": "2026-09-23T12:15:10Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "New York Rangers",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:26Z",
+            "outcomes": [
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 0.5,
+                "price": -4500
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1200
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 1.5,
+                "price": -550
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 1.5,
+                "price": 350
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 2.5,
+                "price": -180
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 2.5,
+                "price": 140
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 3.5,
+                "price": 125
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 3.5,
+                "price": -165
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 4.5,
+                "price": 285
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 4.5,
+                "price": -425
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 5.5,
+                "price": 675
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1350
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 1.5,
+                "price": -450
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 1.5,
+                "price": 300
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 2.5,
+                "price": -155
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 2.5,
+                "price": 115
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 3.5,
+                "price": 165
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 3.5,
+                "price": -225
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 4.5,
+                "price": 380
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 4.5,
+                "price": -615
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Over",
+                "point": 5.5,
+                "price": 900
+              },
+              {
+                "description": "New York Rangers",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2200
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-09-30T00:10:00Z",
+    "home_team": "Boston Bruins",
+    "id": "ac3cb11040dbdb0d2ccfa53e7d6b6cda",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

@@ -29,23 +29,18 @@ comp.render_model_status_header()
 st.caption("Prospective self-audit: real settled predictions only. Never mutates a production "
            "model, decision_policy, or shadow-overlay coefficient from this page.")
 
-if not pl.DB_PATH.exists():
-    comp.render_status_banner(
-        "WAITING",
-        "WAITING FOR 2026-27 RESULTS",
-        "No real 2026-27 predictions have been recorded and settled yet (sample = 0). This is "
-        "the expected state before the season starts, not an error -- this page populates itself "
-        "automatically once real games are played and settled.")
-    st.caption(
-        "How this works: once real results exist, this page re-scores the production model and "
-        "every registered challenger daily against those settled outcomes (Brier score, "
-        "shadow-vs-production comparison, improvement queue). That daily re-scoring is read-only "
-        "reporting -- it NEVER automatically changes the production model, decision_policy, or any "
-        "shadow-overlay coefficient. Promoting a challenger or adjusting production logic always "
-        "requires a separate, explicit, human-authorized change.")
-    st.stop()
-
-conn = pl.get_conn(pl.DB_PATH)
+# Reliability fix (2026-09-24, docs/MODEL_REVIEW_ZERO_DATA_FIX.md): this
+# used to special-case "the ledger file doesn't exist yet" separately
+# from everything else -- which meant the moment the file existed (even
+# with zero rows, e.g. after a settlement job runs once with nothing to
+# settle), this branch was skipped and run_daily_review() had no
+# sample-size check of its own, so the page fell through to a
+# populated-looking "ENGINE STATUS: WATCH". pl.init_db() is idempotent
+# and safe to call whether or not the file exists yet; run_daily_review()
+# itself now returns an honest NO_DATA/INSUFFICIENT_SAMPLE engine_status
+# (with incomplete=True) whenever there isn't enough real settled data,
+# so there is no longer a separate case to special-case here.
+conn = pl.init_db()
 result = dmr.run_daily_review(conn)
 
 status = result["engine_status"]
@@ -53,6 +48,13 @@ comp.render_status_banner(status, f"ENGINE STATUS: {status}", f"Recommendation: 
 
 if result.get("incomplete"):
     st.caption(result["reason"])
+    st.caption(
+        "How this works: once enough real results exist, this page re-scores the production model "
+        "and every registered challenger daily against those settled outcomes (Brier score, "
+        "shadow-vs-production comparison, improvement queue). That daily re-scoring is read-only "
+        "reporting -- it NEVER automatically changes the production model, decision_policy, or any "
+        "shadow-overlay coefficient. Promoting a challenger or adjusting production logic always "
+        "requires a separate, explicit, human-authorized change.")
     st.stop()
 
 st.markdown("#### Trend (Part 57)")

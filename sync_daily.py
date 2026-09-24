@@ -79,9 +79,14 @@ def run(cache_path: Path = READINESS_CACHE_PATH) -> int:
 
     print(report.format_sync_report(nhl_result, moneypuck_result, crosscheck_result, readiness_report))
 
-    if nhl_result.get("status") != "OK":
+    if nhl_result.get("status") == "FAILED":
         print(f"\nCRITICAL FAILURE: NHL sync failed — {nhl_result.get('error')}")
         return 1
+    if nhl_result.get("status") == "PARTIAL_SUCCESS":
+        print(f"\nWARNING: schedule/boxscore data ingested fine, but roster sync degraded "
+              f"({nhl_result.get('roster_status')}) — "
+              f"{len(nhl_result.get('roster_failed_teams', []))} team(s) failed: "
+              f"{[t['team'] for t in nhl_result.get('roster_failed_teams', [])]}")
     return 0
 
 

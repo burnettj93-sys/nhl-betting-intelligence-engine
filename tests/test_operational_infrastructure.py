@@ -450,8 +450,15 @@ class Test37ResearchHubRenders(unittest.TestCase):
 # 38. nav grouping / Today default
 class Test38NavGrouping(unittest.TestCase):
     def test_app_defaults_to_today(self):
+        """P0.7 (2026-09-24 hardening block) added a real auth gate in
+        front of the navigation -- a session must be authenticated (any
+        role; Today is a shared USER-accessible page) before the real
+        app renders at all. See tests/test_auth.py for the auth gate's
+        own dedicated coverage."""
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(str(REPO_ROOT / "dashboard/app.py"))
+        at.session_state["_auth_username"] = "test-user"
+        at.session_state["_auth_role"] = "USER"
         at.run(timeout=60)
         self.assertEqual(list(at.exception), [])
         self.assertEqual([t.value for t in at.title], ["Today"])

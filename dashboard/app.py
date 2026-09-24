@@ -21,12 +21,23 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import auth
+
 st.set_page_config(
     page_title="NHL Model Research Dashboard",
     page_icon="🏒",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# P0.7 (2026-09-24 hardening block): the auth gate runs BEFORE any
+# navigation or page content is built. A logged-out session (or a
+# fresh install with zero accounts yet) only ever sees a login/
+# bootstrap form -- st.stop() below means none of the real navigation,
+# page registration, or per-page content below this point executes.
+_user = auth.render_auth_gate()
+if _user is None:
+    st.stop()
 
 PAGES_DIR = Path(__file__).resolve().parent / "pages"
 
@@ -41,7 +52,7 @@ def _p(filename: str, title: str, icon: str, default: bool = False) -> "st.Page"
 # one of the original 20 pages is still reachable, just regrouped. Icons
 # de-duplicated across the WHOLE nav (the dashboard audit found 🏒 and 🥅
 # each used twice) -- every icon below now appears exactly once.
-pg = st.navigation({
+_nav_sections = {
     "Operate": [
         _p("21_Today.py", "Today", "☀️", default=True),
         _p("8_Live_SOG_Markets.py", "Live SOG Markets", "📡"),
@@ -65,10 +76,6 @@ pg = st.navigation({
         _p("13_Play_By_Play_Status.py", "Play-by-Play Status", "🧩"),
         _p("3_Team_Ratings.py", "Team Ratings", "📊"),
     ],
-    "Fantasy": [
-        _p("34_Fantasy_HQ.py", "Fantasy HQ", "🏆"),
-        _p("35_Fantasy_Settings.py", "Fantasy Settings", "🔌"),
-    ],
     "Research": [
         _p("24_Research_Hub.py", "Research Hub", "🧪"),
         _p("10_Prop_Registry.py", "Prop Registry", "📋"),
@@ -86,11 +93,32 @@ pg = st.navigation({
         _p("4_Model_Performance.py", "Model Performance", "📈"),
         _p("5_Research_Lab.py", "Research Lab", "🔬"),
     ],
-})
+}
+
+# P0.7: the Fantasy section (and everything Yahoo-related inside it) is
+# only ever REGISTERED in the navigation for an ADMIN session -- a USER
+# session has no route to it at all via the sidebar. This is a UX
+# nicety, not the real security boundary: 34_Fantasy_HQ.py and
+# 35_Fantasy_Settings.py each also call auth.require_admin() at the top
+# of their own script, so even a direct/unexpected way to reach that
+# page's file still fails server-side, never just relying on this nav
+# omission (see tests/test_auth.py's explicit route-level tests).
+if _user["role"] == "ADMIN":
+    _nav_sections["Fantasy"] = [
+        _p("34_Fantasy_HQ.py", "Fantasy HQ", "🏆"),
+        _p("35_Fantasy_Settings.py", "Fantasy Settings", "🔌"),
+    ]
+
+pg = st.navigation(_nav_sections)
 
 with st.sidebar:
     st.markdown("### 🏒 NHL Intelligence Engine")
     st.caption("Model Research + Intelligence Dashboard")
     st.caption("Read-only research view — v1")
+    st.divider()
+    st.caption(f"Signed in as **{_user['username']}** ({_user['role']})")
+    if st.button("Log out"):
+        auth.logout()
+        st.rerun()
 
 pg.run()

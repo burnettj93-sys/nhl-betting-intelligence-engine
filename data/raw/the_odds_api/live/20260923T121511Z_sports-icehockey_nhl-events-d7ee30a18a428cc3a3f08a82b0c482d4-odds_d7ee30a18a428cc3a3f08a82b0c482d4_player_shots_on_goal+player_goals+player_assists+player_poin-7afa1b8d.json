@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/d7ee30a18a428cc3a3f08a82b0c482d4/odds",
+    "event_id": "d7ee30a18a428cc3a3f08a82b0c482d4",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "426",
+    "requests_used_header": "74",
+    "response_checksum_sha256": "1d00210db95afeb39320dd010b181cf21ab5ef31f7ce294ee686cc277c2a9732",
+    "retrieved_at_utc": "2026-09-23T12:15:11Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Minnesota Wild",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:14:53Z",
+            "outcomes": [
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 0.5,
+                "price": -6000
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1300
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 1.5,
+                "price": -675
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 1.5,
+                "price": 410
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 2.5,
+                "price": -225
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 2.5,
+                "price": 165
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 3.5,
+                "price": 110
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 3.5,
+                "price": -150
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 4.5,
+                "price": 260
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 4.5,
+                "price": -375
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Over",
+                "point": 5.5,
+                "price": 625
+              },
+              {
+                "description": "Minnesota Wild",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1200
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 1.5,
+                "price": -440
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 1.5,
+                "price": 295
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 2.5,
+                "price": -150
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 2.5,
+                "price": 110
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 3.5,
+                "price": 155
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 3.5,
+                "price": -210
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 4.5,
+                "price": 350
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 4.5,
+                "price": -550
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Over",
+                "point": 5.5,
+                "price": 850
+              },
+              {
+                "description": "Nashville Predators",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2000
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-02T00:10:00Z",
+    "home_team": "Nashville Predators",
+    "id": "d7ee30a18a428cc3a3f08a82b0c482d4",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

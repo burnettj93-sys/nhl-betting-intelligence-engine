@@ -123,13 +123,21 @@ class TestMorningReviewPage(unittest.TestCase):
 
 
 class TestAppNavigationIncludesMorningReview(unittest.TestCase):
+    """P0.7 (2026-09-24 hardening block) added a real auth gate in front
+    of app.py's navigation -- Morning Review is a shared, USER-accessible
+    page, so a plain USER session is sufficient here."""
+
     def test_app_py_loads_with_morning_review(self):
         at = AppTest.from_file(os.path.join(REPO_ROOT, "dashboard", "app.py"), default_timeout=90)
+        at.session_state["_auth_username"] = "test-user"
+        at.session_state["_auth_role"] = "USER"
         at.run()
         self.assertEqual(len(at.exception), 0)
 
     def test_switch_page_to_morning_review_works(self):
         at = AppTest.from_file(os.path.join(REPO_ROOT, "dashboard", "app.py"), default_timeout=90)
+        at.session_state["_auth_username"] = "test-user"
+        at.session_state["_auth_role"] = "USER"
         at.run()
         at.switch_page("pages/36_Morning_Review.py").run()
         self.assertEqual(len(at.exception), 0)

@@ -246,7 +246,18 @@ def resolve_prediction(conn: sqlite3.Connection, prediction: dict) -> dict:
         return resolve_blocks(conn, game_id=game_id, player_id=prediction.get("player_id"),
                                threshold=threshold, side=side)
     if market_id in ("NHL_WIN_MODEL", "MONEYLINE") or market_id.startswith("MONEYLINE"):
-        return resolve_moneyline(conn, game_id=game_id, side_team_id=prediction.get("team_id"))
+        # Real bug fix (Real Recommendation Pipeline block, 2026-09-24):
+        # the prospective ledger schema's real column is "team" -- there
+        # has never been a "team_id" column (confirmed in
+        # operational/prospective_schema.sql). This read "team_id" for as
+        # long as MONEYLINE dispatch has existed, always silently
+        # resolving to None -- never caught because MONEYLINE settlement
+        # had never actually been exercised until this block wired the
+        # first real MONEYLINE predictions through it. TEAM_SOG below has
+        # the identical wrong-key pattern but is harmless dead code
+        # (resolve_team_sog fails closed before ever using its team_id
+        # argument) -- left as-is rather than changed speculatively.
+        return resolve_moneyline(conn, game_id=game_id, side_team_id=prediction.get("team"))
     for prefix, family in _PLAYER_STAT_PREFIXES.items():
         if market_id.startswith(prefix):
             return resolve_player_stat_threshold(conn, market_family=family, game_id=game_id,

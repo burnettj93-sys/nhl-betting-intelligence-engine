@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/e77f5de1229c03c1338f5cf3eb6797ba/odds",
+    "event_id": "e77f5de1229c03c1338f5cf3eb6797ba",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "410",
+    "requests_used_header": "90",
+    "response_checksum_sha256": "2d12fad1db5685855f68e9fc6d3cd60e820cc2d6467000edd7db967333ce09df",
+    "retrieved_at_utc": "2026-09-23T12:15:13Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "St Louis Blues",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:13:28Z",
+            "outcomes": [
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2200
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 0.5,
+                "price": 900
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 1.5,
+                "price": -370
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 1.5,
+                "price": 255
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 2.5,
+                "price": -135
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 2.5,
+                "price": -105
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 3.5,
+                "price": 180
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 3.5,
+                "price": -245
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 4.5,
+                "price": 400
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 4.5,
+                "price": -650
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1000
+              },
+              {
+                "description": "Chicago Blackhawks",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2800
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 1.5,
+                "price": -450
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 1.5,
+                "price": 300
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 2.5,
+                "price": -155
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 2.5,
+                "price": 115
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 3.5,
+                "price": 155
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 3.5,
+                "price": -210
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 4.5,
+                "price": 380
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 4.5,
+                "price": -615
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Over",
+                "point": 5.5,
+                "price": 1000
+              },
+              {
+                "description": "St Louis Blues",
+                "name": "Under",
+                "point": 5.5,
+                "price": -2800
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-07T00:10:00Z",
+    "home_team": "Chicago Blackhawks",
+    "id": "e77f5de1229c03c1338f5cf3eb6797ba",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

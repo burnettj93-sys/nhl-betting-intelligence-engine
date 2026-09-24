@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "bookmaker_filter": "draftkings",
+    "endpoint": "/sports/icehockey_nhl/events/f5a9759e52a784d5fdcc1f3a2fcfc5a2/odds",
+    "event_id": "f5a9759e52a784d5fdcc1f3a2fcfc5a2",
+    "http_status": 200,
+    "market_filter": "player_shots_on_goal,player_goals,player_assists,player_points,player_total_saves,team_totals,alternate_team_totals",
+    "requests_last_header": "1",
+    "requests_remaining_header": "420",
+    "requests_used_header": "80",
+    "response_checksum_sha256": "fcb902dab4c69b424b2736ddc9d817414219bc201ee30eabbab7e3cf70d77886",
+    "retrieved_at_utc": "2026-09-23T12:15:12Z",
+    "sport": "icehockey_nhl"
+  },
+  "response": {
+    "away_team": "Boston Bruins",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "markets": [
+          {
+            "key": "alternate_team_totals",
+            "last_update": "2026-09-23T12:15:08Z",
+            "outcomes": [
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 0.5,
+                "price": -3500
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1100
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 1.5,
+                "price": -525
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 1.5,
+                "price": 340
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 2.5,
+                "price": -180
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 2.5,
+                "price": 140
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 3.5,
+                "price": 135
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 3.5,
+                "price": -175
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 4.5,
+                "price": 310
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 4.5,
+                "price": -475
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Over",
+                "point": 5.5,
+                "price": 800
+              },
+              {
+                "description": "Boston Bruins",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1800
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 0.5,
+                "price": -2800
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 0.5,
+                "price": 1000
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 1.5,
+                "price": -430
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 1.5,
+                "price": 290
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 2.5,
+                "price": -150
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 2.5,
+                "price": 110
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 3.5,
+                "price": 155
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 3.5,
+                "price": -210
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 4.5,
+                "price": 350
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 4.5,
+                "price": -550
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Over",
+                "point": 5.5,
+                "price": 800
+              },
+              {
+                "description": "Winnipeg Jets",
+                "name": "Under",
+                "point": 5.5,
+                "price": -1800
+              }
+            ]
+          }
+        ],
+        "title": "DraftKings"
+      }
+    ],
+    "commence_time": "2026-10-03T00:10:00Z",
+    "home_team": "Winnipeg Jets",
+    "id": "f5a9759e52a784d5fdcc1f3a2fcfc5a2",
+    "sport_key": "icehockey_nhl",
+    "sport_title": "NHL"
+  }
+}

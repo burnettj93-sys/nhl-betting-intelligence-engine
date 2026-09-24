@@ -46,10 +46,18 @@ class Test01RunOrder(unittest.TestCase):
         self.assertEqual(result["engine_status"], "HALT")
 
     def test_proceeds_when_both_complete(self):
+        """Reliability fix (2026-09-24): 'proceeds' no longer means
+        'behaves as if real data existed' -- with zero real settled
+        predictions the correct, honest outcome is NO_DATA/incomplete,
+        never HALT (settlement/results genuinely did complete; there's
+        simply nothing to review yet) and never a populated-looking
+        status. See Test12ZeroAndLowSampleHandling for the full matrix
+        this test used to paper over."""
         conn = pl.init_db(db_path=":memory:")
         result = dmr.run_daily_review(conn, now_utc=NOW)
         self.assertNotEqual(result["engine_status"], "HALT")
-        self.assertNotIn("incomplete", result)
+        self.assertEqual(result["engine_status"], "NO_DATA")
+        self.assertTrue(result["incomplete"])
 
 
 class Test02DeterministicReport(unittest.TestCase):
@@ -278,6 +286,93 @@ class Test11PaperPerformanceIntegration(unittest.TestCase):
         self.assertEqual(without["recommendation"], with_paper["recommendation"])
         self.assertEqual(without["promotion_candidates"], with_paper["promotion_candidates"])
         self.assertEqual(without["engine_status"], with_paper["engine_status"])
+
+
+class Test12ZeroAndLowSampleHandling(unittest.TestCase):
+    """Reliability fix (2026-09-24, docs/MODEL_REVIEW_ZERO_DATA_FIX.md):
+    the exact matrix requested when this bug was reported -- 0
+    observations, 1 observation, below minimum, at the minimum
+    boundary, a valid WATCH case with real data, and a valid
+    promotion-candidate case. Confirms engine_status is never a
+    populated-looking real reading (WATCH/NORMAL/INVESTIGATE) when
+    there isn't enough real data to justify one."""
+
+    def _settle_n(self, conn, n: int, *, result_status: str = "WIN"):
+        for i in range(n):
+            pred_id = _record(conn, player_id=f"P{i}", game_id=i)
+            pl.settle_prediction(conn, pred_id, result_status, actual_outcome="5")
+
+    def test_zero_observations_is_no_data(self):
+        conn = pl.init_db(db_path=":memory:")
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertEqual(result["engine_status"], "NO_DATA")
+        self.assertEqual(result["sample_size"], 0)
+        self.assertTrue(result["incomplete"])
+
+    def test_one_observation_is_insufficient_sample(self):
+        conn = pl.init_db(db_path=":memory:")
+        self._settle_n(conn, 1)
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertEqual(result["engine_status"], "INSUFFICIENT_SAMPLE")
+        self.assertEqual(result["sample_size"], 1)
+        self.assertTrue(result["incomplete"])
+
+    def test_below_minimum_sample_is_insufficient_sample(self):
+        conn = pl.init_db(db_path=":memory:")
+        self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW - 1)
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertEqual(result["engine_status"], "INSUFFICIENT_SAMPLE")
+        self.assertTrue(result["incomplete"])
+
+    def test_at_minimum_sample_boundary_proceeds_normally(self):
+        conn = pl.init_db(db_path=":memory:")
+        self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW)
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertNotIn(result["engine_status"], ("NO_DATA", "INSUFFICIENT_SAMPLE"))
+        self.assertNotIn("incomplete", result)
+        self.assertEqual(result["sample_size"], dmr.MIN_SAMPLE_FOR_REVIEW)
+
+    def test_valid_watch_case_with_real_data_above_minimum(self):
+        """WATCH is a real, valid, permanent structural signal (a
+        verified contract exists with no drift-monitoring built yet) --
+        this must still surface normally once there's enough real data
+        that the top-level status isn't overridden to NO_DATA/
+        INSUFFICIENT_SAMPLE."""
+        conn = pl.init_db(db_path=":memory:")
+        self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW + 5)
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertEqual(result["engine_status"], "WATCH")
+        self.assertNotIn("incomplete", result)
+        self.assertEqual(result["contract_status"]["verified_contracts"], 1)
+
+    def test_valid_promotion_candidate_case_still_works_above_minimum(self):
+        """promotion_candidates()/recommendation are challenger-registry
+        state, not ledger-row state -- confirms they still work
+        correctly (empty registry -> never PROMOTION_REVIEW) once real
+        data clears the sample-size gate, i.e. this override didn't
+        accidentally break the pre-existing promotion-review logic."""
+        conn = pl.init_db(db_path=":memory:")
+        self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW)
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertEqual(result["promotion_candidates"], [])
+        self.assertNotEqual(result["recommendation"], "PROMOTION_REVIEW")
+
+    def test_sample_size_key_always_present_even_when_incomplete(self):
+        conn = pl.init_db(db_path=":memory:")
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertIn("sample_size", result)
+
+    def test_recommendation_and_promotion_fields_still_present_at_zero_samples(self):
+        """These reflect challenger-registry/rejected-research state, not
+        ledger rows -- they must remain real and readable even when
+        engine_status is overridden to NO_DATA, not disappear from the
+        result entirely."""
+        conn = pl.init_db(db_path=":memory:")
+        result = dmr.run_daily_review(conn, now_utc=NOW)
+        self.assertIn("recommendation", result)
+        self.assertIn("promotion_candidates", result)
+        self.assertIn("rejected_research_entries_on_file", result)
+        self.assertGreater(result["rejected_research_entries_on_file"], 0)
 
 
 if __name__ == "__main__":
