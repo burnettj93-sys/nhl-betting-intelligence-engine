@@ -272,9 +272,26 @@ def check_real_prop_pipeline() -> dict:
         # can feed it yet", never a claim that the parlay engine itself
         # is broken.
         "game_edge_parlay_status": "PARTIAL" if modules_import_cleanly else "NOT_READY",
+        # Starting-Goalie Certainty + Prop Contract Watch block
+        # (2026-09-24), Part 11: SOG/Saves MARKET readiness (above) is a
+        # different question from Saves' own STARTER-IDENTITY readiness
+        # -- reported separately, never collapsed. PARTIAL (not
+        # NOT_READY): a real, validated internal starter-projection
+        # model exists and is wired (research/goalie_intelligence/model.py,
+        # 67.5% true-holdout top-1 accuracy); it just can never itself
+        # satisfy CONFIRMED (Part 4 -- see docs/STARTING_GOALIE_SOURCE_
+        # AUDIT.md). WAIT_ONLY (not READY, not NOT_READY): the Saves
+        # actionability gate mechanically works today -- it just can
+        # never produce BET/WATCH until a real CONFIRMED source exists,
+        # so every real Saves observation with positive edge correctly
+        # settles on WAIT.
+        "saves_starter_data_status": "PARTIAL" if modules_import_cleanly else "NOT_READY",
+        "saves_actionability_status": "WAIT_ONLY" if modules_import_cleanly else "NOT_READY",
         "note": ("PENDING_LIVE_CONTRACT is a real, expected, non-failure state -- see "
                  "docs/LIVE_SOG_SAVES_CERTIFICATION.md for the exhaustive real-payload scan "
-                 "that established it. It becomes READY the day DraftKings first posts either market."),
+                 "that established it. It becomes READY the day DraftKings first posts either market. "
+                 "WAIT_ONLY for Saves actionability is likewise expected, not a failure -- see "
+                 "docs/STARTING_GOALIE_SOURCE_AUDIT.md."),
     }
 
 

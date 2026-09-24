@@ -72,6 +72,8 @@ A real production run can — and, until DraftKings posts either market, always 
 
 `opening_day_readiness.py::check_real_prop_pipeline()` reports `sog_status`/`saves_status` as `READY` / `PENDING_LIVE_CONTRACT` / `NOT_READY` (never collapsed into one status with MONEYLINE), and `game_edge_parlay_status` as `PARTIAL` while `orchestration_status == HEALTHY` (the machinery works; nothing can feed it yet). `PENDING_LIVE_CONTRACT` never forces a hard failure or even a warning.
 
+**Updated 2026-09-24 (Starting-Goalie Certainty + Prop Contract Watch block):** two further fields report SEPARATELY from the market-contract status above, per that block's own Part 11 -- `saves_starter_data_status` (`PARTIAL`: a real, validated internal starter-projection model exists and is wired, but can never itself satisfy `CONFIRMED`; see `docs/STARTING_GOALIE_SOURCE_AUDIT.md`) and `saves_actionability_status` (`WAIT_ONLY`: the Saves actionability gate mechanically works today, it just can never produce BET/WATCH until a real CONFIRMED starter source exists). Neither forces a hard failure or warning.
+
 ## Odds archive storage
 
 See `docs/ODDS_ARCHIVE_STORAGE_RECOMMENDATION.md` (Part 35).

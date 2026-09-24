@@ -191,6 +191,41 @@ class TestRealPropOpportunityShapeAdapter(unittest.TestCase):
             pl_conn.close()
             path.unlink(missing_ok=True)
 
+    def test_three_real_bet_legs_reach_the_parlay_engines_own_quality_bar_no_adapter_bug(self):
+        """Starting-Goalie Certainty + Prop Contract Watch block
+        (2026-09-24), Part 10: proves the adapter feeds
+        research/game_edge_parlay/engine.py::game_eligible_legs() cleanly
+        -- all 3 real-shaped legs are recognized as eligible (no field
+        this adapter produces is missing/malformed) -- so any
+        NO_QUALIFYING_GAME_EDGE_PARLAY result comes from the unmodified
+        parlay engine's own real joint-probability/dependence math, never
+        a structural adapter defect. No bug was found; nothing was
+        changed in the parlay engine."""
+        from research.game_edge_parlay.engine import build_game_edge_parlay, game_eligible_legs
+
+        def row(prop, market_family, player_id, threshold, conservative_p, raw_p, no_vig, odds):
+            return {
+                "market_family": market_family, "player_id": player_id, "player_name_snapshot": player_id,
+                "team": "TOR", "opponent": "BOS", "market_id": f"{market_family}_{threshold}",
+                "threshold": threshold, "side": "OVER", "prospective_status": "BET", "confidence": "HIGH",
+                "conservative_probability": conservative_p, "raw_probability": raw_p,
+                "market_no_vig_probability": no_vig, "odds_american": odds,
+            }
+
+        rows = [
+            row("sog", "SOG", "P1", "3+", 0.62, 0.66, 0.50, -115),
+            row("sog", "SOG", "P2", "2+", 0.70, 0.74, 0.55, -140),
+            row("saves", "GOALIE_SAVES", "G1", "20+", 0.65, 0.68, 0.52, -120),
+        ]
+        opps = [rrv.real_prop_observation_to_opportunity_shape(r) for r in rows]
+
+        legs = game_eligible_legs(opps, "TOR", "BOS")
+        self.assertEqual(len(legs), 3, "the unmodified parlay engine's own eligibility filter rejected a "
+                                        "well-formed real leg -- this WOULD be a structural adapter bug")
+
+        result = build_game_edge_parlay(opps, "TOR", "BOS")
+        self.assertIn(result["status"], ("QUALIFIED", "NO_QUALIFYING_GAME_EDGE_PARLAY"))
+
 
 if __name__ == "__main__":
     unittest.main()

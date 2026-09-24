@@ -68,6 +68,11 @@ from research.live_sog_pricing import client, archive
 from research.player_props import registry as prop_registry
 
 ARCHIVE_DIR = archive.ARCHIVE_DIR
+# Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+# Part 9: the pre-hygiene-split evidence directory -- still scanned by
+# _credits_spent_since() so real early-cycle credit spend recorded there
+# is never silently dropped from the running quota total.
+_LEGACY_ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
 BOARD_CACHE_PATH = REPO_ROOT / "operational" / "live_multimarket_board_cache.json"
 
 # Every market this pull requests. Cost is 0 for any key that returns no
@@ -204,20 +209,29 @@ def _credits_spent_since(since: dt.datetime, archive_dir: Path | None = None) ->
     confirmed bug this sprint found (see archive_result()'s identical
     fix in research/live_sog_pricing/archive.py). Looking ARCHIVE_DIR up
     fresh, by name, inside the function body is what makes mock.patch on
-    the module attribute actually work."""
-    if archive_dir is None:
-        archive_dir = ARCHIVE_DIR
-    if not archive_dir.exists():
-        return 0
+    the module attribute actually work.
+
+    Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
+    Part 9: when `archive_dir` is left as None (the real production
+    default), BOTH the current runtime archive (ARCHIVE_DIR) and the
+    pre-hygiene-split legacy evidence directory are summed -- a real
+    monthly billing cycle that started before the split must not have
+    its early-cycle credit spend silently undercounted, which could let
+    the quota governor over-spend. An explicit `archive_dir` (as tests
+    pass) scans only that one directory, unchanged."""
+    archive_dirs = [archive_dir] if archive_dir is not None else [ARCHIVE_DIR, _LEGACY_ARCHIVE_DIR]
     total = 0
-    for f in archive_dir.glob("*.json"):
-        try:
-            meta = json.loads(f.read_text())["meta"]
-            retrieved = dt.datetime.fromisoformat(meta["retrieved_at_utc"].replace("Z", "+00:00"))
-            if retrieved >= since:
-                total += int(meta.get("requests_last_header") or 0)
-        except (json.JSONDecodeError, KeyError, ValueError, TypeError, OSError):
+    for one_dir in archive_dirs:
+        if not one_dir.exists():
             continue
+        for f in one_dir.glob("*.json"):
+            try:
+                meta = json.loads(f.read_text())["meta"]
+                retrieved = dt.datetime.fromisoformat(meta["retrieved_at_utc"].replace("Z", "+00:00"))
+                if retrieved >= since:
+                    total += int(meta.get("requests_last_header") or 0)
+            except (json.JSONDecodeError, KeyError, ValueError, TypeError, OSError):
+                continue
     return total
 
 

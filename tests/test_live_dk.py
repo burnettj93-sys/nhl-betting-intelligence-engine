@@ -37,6 +37,9 @@ def _write_archive(tmp_dir: Path, filename: str, *, event_id: str, home_team: st
         json.dump(payload, f)
 
 
+_NO_LEGACY_DIR = Path("/nonexistent/path/xyz-legacy")
+
+
 class TestNeverSpendsACredit(unittest.TestCase):
     def test_never_imports_the_paid_call_client_module(self):
         tree = ast.parse((REPO_ROOT / "dashboard" / "live_dk.py").read_text())
@@ -57,7 +60,8 @@ class TestLoadLatestVerifiedMoneylineMarkets(unittest.TestCase):
                             away_team="Florida Panthers", commence_time="2026-09-29T21:10:00Z",
                             home_price=-140, away_price=120, last_update="2026-08-31T00:00:00Z",
                             retrieved_at_utc="2026-08-31T00:00:00Z")
-            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path):
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
                 markets = ldk.load_latest_verified_moneyline_markets()
             self.assertEqual(len(markets), 1)
             self.assertEqual(markets["evt1"]["market"].home_price, -140.0)
@@ -69,12 +73,14 @@ class TestLoadLatestVerifiedMoneylineMarkets(unittest.TestCase):
                             away_team="New York Rangers", commence_time="2026-09-30T00:10:00Z",
                             home_price=0, away_price=0, last_update="x", retrieved_at_utc="2026-08-30T00:00:00Z",
                             bookmakers=[])
-            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path):
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
                 markets = ldk.load_latest_verified_moneyline_markets()
             self.assertEqual(markets, {})
 
     def test_missing_archive_dir_returns_empty_not_a_crash(self):
-        with mock.patch.object(ldk, "ARCHIVE_DIR", Path("/nonexistent/path/xyz")):
+        with mock.patch.object(ldk, "ARCHIVE_DIR", Path("/nonexistent/path/xyz")), \
+             mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
             self.assertEqual(ldk.load_latest_verified_moneyline_markets(), {})
 
 
@@ -86,7 +92,8 @@ class TestBuildLiveMoneylineComparisons(unittest.TestCase):
                             away_team="Florida Panthers", commence_time="2026-09-29T21:10:00Z",
                             home_price=-130, away_price=110, last_update="2026-08-31T12:37:46Z",
                             retrieved_at_utc="2026-08-31T12:38:09Z")
-            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path):
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
                 rows = ldk.build_live_moneyline_comparisons()
             self.assertTrue(all(r["source"] == ldk.LIVE_SOURCE_LABEL for r in rows))
             self.assertTrue(all(r["source"] != ldk.SIMULATED_SOURCE_LABEL for r in rows))
@@ -106,7 +113,8 @@ class TestBuildLiveMoneylineComparisons(unittest.TestCase):
                             away_team="Florida Panthers", commence_time="2026-09-29T21:10:00Z",
                             home_price=-130, away_price=110, last_update="2026-08-31T12:37:46Z",
                             retrieved_at_utc="2026-08-31T12:38:09Z")
-            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path):
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
                 rows = ldk.build_live_moneyline_comparisons()
             self.assertTrue(all(r["decision"] != "BET" for r in rows))
             self.assertTrue(all(r["decision"] == "WAIT" for r in rows if r["status"] == "PRICED"))
@@ -120,7 +128,8 @@ class TestBuildLiveMoneylineComparisons(unittest.TestCase):
                                 away_team="Florida Panthers", commence_time="2026-09-29T21:10:00Z",
                                 home_price=-130, away_price=110, last_update="2026-08-31T12:37:46Z",
                                 retrieved_at_utc="2026-08-31T12:38:09Z")
-                with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path):
+                with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
                     rows = ldk.build_live_moneyline_comparisons()
             for r in rows:
                 self.assertNotIn("stale", (r.get("decision_reason") or "").lower())
@@ -133,6 +142,7 @@ class TestBuildLiveMoneylineComparisons(unittest.TestCase):
                             home_price=-130, away_price=110, last_update="2026-08-31T12:37:46Z",
                             retrieved_at_utc="2026-08-31T12:38:09Z")
             with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR), \
                  mock.patch("dashboard.game_detail_view.demo_win_model", return_value=None):
                 rows = ldk.build_live_moneyline_comparisons()
             self.assertEqual(len(rows), 1)
