@@ -355,7 +355,7 @@ class Test33ProductionNhlModelUnchanged(unittest.TestCase):
         self.assertEqual(_file_sha256("config.py"),
                           "c019568da204ace99222954d4f02546a25c31029453c36ed3b0ed4bf97d3df8a")
         self.assertEqual(_file_sha256("db.py"),
-                          "b598f4640e191a26dba7231e240a26ebbf6d7a443bcf4f2eb4c43b37cabcea95")
+                          "02361fb58b22797638a8b3ff2bde98861f8cb1083c8ad3bcfd4088cfac0e9be8")
         self.assertEqual(_file_sha256("schema.sql"),
                           "ff19dd3b0c4cd8a61371d77751a045f222bdce7636d119d90c013f58ef64f31f")
 

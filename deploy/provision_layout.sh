@@ -3,7 +3,7 @@
 #
 # Idempotent. Creates the persistent-state directories described in
 # docs/VPS_PRODUCTION_LAYOUT.md and symlinks every mutable path this
-# codebase's REPO_ROOT-relative code already expects (nhl.db,
+# codebase's REPO_ROOT-relative code already expects (
 # operational/*.db, operational/odds_archive/, operational/backups/,
 # operational/logs/, fantasy/storage/*, research/*/*.db, .env) into
 # them. Zero application code changes -- this only rearranges where
@@ -76,7 +76,15 @@ link_path() {
     echo "  linked $rel -> $target"
 }
 
-link_path "nhl.db"                                             "$DATA/nhl.db"
+# nhl.db is NOT symlinked into app/ any more (runtime DB hygiene, 2026-09-25):
+# the repo-root nhl.db is a frozen git-tracked snapshot. The live database
+# lives at $DATA/nhl.db and db.py finds it via NHL_DB_PATH -- add this line
+# to $SECRETS/.env (checked below):
+#   NHL_DB_PATH=$DATA/nhl.db
+mkdir -p "$DATA"
+if ! grep -qs "^NHL_DB_PATH=" "$SECRETS/.env" 2>/dev/null; then
+    echo "  REMINDER: add 'NHL_DB_PATH=$DATA/nhl.db' to $SECRETS/.env before starting any job."
+fi
 link_path "operational/paper_bankroll.db"                      "$DATA/operational/paper_bankroll.db"
 link_path "operational/auth_store.db"                          "$DATA/operational/auth_store.db"
 link_path "operational/prospective_observations.db"            "$DATA/operational/prospective_observations.db"

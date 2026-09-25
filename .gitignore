@@ -218,3 +218,9 @@ operational/odds_archive/
 # has never actually been committed either, just never had an explicit
 # rule written for it until now).
 operational/prop_contract_candidates.jsonl
+
+# Runtime DB hygiene (2026-09-25): the live, scheduler-mutated NHL database
+# (db.py::RUNTIME_DB_PATH). The tracked repo-root nhl.db is now a frozen
+# snapshot only -- see docs/RUNTIME_DB_HYGIENE.md. Backed up by
+# operational/backup_databases.py, never committed.
+operational/runtime/
