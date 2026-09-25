@@ -89,7 +89,9 @@ SAVES_MARKET_ID = "GOALIE_SAVES"
 SOG_VALIDATED_THRESHOLDS = (2, 3, 4, 5)     # PLAYER_SOG_FOUNDATION_REPORT.md Section AI
 SAVES_VALIDATED_THRESHOLDS = (20, 25)       # GOALIE_SAVES_VALIDATION_REPORT.md
 
-PROP_CONTRACT_CANDIDATES_PATH = REPO_ROOT / "operational" / "prop_contract_candidates.jsonl"
+from operational import state_paths as _state_paths
+
+PROP_CONTRACT_CANDIDATES_PATH = _state_paths.path("prop_contract_candidates.jsonl", area="operational")
 
 
 def flag_prop_contract_candidate_if_observed(market_key: str, payloads: list[dict]) -> dict:

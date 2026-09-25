@@ -80,6 +80,13 @@ def _get(path: str, params: dict) -> ApiResult:
     `endpoint` (which stores the path only, never the query string)."""
     api_key = get_the_odds_api_key()
     retrieved_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    if api_key and getattr(requests.get, "__module__", "") == "requests.api":
+        from operational import state_paths
+        if state_paths.under_test():
+            # a test run must never make a real (billable) Odds API request: tests patch requests.get
+            return ApiResult(ok=False, status_code=None, data=None,
+                              error="blocked: real Odds API request refused under test",
+                              endpoint=path, retrieved_at_utc=retrieved_at)
     if not api_key:
         return ApiResult(ok=False, status_code=None, data=None,
                           error="THE_ODDS_API_KEY not configured (no .env, no environment variable)",

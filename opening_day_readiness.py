@@ -333,7 +333,8 @@ def _launchctl_loaded_count() -> int | None:
 # The single verdict above answers "may we run?"; this answers "what exactly is ready, waiting, or blocked?"
 # Precise states, never a bare READY / NOT_READY. Read-only; no network, no Odds API credit.
 COMPONENT_STATES = ("READY", "READY_WITH_WARNINGS", "WAITING_FOR_LIVE_MARKET", "WAIT_ONLY", "NO_REAL_SAMPLE_YET",
-                    "PARTIAL", "STALE", "OWNER_ACTION_REQUIRED", "OWNER_AUTH_REQUIRED", "FAILED")
+                    "PARTIAL", "STALE", "OWNER_ACTION_REQUIRED", "OWNER_AUTH_REQUIRED", "FAILED",
+                    "WAITING_FOR_FIRST_REAL_CLUSTER")
 _QUOTA_WARN_BELOW, _QUOTA_FAIL_BELOW = 150, 20      # 20 == live_odds_daily_pull.DEFAULT_SAFETY_FLOOR
 
 
@@ -354,6 +355,19 @@ def _health_component(health: dict, key: str, max_hours: float, label: str) -> d
     if age is None or age > max_hours:
         return _c("STALE", f"{label}: last success {age if age is None else round(age, 1)} h ago (limit {max_hours} h)")
     return _c("READY", f"{label}: last success {round(age, 1)} h ago")
+
+
+def cloud_owner_configuration() -> dict:
+    """What can and cannot be observed about the Streamlit Community Cloud deployment from this machine. Never
+    guessed: anything only visible in the Streamlit UI is OWNER_ACTION_REQUIRED."""
+    obs = {"APP DEPLOYED": "OWNER_ACTION_REQUIRED (GitHub shows an active Streamlit webhook, so the repo is connected, "
+                           "but the app URL is not in the repo -- confirm it loads)",
+           "REMOTE SNAPSHOT READER ACTIVE": "OWNER_ACTION_REQUIRED (code ships the reader and cloud-data is reachable; the deployed process is not observable)",
+           "PRIVATE VIEWER MODE CONFIGURED": "OWNER_ACTION_REQUIRED (Settings -> Sharing)",
+           "ADMIN SETUP CODE CONFIGURED": "OWNER_ACTION_REQUIRED (Streamlit secrets)",
+           "ADMIN EMAILS CONFIGURED": "OWNER_ACTION_REQUIRED (Streamlit secrets)",
+           "st.user.email VERIFIED": "OWNER_ACTION_REQUIRED (only observable when signed in to the deployed app)"}
+    return obs
 
 
 def build_component_states(checks: dict) -> dict:
@@ -439,6 +453,60 @@ def build_component_states(checks: dict) -> dict:
         (f"cluster {nxt.get('next_cluster_start_utc')} ({nxt.get('games_in_cluster')} game(s)): pull ~{nxt.get('target_pull_utc')}, "
          f"decision anchor {nxt.get('decision_anchor_utc')}, scheduler armed={nxt.get('scheduler_armed')}, "
          f"quota sufficient={nxt.get('quota_sufficient')}") if nxt.get("next_cluster_start_utc") else str(nxt))
+    # ---- Live Run Reliability block (2026-09-25) ------------------------------------------------------------
+    try:
+        from operational import moneyline_pregame as mp2
+        obs = mp2.live_observed()
+        arch_ok = bool(pregame_armed and certified and quota_gate.get("allow") and eligible is not None and eligible >= 95)
+        out["MONEYLINE_T35_ARCHITECTURE"] = _c("READY" if arch_ok else "PARTIAL",
+                                               f"job loaded={pregame_armed}, end-to-end certified={certified}, quota sufficient="
+                                               f"{quota_gate.get('allow')}, decision-window coverage {eligible}%")
+        last = mp2.last_cluster_outcome()
+        out["MONEYLINE_T35_LIVE_OBSERVED"] = _c(
+            "READY" if obs["live_observed"] else "WAITING_FOR_FIRST_REAL_CLUSTER",
+            (f"LIVE_OBSERVED: first complete cluster {obs.get('first_complete_cluster')}" if obs["live_observed"] else
+             "ARCHITECTURE_READY but not yet LIVE_OBSERVED: no real provider-listed cluster has completed pull -> store -> decide -> publish"
+             + (f"; last cluster {last['cluster_id']}: {last['outcome']}" if last else "")))
+    except Exception as exc:  # noqa: BLE001
+        out["MONEYLINE_T35_ARCHITECTURE"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+        out["MONEYLINE_T35_LIVE_OBSERVED"] = _c("FAILED", "audit unreadable")
+    try:
+        from operational import morning_catchup
+        cs = morning_catchup.status()
+        out["NHL_DAILY_SYNC_CATCHUP"] = _c(
+            "PARTIAL" if cs["stages_pending_catchup"] else "READY",
+            (f"stage(s) past their slot with no success today: {cs['stages_pending_catchup']} (catch-up runs at the next 30-min NHL refresh)"
+             if cs["stages_pending_catchup"] else
+             f"morning chain current; bounded catch-up armed (grace {cs['grace_minutes']} min, <= {cs['max_attempts_per_stage_per_day']} attempts/stage/day)")
+            + (f"; catch-ups today: {cs['catchups_today']}" if cs["catchups_today"] else ""))
+    except Exception as exc:  # noqa: BLE001
+        out["NHL_DAILY_SYNC_CATCHUP"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+    try:
+        from operational import runtime_hygiene, state_paths
+        hy = runtime_hygiene.audit()
+        out["TEST_RUNTIME_ISOLATION"] = _c("READY" if hy["clean"] else "FAILED",
+                                           "tests resolve all state paths into a throw-away directory (operational/state_paths.py); "
+                                           + ("production runtime is clean" if hy["clean"] else "; ".join(hy["findings"])))
+        cand_bad = hy["candidate_records"]["synthetic"] > 0
+        out["PROP_DISCOVERY_STATE_CLEAN"] = _c("FAILED" if cand_bad else "READY",
+                                               f"candidate log: {hy['candidate_records']['real']} real / {hy['candidate_records']['synthetic']} synthetic record(s)")
+    except Exception as exc:  # noqa: BLE001
+        out["TEST_RUNTIME_ISOLATION"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+        out["PROP_DISCOVERY_STATE_CLEAN"] = _c("FAILED", "hygiene audit unavailable")
+    try:
+        from operational import odds_quota
+        rs = odds_quota.reset_status()
+        out["ODDS_RESET_DAY"] = _c("READY" if rs["status"] == "OWNER_CONFIGURED" else "OWNER_ACTION_REQUIRED",
+                                   f"reset day {rs['reset_day']} (owner-configured)" if rs["status"] == "OWNER_CONFIGURED" else
+                                   "OWNER_VERIFICATION_REQUIRED: the provider exposes no reset date; check the account dashboard and set "
+                                   "NHL_ENGINE_ODDS_RESET_DAY=<1-28> in .env" + ("; the configured value is INVALID" if rs.get("invalid") else "")
+                                   + f" (calendar-month day {rs['reset_day']} is only an assumption)")
+    except Exception as exc:  # noqa: BLE001
+        out["ODDS_RESET_DAY"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+    out["CLOUD_OWNER_CONFIGURATION"] = _c(
+        "OWNER_ACTION_REQUIRED",
+        "; ".join(f"{k}: {v}" for k, v in cloud_owner_configuration().items()))
+
     try:
         from operational import scheduler_audit as sa
         info = sa.launchctl_info("com.nhlengine.daily-nhl-sync")

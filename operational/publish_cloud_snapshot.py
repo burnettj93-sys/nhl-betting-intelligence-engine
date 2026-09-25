@@ -54,8 +54,10 @@ from operational import cloud_snapshot_schema as schema
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_BRANCH = "cloud-data"
 CURRENT_DIR = "current"
-STATE_PATH = REPO_ROOT / "operational" / "runtime" / "cloud_publish_state.json"
-LOCK_PATH = REPO_ROOT / "operational" / "runtime" / "cloud_publish.lock"
+from operational import state_paths as _sp
+
+STATE_PATH = _sp.path("cloud_publish_state.json")
+LOCK_PATH = _sp.path("cloud_publish.lock")
 COMPONENT = "cloud_snapshot_publish"
 
 MIN_PUSH_INTERVAL_S = 120
@@ -80,7 +82,7 @@ def publishing_enabled() -> bool:
     """Automatic (scheduler-driven) publishing is OPT-IN: NHL_ENGINE_CLOUD_PUBLISH=ON in the
     environment or .env. A manual `python3 -m operational.publish_cloud_snapshot` always works."""
     value = (os.environ.get("NHL_ENGINE_CLOUD_PUBLISH") or "").strip().upper()
-    if not value:
+    if not value and not _sp.under_test():             # tests never read the owner's real .env
         env_file = REPO_ROOT / ".env"
         if env_file.exists():
             for line in env_file.read_text().splitlines():
@@ -240,6 +242,9 @@ def publish(*, remote: str | None = None, force: bool = False, dry_run: bool = F
                     "publication_seq": None, "sections_omitted": [], "attempted_at": now.isoformat()}
     lock_file = None
     try:
+        if remote is None and not dry_run and _sp.under_test():
+            result.update(status=FAILED, reason="REFUSED_UNDER_TEST: a test run never pushes to the real remote (pass an explicit remote)")
+            return result
         if not dry_run:
             LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
             lock_file = open(LOCK_PATH, "w")

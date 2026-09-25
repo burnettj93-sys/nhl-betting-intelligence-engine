@@ -18,7 +18,9 @@ import json
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CACHE_PATH = REPO_ROOT / "operational" / "ingestion_health_cache.json"
+from operational import state_paths as _state_paths
+
+DEFAULT_CACHE_PATH = _state_paths.path("ingestion_health_cache.json", area="operational")
 
 # A component's own summary dict may use "status", "SUCCESS"/"FAILED"/etc.
 # under different historical field names across this project's modules

@@ -28,15 +28,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TIMEOUT_S = 240
 
 
-def publish_after(job_name: str, *, runner=subprocess.run) -> dict:
+def publish_after(job_name: str, *, runner=None) -> dict:
     result = {"triggered_by": job_name, "status": "SKIPPED", "reason": "DISABLED"}
     try:
         from operational import deployment_mode, publish_cloud_snapshot as pub
+        from operational import state_paths
+        if runner is None and state_paths.under_test():
+            # found 2026-09-25: with NHL_ENGINE_CLOUD_PUBLISH=ON in the real .env, unit tests that ran a job's
+            # _main() launched the REAL publisher and pushed to GitHub. A test run never publishes for real;
+            # tests exercise the hook with an injected `runner`.
+            result["reason"] = "UNDER_TEST"
+            return result
         if not pub.publishing_enabled():
             return result
         if not deployment_mode.is_active_scheduler():
             result["reason"] = "STANDBY"
             return result
+        runner = runner or subprocess.run
         proc = runner([sys.executable, "-m", "operational.publish_cloud_snapshot"], cwd=REPO_ROOT,
                       capture_output=True, text=True, timeout=TIMEOUT_S)
         parsed = None

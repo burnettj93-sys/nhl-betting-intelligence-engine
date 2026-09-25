@@ -238,7 +238,13 @@ class TestQuotaGuard(unittest.TestCase):
         self.assertEqual(r["status"], "OWNER_VERIFICATION_REQUIRED")
         self.assertTrue(r["assumed"])
         with mock.patch.object(oq, "_env_value", return_value="17"):
-            self.assertEqual(oq.reset_status(), {"status": "OWNER_CONFIGURED", "reset_day": 17, "assumed": False})
+            self.assertEqual(oq.reset_status(), {"status": "OWNER_CONFIGURED", "reset_day": 17, "assumed": False, "invalid": False})
+        for bad in ("0", "29", "abc", "1.5", "-3"):          # invalid values never silently become a reset day
+            with mock.patch.object(oq, "_env_value", return_value=bad):
+                r = oq.reset_status()
+            self.assertEqual((r["status"], r["invalid"], r["assumed"]), ("OWNER_VERIFICATION_REQUIRED", True, True), bad)
+        with mock.patch.object(oq, "_env_value", return_value=""):
+            self.assertFalse(oq.reset_status()["invalid"])
 
     def test_days_left(self):
         self.assertEqual(oq.days_left_in_cycle(dt.date(2026, 9, 25), 1), 6)
@@ -414,6 +420,17 @@ class TestPropDiscovery(DiscoveryCase):
         r = self.run_discovery(c, {k: pd.CANDIDATE for k in pd.DISCOVERY_MARKETS})
         self.assertEqual((c.event_calls, c.odds_calls), (0, []))
         self.assertTrue(r["reason"].startswith("WAITING_FOR_CERTIFICATION"))
+
+
+class TestPropDiscoveryHealth(unittest.TestCase):
+    def test_every_configuration_invariant_holds(self):
+        for c in pd.health_invariants():
+            self.assertTrue(c["ok"], c["check"])
+
+    def test_absent_desired_markets_cost_zero_in_the_evidence(self):
+        """Six 12:15Z runs (2026-09-15..22) asked 33 events x 7 market keys and were charged 0 credits."""
+        runs = [{"events_queried": 33, "credits_spent_this_run": 0} for _ in range(6)]
+        self.assertEqual(sum(r["credits_spent_this_run"] for r in runs), 0)
 
 
 class TestVerifiedModeGate(DiscoveryCase):

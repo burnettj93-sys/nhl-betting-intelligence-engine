@@ -113,7 +113,9 @@ _KNOWN_UNMODELED_MARKET_KEYS = frozenset({"team_totals", "alternate_team_totals"
                                            "h2h"})  # h2h IS modeled (MONEYLINE) but via the dedicated
                                                     # run_moneyline_snapshot()/provider_adapter path, not
                                                     # this generic prop parser -- known, not "new".
-NEW_CONTRACT_CANDIDATES_PATH = REPO_ROOT / "operational" / "new_contract_candidates.jsonl"
+from operational import state_paths as _state_paths
+
+NEW_CONTRACT_CANDIDATES_PATH = _state_paths.path("new_contract_candidates.jsonl", area="operational")
 
 
 def _flag_new_contract_candidate(market_key: str, market: dict, event: dict, retrieved_at_utc: str | None) -> None:
@@ -280,7 +282,7 @@ def _parse_event_odds_generic(event: dict, odds_data: dict) -> list[dict]:
     return quotes
 
 
-def run_daily_pull(cycle_reset_day: int = DEFAULT_CYCLE_RESET_DAY,
+def run_daily_pull(cycle_reset_day: int | None = None,
                     safety_floor: int = DEFAULT_SAFETY_FLOOR,
                     lead_days: int = PRESEASON_LEAD_DAYS, markets: str | None = None) -> dict:
     """Never raises past the caller -- any real failure is captured in
@@ -294,6 +296,9 @@ def run_daily_pull(cycle_reset_day: int = DEFAULT_CYCLE_RESET_DAY,
     archive (e.g. if any call to this key is ever made outside this
     script). `credits_spent_this_cycle_via_this_job` is reported
     separately, purely informationally, from this job's own archive."""
+    if cycle_reset_day is None:              # the owner-verified reset day (NHL_ENGINE_ODDS_RESET_DAY) if configured
+        from operational import odds_quota
+        cycle_reset_day = odds_quota.reset_status()["reset_day"]
     now = _now_utc()
     today = now.date()
     summary = {
@@ -711,6 +716,15 @@ def _main() -> None:
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after(f"live_odds_daily_pull:{args.mode}")
 
+    if args.mode == "moneyline-pregame":
+        # per-cluster audit record, written AFTER the downstream chain and the cloud publish so it includes both
+        try:
+            from operational import moneyline_pregame
+            audited = moneyline_pregame.record_audit(result)
+            if audited:
+                result["audit"] = [{"cluster_id": a["cluster_id"], "outcome": a["outcome"], "tags": a["tags"]} for a in audited]
+        except Exception as exc:  # noqa: BLE001 -- auditing must never fail the job
+            result["audit_error"] = type(exc).__name__
     if args.mode == "moneyline-pregame" and result.get("status") == "IDLE":
         print(json.dumps(result, sort_keys=True))          # one line: this job fires every couple of minutes
     else:

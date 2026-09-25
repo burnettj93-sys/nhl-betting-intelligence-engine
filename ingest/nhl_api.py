@@ -68,7 +68,15 @@ MAX_RETRIES = 4
 BASE_RETRY_DELAY_SECONDS = 1.0
 MAX_RETRY_DELAY_SECONDS = 30.0
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
-RETRY_LOG_PATH = Path(__file__).resolve().parent.parent / "operational" / "logs" / "nhl_api_retry_log.jsonl"
+def _retry_log_path() -> Path:
+    from operational import state_paths
+    redirected = state_paths.state_dir()          # tests: a throw-away directory, never the production log
+    if redirected is not None:
+        return redirected / "logs" / "nhl_api_retry_log.jsonl"
+    return Path(__file__).resolve().parent.parent / "operational" / "logs" / "nhl_api_retry_log.jsonl"
+
+
+RETRY_LOG_PATH = _retry_log_path()
 
 
 class NHLApiSchemaError(RuntimeError):

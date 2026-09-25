@@ -40,12 +40,18 @@ def _env_value(name: str) -> str | None:
 def reset_status() -> dict:
     """The provider exposes no reset date in any response header or account endpoint observed so far
     (checked: x-requests-used / -remaining / -last only). Never invented: unless the owner sets
-    NHL_ENGINE_ODDS_RESET_DAY after checking the account dashboard, the status is
-    OWNER_VERIFICATION_REQUIRED and the calendar-month assumption is labeled an assumption."""
+    NHL_ENGINE_ODDS_RESET_DAY (an integer 1-28, from the provider account dashboard) the status is
+    OWNER_VERIFICATION_REQUIRED and the calendar-month assumption is labeled an assumption. A present but
+    invalid value (not an integer, or outside 1-28) is reported as INVALID and treated as unset -- it never
+    silently becomes a reset day."""
     configured = _env_value(RESET_DAY_ENV)
-    if configured and configured.isdigit() and 1 <= int(configured) <= 28:
-        return {"status": "OWNER_CONFIGURED", "reset_day": int(configured), "assumed": False}
-    return {"status": "OWNER_VERIFICATION_REQUIRED", "reset_day": DEFAULT_RESET_DAY, "assumed": True}
+    if configured is None or configured == "":
+        return {"status": "OWNER_VERIFICATION_REQUIRED", "reset_day": DEFAULT_RESET_DAY, "assumed": True, "invalid": False}
+    text = configured.strip().strip("\"'")
+    if text.isdigit() and 1 <= int(text) <= 28:
+        return {"status": "OWNER_CONFIGURED", "reset_day": int(text), "assumed": False, "invalid": False}
+    return {"status": "OWNER_VERIFICATION_REQUIRED", "reset_day": DEFAULT_RESET_DAY, "assumed": True, "invalid": True,
+            "error": f"{RESET_DAY_ENV} must be an integer 1-28 (got a value that is not)"}
 
 
 def days_left_in_cycle(today: dt.date, reset_day: int | None = None) -> int:
