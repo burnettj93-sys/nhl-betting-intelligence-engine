@@ -558,10 +558,11 @@ class TestOptInAndScheduling(unittest.TestCase):
         self.assertTrue(lop.cloud_publish_warranted("sweep-first", busy))
         self.assertTrue(lop.cloud_publish_warranted("sweep-second", {**quiet, "real_saves_orchestrator": {"paper_bets_created": 1}}))
         self.assertFalse(lop.cloud_publish_warranted("sweep-first", {"ran": False}))
-        # a real moneyline / broad props pull brings new prices: it publishes, but only if it actually ran
-        for mode in ("moneyline", "props"):
-            self.assertTrue(lop.cloud_publish_warranted(mode, {"ran": True}), mode)
-            self.assertFalse(lop.cloud_publish_warranted(mode, {"ran": False}), mode)
+        # a real moneyline pull brings new prices: it publishes, but only if it actually ran
+        self.assertTrue(lop.cloud_publish_warranted("moneyline", {"ran": True}))
+        self.assertFalse(lop.cloud_publish_warranted("moneyline", {"ran": False}))
+        # the prop contract watch publishes only if it spent credits or saw a candidate (see test_quota_moneyline_activation)
+        self.assertFalse(lop.cloud_publish_warranted("props", {"ran": True}))
 
     def test_a_sweep_that_only_moves_its_own_timestamp_does_not_change_the_snapshot_hash(self):
         from operational import cloud_snapshot_builder as builder
@@ -997,7 +998,7 @@ class TestOwnerDailyCheck(unittest.TestCase):
 
     def test_answers_every_owner_question(self):
         r = self.rows(self._doc())
-        self.assertEqual(len(r), 10)
+        self.assertEqual(len(r), 11)
         self.assertEqual(r["Is the engine healthy?"]["state"], "YES")
         self.assertEqual(r["Are odds current?"]["state"], "CURRENT")
         self.assertEqual(r["Did settlement run?"]["state"], "YES")

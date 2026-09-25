@@ -75,13 +75,12 @@ ARCHIVE_DIR = archive.ARCHIVE_DIR
 _LEGACY_ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
 BOARD_CACHE_PATH = REPO_ROOT / "operational" / "live_multimarket_board_cache.json"
 
-# Every market this pull requests. Cost is 0 for any key that returns no
-# data for a given event (see module docstring) -- so being inclusive
-# here costs nothing until a book actually posts the market.
-TARGET_MARKETS = (
-    "player_shots_on_goal,player_goals,player_assists,player_points,"
-    "player_total_saves,team_totals,alternate_team_totals"
-)
+# Quota + Moneyline Activation block (2026-09-25): ONLY the three desired prop markets. This used to also
+# request player_goals/assists/points/team_totals/alternate_team_totals; the provider charges one credit per
+# market that RETURNS data, and DraftKings began returning `alternate_team_totals` on 2026-09-23 -- ~30
+# credits/day for a market no model uses. A market that is not posted costs 0. See
+# docs/PROP_DISCOVERY_BUDGET.md. (Broad daily coverage is now prop_discovery's sampled contract watch.)
+TARGET_MARKETS = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves"
 
 DEFAULT_CYCLE_RESET_DAY = 1     # ASSUMPTION: calendar-month reset, used only to
                                 # pace daily_budget across the cycle. The Odds
@@ -283,7 +282,7 @@ def _parse_event_odds_generic(event: dict, odds_data: dict) -> list[dict]:
 
 def run_daily_pull(cycle_reset_day: int = DEFAULT_CYCLE_RESET_DAY,
                     safety_floor: int = DEFAULT_SAFETY_FLOOR,
-                    lead_days: int = PRESEASON_LEAD_DAYS) -> dict:
+                    lead_days: int = PRESEASON_LEAD_DAYS, markets: str | None = None) -> dict:
     """Never raises past the caller -- any real failure is captured in
     the summary dict, matching this project's established
     refresh()/record_daily_predictions.py error philosophy.
@@ -344,11 +343,11 @@ def run_daily_pull(cycle_reset_day: int = DEFAULT_CYCLE_RESET_DAY,
         if spent_today >= daily_budget:
             summary["reason"] = f"stopped: today's dynamic credit budget ({daily_budget}) reached"
             break
-        r_odds = client.get_event_odds(event["id"], markets=TARGET_MARKETS)
+        r_odds = client.get_event_odds(event["id"], markets=markets or TARGET_MARKETS)
         summary["events_queried"] += 1
         if not r_odds.ok:
             continue
-        archive.archive_result(r_odds, event_id=event["id"], market_filter=TARGET_MARKETS,
+        archive.archive_result(r_odds, event_id=event["id"], market_filter=markets or TARGET_MARKETS,
                                 bookmaker_filter="draftkings")
         cost = int(r_odds.requests_last or 0)
         spent_today += cost
@@ -462,6 +461,7 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
     cost = int(r_odds.requests_last or 0)
     summary["credits_spent_this_run"] = cost
     summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+    summary["captured_at_utc"] = r_odds.retrieved_at_utc
 
     future_event_ids = {e["id"] for e in future_events}
     rows = []
@@ -559,25 +559,69 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         events_with_quotes = {r["event_id"] for r in first_cache.get("rows", [])}
         candidates = [e for e in candidates if e["id"] in events_with_quotes]
 
+    # Quota + Moneyline Activation block (2026-09-25): (a) every event is swept at most ONCE per stage per
+    # day -- the 30/15-minute launchd cadence used to re-query the same in-window event every firing, which
+    # would multiply credits ~5x the moment a market appeared; (b) while no contract is VERIFIED
+    # (DISCOVERY mode) the prop discovery budget applies and the FIRST appearance stops the sweep -- nothing
+    # expands before the deterministic certification.
+    from operational import prop_discovery as pd
+    prop_mode = pd.mode()
+    summary["prop_mode"] = prop_mode
     board_rows = []
     for event in candidates:
+        if pd.already_swept(sweep, event["id"], now):
+            summary["events_skipped_already_swept"] = summary.get("events_skipped_already_swept", 0) + 1
+            continue
+        if prop_mode == pd.DISCOVERY and not pd.may_spend(now).get("allow"):
+            summary["reason"] = "DISCOVERY budget reached"
+            break
         r_odds = client.get_event_odds(event["id"], markets=FIRST_SWEEP_MARKETS)
         summary["events_queried"] += 1
         if not r_odds.ok:
             continue
+        pd.mark_swept(sweep, event["id"], now)
         archive.archive_result(r_odds, event_id=event["id"], market_filter=FIRST_SWEEP_MARKETS,
                                 bookmaker_filter="draftkings")
         cost = int(r_odds.requests_last or 0)
         summary["credits_spent_this_run"] += cost
         summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        if prop_mode == pd.DISCOVERY:
+            pd.record_spend(cost, now)
+            if pd.desired_markets_in({**(r_odds.data or {}), "id": event["id"]}):
+                summary["reason"] = "CANDIDATE_OBSERVED: sweep stopped; certification required before expansion"
+                summary["candidate_observed"] = True
         r_odds.data["_retrieved_at_utc"] = r_odds.retrieved_at_utc
         quotes = _parse_event_odds_generic(event, r_odds.data)
         summary["quotes_captured"] += len(quotes)
         board_rows.extend(quotes)
+        if summary.get("candidate_observed"):
+            break
 
     payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": board_rows}
     SWEEP_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
     return summary
+
+
+def run_props(now: dt.datetime | None = None) -> dict:
+    """`--mode=props` (08:15 launchd job). While no PLAYER_SOG / GOALIE_SAVES contract is VERIFIED this is the
+    low-cost DISCOVERY contract watch (<= 2 sampled events, <= 6 credits/day, stops at the first appearance).
+    Once a contract is VERIFIED it runs the budget-governed daily pull restricted to the VERIFIED keys only."""
+    from operational import prop_discovery as pd
+    states = pd.market_states()
+    if pd.mode(states) == pd.DISCOVERY:
+        return pd.run_discovery(now, states=states)
+    result = run_daily_pull(markets=pd.production_markets(states))
+    result["prop_mode"] = pd.VERIFIED_PRODUCTION
+    return result
+
+
+def _moneyline_downstream(result: dict) -> None:
+    """The unchanged chain that follows a real moneyline pull: bridge -> orchestrator (see _main)."""
+    if result.get("ran"):
+        from operational import real_odds_bridge
+        from operational import real_recommendation_orchestrator as orchestrator
+        result["real_odds_bridge"] = real_odds_bridge.sync_moneyline_odds_to_snapshots()
+        result["real_recommendation_orchestrator"] = orchestrator.run_real_moneyline_recommendations()
 
 
 def cloud_publish_warranted(mode: str, result: dict) -> bool:
@@ -587,8 +631,11 @@ def cloud_publish_warranted(mode: str, result: dict) -> bool:
     bet (the orchestrators' own counters) -- never merely because they ran."""
     if not result.get("ran"):
         return False
+    if mode == "props":
+        # discovery that found nothing and spent nothing changes nothing the Cloud shows
+        return bool(result.get("candidate_observed")) or int(result.get("credits_spent_this_run") or 0) > 0
     if mode not in ("sweep-first", "sweep-second"):
-        return True
+        return True                       # moneyline / moneyline-pregame: new prices
     changed = 0
     for key in ("real_sog_orchestrator", "real_saves_orchestrator"):
         summary = result.get(key) or {}
@@ -604,14 +651,21 @@ def _main() -> None:
         return
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("props", "moneyline", "sweep-first", "sweep-second"),
+    parser.add_argument("--mode", choices=("props", "moneyline", "moneyline-pregame", "sweep-first", "sweep-second"),
                          default="props")
     parser.add_argument("--label", default=None,
                          help="operational label for --mode=moneyline (auto-derived from wall-clock hour if omitted)")
     args = parser.parse_args()
 
     if args.mode == "props":
-        result = run_daily_pull()
+        result = run_props()
+    elif args.mode == "moneyline-pregame":
+        # Quota + Moneyline Activation block: one league-wide DraftKings moneyline pull per start-time cluster
+        # at ~T-35 so the EXISTING T-30 decision policy finds a quote in its 10-minute window. Fired every
+        # couple of minutes by launchd; almost every firing is an instant no-op (no network, no credit).
+        from operational import moneyline_pregame
+        result = moneyline_pregame.run_pregame()
+        _moneyline_downstream(result)
     elif args.mode == "moneyline":
         result = run_moneyline_snapshot(args.label)
         # Real Recommendation Pipeline block (2026-09-24), Part 22: the
@@ -657,7 +711,10 @@ def _main() -> None:
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after(f"live_odds_daily_pull:{args.mode}")
 
-    print(json.dumps(result, indent=2, sort_keys=True))
+    if args.mode == "moneyline-pregame" and result.get("status") == "IDLE":
+        print(json.dumps(result, sort_keys=True))          # one line: this job fires every couple of minutes
+    else:
+        print(json.dumps(result, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

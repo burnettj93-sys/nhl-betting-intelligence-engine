@@ -42,6 +42,14 @@ from research.live_sog_pricing.env_config import get_the_odds_api_key
 BASE_URL = "https://api.the-odds-api.com/v4"
 SPORT_KEY = "icehockey_nhl"
 REQUEST_TIMEOUT_SECONDS = 15
+# Quota + Moneyline Activation block (2026-09-25): ~20 % of scheduled moneyline runs failed with one-shot
+# network errors. Bounded retry ONLY where a retry cannot double-charge: a connection that never reached the
+# server (ConnectionError / ConnectTimeout) or an HTTP 502/503/504 (not billed). A ReadTimeout is NOT retried
+# -- the server may already have counted the request. Never more than MAX_ATTEMPTS, exponential backoff.
+MAX_ATTEMPTS = 3
+BACKOFF_SECONDS = (1.0, 3.0)
+RETRYABLE_STATUS = (502, 503, 504)
+_sleep = time.sleep
 
 
 @dataclass
@@ -76,13 +84,24 @@ def _get(path: str, params: dict) -> ApiResult:
         return ApiResult(ok=False, status_code=None, data=None,
                           error="THE_ODDS_API_KEY not configured (no .env, no environment variable)",
                           endpoint=path, retrieved_at_utc=retrieved_at)
-    try:
-        resp = requests.get(f"{BASE_URL}{path}", params={**params, "apiKey": api_key},
-                             timeout=REQUEST_TIMEOUT_SECONDS)
-    except requests.RequestException as exc:
-        return ApiResult(ok=False, status_code=None, data=None,
-                          error=f"network error: {exc.__class__.__name__}",
-                          endpoint=path, retrieved_at_utc=retrieved_at)
+    resp = None
+    for attempt in range(MAX_ATTEMPTS):
+        last = attempt == MAX_ATTEMPTS - 1
+        try:
+            resp = requests.get(f"{BASE_URL}{path}", params={**params, "apiKey": api_key},
+                                 timeout=REQUEST_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            never_reached_server = isinstance(exc, requests.ConnectionError)   # includes ConnectTimeout
+            if last or not never_reached_server:
+                return ApiResult(ok=False, status_code=None, data=None,
+                                  error=f"network error: {exc.__class__.__name__}",
+                                  endpoint=path, retrieved_at_utc=retrieved_at)
+            _sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+            continue
+        if resp.status_code in RETRYABLE_STATUS and not last:
+            _sleep(BACKOFF_SECONDS[min(attempt, len(BACKOFF_SECONDS) - 1)])
+            continue
+        break
 
     headers = _headers_of_interest(resp)
     if resp.status_code != 200:

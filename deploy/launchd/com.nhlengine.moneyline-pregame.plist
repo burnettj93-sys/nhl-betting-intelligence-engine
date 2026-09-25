@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.moneyline-pregame</string>
+
+    <!-- Quota + Moneyline Activation block (2026-09-25). Fires every 2 minutes; almost every firing is an
+         instant no-op (no network, no credit). It makes ONE league-wide DraftKings moneyline pull per
+         start-time cluster at about puck drop - 35 min so the existing T-30 decision policy finds a quote
+         inside its 10-minute window. See operational/moneyline_pregame.py and
+         docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md. The only new paid job; nothing else was added. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.live_odds_daily_pull</string>
+        <string>--mode=moneyline-pregame</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartInterval</key>
+    <integer>120</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/moneyline_pregame.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/moneyline_pregame.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

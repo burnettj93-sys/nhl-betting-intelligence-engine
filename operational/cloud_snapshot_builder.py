@@ -205,7 +205,15 @@ def _health() -> dict:
     # `last_updated_utc` is the time of the latest 15-minute prop sweep -- it changes on every firing and says
     # nothing about market data, so it must not make an otherwise identical snapshot look "changed".
     odds_status = {k: v for k, v in sh.odds_collection_status().items() if k != "last_updated_utc"}
-    return {"items": items, "production": summary, "odds_status": odds_status}
+    ops: dict = {}
+    try:                                     # ADMIN diagnostics: what the next decision cluster needs (read-only)
+        from operational import moneyline_pregame, prop_discovery
+        ops["next_decision_cluster"] = moneyline_pregame.next_decision_cluster()
+        ps = prop_discovery.status()
+        ops["prop_discovery"] = {"mode": ps["mode"], "market_states": ps["market_states"], "daily_budget": ps["daily_budget"]}
+    except Exception as exc:  # noqa: BLE001 -- diagnostics must never fail the snapshot
+        ops["error"] = type(exc).__name__
+    return {"items": items, "production": summary, "odds_status": odds_status, "operations": ops}
 
 
 _SECTION_BUILDERS = {

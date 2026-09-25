@@ -13,7 +13,7 @@ Read the `OVERALL` line and the table under it. `WAITING_FOR_LIVE_MARKET`, `WAIT
 | | Check |
 |---|---|
 | you | Mac plugged in, **prevent sleep** while the lid is closed or use `caffeinate -s` (missed pulls were the top reliability problem: 8 of 41 moneyline runs failed offline). |
-| you | `launchctl print gui/$(id -u)/com.nhlengine.daily-nhl-sync \| grep runs` — must be ≥ 1 after the first 07:00. If `runs = 0`, run the reload commands in `docs/SCHEDULER_INVENTORY.md` (Findings 1). |
+| you | `python3 -m operational.scheduler_audit` — 11 jobs, status `OK`. (`runs` restarts at every boot; a 0 after a late boot is normal — see `docs/SCHEDULER_INVENTORY.md`.) |
 | you | `python3 -m operational.cloud_preflight` → `PASS_WITH_OWNER_ACTIONS`; do the owner actions in `docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md`. |
 | you | Open the Cloud app as an allowed viewer: banner shows **SNAPSHOT CURRENT**, Diagnostics (ADMIN) shows source `REMOTE`, fetch `OK`, schema 2. |
 
@@ -40,10 +40,12 @@ Read the `OVERALL` line and the table under it. `WAITING_FOR_LIVE_MARKET`, `WAIT
 
 ## Pregame (2–0.5 h before the first puck drop)
 
-The engine prices each game at **puck drop − 30 min** and only accepts a DraftKings quote ≤ 10 min older than that. With the current 4-pulls/day schedule almost no game qualifies (`docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md`), so **expect `DATA_UNAVAILABLE` and no real recommendation today** unless the schedule proposal has been adopted.
+The engine prices each game at **puck drop − 30 min** and only accepts a DraftKings quote captured in the 10 minutes before that. The `moneyline-pregame` job (every 2 min, launchd) makes **one league-wide pull ≈ 35 min before each start-time cluster** for games the provider lists (first: 2026-09-29). Games the provider does not list are skipped at 0 credits. Keep the Mac awake and online.
 
 | Check | Expected |
 |---|---|
+| Diagnostics → **Next decision cluster** / `python3 opening_day_readiness.py` → `NEXT_T35_CLUSTER` | Shows the next cluster, target pull time, decision anchor, scheduler armed, quota sufficient |
+| `operational/runtime/moneyline_pregame_state.json` | After the pull: `status: DONE`, `in_decision_window: true`, `credits: 1` |
 | Today → Live Model Edges | Rows show `WAIT` (Elo staleness / fail-closed gates) and MARKET FRESHNESS; prices > 3 h old (or > 90 min inside 4 h of puck drop) read **STALE — not live** |
 | Any recommendation cards | Show created-at, price captured, game start, freshness. A stale leg makes a Game Edge Parlay "not a current opportunity" |
 | Game Edge Parlay | `NO_QUALIFYING_GAME_EDGE_PARLAY` is the correct answer until a prop contract is verified |
