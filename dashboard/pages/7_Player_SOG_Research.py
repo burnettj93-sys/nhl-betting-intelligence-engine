@@ -21,17 +21,17 @@ from research.player_sog import features as pf
 from research.run_player_sog_model import build_team_schedules, NHL_CORPUS_PATH
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_results():
     return sv.load_results()
 
 
-@st.cache_data(show_spinner="Loading real player-game SOG corpus (this can take a few seconds)...")
+@st.cache_data(show_spinner="Loading real player-game SOG corpus (this can take a few seconds)...", max_entries=8, ttl=3600)
 def _load_sog_rows():
     return pf.load_sog_corpus()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_index(_rows):
     """Leading underscore tells Streamlit to skip hashing this argument
     for the cache key -- hashing a ~189k-row list of dicts on every
@@ -42,7 +42,7 @@ def _build_index(_rows):
     return pf.PlayerHistoryIndex(_rows)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_opponent_history(_rows):
     totals = pf.build_team_game_totals(_rows)
     allowed = pf.build_opponent_allowed_history(totals)
@@ -51,7 +51,7 @@ def _build_opponent_history(_rows):
     return allowed, league_avg
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _load_team_schedules():
     games = ec.load_corpus(str(NHL_CORPUS_PATH))
     return build_team_schedules(games)

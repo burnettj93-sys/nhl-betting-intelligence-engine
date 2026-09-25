@@ -208,7 +208,7 @@ with st.expander("Power Play Role (live special-teams role intelligence)", expan
     try:
         from operational import special_teams_history_store as sths
         from operational import special_teams_roles_live as srl
-        _sth_conn = sths.get_connection()
+        _sth_conn = sths.open_readonly()  # read-only: a page render never creates/writes this DB
         _role_state = srl.compute_pp_role_state(_sth_conn, player.player_id, player.team, dd.SIMULATED_DATE)
         comp.render_pp_role_badge(_role_state)
     except Exception as exc:

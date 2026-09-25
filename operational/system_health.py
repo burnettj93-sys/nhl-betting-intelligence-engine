@@ -166,6 +166,16 @@ def context_overlay_registry_health() -> dict:
 def database_health() -> dict:
     import sqlite3
     from db import DB_PATH
+    from operational import runtime_mode
+    if runtime_mode.is_community_cloud():
+        # Community Cloud memory sprint (Part 15): the only nhl.db this deployment
+        # can see is the FROZEN git-tracked snapshot (the live database is a
+        # gitignored runtime file, docs/RUNTIME_DB_HYGIENE.md). Reporting
+        # "connection OK" would present stale data as current operational
+        # state, so it is reported STALE, and the file is not even opened.
+        return _health_item("STALE", "Database", None,
+                             "frozen git snapshot of nhl.db -- NOT live operational state "
+                             "(this deployment has no scheduler)", str(DB_PATH))
     if not DB_PATH.exists():
         return _health_item("ERROR", "Database", None, "nhl.db not found", str(DB_PATH))
     try:
@@ -196,6 +206,11 @@ def prospective_ledger_health() -> dict:
 
 
 def last_sync_health(cache: dict | None = None) -> dict:
+    from operational import runtime_mode
+    if runtime_mode.is_community_cloud():
+        return _health_item("NOT_REQUIRED", "Last Sync", None,
+                             "no NHL sync runs in Community Cloud mode (thin read-only layer)",
+                             "operational/data_readiness_cache.json")
     cache = cache if cache is not None else _load_readiness_cache()
     if cache is None or "readiness" not in cache:
         return _health_item("UNKNOWN", "Last Sync", None, "no sync has ever completed",
@@ -216,7 +231,7 @@ def special_teams_role_freshness_health() -> dict:
         if not sths.DB_PATH.exists():
             return _health_item("WAITING", "Special-Teams Role History", None,
                                  "special_teams_history.db not found", str(sths.DB_PATH))
-        conn = sths.get_connection()
+        conn = sths.open_readonly()
         summary = sths.coverage_summary(conn)
         conn.close()
         return _health_item("OK", "Special-Teams Role History", summary.get("latest_game_date"),
@@ -229,28 +244,44 @@ def special_teams_role_freshness_health() -> dict:
 
 def odds_archive_freshness_health() -> dict:
     """Part 48: Odds API archive freshness -- the real, on-disk raw
-    capture directory (data/raw/the_odds_api/live/), never the demo
-    board cache. Reports the most recent REAL capture's timestamp; a
-    directory with zero files is WAITING (never seen a real pull yet),
-    never ERROR (that's an expected preseason state, not a failure)."""
-    archive_dir = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
-    if not archive_dir.exists():
+    capture directories, never the demo board cache. Reports the most
+    recent REAL capture's timestamp; zero files is WAITING (never seen a
+    real pull yet), never ERROR (an expected preseason state).
+
+    Fixed in the Community Cloud memory sprint: it only ever looked in the
+    legacy git-tracked directory, so after the runtime archive split
+    (research/live_sog_pricing/archive.py::ARCHIVE_DIR ->
+    operational/odds_archive/live/) it could not see any new capture. It now
+    checks both, uses one os.scandir pass per directory (cached DirEntry
+    stat, no per-file open) and opens only the single newest file."""
+    import os
+    runtime = REPO_ROOT / "operational" / "odds_archive" / "live"  # == archive.ARCHIVE_DIR
+    legacy = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
+    dirs = [d for d in (runtime, legacy) if d.exists()]
+    if not dirs:
         return _health_item("WAITING", "Odds API Archive", None, "archive directory does not exist yet",
-                             str(archive_dir))
-    files = sorted(archive_dir.glob("*.json"))
-    if not files:
-        return _health_item("WAITING", "Odds API Archive", None, "no captures recorded yet", str(archive_dir))
+                             str(runtime))
+    count, newest, newest_mtime = 0, None, -1.0
+    for d in dirs:
+        with os.scandir(d) as it:
+            for entry in it:
+                if not entry.name.endswith(".json"):
+                    continue
+                count += 1
+                mtime = entry.stat().st_mtime
+                if mtime > newest_mtime:
+                    newest, newest_mtime = entry.path, mtime
+    if newest is None:
+        return _health_item("WAITING", "Odds API Archive", None, "no captures recorded yet", str(dirs[0]))
     try:
-        latest = max(files, key=lambda p: p.stat().st_mtime)
-        with open(latest) as f:
+        with open(newest) as f:
             meta = json.load(f).get("meta", {})
         retrieved_at = meta.get("retrieved_at_utc")
         return _health_item("OK", "Odds API Archive", retrieved_at,
-                             f"{len(files)} real capture(s) on disk, latest at {retrieved_at}",
-                             str(archive_dir))
+                             f"{count} real capture(s) on disk, latest at {retrieved_at}", str(dirs[0]))
     except Exception as e:
         return _health_item("ERROR", "Odds API Archive", None, f"could not read latest capture: {e}",
-                             str(archive_dir), technical_detail=repr(e))
+                             str(dirs[0]), technical_detail=repr(e))
 
 
 def contract_status_health() -> dict:
@@ -326,6 +357,11 @@ def live_odds_scheduler_health() -> dict:
     via code inspection, not a query failure that had actually happened
     yet (no VPS exists). Dispatches on the real platform; never assumes
     installed."""
+    from operational import runtime_mode
+    if runtime_mode.is_community_cloud():
+        return _health_item("NOT_REQUIRED", "Live Odds Scheduler", None,
+                             "no scheduler runs in Community Cloud mode (thin read-only layer)",
+                             "runtime mode")
     import platform
     if platform.system() == "Linux":
         return _scheduler_health_via_systemctl()

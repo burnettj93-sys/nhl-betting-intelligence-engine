@@ -40,7 +40,7 @@ st.caption("Prospective self-audit: real settled predictions only. Never mutates
 # itself now returns an honest NO_DATA/INSUFFICIENT_SAMPLE engine_status
 # (with incomplete=True) whenever there isn't enough real settled data,
 # so there is no longer a separate case to special-case here.
-conn = pl.init_db()
+conn = pl.open_for_dashboard()
 result = dmr.run_daily_review(conn)
 
 status = result["engine_status"]

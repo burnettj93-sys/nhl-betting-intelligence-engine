@@ -104,6 +104,14 @@ def require_nhl_corpus() -> None:
 
 
 def require_moneypuck_db() -> None:
+    from operational import runtime_mode
+    if runtime_mode.is_community_cloud():
+        # Community Cloud memory sprint (Part 7): research databases are never
+        # opened by the thin presentation layer. Callers already treat
+        # DataAvailabilityError as "not available" and degrade gracefully.
+        raise DataAvailabilityError(
+            "MONEYPUCK RESEARCH DB: not loaded in Community Cloud mode (research databases "
+            "are never opened by the thin read-only presentation layer).")
     if not MONEYPUCK_DB_PATH.exists():
         raise DataAvailabilityError(
             f"MONEYPUCK RESEARCH DB: NOT FOUND\n\n"

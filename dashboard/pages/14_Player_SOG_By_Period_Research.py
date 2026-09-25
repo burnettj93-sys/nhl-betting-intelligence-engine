@@ -63,7 +63,7 @@ except da.DataAvailabilityError as exc:
     st.stop()
 
 
-@st.cache_resource(show_spinner="Loading period SOG model (first load takes a few seconds)...")
+@st.cache_resource(show_spinner="Loading period SOG model (first load takes a few seconds)...", max_entries=4)
 def _engine(_results):
     return pv.PeriodSogEngine(_results)
 

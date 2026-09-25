@@ -1,8 +1,11 @@
 requests>=2.31
 
 # Dashboard (dashboard/) -- Streamlit brings in Altair (charting) and
-# pandas (dataframes) as its own dependencies automatically.
-streamlit>=1.36
+# pandas (dataframes) as its own dependencies automatically. Pinned to the
+# exact version every memory measurement and test in this repo ran against
+# (Community Cloud memory sprint, 2026-09-25); newer releases exist (1.64.0)
+# but were not adopted -- see docs/STREAMLIT_MEMORY_CERTIFICATION.md.
+streamlit==1.62.0
 
 # Yahoo compliance/reliability hardening pass (2026-09-24): AES-256-GCM
 # encryption for OAuth token-at-rest storage (fantasy/yahoo/crypto.py,

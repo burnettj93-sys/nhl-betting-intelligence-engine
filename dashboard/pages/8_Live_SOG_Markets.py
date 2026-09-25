@@ -22,7 +22,7 @@ from research import elo_comparison as ec
 from research.run_player_sog_model import build_team_schedules, NHL_CORPUS_PATH
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_sog_results():
     import json
     path = REPO_ROOT / "research" / "player_sog_results.json"
@@ -32,17 +32,17 @@ def _load_sog_results():
         return json.load(f)
 
 
-@st.cache_data(show_spinner="Loading real player-game SOG corpus...")
+@st.cache_data(show_spinner="Loading real player-game SOG corpus...", max_entries=8, ttl=3600)
 def _load_sog_rows():
     return pf.load_sog_corpus()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_index(_rows):
     return pf.PlayerHistoryIndex(_rows)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_opponent_history(_rows):
     totals = pf.build_team_game_totals(_rows)
     allowed = pf.build_opponent_allowed_history(totals)
@@ -51,7 +51,7 @@ def _build_opponent_history(_rows):
     return allowed, league_avg
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _load_team_schedules():
     games = ec.load_corpus(str(NHL_CORPUS_PATH))
     return build_team_schedules(games)

@@ -53,6 +53,21 @@ def get_connection(path: Path = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+def open_readonly(path: Path | None = None) -> sqlite3.Connection:
+    """Read-only connection for dashboard/health readers (Community Cloud
+    memory sprint, Part 10): unlike get_connection(), it never creates the
+    file (sqlite3.connect() silently creates an empty DB for a missing path)
+    and never executes the schema DDL, so a page render can never write this
+    database. Raises FileNotFoundError when it does not exist -- callers
+    already treat that as "not available"."""
+    path = path if path is not None else DB_PATH
+    if not Path(path).exists():
+        raise FileNotFoundError(str(path))
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def _now_utc() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat()
 

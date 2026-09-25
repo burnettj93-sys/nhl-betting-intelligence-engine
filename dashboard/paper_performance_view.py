@@ -9,6 +9,7 @@ from __future__ import annotations
 from dashboard import conviction as cv
 from dashboard import eligible_bets as eb
 from dashboard import live_dk as ldk
+from operational import runtime_mode
 from operational import paper_bankroll as pb
 
 
@@ -66,11 +67,17 @@ def full_dashboard_state() -> dict:
     """One call for the Paper Performance page: ensures today's
     idempotent bet creation has run for both tracks, then returns each
     track's real summary + breakdowns, computed only from stored data
-    (Part 49)."""
-    conn = pb.init_db()
-    ensure_demo_paper_bets_created(conn)
-    ensure_real_market_paper_bets_created(conn)
-    ensure_game_edge_parlay_paper_bets_created(conn)
+    (Part 49).
+
+    In COMMUNITY_CLOUD_MODE this is strictly READ-ONLY: no bets are
+    created from a page render and no database file is created or written."""
+    if runtime_mode.is_community_cloud():
+        conn = pb.open_for_dashboard()
+    else:
+        conn = pb.init_db()
+        ensure_demo_paper_bets_created(conn)
+        ensure_real_market_paper_bets_created(conn)
+        ensure_game_edge_parlay_paper_bets_created(conn)
     return {
         track: {
             "summary": pb.bankroll_summary(conn, track),
