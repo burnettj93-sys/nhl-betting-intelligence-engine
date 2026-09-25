@@ -673,6 +673,9 @@ def _main() -> None:
         try:                               # hold an idle-sleep assertion inside the critical window (self-ending; see keep_awake.py)
             from operational import keep_awake
             keep_awake_result = keep_awake.ensure_holding()
+            guard = keep_awake.ensure_guard()          # survives sleep; re-asserts within ~5 s of a wake (closes the wake gap)
+            if guard.get("guard") not in ("NONE", None):
+                keep_awake_result = {**keep_awake_result, "guard": guard["guard"]}
         except Exception as exc:  # noqa: BLE001 -- never affects the pull
             keep_awake_result = {"action": "ERROR", "reason": type(exc).__name__}
         result = moneyline_pregame.run_pregame()
@@ -731,6 +734,13 @@ def _main() -> None:
             audited = moneyline_pregame.record_audit(result)
             if audited:
                 result["audit"] = [{"cluster_id": a["cluster_id"], "outcome": a["outcome"], "tags": a["tags"]} for a in audited]
+            try:                                   # zero-cost, detached, non-blocking macOS notification (listed clusters only)
+                from operational import notify
+                missed = [r for r in (moneyline_pregame.load_audit()["records"].get(c) for c in result.get("missed_windows", [])) if r]
+                for title, message in notify.messages_for(result, list(audited or []) + missed):
+                    notify.send(title, message)
+            except Exception:  # noqa: BLE001
+                pass
         except Exception as exc:  # noqa: BLE001 -- auditing must never fail the job
             result["audit_error"] = type(exc).__name__
     if args.mode == "moneyline-pregame" and result.get("status") == "IDLE":

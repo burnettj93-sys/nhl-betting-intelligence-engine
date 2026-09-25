@@ -529,6 +529,35 @@ def build_component_states(checks: dict) -> dict:
     except Exception as exc:  # noqa: BLE001
         out["MACHINE_POWER"] = _c("PARTIAL", f"could not read power settings: {type(exc).__name__}")
     try:
+        from operational import schedule_next_wake, keep_awake as _ka
+        nxt_wake = schedule_next_wake.next_wake()
+        out["MAC_WAKE_PLAN"] = _c("READY" if nxt_wake else "WAITING_FOR_EVENT",
+                                  (f"next wake {nxt_wake['wake_local']} for {nxt_wake['window']['cluster']}: {nxt_wake['command']} "
+                                   "(plan: python3 -m operational.first_live_certification --wake-plan)") if nxt_wake else
+                                  "no provider-listed cluster within 10 days")
+        wk = schedule_next_wake.verify(nxt=nxt_wake) if nxt_wake else {"state": "WAITING_FOR_EVENT", "detail": "no listed cluster ahead"}
+        out["MAC_WAKE_SCHEDULED"] = _c({"SCHEDULED": "READY", "WAITING_FOR_EVENT": "WAITING_FOR_EVENT"}.get(wk["state"], "OWNER_ACTION_REQUIRED"),
+                                       wk["detail"] + ". Needs the owner's sudo (never run automatically); lid must be open, on AC")
+        import os as _os
+        ok = _os.path.exists("/usr/bin/caffeinate") and hasattr(_ka, "guard_loop")
+        out["TEMP_KEEP_AWAKE"] = _c("READY" if ok else "NOT_READY",
+                                    "self-ending caffeinate -i inside each listed hold window, started by a sleep-surviving wake-guard within ~5 s of a wake; "
+                                    "cannot wake a sleeping Mac or override lid-close / shutdown" if ok else "caffeinate or the wake-guard is unavailable")
+    except Exception as exc:  # noqa: BLE001
+        out["MAC_WAKE_PLAN"] = _c("PARTIAL", f"wake planning unavailable: {type(exc).__name__}")
+    try:
+        from operational import cloud_preflight
+        _url = cloud_preflight.app_url()
+        out["STREAMLIT_URL"] = _c("READY" if _url else "OWNER_ACTION_REQUIRED",
+                                  "configured (NHL_ENGINE_STREAMLIT_URL)" if _url else
+                                  "not discoverable from the repo or GitHub: add NHL_ENGINE_STREAMLIT_URL=https://<your-app>.streamlit.app to .env")
+        out["STREAMLIT_OWNER_CONFIG"] = _c("OWNER_ACTION_REQUIRED",
+                                           "not observable from here: NHL_ENGINE_ADMIN_SETUP_CODE, NHL_ENGINE_TRUST_PLATFORM_VIEWER=\"ON\", "
+                                           "NHL_ENGINE_ADMIN_EMAILS (Streamlit Secrets); Sharing = only specific people; st.user.email populated "
+                                           "-- see docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md 'Owner completion'")
+    except Exception as exc:  # noqa: BLE001
+        out["STREAMLIT_URL"] = _c("PARTIAL", f"{type(exc).__name__}")
+    try:
         from operational import cloud_preflight
         app = cloud_preflight.check_deployed_app()
         out["CLOUD_DEPLOYMENT"] = _c("READY" if app["state"] == "PASS" else "OWNER_ACTION_REQUIRED" if app["state"] == "OWNER_ACTION_REQUIRED" else "FAILED",

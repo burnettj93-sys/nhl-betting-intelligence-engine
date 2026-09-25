@@ -130,3 +130,25 @@ The repository is public, so `cloud-data/current/snapshot.json` is world-readabl
 is viewer-restricted. It contains only shared betting data (no user data, no Yahoo content, no credentials,
 no paths). If that is unacceptable, make the repo private and set `NHL_ENGINE_SNAPSHOT_TOKEN`
 (fine-grained, contents:read) in Streamlit secrets — Community Cloud can read private repos via its GitHub link.
+
+
+## Owner completion (what only you can do — exact steps)
+
+None of the following is observable from the repo or this machine, so none is claimed done. `python3 opening_day_readiness.py` reports `STREAMLIT_URL` and `STREAMLIT_OWNER_CONFIG` as `OWNER_ACTION_REQUIRED` until you finish.
+
+1. **Tell the engine the app URL** (enables the anonymous, read-only smoke check): open the app in your browser, copy the address (`https://<name>.streamlit.app`), and add one line to the gitignored `.env`:
+   `NHL_ENGINE_STREAMLIT_URL=https://<name>.streamlit.app`
+   then run `python3 -m operational.cloud_preflight` — it makes two anonymous GETs and reports whether the app answers and whether anonymous visitors are redirected to sign-in (private mode).
+2. **Private sharing:** share.streamlit.io → your app → ⋮ → **Settings → Sharing** → choose **"Only specific people can view this app"** → add each friend's email (and your own) → Save.
+3. **Secrets:** ⋮ → **Settings → Secrets** → paste (values are yours; never share them):
+   ```toml
+   NHL_ENGINE_ADMIN_SETUP_CODE = "<make up a long random string>"
+   NHL_ENGINE_TRUST_PLATFORM_VIEWER = "ON"
+   NHL_ENGINE_ADMIN_EMAILS = "you@example.com"
+   ```
+   (`NHL_ENGINE_SNAPSHOT_SOURCE` is optional; the default `REMOTE` is correct.) Save → the app reboots.
+4. **Verify while signed in** (this cannot be automated without weakening privacy):
+   - as **you (ADMIN)**: Today loads; banner says *SNAPSHOT CURRENT*; **Diagnostics** opens and shows source **REMOTE**, schema **2**, a content hash equal to the newest `cloud-data` snapshot, RSS well under 1 GB;
+   - as an **invited friend (USER)**: Today, Game Detail and Paper Performance work; **Diagnostics, Morning Review and Data Status are denied**;
+   - `st.user.email` is populated when you are signed in (Diagnostics shows you as ADMIN without typing a password — if it asks for a login instead, the platform did not supply your email; use the setup-code login once).
+5. **Odds API reset day:** the-odds-api.com → log in → **Account / Usage** → note the date your monthly quota renews → add `NHL_ENGINE_ODDS_RESET_DAY=<day of month, 1-28>` to `.env` → `python3 opening_day_readiness.py` shows `ODDS_RESET_DAY: READY`. (Invalid values are rejected and treated as unset; the day is never inferred.)

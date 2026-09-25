@@ -10,15 +10,16 @@ Read the `OVERALL` line and the table under it. `WAITING_FOR_LIVE_MARKET`, `WAIT
 
 ## Owner quick card — first real T-35 (Tuesday 2026-09-29, first listed game 21:00Z = 17:00 EDT)
 
-Times below are computed from the current NHL schedule (`python3 -m operational.first_live_certification` prints the live values; if the schedule changes, trust that command, not this card).
+Times are computed from the schedule: `python3 -m operational.first_live_certification --wake-plan` prints the live values (trust it over this card if the schedule moves).
 
-| EDT | Do |
+| When (EDT) | Do |
 |---|---|
-| **15:45** | Mac plugged in, lid **open**, logged in. (The job starts a self-ending keep-awake at ≈ 15:50 — it cannot wake a sleeping Mac.) Optional but safest: `python3 -m operational.keep_awake --plan` prints `sudo pmset schedule wake ...` lines you may run yourself. |
-| **≈ 16:15** | `python3 -m operational.first_live_certification` → `PRE-FLIGHT`: scheduler on clean **master**, quota sufficient, publisher enabled, next cluster 2026-09-29T21:00, provider LISTED, overall `WAITING_FOR_FIRST_REAL_CLUSTER`. Also Diagnostics → *Moneyline T-35 live status*. |
-| **≈ 16:25** | T-35 pull expected (one request, 1 credit). |
-| **≈ 16:30** | T-30 decision. |
-| **≈ 16:35** | `python3 -m operational.first_live_certification` again → `LIVE_CERTIFIED` (PASS / WAIT is enough), or the exact failed gate. |
+| **Before the day (once)** | Schedule the one-time wake — the Mac idle-sleeps after **1 minute** on AC and `caffeinate` cannot wake a sleeping Mac. Run in a terminal (asks for your password): `sudo pmset schedule wake "09/29/26 15:45:00" nhl-engine` — or try `python3 -m operational.schedule_next_wake --apply` (non-interactive; if it needs a password it just prints the command above). Confirm with `pmset -g sched` or `python3 -m operational.schedule_next_wake --verify` (reads the OS's own event list). |
+| **15:45** | Mac wakes by itself. Must be: **plugged in, lid OPEN** (or external display), logged in, **not shut down**. A wake-guard already running (started by the 2-minute job while the Mac was awake) starts a self-ending `caffeinate` within ~5 s of the wake and holds until ≈ 16:50. |
+| **≈ 16:15** | `python3 -m operational.first_live_certification` → `PRE-FLIGHT: READY` (or the exact owner action / failed prerequisite). |
+| **16:25** | T-35 pull (one request, 1 credit). A macOS notification says SUCCESS / FAILED / MISSED_WINDOW. |
+| **16:30** | T-30 decision. |
+| **≈ 16:35** | `python3 -m operational.first_live_certification` again → `LIVE_CERTIFIED` (PASS / WAIT is enough), or the exact failed gate. The first real cluster's record is also preserved permanently in `operational/runtime/moneyline_pregame_first_live.json`. |
 
 ## Night before
 
