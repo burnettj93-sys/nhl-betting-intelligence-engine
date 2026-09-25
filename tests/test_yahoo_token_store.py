@@ -70,6 +70,19 @@ class TestEncryptedFileTokenStore(unittest.TestCase):
         with mock.patch("fantasy.yahoo.token_store.get_encryption_key", return_value=self.key):
             self.assertIsNone(store.get())
 
+    def test_saved_file_is_owner_only(self):
+        """VPS Production Deployment block (2026-09-24), Part 9: the
+        ciphertext is already encrypted, but there's no reason the file
+        itself should be world-readable under a default Linux umask."""
+        import os
+        store = EncryptedFileTokenStore(self.path)
+        token = TokenResponse(access_token="AT1", refresh_token="RT1", token_type="bearer",
+                               expires_at_epoch=time.time() + 3600)
+        with mock.patch("fantasy.yahoo.token_store.get_encryption_key", return_value=self.key):
+            store.save(token)
+        mode = self.path.stat().st_mode & 0o777
+        self.assertEqual(mode, 0o600)
+
     def test_save_then_get_round_trips_the_token(self):
         store = EncryptedFileTokenStore(self.path)
         token = TokenResponse(access_token="AT1", refresh_token="RT1", token_type="bearer",

@@ -1,0 +1,8 @@
+[Unit]
+Description=NHL Engine daily post-mortem
+
+[Service]
+Type=oneshot
+User=nhlengine
+WorkingDirectory=/opt/nhl-engine/app
+ExecStart=/opt/nhl-engine/app/.venv/bin/python3 -m operational.daily_postmortem

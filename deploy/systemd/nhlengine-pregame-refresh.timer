@@ -1,0 +1,9 @@
+[Unit]
+Description=Pregame targeted refresh every 30 minutes
+
+[Timer]
+OnBootSec=120
+OnUnitActiveSec=1800
+
+[Install]
+WantedBy=timers.target

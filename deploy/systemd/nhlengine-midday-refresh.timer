@@ -1,0 +1,9 @@
+[Unit]
+Description=Midday schedule refresh at 13:00
+
+[Timer]
+OnCalendar=*-*-* 13:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

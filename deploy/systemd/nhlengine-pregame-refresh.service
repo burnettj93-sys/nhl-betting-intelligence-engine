@@ -1,0 +1,8 @@
+[Unit]
+Description=NHL Engine pregame targeted refresh
+
+[Service]
+Type=oneshot
+User=nhlengine
+WorkingDirectory=/opt/nhl-engine/app
+ExecStart=/opt/nhl-engine/app/.venv/bin/python3 -m operational.nhl_sync --mode=pregame

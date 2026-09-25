@@ -30,6 +30,30 @@ def _fresh_conn():
     return auth_store.get_connection(Path(tmp.name))
 
 
+class TestAuthStoreFilePermissions(unittest.TestCase):
+    """VPS Production Deployment block (2026-09-24), Part 8: real gap --
+    sqlite3.connect() creates a file under the process umask (typically
+    644/world-readable on Linux); this file holds every user's password
+    hash and salt. get_connection() now tightens it to owner-only on
+    every open, whether newly created or pre-existing."""
+
+    def test_new_auth_store_file_is_owner_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "fresh_auth_store.db"
+            auth_store.get_connection(path)
+            mode = path.stat().st_mode & 0o777
+            self.assertEqual(mode, 0o600)
+
+    def test_pre_existing_file_with_loose_permissions_is_corrected_on_open(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "existing_auth_store.db"
+            path.touch()
+            os.chmod(path, 0o644)
+            auth_store.get_connection(path)
+            mode = path.stat().st_mode & 0o777
+            self.assertEqual(mode, 0o600)
+
+
 class TestPasswordHashing(unittest.TestCase):
     def test_password_is_never_stored_in_plain_text(self):
         conn = _fresh_conn()

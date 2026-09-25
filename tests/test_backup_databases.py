@@ -10,7 +10,29 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from operational import backup_databases as bd
+from operational import backup_databases as bd, ingestion_health
+
+# VPS Production Deployment block (2026-09-24), Part 13: real gap found
+# -- run_all_backups() calls ingestion_health.record_run("database_backups",
+# ...) unconditionally, and only one test in this file
+# (test_records_ingestion_health) isolated it; test_one_failure_does_not_
+# abort_the_whole_batch was silently overwriting the REAL
+# operational/ingestion_health_cache.json on every run despite this
+# file's own docstring's isolation guarantee. Isolated module-wide so no
+# future test here can reintroduce the gap.
+_health_cache_patcher = None
+
+
+def setUpModule():
+    global _health_cache_patcher
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    tmp.close()
+    _health_cache_patcher = mock.patch.object(ingestion_health, "DEFAULT_CACHE_PATH", Path(tmp.name))
+    _health_cache_patcher.start()
+
+
+def tearDownModule():
+    _health_cache_patcher.stop()
 
 
 def _make_db(path: Path, rows: int = 3) -> None:

@@ -111,6 +111,15 @@ class EncryptedFileTokenStore:
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(encrypt_json(key, payload))
+        # VPS Production Deployment block (2026-09-24), Part 9: encrypted
+        # already, but there's no reason the ciphertext file itself should
+        # be world-readable under a default Linux umask either -- same
+        # owner-only, best-effort treatment as operational/auth_store.py.
+        try:
+            import os
+            os.chmod(self._path, 0o600)
+        except OSError:
+            pass
 
     def clear(self) -> None:
         try:

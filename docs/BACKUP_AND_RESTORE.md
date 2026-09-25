@@ -34,6 +34,13 @@ original games: 1113 | restored games: 1113
 RESTORE VERIFIED: row counts match
 ```
 
+**Re-verified during the VPS Production Deployment block (2026-09-24), Part 11:** ran the real job again (`auth_store_db` correctly `SKIPPED` — no admin account has been bootstrapped in this environment yet; `odds_archive` now also backs up successfully as a tarball, per the odds-archive hygiene split), restored `nhl_db`'s fresh backup into an isolated `/tmp` path (never over the real database), and re-confirmed:
+
+```
+original games: 1192 | restored games: 1192
+RESTORE VERIFIED: row counts match
+```
+
 ## How to restore, for real, if it's ever needed
 
 **This never happens automatically — restoring is always a deliberate, explicit action.**

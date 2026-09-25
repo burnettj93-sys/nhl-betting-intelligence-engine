@@ -1,0 +1,16 @@
+[Unit]
+Description=NHL Engine Streamlit Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=nhlengine
+WorkingDirectory=/opt/nhl-engine/app
+ExecStart=/opt/nhl-engine/app/.venv/bin/streamlit run dashboard/app.py --server.address 127.0.0.1 --server.port 8501
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

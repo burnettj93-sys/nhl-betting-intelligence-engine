@@ -48,6 +48,20 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    # VPS Production Deployment block (2026-09-24), Part 8: sqlite3.connect()
+    # creates a fresh file under the process umask -- typically 644
+    # (world-readable) on a default Linux install -- and an already-existing
+    # file may predate this fix. This file holds every user's password hash
+    # and salt; even though PBKDF2 makes offline cracking slow, there's no
+    # reason a world-readable file should hold that data at all. Re-applied
+    # on every open (idempotent, cheap) so a pre-existing file gets
+    # corrected too, not just newly-created ones. Owner-only, best-effort
+    # (chmod can fail/no-op on exotic filesystems -- never worth failing
+    # login over).
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return conn
 
 

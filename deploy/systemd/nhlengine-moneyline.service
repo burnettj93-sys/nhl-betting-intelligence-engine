@@ -1,0 +1,8 @@
+[Unit]
+Description=NHL Engine moneyline snapshot
+
+[Service]
+Type=oneshot
+User=nhlengine
+WorkingDirectory=/opt/nhl-engine/app
+ExecStart=/opt/nhl-engine/app/.venv/bin/python3 -m operational.live_odds_daily_pull --mode=moneyline

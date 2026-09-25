@@ -83,8 +83,16 @@ class TestBackupCoversTheOddsArchive(unittest.TestCase):
         self.assertEqual(result["status"], "SKIPPED")
 
     def test_run_all_backups_includes_the_odds_archive(self):
+        # VPS Production Deployment block (2026-09-24), Part 13: real gap
+        # found -- run_all_backups() calls ingestion_health.record_run()
+        # unconditionally, and this test was silently overwriting the
+        # REAL operational/ingestion_health_cache.json with a fake
+        # "database_backups" entry on every run.
+        from operational import ingestion_health
         with tempfile.TemporaryDirectory() as tmp:
-            result = bd.run_all_backups(backup_root=Path(tmp) / "backups")
+            health_cache = Path(tmp) / "health.json"
+            with mock.patch.object(ingestion_health, "DEFAULT_CACHE_PATH", health_cache):
+                result = bd.run_all_backups(backup_root=Path(tmp) / "backups")
         self.assertIn("odds_archive", result["results"])
 
 
