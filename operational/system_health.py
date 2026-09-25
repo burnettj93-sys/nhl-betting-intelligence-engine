@@ -478,6 +478,43 @@ def postmortem_status_health() -> dict:
                          f"latest report: {latest.name}", str(reports_dir))
 
 
+CLOUD_PUBLISH_STALE_HOURS = 36.0
+
+
+def cloud_snapshot_publish_health() -> dict:
+    """Cloud live-data sprint (2026-09-25), Part 33: health of the DOWNSTREAM Cloud
+    snapshot publisher -- last attempt, last success, status, snapshot age, last
+    error -- read from the existing ingestion-health cache (component
+    `cloud_snapshot_publish`, written by operational/publish_cloud_snapshot.py).
+    Publication failing is DEGRADED, never a reason for anything else to fail."""
+    from operational import ingestion_health as ih
+    from operational import publish_cloud_snapshot as pub
+    label = "Cloud Snapshot Publisher"
+    row = ih.load_health().get(pub.COMPONENT)
+    if row is None:
+        if not pub.publishing_enabled():
+            return _health_item("NOT_REQUIRED", label, None,
+                                 "automatic publishing is off (opt-in: NHL_ENGINE_CLOUD_PUBLISH=ON) and no "
+                                 "publish has run", "ingestion_health_cache.json")
+        return _health_item("WAITING", label, None, "publishing is enabled; no attempt yet",
+                             "ingestion_health_cache.json")
+    age = ih.component_age_hours(row)
+    last_status, detail = row.get("last_status"), row.get("last_detail")
+    if last_status == "FAILED":
+        if age is not None and age <= CLOUD_PUBLISH_STALE_HOURS:
+            return _health_item("DEGRADED", label, row.get("last_success_utc"),
+                                 f"last publish FAILED ({detail}); last success {age:.1f}h ago",
+                                 "ingestion_health_cache.json", age_hours=age)
+        return _health_item("ERROR", label, row.get("last_success_utc"), f"last publish FAILED ({detail})",
+                             "ingestion_health_cache.json", age_hours=age)
+    if age is None:
+        return _health_item("ERROR", label, None, "no publish has ever succeeded", "ingestion_health_cache.json")
+    status = "OK" if age <= CLOUD_PUBLISH_STALE_HOURS else "STALE"
+    return _health_item(status, label, row.get("last_success_utc"),
+                         f"last success {age:.1f}h ago ({last_status})", "ingestion_health_cache.json",
+                         age_hours=age)
+
+
 def build_system_health() -> dict:
     """The full SYSTEM_HEALTH object (Section 27): one entry per
     component, all real. Call this once per page render; each
@@ -504,6 +541,7 @@ def build_system_health() -> dict:
         "LIVE_ODDS_SCHEDULER": live_odds_scheduler_health(),
         "NEW_CONTRACT_CANDIDATES": new_contract_candidates_health(),
         "DAILY_POSTMORTEM": postmortem_status_health(),
+        "CLOUD_SNAPSHOT_PUBLISH": cloud_snapshot_publish_health(),
     }
 
 
@@ -515,7 +553,7 @@ def _job_health(component: str, max_age_hours: float) -> dict:
             "last_run": row.get("recorded_at_utc") if row else None}
 
 
-def production_health_summary() -> dict:
+def production_health_summary(*, include_yahoo: bool = True) -> dict:
     """VPS Production Deployment block (2026-09-24), Part 13: the
     smallest practical unified health check for ops/monitoring -- APP,
     DATABASES, NHL_DATA, ODDS, SCHEDULERS, SETTLEMENT, POSTMORTEM,
@@ -530,11 +568,10 @@ def production_health_summary() -> dict:
     here (Part 13/20: Yahoo must never fail betting-side health).
     Imports opening_day_readiness lazily -- that module already imports
     this one (for the scheduler-label constants), so a top-level import
-    here would be circular."""
-    import opening_day_readiness as odr
-
+    here would be circular. `include_yahoo=False` (used by the Cloud snapshot
+    publisher) never touches the Yahoo token store at all."""
     system = build_system_health()
-    return {
+    summary = {
         "APP": {"status": "OK", "message": "process responding (this call executed)"},
         "DATABASES": {"status": system["DATABASE"]["status"], "message": system["DATABASE"]["message"]},
         "NHL_DATA": _job_health("nhl_sync_full", max_age_hours=30.0),
@@ -544,5 +581,10 @@ def production_health_summary() -> dict:
         "SETTLEMENT": _job_health("settlement", max_age_hours=30.0),
         "POSTMORTEM": _job_health("postmortem", max_age_hours=30.0),
         "BACKUPS": _job_health("database_backups", max_age_hours=30.0),
-        "YAHOO": odr.check_yahoo(),
+        "CLOUD_SNAPSHOT": {"status": system["CLOUD_SNAPSHOT_PUBLISH"]["status"],
+                           "message": system["CLOUD_SNAPSHOT_PUBLISH"]["message"]},
     }
+    if include_yahoo:
+        import opening_day_readiness as odr
+        summary["YAHOO"] = odr.check_yahoo()
+    return summary

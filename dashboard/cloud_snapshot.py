@@ -40,7 +40,7 @@ from pathlib import Path
 from operational import runtime_mode
 
 SNAPSHOT_PATH = Path(__file__).resolve().parent / "cloud_snapshot" / "board.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 1   # the BUNDLED board.json (v1); the published snapshot is v2 (operational/cloud_snapshot_schema.py)
 HISTORY_PROPS = ("sog", "goals", "assists", "points", "blocks")
 TREND_PROPS = HISTORY_PROPS + ("toi",)
 
@@ -69,7 +69,9 @@ def snapshot_active() -> bool:
 
 
 @lru_cache(maxsize=1)
-def _load() -> dict:
+def _load_bundled() -> dict:
+    """The git-bundled board.json (schema 1): the emergency/bootstrap FALLBACK
+    only. In Community Cloud the normal source is the remote current snapshot."""
     try:
         data = json.loads(SNAPSHOT_PATH.read_text())
     except FileNotFoundError:
@@ -81,8 +83,23 @@ def _load() -> dict:
     return data
 
 
+def _load() -> dict:
+    """The snapshot to serve: the remote current snapshot (last-known-good on a
+    failed refresh) in Community Cloud, else the bundled file."""
+    from dashboard import snapshot_source
+    if snapshot_source.remote_enabled():
+        state = snapshot_source.current()
+        if state.data is None:
+            raise SnapshotUnavailable("no snapshot is available: the remote fetch failed and the "
+                                      "bundled fallback is missing")
+        return state.data
+    return _load_bundled()
+
+
 def reset_cache() -> None:
-    _load.cache_clear()
+    _load_bundled.cache_clear()
+    from dashboard import snapshot_source
+    snapshot_source.reset()
 
 
 def load_snapshot() -> dict:
@@ -156,13 +173,74 @@ def live_moneyline_rows() -> list[dict]:
     return _section("live_moneyline_rows")
 
 
+class SectionUnavailable(SnapshotUnavailable):
+    """The snapshot in use does not carry this section (e.g. the bundled v1 fallback)."""
+
+
+def _optional(name: str):
+    data = _load()
+    if name not in data:
+        raise SectionUnavailable(f"the current snapshot has no `{name}` section")
+    return copy.deepcopy(data[name])
+
+
+def performance_state() -> dict:
+    return _optional("performance")
+
+
+def morning_review_report() -> dict:
+    return _optional("morning_review")
+
+
+def model_learning_result() -> dict:
+    return _optional("model_learning")
+
+
+def ledger_section() -> dict:
+    return _optional("ledger")
+
+
+def data_status_section() -> dict:
+    return _optional("data_status")
+
+
+def health_section() -> dict:
+    return _optional("health")
+
+
+def real_recommendations() -> dict:
+    return _optional("real_recommendations")
+
+
 def snapshot_meta() -> dict:
-    """Small provenance dict for the freshness banner; never raises."""
+    """Small provenance dict for banners; never raises."""
+    from operational import cloud_snapshot_schema as schema
     try:
         data = _load()
     except SnapshotUnavailable as exc:
         return {"available": False, "error": str(exc)}
-    return {"available": True, **copy.deepcopy(data["meta"])}
+    meta = schema.metadata_of(data)
+    meta.setdefault("generated_at_utc", meta.get("generated_at"))
+    return {"available": True, **copy.deepcopy(meta)}
+
+
+def freshness() -> dict:
+    """What the UI needs to label data honestly: the state, the two required
+    timestamps, and where the snapshot came from."""
+    from dashboard import snapshot_source
+    from operational import cloud_snapshot_schema as schema
+    if snapshot_source.remote_enabled():
+        st = snapshot_source.current()
+        return {"state": st.freshness, "data_as_of": st.data_as_of, "last_updated": st.generated_at,
+                "source": st.source, "fetch_status": st.fetch_status, "last_error": st.last_error,
+                "age_hours": st.age_hours, "components": (schema.metadata_of(st.data).get("freshness")
+                                                          if st.data else None)}
+    meta = snapshot_meta()
+    as_of = meta.get("data_as_of") or meta.get("newest_real_dk_capture_utc")
+    return {"state": schema.classify_freshness(as_of) if meta.get("available") else schema.UNAVAILABLE,
+            "data_as_of": as_of, "last_updated": meta.get("generated_at"), "source": "BUNDLED",
+            "fetch_status": "NOT_ATTEMPTED", "last_error": None,
+            "age_hours": schema.age_hours(as_of), "components": meta.get("freshness")}
 
 
 # ---- building / verifying (local only; imports the heavy stack lazily)

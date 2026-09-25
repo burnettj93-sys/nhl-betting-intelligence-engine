@@ -14,21 +14,46 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from operational import prospective_ledger as pl
+from operational import runtime_mode
 
 st.title("Bet / Observation Ledger")
 comp.render_model_status_header()
 
-if not pl.DB_PATH.exists():
-    comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES",
-                             "No prospective observations have been recorded yet. The ledger database is "
-                             "created automatically the first time a prediction is recorded.")
-    st.stop()
+if runtime_mode.is_community_cloud():
+    # Community Cloud has no ledger database: show the (capped) ledger view the local
+    # engine published in the snapshot.
+    try:
+        _ledger = cloud_snapshot.ledger_section()
+    except cloud_snapshot.SnapshotUnavailable as _exc:
+        st.warning(f"The ledger is not available in the snapshot currently being served ({_exc}).")
+        st.stop()
+    summary, op_summary = _ledger["summary"], _ledger["operational"]
 
-conn = pl.open_for_dashboard(pl.DB_PATH)
-summary = pl.summary_metrics(conn)
-op_summary = pl.operational_summary(conn)
+    def _rows(record_type):
+        return _ledger["rows"].get(record_type, [])
+
+    def _cohort(prop):
+        return _ledger.get("shadow_cohorts", {}).get(prop, {"n": 0})
+
+    st.caption(f"Showing up to {_ledger['row_cap_per_type']} most recent rows per record type (snapshot view).")
+else:
+    if not pl.DB_PATH.exists():
+        comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES",
+                                 "No prospective observations have been recorded yet. The ledger database is "
+                                 "created automatically the first time a prediction is recorded.")
+        st.stop()
+    conn = pl.open_for_dashboard(pl.DB_PATH)
+    summary = pl.summary_metrics(conn)
+    op_summary = pl.operational_summary(conn)
+
+    def _rows(record_type):
+        return pl.query_observations(conn, record_type=record_type)
+
+    def _cohort(prop):
+        return pl.raw_vs_adjusted_summary(conn, prop)
 
 st.markdown("#### Prospective Recording Status")
 o1, o2, o3 = st.columns(3)
@@ -52,7 +77,7 @@ with tab_real:
         c1, c2 = st.columns(2)
         c1.metric("Real bets recorded", s["n"])
         c2.metric("Total profit/loss", f"{s['total_profit_loss']:.2f}" if s["total_profit_loss"] is not None else "—")
-        rows = pl.query_observations(conn, record_type="REAL_BET")
+        rows = _rows("REAL_BET")
         st.dataframe(rows, width='stretch')
 
 with tab_model:
@@ -60,7 +85,7 @@ with tab_model:
     c1, c2 = st.columns(2)
     c1.metric("Observations", s["n"])
     c2.metric("With known outcome", s["n_with_outcome"])
-    rows = pl.query_observations(conn, record_type="MODEL_OBSERVATION")
+    rows = _rows("MODEL_OBSERVATION")
     if rows:
         st.dataframe(rows, width='stretch')
     else:
@@ -71,10 +96,10 @@ with tab_shadow:
     c1, c2 = st.columns(2)
     c1.metric("Shadow observations", s["n"])
     c2.metric("With known outcome", s["n_with_outcome"])
-    rows = pl.query_observations(conn, record_type="SHADOW_POLICY_OBSERVATION")
+    rows = _rows("SHADOW_POLICY_OBSERVATION")
     if rows:
         for prop in ("GOALS", "POINTS"):
-            cohort = pl.raw_vs_adjusted_summary(conn, prop)
+            cohort = _cohort(prop)
             if cohort["n"]:
                 st.markdown(f"**{prop}** — n={cohort['n']}, with outcome={cohort['n_with_outcome']}")
                 if cohort.get("raw_brier") is not None:
@@ -86,7 +111,7 @@ with tab_shadow:
 with tab_hist:
     s = summary["HISTORICAL_RESEARCH"]
     st.metric("Historical research examples", s["n"])
-    rows = pl.query_observations(conn, record_type="HISTORICAL_RESEARCH")
+    rows = _rows("HISTORICAL_RESEARCH")
     if rows:
         st.dataframe(rows, width='stretch')
     else:

@@ -19,10 +19,12 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from operational import challenger_registry as cr
 from operational import daily_model_review as dmr
 from operational import prospective_ledger as pl
+from operational import runtime_mode
 
 st.title("Model Learning / Health")
 comp.render_model_status_header()
@@ -40,8 +42,15 @@ st.caption("Prospective self-audit: real settled predictions only. Never mutates
 # itself now returns an honest NO_DATA/INSUFFICIENT_SAMPLE engine_status
 # (with incomplete=True) whenever there isn't enough real settled data,
 # so there is no longer a separate case to special-case here.
-conn = pl.open_for_dashboard()
-result = dmr.run_daily_review(conn)
+if runtime_mode.is_community_cloud():
+    try:
+        result = cloud_snapshot.model_learning_result()
+    except cloud_snapshot.SnapshotUnavailable as _exc:
+        st.warning(f"Model learning results are not available in the snapshot currently being served ({_exc}).")
+        st.stop()
+else:
+    conn = pl.open_for_dashboard()
+    result = dmr.run_daily_review(conn)
 
 status = result["engine_status"]
 comp.render_status_banner(status, f"ENGINE STATUS: {status}", f"Recommendation: {result.get('recommendation', 'N/A')}")

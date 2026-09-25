@@ -63,27 +63,40 @@ def ensure_game_edge_parlay_paper_bets_created(conn) -> list[dict]:
     return results
 
 
+def read_dashboard_state(conn, *, max_bets: int | None = None) -> dict:
+    """PURE READ of every track's summary/breakdowns/bets/answer from an open
+    bankroll connection -- creates nothing. Shared by the page (LOCAL, after
+    ensure_*) and the Cloud snapshot builder (which must never write).
+    `max_bets` keeps only the most recent N bets per track (snapshot size)."""
+    out = {}
+    for track in pb.TRACKS:
+        bets = pb.query_paper_bets(conn, track=track)
+        if max_bets is not None:
+            bets = bets[-max_bets:]
+        out[track] = {
+            "summary": pb.bankroll_summary(conn, track),
+            "breakdowns": pb.performance_breakdowns(conn, track),
+            "bets": bets,
+            "answer": pb.answer_theoretical_bankroll_question(conn, track),
+        }
+    return out
+
+
 def full_dashboard_state() -> dict:
     """One call for the Paper Performance page: ensures today's
     idempotent bet creation has run for both tracks, then returns each
     track's real summary + breakdowns, computed only from stored data
     (Part 49).
 
-    In COMMUNITY_CLOUD_MODE this is strictly READ-ONLY: no bets are
-    created from a page render and no database file is created or written."""
+    In COMMUNITY_CLOUD_MODE this is strictly READ-ONLY and never touches a
+    local database: it returns the `performance` section of the current
+    snapshot (raises cloud_snapshot.SnapshotUnavailable if the snapshot in
+    use does not carry one -- the page says so honestly)."""
     if runtime_mode.is_community_cloud():
-        conn = pb.open_for_dashboard()
-    else:
-        conn = pb.init_db()
-        ensure_demo_paper_bets_created(conn)
-        ensure_real_market_paper_bets_created(conn)
-        ensure_game_edge_parlay_paper_bets_created(conn)
-    return {
-        track: {
-            "summary": pb.bankroll_summary(conn, track),
-            "breakdowns": pb.performance_breakdowns(conn, track),
-            "bets": pb.query_paper_bets(conn, track=track),
-            "answer": pb.answer_theoretical_bankroll_question(conn, track),
-        }
-        for track in pb.TRACKS
-    }
+        from dashboard import cloud_snapshot
+        return cloud_snapshot.performance_state()
+    conn = pb.init_db()
+    ensure_demo_paper_bets_created(conn)
+    ensure_real_market_paper_bets_created(conn)
+    ensure_game_edge_parlay_paper_bets_created(conn)
+    return read_dashboard_state(conn)

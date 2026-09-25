@@ -145,6 +145,10 @@ def real_prop_observation_to_opportunity_shape(row: dict) -> dict | None:
         "source": LIVE_SOURCE_LABEL if row.get("prospective_status") == "BET"
         else f"{REAL_MARKET_SOURCE_LABEL_PREFIX} — {row.get('prospective_status') or 'UNKNOWN'}",
         "is_demo": False,
+        # freshness truth (presentation only): when the recommendation was recorded, when the price was
+        # captured, and when the game starts
+        "created_at_utc": row.get("created_at_utc"), "odds_captured_at_utc": row.get("odds_captured_at_utc"),
+        "event_start_utc": row.get("event_start_utc"),
     }
 
 

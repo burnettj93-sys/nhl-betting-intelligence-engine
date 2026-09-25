@@ -43,6 +43,16 @@ def peak_rss_mb() -> float:
     return round(peak / (1024 * 1024) if sys.platform == "darwin" else peak / 1024, 1)
 
 
+def _snapshot_diagnostics() -> dict:
+    """Snapshot source / remote fetch status / last success / generated_at / age / schema /
+    content hash (Cloud live-data sprint, Part 24). Never includes a token or a URL query."""
+    from dashboard import snapshot_source
+    try:
+        return snapshot_source.diagnostics()
+    except Exception as exc:  # noqa: BLE001 -- diagnostics must never break the page
+        return {"snapshot_source": "ERROR", "last_error": f"{type(exc).__name__}"}
+
+
 def process_diagnostics() -> dict:
     import streamlit as st
     from operational import runtime_mode
@@ -56,4 +66,5 @@ def process_diagnostics() -> dict:
         "libraries_loaded": {name: name in loaded for name in _LIBRARIES},
         "research_modules_loaded": sum(1 for m in loaded if m == "research" or m.startswith("research.")),
         "model_stack_loaded": "research.context_overlay.prediction_stack" in loaded,
+        "snapshot": _snapshot_diagnostics(),
     }

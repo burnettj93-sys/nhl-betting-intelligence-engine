@@ -19,6 +19,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from dashboard import formatting as fmt
 from dashboard import paper_performance_view as ppv
@@ -29,7 +30,11 @@ comp.render_model_status_header()
 st.caption("Theoretical bankroll tracking: what would have happened if this engine's own BET "
            "recommendations had each received a flat $10 paper wager. Never a real-money bet.")
 
-state = ppv.full_dashboard_state()
+try:
+    state = ppv.full_dashboard_state()
+except cloud_snapshot.SnapshotUnavailable as _exc:
+    st.warning(f"Paper performance is not available in the snapshot currently being served ({_exc}).")
+    st.stop()
 
 TRACK_LABEL = {"REAL_MARKET_PAPER": "Real-Market Paper (real DraftKings prices)",
                "DEMO_PAPER": "Demo Paper (simulated prices)",

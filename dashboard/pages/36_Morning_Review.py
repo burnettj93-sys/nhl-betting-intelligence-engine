@@ -20,10 +20,17 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import auth
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from dashboard import formatting as fmt
 from operational import daily_postmortem as dpm
 from operational import paper_bankroll as pb
+from operational import runtime_mode
+
+# Community Cloud: an operational surface, ADMIN-only (server-side; the nav omission is only UX).
+if runtime_mode.is_community_cloud():
+    auth.require_admin()
 
 st.title("Morning Review")
 comp.render_model_status_header()
@@ -32,8 +39,18 @@ st.caption("Answers every morning: what worked, what didn't, why, whether it's n
            "production model, threshold, or decision policy -- see PRIVACY_AND_COMPLIANCE-style "
            "boundary in this module's own docstring.")
 
-conn = pb.open_for_dashboard()
-report = dpm.run_daily_postmortem(conn)
+if runtime_mode.is_community_cloud():
+    # Community Cloud never computes a post-mortem: it displays the one the local
+    # engine produced and published (Cloud live-data sprint).
+    try:
+        report = cloud_snapshot.morning_review_report()
+    except cloud_snapshot.SnapshotUnavailable as _exc:
+        st.warning(f"The Morning Review is not available in the snapshot currently being served ({_exc}).")
+        st.stop()
+    st.caption(f"Report computed by the local engine at {report.get('generated_at_utc', 'an unknown time')}.")
+else:
+    conn = pb.open_for_dashboard()
+    report = dpm.run_daily_postmortem(conn)
 
 st.markdown("## Yesterday's Scoreboard")
 if report["scoreboard"]["tracks"]:

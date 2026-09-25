@@ -47,6 +47,49 @@ def logout() -> None:
 
 
 SETUP_CODE_ENV = "NHL_ENGINE_ADMIN_SETUP_CODE"
+TRUST_PLATFORM_ENV = "NHL_ENGINE_TRUST_PLATFORM_VIEWER"
+ADMIN_EMAILS_ENV = "NHL_ENGINE_ADMIN_EMAILS"
+
+
+def _setting(name: str) -> str | None:
+    value = (os.environ.get(name) or "").strip()
+    if value:
+        return value
+    try:
+        return (st.secrets.get(name) or "").strip() or None
+    except Exception:
+        return None
+
+
+def platform_identity_trusted() -> bool:
+    """COMMUNITY_CLOUD_MODE only, and only when the owner has EXPLICITLY declared (secret
+    NHL_ENGINE_TRUST_PLATFORM_VIEWER=ON) that the Community Cloud app is restricted to an invited
+    viewer list in its Sharing settings. Without that declaration no platform identity is
+    trusted -- we cannot verify from inside the app that the platform gate is enabled, and a
+    public app must never mint a role from an unverifiable header."""
+    return runtime_mode.is_community_cloud() and (_setting(TRUST_PLATFORM_ENV) or "").upper() in ("ON", "1", "TRUE", "YES")
+
+
+def platform_viewer_email() -> str | None:
+    """The viewer email Streamlit reports for a signed-in Community Cloud viewer (None when the
+    platform provides none, e.g. local runs or a public app)."""
+    for attr in ("user", "experimental_user"):
+        try:
+            proxy = getattr(st, attr)
+            email = proxy.get("email") if hasattr(proxy, "get") else getattr(proxy, "email", None)
+        except Exception:
+            continue
+        if email:
+            return str(email).strip().lower()
+    return None
+
+
+def platform_role_for(email: str) -> str:
+    """ADMIN only for an address listed in NHL_ENGINE_ADMIN_EMAILS (comma-separated secret);
+    every other invited viewer is a USER. No list configured -> nobody is ADMIN via the platform
+    (the setup-code bootstrap remains the only way to obtain ADMIN)."""
+    admins = {e.strip().lower() for e in (_setting(ADMIN_EMAILS_ENV) or "").split(",") if e.strip()}
+    return "ADMIN" if email.strip().lower() in admins else "USER"
 
 
 def _configured_setup_code() -> str | None:
@@ -148,6 +191,15 @@ def render_auth_gate() -> dict | None:
     user = current_user()
     if user is not None:
         return user
+
+    # Community Cloud: the platform's private-viewer gate is the primary USER access control
+    # (accounts on Cloud's ephemeral filesystem cannot be relied on). Mode-specific and opt-in;
+    # LOCAL/PRODUCTION never reach this branch.
+    if platform_identity_trusted():
+        email = platform_viewer_email()
+        if email:
+            _set_session(email, platform_role_for(email))
+            return current_user()
 
     conn = auth_store.get_connection()
     no_users_yet = len(auth_store.list_users(conn)) == 0

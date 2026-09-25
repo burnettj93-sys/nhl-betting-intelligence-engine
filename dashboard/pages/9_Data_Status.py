@@ -12,9 +12,16 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
+from dashboard import auth
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from dashboard import data_status_view as dv
 from operational import ingestion_health
+from operational import runtime_mode
+
+# Community Cloud: an operational surface, ADMIN-only (server-side; the nav omission is only UX).
+if runtime_mode.is_community_cloud():
+    auth.require_admin()
 
 st.title("Data Status")
 comp.render_model_status_header()
@@ -30,7 +37,18 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-cache = dv.load_readiness_cache()
+if runtime_mode.is_community_cloud():
+    # Community Cloud has no caches of its own: this is the LOCAL ENGINE's data status as
+    # published in the snapshot (see the banner for how current that is).
+    try:
+        _ds = cloud_snapshot.data_status_section()
+    except cloud_snapshot.SnapshotUnavailable as _exc:
+        st.warning(f"Data status is not available in the snapshot currently being served ({_exc}).")
+        st.stop()
+    cache = _ds.get("readiness_cache")
+else:
+    _ds = None
+    cache = dv.load_readiness_cache()
 if cache is None:
     st.info("No sync has been run yet. Run `python3 sync_daily.py` to populate this page.")
     st.stop()
@@ -82,7 +100,7 @@ st.caption("P0.1 (2026-09-24 hardening block): last attempt, last success, statu
            "scheduled component -- read from a local cache only, same no-network-call rule as the "
            "rest of this page. A component with no row here has never run since this cache was last "
            "cleared, not necessarily an error.")
-health = ingestion_health.load_health()
+health = _ds.get("ingestion_health") if _ds is not None else ingestion_health.load_health()
 if not health:
     st.caption("No scheduled job has recorded a run yet.")
 else:
