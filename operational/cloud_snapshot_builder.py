@@ -210,8 +210,14 @@ def _health() -> dict:
         from operational import moneyline_pregame, prop_discovery
         ops["next_decision_cluster"] = moneyline_pregame.next_decision_cluster()
         obs = moneyline_pregame.live_observed()
-        ops["moneyline_t35"] = {"architecture_ready": True, "live_observed": obs["live_observed"], "status": obs["status"],
-                                "last_cluster": moneyline_pregame.last_cluster_outcome()}
+        from operational import first_live_certification as flc
+        pre = flc.preflight()
+        ops["moneyline_t35"] = {"architecture_ready": pre["architecture_ready"], "live_observed": obs["live_observed"],
+                                "live_certified": obs.get("live_certified", False), "status": pre["state"],
+                                "last_cluster": moneyline_pregame.last_cluster_outcome(),
+                                "scheduler": {k: pre["scheduler"].get(k) for k in ("loaded", "branch", "commit", "on_master")},
+                                "credits_remaining": pre["quota"].get("credits_remaining"), "quota_sufficient": pre["quota"].get("sufficient"),
+                                "cloud_publisher_enabled": pre["cloud_publisher_enabled"], "power_risk": pre["power_risk"]}
         ps = prop_discovery.status()
         ops["prop_discovery"] = {"mode": ps["mode"], "market_states": ps["market_states"], "daily_budget": ps["daily_budget"]}
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never fail the snapshot

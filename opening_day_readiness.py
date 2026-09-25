@@ -426,7 +426,13 @@ def build_component_states(checks: dict) -> dict:
                      f"{', '.join(missing)} (decision-window coverage now {eligible}%; docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md)")
     else:
         ml_state = "READY"
-        ml_detail = (f"pregame T-35 cluster pulls armed; decision-window coverage {eligible}% of upcoming games; "
+        try:
+            from operational import moneyline_pregame as _mp
+            _certified = _mp.live_observed().get("live_certified")
+        except Exception:  # noqa: BLE001
+            _certified = False
+        ml_detail = ((f"live-certified; " if _certified else "ARCHITECTURE READY — AWAITING FIRST LIVE T-35 CERTIFICATION (not yet proven by a real cluster); ")
+                     + f"pregame T-35 cluster pulls armed; decision-window coverage {eligible}% of upcoming games; "
                      f"{rr['real_moneyline_recommendations_recorded']} recommendation(s) recorded so far")
     out["MONEYLINE RECOMMENDATION PIPELINE"] = _c(ml_state, ml_detail)
     out["MONEYLINE_DECISION_COVERAGE"] = _c(
@@ -457,16 +463,27 @@ def build_component_states(checks: dict) -> dict:
     try:
         from operational import moneyline_pregame as mp2
         obs = mp2.live_observed()
-        arch_ok = bool(pregame_armed and certified and quota_gate.get("allow") and eligible is not None and eligible >= 95)
+        from operational import first_live_certification as _flc
+        _sc = _flc.scheduler_code()
+        arch_ok = bool(pregame_armed and certified and quota_gate.get("allow") and eligible is not None and eligible >= 95
+                       and _sc.get("on_master") is not False)
         out["MONEYLINE_T35_ARCHITECTURE"] = _c("READY" if arch_ok else "PARTIAL",
                                                f"job loaded={pregame_armed}, end-to-end certified={certified}, quota sufficient="
-                                               f"{quota_gate.get('allow')}, decision-window coverage {eligible}%")
+                                               f"{quota_gate.get('allow')}, decision-window coverage {eligible}%, scheduler code "
+                                               f"{_sc.get('branch')}@{_sc.get('commit')} on clean master={_sc.get('on_master')}")
         last = mp2.last_cluster_outcome()
         out["MONEYLINE_T35_LIVE_OBSERVED"] = _c(
-            "READY" if obs["live_observed"] else "WAITING_FOR_FIRST_REAL_CLUSTER",
-            (f"LIVE_OBSERVED: first complete cluster {obs.get('first_complete_cluster')}" if obs["live_observed"] else
-             "ARCHITECTURE_READY but not yet LIVE_OBSERVED: no real provider-listed cluster has completed pull -> store -> decide -> publish"
+            "READY" if obs["live_observed"] else ("FAILED" if obs["status"] == "FAILED" else "WAITING_FOR_FIRST_REAL_CLUSTER"),
+            (f"LIVE_OBSERVED: a real provider-listed cluster fired and produced real provider data ({obs.get('observed_clusters')} cluster(s))"
+             if obs["live_observed"] else
+             "ARCHITECTURE_READY but not yet LIVE_OBSERVED: no real provider-listed cluster has fired"
              + (f"; last cluster {last['cluster_id']}: {last['outcome']}" if last else "")))
+        out["MONEYLINE_T35_LIVE_CERTIFIED"] = _c(
+            "READY" if obs.get("live_certified") else ("FAILED" if obs["status"] == "FAILED" else "WAITING_FOR_FIRST_REAL_CLUSTER"),
+            ("LIVE_CERTIFIED: timing valid + quote stored + decision evaluated + cloud published for a real cluster (see first_live_certification)"
+             if obs.get("live_certified") else
+             f"not certified ({obs['status']}); needs one real cluster with timing valid, credit spent, quote stored, decision evaluated at T-30, "
+             "immutable observation recorded and cloud snapshot published. A bare HTTP 200 never certifies."))
     except Exception as exc:  # noqa: BLE001
         out["MONEYLINE_T35_ARCHITECTURE"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
         out["MONEYLINE_T35_LIVE_OBSERVED"] = _c("FAILED", "audit unreadable")
@@ -503,6 +520,21 @@ def build_component_states(checks: dict) -> dict:
                                    + f" (calendar-month day {rs['reset_day']} is only an assumption)")
     except Exception as exc:  # noqa: BLE001
         out["ODDS_RESET_DAY"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+    try:
+        from operational import keep_awake
+        pr = keep_awake.power_risk()
+        out["MACHINE_POWER"] = _c({"LOW": "READY", "MEDIUM": "READY_WITH_WARNINGS"}.get(pr["risk"], "PARTIAL"),
+                                  f"sleep risk {pr['risk']}: {pr['detail']}. {pr['mitigation']}. Optional owner wake schedule: "
+                                  "python3 -m operational.keep_awake --plan")
+    except Exception as exc:  # noqa: BLE001
+        out["MACHINE_POWER"] = _c("PARTIAL", f"could not read power settings: {type(exc).__name__}")
+    try:
+        from operational import cloud_preflight
+        app = cloud_preflight.check_deployed_app()
+        out["CLOUD_DEPLOYMENT"] = _c("READY" if app["state"] == "PASS" else "OWNER_ACTION_REQUIRED" if app["state"] == "OWNER_ACTION_REQUIRED" else "FAILED",
+                                     app["detail"])
+    except Exception as exc:  # noqa: BLE001
+        out["CLOUD_DEPLOYMENT"] = _c("PARTIAL", f"deployment check failed: {type(exc).__name__}")
     out["CLOUD_OWNER_CONFIGURATION"] = _c(
         "OWNER_ACTION_REQUIRED",
         "; ".join(f"{k}: {v}" for k, v in cloud_owner_configuration().items()))

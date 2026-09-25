@@ -8,6 +8,18 @@ python3 opening_day_readiness.py        # per-component states (READY / WAITING_
 
 Read the `OVERALL` line and the table under it. `WAITING_FOR_LIVE_MARKET`, `WAIT_ONLY` and `NO_REAL_SAMPLE_YET` are expected on day one. `PARTIAL`, `STALE` or `FAILED` need attention.
 
+## Owner quick card — first real T-35 (Tuesday 2026-09-29, first listed game 21:00Z = 17:00 EDT)
+
+Times below are computed from the current NHL schedule (`python3 -m operational.first_live_certification` prints the live values; if the schedule changes, trust that command, not this card).
+
+| EDT | Do |
+|---|---|
+| **15:45** | Mac plugged in, lid **open**, logged in. (The job starts a self-ending keep-awake at ≈ 15:50 — it cannot wake a sleeping Mac.) Optional but safest: `python3 -m operational.keep_awake --plan` prints `sudo pmset schedule wake ...` lines you may run yourself. |
+| **≈ 16:15** | `python3 -m operational.first_live_certification` → `PRE-FLIGHT`: scheduler on clean **master**, quota sufficient, publisher enabled, next cluster 2026-09-29T21:00, provider LISTED, overall `WAITING_FOR_FIRST_REAL_CLUSTER`. Also Diagnostics → *Moneyline T-35 live status*. |
+| **≈ 16:25** | T-35 pull expected (one request, 1 credit). |
+| **≈ 16:30** | T-30 decision. |
+| **≈ 16:35** | `python3 -m operational.first_live_certification` again → `LIVE_CERTIFIED` (PASS / WAIT is enough), or the exact failed gate. |
+
 ## Night before
 
 | | Check |

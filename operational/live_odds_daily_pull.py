@@ -669,7 +669,15 @@ def _main() -> None:
         # at ~T-35 so the EXISTING T-30 decision policy finds a quote in its 10-minute window. Fired every
         # couple of minutes by launchd; almost every firing is an instant no-op (no network, no credit).
         from operational import moneyline_pregame
+        keep_awake_result = None
+        try:                               # hold an idle-sleep assertion inside the critical window (self-ending; see keep_awake.py)
+            from operational import keep_awake
+            keep_awake_result = keep_awake.ensure_holding()
+        except Exception as exc:  # noqa: BLE001 -- never affects the pull
+            keep_awake_result = {"action": "ERROR", "reason": type(exc).__name__}
         result = moneyline_pregame.run_pregame()
+        if keep_awake_result and keep_awake_result.get("action") not in ("NONE", None):
+            result["keep_awake"] = keep_awake_result
         _moneyline_downstream(result)
     elif args.mode == "moneyline":
         result = run_moneyline_snapshot(args.label)

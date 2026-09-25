@@ -167,6 +167,60 @@ def check_remote_snapshot() -> list[dict]:
     return rows
 
 
+APP_URL_ENV = "NHL_ENGINE_STREAMLIT_URL"
+
+
+def app_url() -> str | None:
+    """The deployed app URL, only if the owner configured it (env or .env). Never guessed or derived."""
+    value = (os.environ.get(APP_URL_ENV) or "").strip()
+    if not value:
+        env_file = REPO_ROOT / ".env"
+        if env_file.exists() and not os.environ.get("NHL_ENGINE_UNDER_TEST"):
+            for line in env_file.read_text().splitlines():
+                key, sep, val = line.strip().partition("=")
+                if sep and key.strip() == APP_URL_ENV:
+                    value = val.strip().strip("\"'")
+    return value or None
+
+
+def check_deployed_app(url: str | None = None, fetch=None) -> dict:
+    """Read-only smoke test of the DEPLOYED app's reachability (two GETs, no login, no privacy weakening):
+    Streamlit's own health endpoint, and the landing page (a private app answers with a redirect / auth page to
+    an anonymous client, a public one with the app itself). Authenticated checks (source REMOTE, schema, memory,
+    ADMIN vs USER) can only be done by a signed-in allowed viewer -- OWNER_SMOKE_TEST_REQUIRED."""
+    url = url or app_url()
+    if not url:
+        return {"state": OWNER, "detail": f"provide the deployed app URL: set {APP_URL_ENV}=https://<your-app>.streamlit.app in .env "
+                                          "(not discoverable from the repo, GitHub metadata or the Streamlit webhook)"}
+    if not url.startswith("https://"):
+        return {"state": FAIL, "detail": "app URL must be https://"}
+    if fetch is None:
+        import urllib.request
+
+        def fetch(u):
+            class _NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *a, **k):
+                    return None
+            opener = urllib.request.build_opener(_NoRedirect)
+            try:
+                with opener.open(urllib.request.Request(u, headers={"User-Agent": "nhl-engine-preflight/1"}), timeout=15) as r:
+                    return r.status, r.read(2000).decode("utf-8", "replace"), dict(r.headers)
+            except urllib.error.HTTPError as e:
+                return e.code, "", dict(e.headers or {})
+    try:
+        h_status, h_body, _ = fetch(url.rstrip("/") + "/_stcore/health")
+        p_status, _, headers = fetch(url)
+    except Exception as exc:  # noqa: BLE001
+        return {"state": FAIL, "detail": f"unreachable: {type(exc).__name__}"}
+    private = p_status in (301, 302, 303, 307, 308, 401, 403)
+    healthy = h_status == 200 and h_body.strip().lower() == "ok"
+    return {"state": PASS if (healthy or private) else FAIL,
+            "detail": f"health endpoint {h_status} ({'ok' if healthy else 'not ok'}); landing page {p_status} "
+                      f"({'redirects anonymous visitors to sign-in: private viewer mode is ACTIVE' if private else 'served to an anonymous client: the app is PUBLIC'})",
+            "private_viewer_mode": private, "healthy": healthy,
+            "next": "OWNER_SMOKE_TEST_REQUIRED: signed in as an allowed viewer confirm banner SNAPSHOT CURRENT, Diagnostics source REMOTE / schema 2, and that a non-admin cannot open Diagnostics"}
+
+
 def run(offline: bool = False) -> dict:
     rows = []
     for fn in (check_entrypoint_and_requirements, check_mode_and_auth, check_page_registry, check_render_probe):
@@ -179,6 +233,9 @@ def run(offline: bool = False) -> dict:
             rows += check_remote_snapshot()
         except Exception as exc:  # noqa: BLE001
             rows.append(_row("remote snapshot fetch", FAIL, f"{type(exc).__name__}: {str(exc)[:200]}"))
+    if not offline:
+        app = check_deployed_app()
+        rows.append(_row("deployed app reachable (anonymous, read-only)", app["state"], app["detail"]))
     rows.append(_row("deployed app: loads, no resource-limit error, snapshot REMOTE", OWNER,
                      "requires opening the deployed URL as an allowed viewer (privacy is not weakened for testing)"))
     failed = [r for r in rows if r["status"] == FAIL]

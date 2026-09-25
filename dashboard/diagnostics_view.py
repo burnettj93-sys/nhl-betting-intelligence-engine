@@ -74,7 +74,12 @@ def _t35_row(health: dict) -> dict:
     t35 = ((health.get("operations") or {}).get("moneyline_t35")) or {}
     last = t35.get("last_cluster") or {}
     state = t35.get("status") or "UNKNOWN"
-    detail = ("ARCHITECTURE_READY=yes; LIVE_OBSERVED=" + ("yes" if t35.get("live_observed") else "no")
+    sc = t35.get("scheduler") or {}
+    detail = (f"scheduler loaded={sc.get('loaded')} code {sc.get('branch')}@{sc.get('commit')} (clean master={sc.get('on_master')}); "
+              f"credits {t35.get('credits_remaining')} (sufficient={t35.get('quota_sufficient')}); publisher enabled={t35.get('cloud_publisher_enabled')}; "
+              f"sleep risk {t35.get('power_risk')}; "
+              f"ARCHITECTURE_READY={'yes' if t35.get('architecture_ready') else 'no'}; LIVE_OBSERVED=" + ("yes" if t35.get("live_observed") else "no")
+              + "; LIVE_CERTIFIED=" + ("yes" if t35.get("live_certified") else "no")
               + (f"; last cluster {last.get('cluster_id')}: {last.get('outcome')} (listed={last.get('provider_listed')}, "
                  f"credits={last.get('credits_spent')}, in window={last.get('in_decision_window')}, publish={last.get('cloud_publish')})"
                  if last else "; no cluster audited yet"))
