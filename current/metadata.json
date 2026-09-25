@@ -1,9 +1,9 @@
 {
- "bytes": 680785,
- "content_hash": "a9d78afddaacddafba34173230285cfa87a764caf42ffee0bf05ba0211ace352",
+ "bytes": 680789,
+ "content_hash": "a08fbcbae739799dba0e558c246afbb0781f0f036af6b2a3fa641dcd50b70b7c",
  "data_as_of": "2026-09-25T17:00:05Z",
- "generated_at": "2026-09-25T17:41:55.024268+00:00",
- "publication_seq": 3,
+ "generated_at": "2026-09-25T17:45:12.139574+00:00",
+ "publication_seq": 4,
  "schema_version": 2,
  "sections_omitted": []
 }
