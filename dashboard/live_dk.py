@@ -92,13 +92,22 @@ def _iter_archived_h2h_markets():
                 loaded = archive.load_archived(path)
             except (OSError, ValueError):
                 continue
-            event = loaded.get("response")
-            if not isinstance(event, dict):
-                continue
-            result = pa.parse_the_odds_api_h2h_market(event)
-            if result["status"] != "PARSED":
-                continue
-            yield event.get("id"), result["market"], loaded.get("meta", {}).get("retrieved_at_utc")
+            response = loaded.get("response")
+            # Cloud live-data sprint (2026-09-25): the scheduled moneyline pulls
+            # (operational/live_odds_daily_pull.py --mode=moneyline) archive a
+            # SPORT-LEVEL response -- a LIST of events -- which this reader used to
+            # skip (only per-event dicts were read), so "Live Model Edges" stayed
+            # frozen at the last per-event probe (2026-09-15) even while fresh
+            # captures piled up. Both shapes are now read; anything that does not
+            # parse as a verified MONEYLINE market still falls out unchanged.
+            events = response if isinstance(response, list) else [response]
+            for event in events:
+                if not isinstance(event, dict):
+                    continue
+                result = pa.parse_the_odds_api_h2h_market(event)
+                if result["status"] != "PARSED":
+                    continue
+                yield event.get("id"), result["market"], loaded.get("meta", {}).get("retrieved_at_utc")
 
 
 _latest_markets_memo: tuple | None = None  # (signature, result) -- one entry, never grows

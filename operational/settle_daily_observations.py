@@ -191,6 +191,11 @@ def main() -> None:
     # error, never merely because there was nothing PENDING to settle yet.
     health_status = "FAILED" if summary["errors"] else "SUCCESS"
     ingestion_health.record_run("settlement", {**summary, "status": health_status})
+    # Cloud live-data sprint (2026-09-25): settlement changed the ledger/bankroll ->
+    # publish (opt-in, downstream, never raises, only when the run did not fail).
+    if health_status == "SUCCESS":
+        from operational import cloud_publish_hook
+        print("cloud snapshot:", cloud_publish_hook.publish_after("settlement"))
 
 
 if __name__ == "__main__":

@@ -29,6 +29,23 @@ from operational import runtime_mode as rm
 
 REPO = Path(__file__).resolve().parent.parent
 
+
+def setUpModule():
+    """In-process Cloud-mode tests must never fetch the remote snapshot from the network:
+    force the bundled source (the remote reader has its own tests in test_cloud_live_data.py)."""
+    global _saved_source
+    _saved_source = os.environ.get("NHL_ENGINE_SNAPSHOT_SOURCE")
+    os.environ["NHL_ENGINE_SNAPSHOT_SOURCE"] = "BUNDLED"
+    from dashboard import snapshot_source
+    snapshot_source.reset()
+
+
+def tearDownModule():
+    if _saved_source is None:
+        os.environ.pop("NHL_ENGINE_SNAPSHOT_SOURCE", None)
+    else:
+        os.environ["NHL_ENGINE_SNAPSHOT_SOURCE"] = _saved_source
+
 # Titles that existed in the nav BEFORE this sprint (36 pages) -- LOCAL_MODE
 # must keep registering every one of them.
 ORIGINAL_36 = {
@@ -316,7 +333,7 @@ print("RESULT " + json.dumps({
     "critical_unchanged": {k: before[k] == digest(v) for k, v in critical.items()},
     "operational_dir_unchanged": snapshot_dir_before == sorted(os.listdir(f"{REPO}/operational")),
     "max_session_state_bytes": max(sessions.values()),
-    "today_banner": "COMMUNITY CLOUD SNAPSHOT" in today_text,
+    "today_banner": 'data-testid="cloud-snapshot-banner"' in today_text and "DATA AS OF" in today_text,
 }))
 '''
 
@@ -327,6 +344,7 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         env = {k: v for k, v in os.environ.items() if k != rm.ENV_VAR}
+        env["NHL_ENGINE_SNAPSHOT_SOURCE"] = "BUNDLED"    # this probe asserts NO network at all
         proc = subprocess.run(
             [sys.executable, "-c", _RENDER_PROBE, str(REPO), json.dumps(list(FORBIDDEN_MODULES))],
             capture_output=True, text=True, timeout=600, env=env, cwd=str(REPO))
@@ -397,32 +415,39 @@ class TestFreshnessHonesty(unittest.TestCase):
             self.assertIn(sh.database_health()["status"], ("OK", "ERROR"))
 
 
-class TestPaperPerformanceReadOnlyInCloud(unittest.TestCase):
-    def test_cloud_mode_creates_no_file_and_no_bets_when_the_bankroll_db_is_absent(self):
+class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
+    def test_cloud_mode_returns_the_published_performance_section_and_touches_no_database(self):
         from dashboard import paper_performance_view as ppv
         from operational import paper_bankroll as pb
-        with tempfile.TemporaryDirectory() as tmp:
-            absent = Path(tmp) / "paper_bankroll.db"
-            with mock.patch.object(pb, "DB_PATH", absent), \
-                 mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
-                state = ppv.full_dashboard_state()
-            self.assertFalse(absent.exists(), "the web process must never create the bankroll DB")
-        for track in pb.TRACKS:
-            self.assertEqual(state[track]["summary"]["wins"] + state[track]["summary"]["losses"], 0)
-            self.assertEqual(state[track]["bets"], [])
+        published = {t: {"summary": {"wins": 1}, "breakdowns": {}, "bets": [], "answer": "x"} for t in pb.TRACKS}
+        with tempfile.TemporaryDirectory() as tmp, \
+             mock.patch.object(pb, "DB_PATH", Path(tmp) / "must_not_be_created.db"), \
+             mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
+             mock.patch.object(cloud_snapshot, "_load", return_value={"schema_version": 2, "performance": published}):
+            state = ppv.full_dashboard_state()
+            self.assertFalse((Path(tmp) / "must_not_be_created.db").exists())
+        self.assertEqual(state, published)
 
-    def test_cloud_mode_leaves_an_existing_bankroll_db_byte_identical(self):
+    def test_a_snapshot_without_a_performance_section_is_reported_not_faked(self):
+        from dashboard import paper_performance_view as ppv
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+            with self.assertRaises(cloud_snapshot.SectionUnavailable):
+                ppv.full_dashboard_state()      # the bundled v1 fallback carries no performance section
+
+    def test_read_dashboard_state_is_a_pure_read_that_never_creates_bets(self):
         import hashlib
         from dashboard import paper_performance_view as ppv
         from operational import paper_bankroll as pb
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "paper_bankroll.db"
+            path = Path(tmp) / "pb.db"
             pb.init_db(path).close()
             before = hashlib.sha256(path.read_bytes()).hexdigest()
-            with mock.patch.object(pb, "DB_PATH", path), \
-                 mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
-                ppv.full_dashboard_state()
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+            state = ppv.read_dashboard_state(conn, max_bets=5)
+            conn.close()
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), before)
+        self.assertEqual(set(state), set(pb.TRACKS))
 
 
 class TestBoundedCachesAndQueries(unittest.TestCase):
@@ -575,7 +600,7 @@ class TestDiagnosticsAdminOnly(unittest.TestCase):
         d = dv.process_diagnostics()
         self.assertEqual(set(d), {"runtime_mode", "rss_mb", "peak_rss_mb", "python_version",
                                   "streamlit_version", "libraries_loaded", "research_modules_loaded",
-                                  "model_stack_loaded"})
+                                  "model_stack_loaded", "snapshot"})
         blob = json.dumps(d).lower()
         for needle in ("api_key", "secret", "token", "password", "/users/"):
             self.assertNotIn(needle, blob)

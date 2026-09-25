@@ -633,6 +633,14 @@ def _main() -> None:
             result["real_sog_orchestrator"] = prop_orchestrator.run_real_sog_recommendations()
             result["real_saves_orchestrator"] = prop_orchestrator.run_real_saves_recommendations()
 
+    # Cloud live-data sprint (2026-09-25): after a REAL refresh, publish the
+    # compact Cloud snapshot IF the owner enabled it (NHL_ENGINE_CLOUD_PUBLISH=ON).
+    # Downstream, opt-in, bounded, never raises, never changes this job's result
+    # beyond attaching its own status (operational/cloud_publish_hook.py).
+    if result.get("ran"):
+        from operational import cloud_publish_hook
+        result["cloud_publish"] = cloud_publish_hook.publish_after(f"live_odds_daily_pull:{args.mode}")
+
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

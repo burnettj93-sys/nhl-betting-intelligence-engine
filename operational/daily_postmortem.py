@@ -404,6 +404,10 @@ def main() -> None:
     # docstring) -- reaching this line at all is SUCCESS for health-
     # tracking purposes; a real failure would have raised before here.
     ingestion_health.record_run("postmortem", {"status": "SUCCESS", "report_path": str(path)})
+    # Cloud live-data sprint (2026-09-25): the Morning Review changed -> publish
+    # (opt-in, downstream, never raises).
+    from operational import cloud_publish_hook
+    print("cloud snapshot:", cloud_publish_hook.publish_after("daily_postmortem"))
 
 
 if __name__ == "__main__":

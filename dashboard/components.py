@@ -18,33 +18,89 @@ RESEARCH_METRIC = "RESEARCH METRIC — NOT CURRENTLY USED BY MODEL"
 NOT_AVAILABLE = "NOT AVAILABLE IN HISTORICAL RESEARCH MODE"
 
 
+_STATE_HEADLINE = {
+    "CURRENT": ("☁️ COMMUNITY CLOUD — LIVE SNAPSHOT (CURRENT)", "ok"),
+    "STALE": ("⚠️ DATA STALE — this snapshot is older than the live window; do not treat it as live", "warn"),
+    "VERY_STALE": ("🛑 DATA VERY STALE — not live betting intelligence", "bad"),
+    "UNAVAILABLE": ("🛑 SNAPSHOT UNAVAILABLE — no usable timestamp; nothing here is verified current", "bad"),
+}
+_TONE = {"ok": ("#1f3d2b", "#2f6a48", "#8fe0b0"), "warn": ("#3a2f12", "#6b5417", "#f0cf6a"),
+         "bad": ("#3d1d1d", "#7a2f2f", "#f0a0a0")}
+
+
+def cloud_banner_model(fr: dict, meta: dict) -> dict:
+    """Pure: everything the banner says, derived only from factual timestamps and
+    fetch state (Cloud live-data sprint, Parts 9/10/22). Testable without Streamlit."""
+    headline, tone = _STATE_HEADLINE.get(fr.get("state"), _STATE_HEADLINE["UNAVAILABLE"])
+    notices = []
+    if fr.get("source") == "REMOTE_LAST_KNOWN_GOOD":
+        notices.append(f"REMOTE UPDATE FAILED ({fr.get('last_error') or 'unknown error'}) — showing the "
+                       f"last-known-good snapshot, not a fresh one.")
+        headline = f"⚠️ REMOTE UPDATE FAILED — LAST-KNOWN-GOOD SNAPSHOT (data {str(fr.get('state')).replace('_', ' ')} as of its timestamp)"
+        if tone == "ok":
+            tone = "warn"
+    elif fr.get("source") == "BUNDLED_FALLBACK":
+        notices.append("The remote snapshot has never loaded in this process — showing the frozen BUNDLED "
+                       f"fallback{' (' + fr['last_error'] + ')' if fr.get('last_error') else ''}.")
+        headline = f"⚠️ REMOTE SNAPSHOT UNAVAILABLE — BUNDLED FALLBACK ({str(fr.get('state')).replace('_', ' ')})"
+        if tone == "ok":
+            tone = "warn"
+    lines = [f"DATA AS OF: {fr.get('data_as_of') or 'unknown'}",
+             f"LAST UPDATED: {fr.get('last_updated') or 'unknown'}"]
+    comps = fr.get("components") or {}
+    shown = [f"{label} {comps[key][:16]}Z" for label, key in (("NHL", "nhl_data"), ("odds", "odds"),
+             ("recs", "recommendations"), ("settlement", "settlement"), ("post-mortem", "postmortem"))
+             if comps.get(key)]
+    if shown:
+        lines.append("Component freshness: " + " · ".join(shown))
+    lines.append("Demo board prices are SIMULATED (labeled SIMULATED — DEMO ONLY); real DraftKings rows are "
+                 "labeled LIVE — DRAFTKINGS; recorded recommendations are labeled REAL MARKET.")
+    return {"headline": headline, "tone": tone, "notices": notices, "lines": lines, "state": fr.get("state")}
+
+
 def cloud_freshness_lines(meta: dict) -> list[str]:
-    """Plain-language statement of exactly which displayed data is frozen and
-    how old it is (Part 15: never present a frozen snapshot as live state)."""
+    """Back-compat plain-text summary used by older callers/tests."""
     if not meta.get("available"):
         return ["Snapshot data is unavailable in this deployment: " + str(meta.get("error", "unknown reason"))]
     return [
-        f"Demo board (simulated prices, real model output) frozen at {meta['generated_at_utc'][:16]} UTC "
-        f"for the simulated slate {meta['simulated_slate_date']}.",
-        f"Newest real DraftKings moneyline capture in this snapshot: {meta.get('newest_real_dk_capture_utc') or 'none'}. "
+        f"Demo board (simulated prices, real model output) frozen at {str(meta.get('generated_at_utc') or meta.get('generated_at'))[:16]} UTC "
+        f"for the simulated slate {meta.get('simulated_slate_date')}.",
+        f"Newest real DraftKings moneyline capture in this snapshot: "
+        f"{meta.get('newest_real_dk_capture_utc') or (meta.get('freshness') or {}).get('odds') or 'none'}. "
         f"Elo ratings reflect games through {meta.get('elo_corpus_last_game_date') or 'unknown'}.",
-        "This deployment has no scheduler and cannot receive live operational state: the bundled NHL "
-        "database is a frozen git snapshot, and the ledger/bankroll/health caches are not part of it.",
+        "This deployment has no scheduler and cannot receive live operational state except through the "
+        "published snapshot; it never runs models, syncs, settlement or backups.",
     ]
 
 
 def render_cloud_snapshot_banner() -> None:
-    lines = cloud_freshness_lines(cloud_snapshot.snapshot_meta())
-    body = "<br/>".join(lines)
+    model = cloud_banner_model(cloud_snapshot.freshness(), cloud_snapshot.snapshot_meta())
+    bg, border, fg = _TONE[model["tone"]]
+    body = "<br/>".join(model["notices"] + model["lines"])
     st.markdown(
         f"""
-        <div style="border:1px solid #5a4420; border-radius:8px; padding:8px 14px;
-                    background:#241c10; color:#e8c46a; font-size:0.82rem; margin-bottom:10px;">
-          <b>☁️ COMMUNITY CLOUD SNAPSHOT — NOT LIVE DATA</b><br/>{body}
+        <div data-testid="cloud-snapshot-banner" style="border:1px solid {border}; border-radius:8px; padding:8px 14px;
+                    background:{bg}; color:{fg}; font-size:0.82rem; margin-bottom:10px;">
+          <b>{model['headline']}</b><br/>{body}
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def live_data_state() -> str:
+    """CURRENT / STALE / VERY_STALE / UNAVAILABLE in Community Cloud; always CURRENT elsewhere
+    (LOCAL/PRODUCTION compute live). Used to downgrade 'live' badges on stale data."""
+    if not runtime_mode.is_community_cloud():
+        return "CURRENT"
+    return cloud_snapshot.freshness()["state"]
+
+
+def live_label(base_label: str) -> str:
+    """A provenance label made honest about staleness: 'LIVE — DRAFTKINGS' becomes
+    'STALE — LIVE — DRAFTKINGS (NOT CURRENT)' when the snapshot is not CURRENT."""
+    state = live_data_state()
+    return base_label if state == "CURRENT" else f"{state.replace('_', ' ')} — {base_label} (NOT CURRENT)"
 
 
 def render_model_status_header() -> None:

@@ -12,6 +12,7 @@ of its own to test against.
 import ast
 import importlib
 import os
+import re
 import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -403,7 +404,8 @@ class TestDashboardCannotWriteProductionTables(unittest.TestCase):
             for node in ast.walk(tree):
                 if isinstance(node, ast.Constant) and isinstance(node.value, str):
                     upper = node.value.upper()
-                    if "INSERT INTO" in upper or "UPDATE " in upper or "DELETE FROM" in upper:
+                    if ("INSERT INTO" in upper or re.search(r"\bUPDATE\s+\w+\s+SET\b", upper)
+                            or "DELETE FROM" in upper):
                         self.fail(f"{fname} contains a write-shaped SQL string: {node.value!r}")
 
     def test_pages_directory_also_has_no_write_sql(self):

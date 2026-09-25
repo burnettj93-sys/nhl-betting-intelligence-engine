@@ -19,6 +19,7 @@ import datetime as dt
 
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from dashboard import conviction as cv
 from dashboard import data_access as da
@@ -38,8 +39,20 @@ comp.render_model_status_header()
 comp.render_global_search(key_prefix="today")
 
 st.markdown("### System Health")
-health = build_system_health()
-_dot = {"OK": "🟢", "STALE": "🟡", "WAITING": "🔵", "ERROR": "🔴", "NOT_REQUIRED": "⚪", "UNKNOWN": "⚫"}
+if runtime_mode.is_community_cloud():
+    # Community Cloud: health is the LOCAL ENGINE's, as published in the snapshot
+    # (never computed here -- the web process has no caches/DBs/schedulers to inspect).
+    try:
+        _cloud_health = cloud_snapshot.health_section()
+        health = {i["key"]: {"status": i["status"], "label": i["label"], "message": i.get("message", "")}
+                  for i in _cloud_health["items"]}
+    except cloud_snapshot.SnapshotUnavailable:
+        _cloud_health, health = {}, {}
+else:
+    _cloud_health = None
+    health = build_system_health()
+_dot = {"OK": "🟢", "STALE": "🟡", "WAITING": "🔵", "ERROR": "🔴", "NOT_REQUIRED": "⚪", "UNKNOWN": "⚫",
+        "DEGRADED": "🟠"}
 chip_html = "".join(
     f'<span style="display:inline-block; margin:3px 6px 3px 0; padding:4px 10px; '
     f'border-radius:999px; background:#1c2330; border:1px solid #262e3d; font-size:0.78rem;">'
@@ -51,7 +64,8 @@ failing = [item for item in health.values() if item["status"] == "ERROR"]
 if failing:
     st.error(" · ".join(f"{item['label']}: {item['message']}" for item in failing))
 
-_odds_status = odds_collection_status()
+_odds_status = (_cloud_health.get("odds_status") if runtime_mode.is_community_cloud() and _cloud_health
+                else None) or odds_collection_status()
 oc1, oc2, oc3, oc4, oc5, oc6 = st.columns(6)
 oc1.metric("Odds last updated", (_odds_status["last_updated_utc"] or "—")[:16])
 oc2.metric("Credits remaining", _odds_status["credits_remaining"] if _odds_status["credits_remaining"] is not None else "—")
@@ -106,24 +120,63 @@ st.markdown(
 )
 
 # ---- 0. Live Model Edges (real DraftKings, when a verified contract exists) ----
+_live_state = comp.live_data_state()   # CURRENT everywhere except a stale/unavailable Cloud snapshot
 _live_rows = ldk.build_live_moneyline_comparisons()
 _live_priced = [r for r in _live_rows if r.get("status") == "PRICED"]
 if _live_priced:
-    st.markdown("## Live Model Edges")
-    st.caption(f"{ldk.LIVE_SOURCE_LABEL} — real DraftKings MONEYLINE prices, captured via a real Odds "
-               f"API probe and compared against this engine's real Elo win model. This is not "
-               f"simulated.")
+    st.markdown("## Live Model Edges" if _live_state == "CURRENT" else "## Model Edges — DATA STALE (not live)")
+    st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
+               f"Odds API pull and compared against this engine's real Elo win model. This is not simulated.")
     for r in sorted(_live_priced, key=lambda r: -abs(r.get("raw_edge") or 0.0))[:6]:
         lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
         lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
         lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
         lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
-        lc4.markdown(comp.label_badge(r["decision"], "input"), unsafe_allow_html=True)
+        # A stale snapshot never shows an actionable badge: the decision is replaced by STALE.
+        lc4.markdown(comp.label_badge(r["decision"] if _live_state == "CURRENT" else "STALE", "input"),
+                     unsafe_allow_html=True)
         if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
             st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
                        f"real edge, not presented as actionable. {r['decision_reason']}")
         st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
                    f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
+
+# ---- 0b. Recorded recommendations (real market, paper-tracked) --------------------
+st.markdown("## Recorded Recommendations")
+try:
+    if runtime_mode.is_community_cloud():
+        _recs = cloud_snapshot.real_recommendations()
+    else:
+        from dashboard import real_recommendations_view as _rrv
+        _recs = {"provenance": "REAL MARKET", "moneyline": _rrv.real_moneyline_recommendations()[-300:],
+                 "props": _rrv.real_prop_recommendations_for_conviction_and_parlay()[-300:],
+                 "game_edge_parlays": []}
+except cloud_snapshot.SnapshotUnavailable as _exc:
+    _recs = None
+    st.caption(f"Recorded recommendations are not available in this snapshot ({_exc}).")
+if _recs is not None:
+    st.caption(f"{_recs['provenance']} — recommendations the real engine recorded against real prices "
+               f"(paper-tracked, never real money). Kept separate from the simulated demo board below."
+               + ("" if _live_state == "CURRENT" else f"  **{_live_state.replace('_', ' ')} — not current.**"))
+    if _recs["moneyline"]:
+        st.dataframe([{"Game": f"{r.get('opponent')} @ {r.get('team')}" if r.get("side") == r.get("team") else r.get("team"),
+                       "Side": r.get("side"), "Status": r.get("prospective_status"),
+                       "Model P": fmt.format_probability(r["conservative_probability"])
+                       if r.get("conservative_probability") is not None else "—",
+                       "Odds": fmt.format_american_odds(r["odds_american"]) if r.get("odds_american") else "—",
+                       "Confidence": r.get("confidence"), "Recorded": (r.get("created_at_utc") or "")[:16],
+                       "Source": r.get("source")} for r in _recs["moneyline"][-30:]], width="stretch")
+    else:
+        st.caption("No real-market MONEYLINE recommendation has been recorded yet.")
+    if _recs["props"]:
+        st.dataframe([{"Player": o.get("player"), "Market": o.get("market"), "Threshold": o.get("threshold"),
+                       "Decision": o.get("decision"),
+                       "Model P": fmt.format_probability(o["coherent_probability"])
+                       if o.get("coherent_probability") is not None else "—"} for o in _recs["props"][-30:]],
+                     width="stretch")
+    for _p in _recs.get("game_edge_parlays", []):
+        _legs = " + ".join(f"{l.get('player')} {l.get('market')} {l.get('threshold')}" for l in _p["combo"]["legs"])
+        st.markdown(f"**Real Game Edge Parlay — {_p['opponent']} @ {_p['team']}:** {_legs}")
 
 # ---- 1. Today's Slate ---------------------------------------------------
 st.markdown("## 1 · Today's Slate")
