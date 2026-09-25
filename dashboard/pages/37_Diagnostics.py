@@ -25,6 +25,15 @@ st.title("Diagnostics")
 comp.render_model_status_header()
 st.caption("Process facts only -- no environment variables, secrets or paths are shown.")
 
+st.markdown("### Owner daily check")
+try:
+    from dashboard import snapshot_source
+    _doc = snapshot_source.current().data if snapshot_source.remote_enabled() else None
+except Exception:  # noqa: BLE001 -- the diagnostics page must never fail because of the snapshot
+    _doc = None
+st.dataframe(dv.owner_daily_rows(_doc), width="stretch", hide_index=True)
+st.caption("Derived from the published snapshot. Outside Community Cloud, run `python3 opening_day_readiness.py`.")
+
 d = dv.process_diagnostics()
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Process RSS (MB)", d["rss_mb"] if d["rss_mb"] is not None else "n/a")

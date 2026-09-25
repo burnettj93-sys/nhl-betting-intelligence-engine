@@ -202,7 +202,10 @@ def _health() -> dict:
             entry["message"] = item.get("message")   # volatile ages only appear on non-OK items
         items.append(entry)
     summary = {k: {"status": v.get("status")} for k, v in sh.production_health_summary(include_yahoo=False).items()}
-    return {"items": items, "production": summary, "odds_status": sh.odds_collection_status()}
+    # `last_updated_utc` is the time of the latest 15-minute prop sweep -- it changes on every firing and says
+    # nothing about market data, so it must not make an otherwise identical snapshot look "changed".
+    odds_status = {k: v for k, v in sh.odds_collection_status().items() if k != "last_updated_utc"}
+    return {"items": items, "production": summary, "odds_status": odds_status}
 
 
 _SECTION_BUILDERS = {

@@ -108,7 +108,29 @@ def moneypuck_health(cache: dict | None = None) -> dict:
                          technical_detail=json.dumps(parts))
 
 
+def _latest_moneyline_pull_health(label: str) -> dict | None:
+    """The odds items used to echo the readiness cache, which is written only by the once-a-day NHL sync --
+    so they showed STALE all day even right after a fresh 4x/day moneyline pull, contradicting the
+    Cloud banner's market freshness. They now judge the newest real moneyline pull with the SAME rule as the
+    market-freshness display (<= 180 min CURRENT). None when no pull has ever been cached."""
+    from operational import cloud_snapshot_schema as schema
+    cache = _load_cache_safely(REPO_ROOT / "operational" / "moneyline_snapshot_cache.json")
+    ts = (cache or {}).get("generated_at_utc")
+    if not ts:
+        return None
+    fresh = schema.classify_market_freshness(ts)
+    age_min = fresh["age_minutes"]
+    ok = fresh["state"] == schema.CURRENT
+    age_txt = "unknown" if age_min is None else (f"{age_min:.0f} min" if age_min < 120 else f"{age_min / 60:.1f} h")
+    return _health_item("OK" if ok else "STALE", label, ts,
+                        f"newest real moneyline pull {age_txt} ago ({'within' if ok else 'older than'} the 3 h market-freshness limit)",
+                        "operational/moneyline_snapshot_cache.json", age_hours=None if age_min is None else round(age_min / 60, 2))
+
+
 def odds_api_health(cache: dict | None = None) -> dict:
+    live = _latest_moneyline_pull_health("Odds API")
+    if live is not None:
+        return live
     cache = cache if cache is not None else _load_readiness_cache()
     return _from_readiness_block(cache, "odds", "Odds API")
 
@@ -116,8 +138,10 @@ def odds_api_health(cache: dict | None = None) -> dict:
 def draftkings_markets_health(cache: dict | None = None) -> dict:
     # No dedicated DraftKings-market-availability signal exists separately
     # from the Odds API cache today -- SOG is the only live-tested family.
-    cache = cache if cache is not None else _load_readiness_cache()
-    item = _from_readiness_block(cache, "odds", "DraftKings Markets")
+    item = _latest_moneyline_pull_health("DraftKings Markets")
+    if item is None:
+        cache = cache if cache is not None else _load_readiness_cache()
+        item = _from_readiness_block(cache, "odds", "DraftKings Markets")
     item["technical_detail"] = "Only Player SOG has a live-tested DraftKings payload contract today."
     return item
 

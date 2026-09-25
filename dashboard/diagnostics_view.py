@@ -68,3 +68,56 @@ def process_diagnostics() -> dict:
         "model_stack_loaded": "research.context_overlay.prediction_stack" in loaded,
         "snapshot": _snapshot_diagnostics(),
     }
+
+
+def owner_daily_rows(doc: dict | None, now=None) -> list[dict]:
+    """The ADMIN's concise answer to "is the engine OK today?", derived ONLY from the published snapshot
+    (production activation block, 2026-09-25) so it works in Community Cloud without touching any database:
+    health, cloud freshness, odds freshness, sync / predictions / paper bets / settlement / postmortem,
+    Odds API credits, and the list of anything not OK. Ages come from factual timestamps."""
+    from operational import cloud_snapshot_schema as schema
+    if not doc or doc.get("schema_version") != 2:
+        return [{"question": "Snapshot available?", "state": "UNAVAILABLE",
+                 "detail": "no schema-2 snapshot loaded (bundled fallback or remote failure)"}]
+    meta = schema.metadata_of(doc)
+    fresh = meta.get("freshness") or {}
+    health = doc.get("health") or {}
+    items = health.get("items") or []
+    not_ok = [f"{i.get('label') or i.get('key')}: {i.get('status')}" for i in items
+              if i.get("status") not in ("OK", "NOT_REQUIRED", "WAITING")]
+
+    def daily(key: str, label: str, limit_h: float = 30.0) -> dict:
+        age = schema.age_hours(fresh.get(key), now)
+        if age is None:
+            return {"question": label, "state": "NO", "detail": "no successful run recorded"}
+        return {"question": label, "state": "YES" if age <= limit_h else "STALE",
+                "detail": f"last success {age:.1f} h ago (limit {limit_h:.0f} h)"}
+
+    mf = schema.classify_market_freshness(fresh.get("odds"), None, now)
+    real = doc.get("real_recommendations") or {}
+    n_ml, n_props = len(real.get("moneyline") or []), len(real.get("props") or [])
+    perf = doc.get("performance") or {}
+    real_track = perf.get("REAL_MARKET_PAPER") or {}
+    n_bets = len(real_track.get("bets") or [])
+    credits = (health.get("odds_status") or {}).get("credits_remaining")
+    snap_age = schema.age_hours(meta.get("generated_at"), now)
+    snap_state = schema.classify_freshness(meta.get("data_as_of"), now)
+    return [
+        {"question": "Is the engine healthy?", "state": "YES" if not not_ok else "ATTENTION",
+         "detail": "all components OK" if not not_ok else "; ".join(not_ok[:6])},
+        {"question": "Is cloud data current?", "state": snap_state,
+         "detail": f"snapshot published {snap_age:.1f} h ago; data as of {meta.get('data_as_of')}" if snap_age is not None else "unknown"},
+        {"question": "Are odds current?", "state": mf["state"],
+         "detail": f"newest price {mf['age_minutes']} min old (limit 180 min; 90 min within 4 h of a game)"
+         if mf["age_minutes"] is not None else "no price timestamp"},
+        daily("nhl_data", "Did the NHL sync run?"),
+        {"question": "Did predictions run?", "state": "YES" if (n_ml or n_props) else "NO_REAL_SAMPLE_YET",
+         "detail": f"{n_ml} real moneyline and {n_props} real prop recommendation(s) recorded"},
+        {"question": "Any paper bets?", "state": "YES" if n_bets else "NONE_YET", "detail": f"{n_bets} REAL_MARKET_PAPER bet(s); zero is a valid outcome"},
+        daily("settlement", "Did settlement run?"),
+        daily("postmortem", "Did the post-mortem run?"),
+        {"question": "Odds API credits remaining", "state": "OK" if isinstance(credits, (int, float)) and credits >= 150
+         else "LOW" if isinstance(credits, (int, float)) else "UNKNOWN", "detail": f"{credits} of 500/month"},
+        {"question": "Any blockers?", "state": "NONE" if not not_ok else "SEE_ABOVE",
+         "detail": "no component reports a problem" if not not_ok else f"{len(not_ok)} component(s) not OK"},
+    ]

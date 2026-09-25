@@ -311,6 +311,36 @@ class PublisherCase(unittest.TestCase):
         return json.loads(_git("--git-dir", self.remote, "show", f"{pub.DATA_BRANCH}:current/snapshot.json"))
 
 
+class TestPublishToReaderEndToEnd(PublisherCase):
+    """meaningful change -> publisher -> remote branch changes -> reader sees the new hash;
+    no meaningful change -> NO_CHANGE -> no new commit. No Odds API credits, no real network."""
+
+    def _reader_state(self):
+        path = Path(self.tmp.name) / "served.json"
+        path.write_text(_git("--git-dir", self.remote, "show", f"{pub.DATA_BRANCH}:current/snapshot.json"))
+        snapshot_source.reset()
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
+             mock.patch.dict(os.environ, {"NHL_ENGINE_SNAPSHOT_SOURCE": "REMOTE",
+                                          "NHL_ENGINE_SNAPSHOT_URL": path.as_uri()}):
+            return snapshot_source.current(force_refresh=True)
+
+    def test_change_publishes_and_the_reader_sees_it_then_no_change_is_free(self):
+        first = self.publish()
+        s1 = self._reader_state()
+        self.assertEqual((s1.source, s1.fetch_status, s1.content_hash), ("REMOTE", "OK", first["content_hash"]))
+        doc = sample_doc(); doc["demo"]["opportunities"] = [{"x": 2}]
+        second = self.publish(doc, force=True)
+        self.assertEqual(second["status"], pub.SUCCESS)
+        s2 = self._reader_state()
+        self.assertEqual(s2.content_hash, second["content_hash"])
+        self.assertNotEqual(s1.content_hash, s2.content_hash)
+        commits = self.commits()
+        with mock.patch.object(pub, "_publish_via_git", side_effect=AssertionError("no git for NO_CHANGE")):
+            third = self.publish(doc)
+        self.assertEqual(third["status"], pub.NO_CHANGE)
+        self.assertEqual(self.commits(), commits)
+
+
 class TestPublisher(PublisherCase):
     def test_first_publish_creates_a_data_only_orphan_branch(self):
         r = self.publish()
@@ -516,6 +546,38 @@ class TestOptInAndScheduling(unittest.TestCase):
         out = json.loads(printed.call_args[0][0])
         self.assertEqual(out["real_recommendation_orchestrator"], {"ok": 2})
         self.assertEqual(out["cloud_publish"]["status"], "FAILED")
+
+    def test_prop_sweeps_publish_only_when_they_recorded_something(self):
+        """The 15/30-minute sweeps ran ~100x/day and each one used to trigger a publication."""
+        from operational import live_odds_daily_pull as lop
+        quiet = {"ran": True, "real_sog_orchestrator": {"recommendations_recorded": 0, "paper_bets_created": 0},
+                 "real_saves_orchestrator": {"recommendations_recorded": 0, "paper_bets_created": 0}}
+        for mode in ("sweep-first", "sweep-second"):
+            self.assertFalse(lop.cloud_publish_warranted(mode, quiet), mode)
+        busy = {**quiet, "real_sog_orchestrator": {"recommendations_recorded": 1, "paper_bets_created": 0}}
+        self.assertTrue(lop.cloud_publish_warranted("sweep-first", busy))
+        self.assertTrue(lop.cloud_publish_warranted("sweep-second", {**quiet, "real_saves_orchestrator": {"paper_bets_created": 1}}))
+        self.assertFalse(lop.cloud_publish_warranted("sweep-first", {"ran": False}))
+        # a real moneyline / broad props pull brings new prices: it publishes, but only if it actually ran
+        for mode in ("moneyline", "props"):
+            self.assertTrue(lop.cloud_publish_warranted(mode, {"ran": True}), mode)
+            self.assertFalse(lop.cloud_publish_warranted(mode, {"ran": False}), mode)
+
+    def test_a_sweep_that_only_moves_its_own_timestamp_does_not_change_the_snapshot_hash(self):
+        from operational import cloud_snapshot_builder as builder
+        first, _ = builder.build_live_snapshot(sections=("health",))
+        with mock.patch("operational.system_health.odds_collection_status",
+                        return_value={"status": "OK", "credits_remaining": 368, "tracked_events": 33,
+                                      "player_prop_quotes": 744, "last_updated_utc": "2099-01-01T00:00:00+00:00"}):
+            second, _ = builder.build_live_snapshot(sections=("health",))
+            third, _ = builder.build_live_snapshot(sections=("health",))
+        self.assertNotIn("last_updated_utc", second["health"]["odds_status"])
+        self.assertEqual(schema.content_hash(second), schema.content_hash(third))
+        with mock.patch("operational.system_health.odds_collection_status",
+                        return_value={"status": "OK", "credits_remaining": 340, "tracked_events": 33,
+                                      "player_prop_quotes": 744, "last_updated_utc": "2099-01-01T00:00:00+00:00"}):
+            fourth, _ = builder.build_live_snapshot(sections=("health",))
+        self.assertNotEqual(schema.content_hash(third), schema.content_hash(fourth))   # a real quota change still counts
 
     def test_the_pregame_refresh_is_not_a_publish_trigger(self):
         src = (REPO / "operational" / "nhl_sync.py").read_text()
@@ -916,6 +978,77 @@ class TestTodayPageStaleRendering(unittest.TestCase):
         self.assertIn("SIMULATED MARKET (DEMO ONLY)", text)
 
 
+class TestOwnerDailyCheck(unittest.TestCase):
+    NOW = dt.datetime(2026, 9, 25, 18, 0, tzinfo=dt.timezone.utc)
+
+    def _doc(self, **over):
+        ago = lambda h: (self.NOW - dt.timedelta(hours=h)).isoformat()
+        doc = {"schema_version": 2, "metadata": {"schema_version": 2, "generated_at": ago(0.2), "data_as_of": ago(0.5),
+               "freshness": {"nhl_data": ago(6), "odds": ago(0.5), "settlement": ago(10), "postmortem": ago(10)}},
+               "health": {"items": [{"key": "A", "label": "A", "status": "OK"}], "odds_status": {"credits_remaining": 368}},
+               "real_recommendations": {"moneyline": [], "props": []},
+               "performance": {"REAL_MARKET_PAPER": {"bets": []}}}
+        doc.update(over)
+        return doc
+
+    def rows(self, doc):
+        from dashboard import diagnostics_view as dv
+        return {r["question"]: r for r in dv.owner_daily_rows(doc, self.NOW)}
+
+    def test_answers_every_owner_question(self):
+        r = self.rows(self._doc())
+        self.assertEqual(len(r), 10)
+        self.assertEqual(r["Is the engine healthy?"]["state"], "YES")
+        self.assertEqual(r["Are odds current?"]["state"], "CURRENT")
+        self.assertEqual(r["Did settlement run?"]["state"], "YES")
+        self.assertEqual(r["Odds API credits remaining"]["state"], "OK")
+        self.assertEqual(r["Any paper bets?"]["state"], "NONE_YET")
+        self.assertEqual(r["Did predictions run?"]["state"], "NO_REAL_SAMPLE_YET")
+
+    def test_flags_stale_odds_missing_runs_low_credits_and_unhealthy_components(self):
+        doc = self._doc()
+        doc["metadata"]["freshness"].update(odds=(self.NOW - dt.timedelta(hours=5)).isoformat(), postmortem=None)
+        doc["health"] = {"items": [{"key": "B", "label": "Backups", "status": "ERROR"}], "odds_status": {"credits_remaining": 40}}
+        r = self.rows(doc)
+        self.assertEqual(r["Are odds current?"]["state"], "STALE")
+        self.assertEqual(r["Did the post-mortem run?"]["state"], "NO")
+        self.assertEqual(r["Odds API credits remaining"]["state"], "LOW")
+        self.assertEqual(r["Is the engine healthy?"]["state"], "ATTENTION")
+        self.assertEqual(r["Any blockers?"]["state"], "SEE_ABOVE")
+
+    def test_no_schema_2_snapshot_is_reported_not_crashed(self):
+        from dashboard import diagnostics_view as dv
+        for doc in (None, {"schema_version": 1}):
+            self.assertEqual(dv.owner_daily_rows(doc, self.NOW)[0]["state"], "UNAVAILABLE")
+
+
+class TestOddsHealthItemsUseMarketFreshness(unittest.TestCase):
+    """The 'Odds API' / 'DraftKings Markets' health dots used to echo a once-a-day readiness cache and
+    read STALE all day, contradicting the market-freshness display. They judge the newest real pull."""
+
+    def _health(self, age_minutes):
+        from operational import system_health as sh
+        ts = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=age_minutes)).isoformat()
+        with mock.patch.object(sh, "_load_cache_safely", return_value={"generated_at_utc": ts}):
+            return sh.odds_api_health(cache={"readiness": {"odds": {"status": "STALE"}}}), \
+                sh.draftkings_markets_health(cache={"readiness": {"odds": {"status": "STALE"}}})
+
+    def test_a_recent_pull_is_ok_even_if_the_daily_readiness_cache_says_stale(self):
+        for item in self._health(45):
+            self.assertEqual(item["status"], "OK")
+
+    def test_a_pull_older_than_three_hours_is_stale(self):
+        for item in self._health(200):
+            self.assertEqual(item["status"], "STALE")
+
+    def test_without_any_cached_pull_the_readiness_cache_is_used(self):
+        from operational import system_health as sh
+        with mock.patch.object(sh, "_load_cache_safely", return_value=None):
+            item = sh.odds_api_health(cache={"readiness": {"odds": {"status": "STALE", "reason": "x"}}})
+        self.assertEqual(item["status"], "STALE")
+        self.assertEqual(item["source"], "operational/data_readiness_cache.json")
+
+
 # ------------------------------------------------------------------------ market freshness
 class TestMarketFreshness(unittest.TestCase):
     NOW = dt.datetime(2026, 9, 25, 18, 0, tzinfo=dt.timezone.utc)
@@ -1027,6 +1160,32 @@ class TestMarketFreshness(unittest.TestCase):
 
 
 # --------------------------------------------------------------------------------------- auth
+class TestSignedOutVisitorSeesNoNavigation(unittest.TestCase):
+    """Before sign-in Streamlit would list every pages/ file in the sidebar (names of internal pages);
+    the gate hides the sidebar, so an anonymous visitor sees only the login form."""
+
+    def _signed_out(self, *, users):
+        from streamlit.testing.v1 import AppTest
+        from operational import auth_store
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"NHL_ENGINE_SNAPSHOT_SOURCE": "BUNDLED"}), \
+             mock.patch.object(auth_store, "DEFAULT_DB_PATH", Path(tmp) / "a.db"), \
+             mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+            if users:
+                conn = auth_store.get_connection()
+                auth_store.create_user(conn, "someone", "Some!Passw0rd-2026", "USER")
+                conn.close()
+            at = AppTest.from_file(str(REPO / "dashboard" / "app.py"), default_timeout=120)
+            at.run()
+        self.assertEqual(list(at.exception), [])
+        return " ".join(m.value for m in at.markdown)
+
+    def test_login_screen_hides_the_sidebar_navigation(self):
+        self.assertIn("stSidebar", self._signed_out(users=True))
+
+    def test_bootstrap_screen_hides_the_sidebar_navigation(self):
+        self.assertIn("stSidebar", self._signed_out(users=False))
+
+
 class TestCloudAuthenticationModel(unittest.TestCase):
     def _run(self, page, *, email, role_env=None, trust="ON", admins="", cloud=True):
         from streamlit.testing.v1 import AppTest

@@ -309,7 +309,10 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None)
         "what_didnt": _summarize_what_didnt(issues) if issues else (
             "WAITING_FOR_SETTLED_DATA" if not any_bets_settled else "nothing flagged"),
         "why": [f"{i['category']}: {i.get('explanation', '')}" for i in issues] or ["WAITING_FOR_SETTLED_DATA"],
-        "normal_variance_vs_systematic": _variance_vs_systematic(issues),
+        # Zero settled results is NO_DATA, never a "normal variance" conclusion about a model with no sample.
+        "normal_variance_vs_systematic": (
+            "NO_DATA (no settled recommendations yet -- no variance or model conclusion is drawn)"
+            if not any_bets_settled and not issues else _variance_vs_systematic(issues)),
         "investigate": [i for i in issues if i["recommended_action"] in (INVESTIGATE, BUG_FIX, CHALLENGER_IDEA)],
         "software_bug_candidates": [i for i in issues if i["recommended_action"] == BUG_FIX],
         "challenger_ideas": [i for i in issues if i["recommended_action"] == CHALLENGER_IDEA],

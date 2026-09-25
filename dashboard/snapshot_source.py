@@ -125,13 +125,25 @@ def public_url_label() -> str:
 
 
 # ---- transport ----------------------------------------------------------------------------------------------------
+def _ssl_context(url: str):
+    """Some Python builds (e.g. python.org macOS) ship without a CA bundle; use certifi's when present."""
+    if not url.lower().startswith("https"):
+        return None
+    try:
+        import certifi
+        import ssl
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:  # noqa: BLE001 -- fall back to the interpreter's default trust store
+        return None
+
+
 def _http_get(url: str, token: str | None) -> bytes:
     request = urllib.request.Request(url, headers={"User-Agent": "nhl-engine-cloud-reader/1",
                                                    "Accept": "application/json",
                                                    "Cache-Control": "no-cache"})
     if token:
         request.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S) as response:  # noqa: S310 -- fixed https URL
+    with urllib.request.urlopen(request, timeout=HTTP_TIMEOUT_S, context=_ssl_context(url)) as response:  # noqa: S310 -- fixed https URL
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
         raise ValueError(f"snapshot exceeds {MAX_BYTES} bytes")
