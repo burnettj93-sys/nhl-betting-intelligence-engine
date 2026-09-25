@@ -71,12 +71,12 @@ except da.DataAvailabilityError as exc:
     st.stop()
 
 
-@st.cache_resource(show_spinner="Loading goalie saves model (first load takes a few seconds)...")
+@st.cache_resource(show_spinner="Loading goalie saves model (first load takes a few seconds)...", max_entries=4)
 def _engine(_results):
     return gv.GoalieSavesEngine(_results)
 
 
-@st.cache_resource(show_spinner="Loading starter-probability model...")
+@st.cache_resource(show_spinner="Loading starter-probability model...", max_entries=4)
 def _starter_engine():
     sr = gv.load_starter_results()
     return gv.StarterProbabilityEngine(sr) if sr is not None else None

@@ -24,6 +24,7 @@ sprint:
 """
 from __future__ import annotations
 
+from dashboard import cloud_snapshot
 from dashboard import demo_data as dd
 from dashboard.live_dk import SIMULATED_SOURCE_LABEL
 from research.live_sog_pricing.pricing import decide, zone
@@ -89,6 +90,8 @@ def build_all_player_prop_opportunities() -> list[dict]:
     1+, so 2+ has no overlay stage to go through -- context_adjusted/
     coherent default to raw there, the same convention demo_data.py
     already uses for SOG/Blocks)."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.prop_opportunities()
     stack = dd._demo_context()
     roster = dd.build_demo_roster()
     game_by_teams = {(g.away, g.home): g for g in dd.build_demo_games()}
@@ -182,6 +185,8 @@ def build_goalie_saves_opportunities() -> list[dict]:
     are still computed (for display completeness, matching the base SOG
     1+/6+/7+/8+ convention) but flagged not-actionable and never
     produce a BET/WATCH decision."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.goalie_saves_opportunities()
     goalies = dd.build_demo_goalies()
     out = []
     for g in goalies:

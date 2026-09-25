@@ -31,32 +31,32 @@ STATUS_BADGE_KIND = {"VALIDATED": "input", "PARTIAL": "research", "RESEARCH": "r
 REDESIGN_RESULTS_PATH = REPO_ROOT / "research" / "player_points_redesign_results.json"
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_redesign_results():
     return da.load_json_safely(REDESIGN_RESULTS_PATH)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_results():
     return pv.load_results()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_manifest():
     return pv.load_manifest()
 
 
-@st.cache_data(show_spinner="Loading real player-game points corpus (this can take a few seconds)...")
+@st.cache_data(show_spinner="Loading real player-game points corpus (this can take a few seconds)...", max_entries=8, ttl=3600)
 def _load_points_rows():
     return ptf.load_points_corpus()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_index(_rows):
     return ptf.PlayerHistoryIndex(_rows)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_team_context(_rows):
     totals = ptf.build_team_game_points_totals(_rows)
     team_offense_hist = ptf.build_team_offense_history(totals)
@@ -66,7 +66,7 @@ def _build_team_context(_rows):
     return team_offense_hist, opponent_env, league_avg
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _load_team_schedules():
     games = ec.load_corpus(str(NHL_CORPUS_PATH))
     return build_team_schedules(games)

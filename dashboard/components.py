@@ -9,14 +9,47 @@ from __future__ import annotations
 
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import data_access as da
+from operational import runtime_mode
 
 MODEL_INPUT = "MODEL INPUT"
 RESEARCH_METRIC = "RESEARCH METRIC — NOT CURRENTLY USED BY MODEL"
 NOT_AVAILABLE = "NOT AVAILABLE IN HISTORICAL RESEARCH MODE"
 
 
+def cloud_freshness_lines(meta: dict) -> list[str]:
+    """Plain-language statement of exactly which displayed data is frozen and
+    how old it is (Part 15: never present a frozen snapshot as live state)."""
+    if not meta.get("available"):
+        return ["Snapshot data is unavailable in this deployment: " + str(meta.get("error", "unknown reason"))]
+    return [
+        f"Demo board (simulated prices, real model output) frozen at {meta['generated_at_utc'][:16]} UTC "
+        f"for the simulated slate {meta['simulated_slate_date']}.",
+        f"Newest real DraftKings moneyline capture in this snapshot: {meta.get('newest_real_dk_capture_utc') or 'none'}. "
+        f"Elo ratings reflect games through {meta.get('elo_corpus_last_game_date') or 'unknown'}.",
+        "This deployment has no scheduler and cannot receive live operational state: the bundled NHL "
+        "database is a frozen git snapshot, and the ledger/bankroll/health caches are not part of it.",
+    ]
+
+
+def render_cloud_snapshot_banner() -> None:
+    lines = cloud_freshness_lines(cloud_snapshot.snapshot_meta())
+    body = "<br/>".join(lines)
+    st.markdown(
+        f"""
+        <div style="border:1px solid #5a4420; border-radius:8px; padding:8px 14px;
+                    background:#241c10; color:#e8c46a; font-size:0.82rem; margin-bottom:10px;">
+          <b>☁️ COMMUNITY CLOUD SNAPSHOT — NOT LIVE DATA</b><br/>{body}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_model_status_header() -> None:
+    if runtime_mode.is_community_cloud():
+        render_cloud_snapshot_banner()
     st.markdown(
         f"""
         <div style="border:1px solid #3a3f4b; border-radius:8px; padding:10px 16px;

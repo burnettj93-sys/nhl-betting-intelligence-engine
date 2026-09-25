@@ -23,6 +23,7 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
+from dashboard import cloud_snapshot
 from dashboard import data_access as da
 from dashboard import game_detail_view as gdv
 from pricing import odds_math as pm
@@ -100,10 +101,38 @@ def _iter_archived_h2h_markets():
             yield event.get("id"), result["market"], loaded.get("meta", {}).get("retrieved_at_utc")
 
 
+_latest_markets_memo: tuple | None = None  # (signature, result) -- one entry, never grows
+
+
+def _archive_signature() -> tuple:
+    """Cheap fingerprint of the archive directories (names + mtimes + sizes,
+    stat only -- no file is opened). Lets a Streamlit rerun reuse the parsed
+    result instead of re-reading and re-parsing every archived capture."""
+    sig = []
+    for archive_dir in (ARCHIVE_DIR, LEGACY_ARCHIVE_DIR):
+        if not archive_dir.exists():
+            continue
+        for path in sorted(archive_dir.glob("*.json")):
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            sig.append((str(path), st.st_mtime_ns, st.st_size))
+    return tuple(sig)
+
+
 def load_latest_verified_moneyline_markets() -> dict[str, dict]:
     """One entry per event_id (the LATEST archived capture, by
     retrieved_at_utc, if the same event was probed more than once) --
-    {"market": NormalizedMoneylineMarket, "retrieved_at_utc": str}."""
+    {"market": NormalizedMoneylineMarket, "retrieved_at_utc": str}.
+
+    Memoized on a stat-only fingerprint of the archive (Community Cloud memory
+    sprint, Part 11): a page rerun no longer re-reads/re-parses ~1000 archived
+    JSON captures unless the archive actually changed."""
+    global _latest_markets_memo
+    signature = _archive_signature()
+    if _latest_markets_memo is not None and _latest_markets_memo[0] == signature:
+        return dict(_latest_markets_memo[1])
     latest: dict[str, dict] = {}
     for event_id, market, retrieved_at in _iter_archived_h2h_markets():
         if event_id is None:
@@ -111,7 +140,8 @@ def load_latest_verified_moneyline_markets() -> dict[str, dict]:
         current = latest.get(event_id)
         if current is None or (retrieved_at or "") > (current["retrieved_at_utc"] or ""):
             latest[event_id] = {"market": market, "retrieved_at_utc": retrieved_at}
-    return latest
+    _latest_markets_memo = (signature, latest)
+    return dict(latest)
 
 
 def _decide_from_win_probability(model_prob: float, market_prob: float, current_price: float,
@@ -147,6 +177,11 @@ def build_live_moneyline_comparisons() -> list[dict]:
     regardless of the raw edge -- a real number computed from a rating
     that no longer reflects the current roster is not something this
     engine will present as actionable (see the module docstring)."""
+    if cloud_snapshot.snapshot_active():
+        # Community Cloud: never scan the raw odds archive / load the Elo
+        # corpus from a page render. Serve the compact rows computed locally
+        # (each carries its own real captured_at_utc; see the freshness banner).
+        return cloud_snapshot.live_moneyline_rows()
     rows = []
     for event_id, entry in load_latest_verified_moneyline_markets().items():
         market = entry["market"]

@@ -10,6 +10,7 @@ player props in the prior sprint, never a new team model.
 from __future__ import annotations
 
 import config
+from dashboard import cloud_snapshot
 from dashboard import data_access as da
 from dashboard import demo_data as dd
 from dashboard import player_intelligence_view as piv
@@ -65,6 +66,8 @@ def team_sog_projection(team: str, is_home: bool) -> dict | None:
     reimplemented. Falls back to None (never fabricated) if the frozen
     engine or a real recent history window isn't available for this
     team in the demo context."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.team_sog_projection(team, is_home)
     try:
         from dashboard.team_sog_view import TeamSogEngine, load_results
     except ImportError:

@@ -14,9 +14,13 @@ belt-and-suspenders) is a UX nicety, not the actual security boundary.
 """
 from __future__ import annotations
 
+import hmac
+import os
+
 import streamlit as st
 
 from operational import auth_store
+from operational import runtime_mode
 
 _SESSION_KEY_USERNAME = "_auth_username"
 _SESSION_KEY_ROLE = "_auth_role"
@@ -42,6 +46,36 @@ def logout() -> None:
     st.session_state.pop(_SESSION_KEY_ROLE, None)
 
 
+SETUP_CODE_ENV = "NHL_ENGINE_ADMIN_SETUP_CODE"
+
+
+def _configured_setup_code() -> str | None:
+    value = (os.environ.get(SETUP_CODE_ENV) or "").strip()
+    if value:
+        return value
+    try:
+        return (st.secrets.get(SETUP_CODE_ENV) or "").strip() or None
+    except Exception:
+        return None
+
+
+def bootstrap_requires_setup_code() -> bool:
+    """Community Cloud memory sprint (2026-09-25): on Streamlit Community
+    Cloud there is no auth_store.db in git and the filesystem is ephemeral, so
+    the "no users yet" first-visit form would let ANY stranger who reaches the
+    public URL first (and again after every restart) create the ADMIN account.
+    In COMMUNITY_CLOUD_MODE the bootstrap therefore requires a setup code held
+    in a secret (NHL_ENGINE_ADMIN_SETUP_CODE, env or st.secrets); with no code
+    configured, no account can be created at all. LOCAL/PRODUCTION are
+    unchanged."""
+    return runtime_mode.is_community_cloud()
+
+
+def setup_code_valid(submitted: str) -> bool:
+    configured = _configured_setup_code()
+    return bool(configured) and hmac.compare_digest(submitted.encode(), configured.encode())
+
+
 def render_bootstrap_admin_form() -> bool:
     """Shown instead of the login form when zero users exist yet (a
     fresh install) -- creates the first account, always as ADMIN (the
@@ -50,12 +84,21 @@ def render_bootstrap_admin_form() -> bool:
     page again once at least one user exists."""
     st.title("First-time setup: create the administrator account")
     st.caption("This form only appears once, before any account exists.")
+    needs_code = bootstrap_requires_setup_code()
+    if needs_code and not _configured_setup_code():
+        st.error("Administrator setup is disabled on this deployment: no setup code is configured "
+                 f"({SETUP_CODE_ENV}). Configure it as a secret, then reload.")
+        return False
     with st.form("bootstrap_admin_form"):
         username = st.text_input("Admin username")
         password = st.text_input("Password", type="password")
         confirm = st.text_input("Confirm password", type="password")
+        setup_code = st.text_input("Setup code", type="password") if needs_code else ""
         submitted = st.form_submit_button("Create administrator account")
     if not submitted:
+        return False
+    if needs_code and not setup_code_valid(setup_code):
+        st.error("Invalid setup code.")
         return False
     if not username or not password:
         st.error("Username and password are required.")

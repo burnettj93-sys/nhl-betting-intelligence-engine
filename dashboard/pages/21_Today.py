@@ -26,6 +26,7 @@ from dashboard import demo_data as dd
 from dashboard import eligible_bets as eb
 from dashboard import formatting as fmt
 from dashboard import live_dk as ldk
+from operational import runtime_mode
 from operational.system_health import build_system_health, odds_collection_status
 from research.game_edge_parlay import engine as gep
 from research.generic_prop_pricing.provider_adapter import VERIFIED_CONTRACTS
@@ -60,23 +61,28 @@ oc5.metric("Player prop quotes", _odds_status["player_prop_quotes"])
 oc6.metric("Tracked events", _odds_status["tracked_events"])
 
 with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
-    try:
-        predictions = da.compute_baseline_predictions()
-        dates = da.available_dates(predictions)
-        today_str = dt.date.today().isoformat()
-        todays_games = da.games_on_date(predictions, today_str) if today_str in dates else []
-        if not todays_games:
-            comp.render_empty_state("NO_GAMES", f"No real NHL games found in the corpus for {today_str}.")
-        else:
-            for g in todays_games:
-                readiness = live_readiness("PLAYER_SOG", game_id=g.get("game_id"))
-                st.caption(f"**{g['away_team']} @ {g['home_team']}** — SOG market readiness: {readiness['status']}")
-    except da.DataAvailabilityError as exc:
-        comp.render_missing_data_page(exc)
+    if runtime_mode.is_community_cloud():
+        # Community Cloud memory sprint: the historical NHL corpus is never loaded
+        # or walked from a page render in the thin presentation layer.
+        st.caption("Real-corpus slate detail is not loaded in Community Cloud mode.")
+    else:
+        try:
+            predictions = da.compute_baseline_predictions()
+            dates = da.available_dates(predictions)
+            today_str = dt.date.today().isoformat()
+            todays_games = da.games_on_date(predictions, today_str) if today_str in dates else []
+            if not todays_games:
+                comp.render_empty_state("NO_GAMES", f"No real NHL games found in the corpus for {today_str}.")
+            else:
+                for g in todays_games:
+                    readiness = live_readiness("PLAYER_SOG", game_id=g.get("game_id"))
+                    st.caption(f"**{g['away_team']} @ {g['home_team']}** — SOG market readiness: {readiness['status']}")
+        except da.DataAvailabilityError as exc:
+            comp.render_missing_data_page(exc)
 
     st.markdown("**Prospective Recording**")
     if pl.DB_PATH.exists():
-        _conn = pl.init_db(pl.DB_PATH)
+        _conn = pl.open_for_dashboard(pl.DB_PATH)
         _op = pl.operational_summary(_conn)
         p1, p2, p3 = st.columns(3)
         p1.metric("Model observations today", _op["recorded_today"])

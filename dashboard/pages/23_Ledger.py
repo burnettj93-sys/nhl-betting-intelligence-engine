@@ -26,7 +26,7 @@ if not pl.DB_PATH.exists():
                              "created automatically the first time a prediction is recorded.")
     st.stop()
 
-conn = pl.init_db(pl.DB_PATH)
+conn = pl.open_for_dashboard(pl.DB_PATH)
 summary = pl.summary_metrics(conn)
 op_summary = pl.operational_summary(conn)
 

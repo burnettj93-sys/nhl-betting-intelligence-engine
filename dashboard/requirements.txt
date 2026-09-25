@@ -1,0 +1,13 @@
+# Streamlit Community Cloud runtime dependencies ONLY (COMMUNITY_CLOUD_MODE).
+#
+# Community Cloud installs the dependency file it finds next to the app's
+# entrypoint (dashboard/app.py) before falling back to the repo-root
+# requirements.txt. Both pin the same Streamlit; this one omits everything
+# the thin, read-only Cloud path never imports:
+#   - cryptography: only fantasy/yahoo/* (Yahoo is not registered in Cloud;
+#     tests/test_streamlit_cloud_mode.py asserts it is never imported there)
+#   - research/training/development tooling: none is installed at all; the
+#     repo's research code only needs the stdlib + these packages.
+# Local development / VPS use the root requirements.txt.
+streamlit==1.62.0
+requests>=2.31

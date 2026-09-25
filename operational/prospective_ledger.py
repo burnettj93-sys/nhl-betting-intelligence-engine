@@ -105,6 +105,27 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+def open_for_dashboard(db_path: Path | None = None) -> sqlite3.Connection:
+    """Connection for dashboard pages (Community Cloud memory sprint,
+    Part 10). LOCAL/PRODUCTION: exactly init_db() as before. COMMUNITY_CLOUD_MODE:
+    strictly read-only -- an existing file is opened `mode=ro` (no DDL, no
+    migration, no writes); a missing one (the normal case there -- the ledger
+    is not in git) yields an EMPTY in-memory ledger so pages show honest
+    zeros, and no file is ever created."""
+    from operational import runtime_mode
+    path = db_path if db_path is not None else DB_PATH
+    if not runtime_mode.is_community_cloud():
+        return init_db(path)
+    if Path(path).exists():
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    else:
+        conn = sqlite3.connect(":memory:")
+        with open(SCHEMA_PATH) as f:
+            conn.executescript(f.read())
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def _utcnow_iso() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
@@ -287,24 +308,32 @@ def operational_summary(conn: sqlite3.Connection) -> dict:
     into the ledger for Today/Ledger widgets -- today's recorded count,
     pending-past-event settlements, last recorded timestamp, and a
     checkpoint breakdown. Never fabricates a count; an empty ledger
-    reports honest zeros."""
-    rows = conn.execute("SELECT * FROM predictions").fetchall()
-    rows = [dict(r) for r in rows]
+    reports honest zeros.
+
+    Community Cloud memory sprint (2026-09-25, Part 10): computed with SQL
+    aggregates. It used to `SELECT *` the entire, ever-growing ledger into
+    Python dicts on every Today/Ledger render and filter/count there; the
+    results are identical (same NULL/empty-string semantics), only the
+    materialization is gone."""
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
     now_iso = _utcnow_iso()
-    recorded_today = [r for r in rows if (r.get("created_at_utc") or "").startswith(today)]
-    pending_past_event = [r for r in rows
-                           if r.get("result_status") == "PENDING" and (r.get("event_start_utc") or "") < now_iso]
-    checkpoints = {}
-    for r in rows:
-        cp = r.get("prediction_checkpoint") or "UNKNOWN"
-        checkpoints[cp] = checkpoints.get(cp, 0) + 1
-    last_recorded = max((r["created_at_utc"] for r in rows if r.get("created_at_utc")), default=None)
+    total, recorded_today, pending, last_recorded = conn.execute(
+        "SELECT COUNT(*), "
+        "COALESCE(SUM(CASE WHEN substr(created_at_utc, 1, ?) = ? THEN 1 ELSE 0 END), 0), "
+        "COALESCE(SUM(CASE WHEN result_status = 'PENDING' AND COALESCE(event_start_utc, '') < ? "
+        "THEN 1 ELSE 0 END), 0), "
+        "MAX(created_at_utc) FROM predictions",
+        (len(today), today, now_iso)).fetchone()
+    checkpoints = {
+        row[0]: row[1] for row in conn.execute(
+            "SELECT COALESCE(NULLIF(prediction_checkpoint, ''), 'UNKNOWN') AS cp, COUNT(*) "
+            "FROM predictions GROUP BY cp")
+    }
     return {
-        "total": len(rows),
-        "recorded_today": len(recorded_today),
-        "pending_settlement": len(pending_past_event),
-        "last_recorded_at_utc": last_recorded,
+        "total": total,
+        "recorded_today": recorded_today,
+        "pending_settlement": pending,
+        "last_recorded_at_utc": last_recorded or None,
         "by_checkpoint": checkpoints,
     }
 

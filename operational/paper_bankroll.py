@@ -69,6 +69,23 @@ def get_conn(db_path: Path = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
+def open_for_dashboard(db_path: Path | None = None) -> sqlite3.Connection:
+    """Connection for dashboard pages (Community Cloud memory sprint, Part
+    10). LOCAL/PRODUCTION: exactly init_db() as before. COMMUNITY_CLOUD_MODE:
+    strictly read-only -- an existing file is opened `mode=ro` (no DDL, no
+    migration, no bet creation); a missing one yields an empty in-memory
+    schema so pages show honest zeros, and no file is ever created."""
+    from operational import runtime_mode
+    path = db_path if db_path is not None else DB_PATH
+    if not runtime_mode.is_community_cloud():
+        return init_db(path)
+    if Path(path).exists():
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        conn.row_factory = sqlite3.Row
+        return conn
+    return init_db(Path(":memory:"))
+
+
 _V2_CREATE_PAPER_BETS = """
 CREATE TABLE paper_bets (
     paper_bet_id            TEXT PRIMARY KEY,

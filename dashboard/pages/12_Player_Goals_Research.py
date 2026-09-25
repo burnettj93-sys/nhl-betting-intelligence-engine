@@ -28,22 +28,22 @@ STATUS_BADGE_KIND = {"VALIDATED": "input", "PARTIAL": "research", "RESEARCH": "r
                       "EMPIRICAL_BASELINE_REMAINS_CHAMPION": "research", "SUPPORTED_BY_GOALS_MODEL": "input"}
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_results():
     return gv.load_results()
 
 
-@st.cache_data(show_spinner="Loading real player-game goals corpus (this can take a few seconds)...")
+@st.cache_data(show_spinner="Loading real player-game goals corpus (this can take a few seconds)...", max_entries=8, ttl=3600)
 def _load_goals_rows():
     return gf.load_goals_corpus()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_index(_rows):
     return gf.PlayerHistoryIndex(_rows)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _build_team_context(_rows):
     totals = gf.build_team_game_goals_totals(_rows)
     team_offense_hist = gf.build_team_offense_history(totals)
@@ -55,7 +55,7 @@ def _build_team_context(_rows):
     return team_offense_hist, opponent_env, league_avg, league_shooting_pct
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _load_team_schedules():
     games = ec.load_corpus(str(NHL_CORPUS_PATH))
     return build_team_schedules(games)

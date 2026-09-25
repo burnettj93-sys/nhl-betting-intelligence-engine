@@ -31,12 +31,17 @@ import statistics
 from dataclasses import dataclass, field
 from functools import lru_cache
 
+from dashboard import cloud_snapshot
+from operational import runtime_mode
 from pricing import odds_math as pm
-from research.context_overlay.prediction_stack import ShadowContextStack
 from research.live_sog_pricing.pricing import decide, zone
 from research.player_props import decision_policy
-from research.player_sog import count_models as cm
-from research.player_sog import live_projection as plp
+
+# Community Cloud memory sprint (2026-09-25): count_models, live_projection and
+# the ShadowContextStack (which loads every frozen marginal corpus, ~430 MB) are
+# imported lazily inside the functions that need them, and in
+# COMMUNITY_CLOUD_MODE every public builder below reads the compact snapshot
+# (dashboard/cloud_snapshot.py) instead. The stack is never constructed there.
 
 DEMO_SEED = 20260827
 DEMO_MODE_LABEL = "DEMO MODE — REAL NHL ENTITIES / SIMULATED MARKETS & MODEL OUTPUTS"
@@ -114,8 +119,14 @@ def _opponent_for(team: str) -> str | None:
     return None
 
 
-@lru_cache(maxsize=1)
 def build_demo_games() -> list[DemoGame]:
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.demo_games()
+    return _build_demo_games_live()
+
+
+@lru_cache(maxsize=1)
+def _build_demo_games_live() -> list[DemoGame]:
     """Part 8/9: SIMULATED NHL SLATE -- real teams, simulated date/games.
     Deterministic readiness assignment (Part 8: a realistic mix of
     readiness states, not all green)."""
@@ -136,10 +147,20 @@ def build_demo_games() -> list[DemoGame]:
     return games
 
 
-@lru_cache(maxsize=1)
-def _demo_context() -> ShadowContextStack:
+def _demo_context():
     """The one expensive object (loads all five frozen marginal corpora).
-    Built once, cached for the process lifetime."""
+    Built once, cached for the process lifetime. NEVER built in
+    COMMUNITY_CLOUD_MODE -- callers there read the snapshot instead."""
+    if cloud_snapshot.snapshot_active():
+        raise runtime_mode.HeavyFeatureUnavailable(
+            "the research model stack (demo context) is never built in COMMUNITY_CLOUD_MODE; "
+            "this code path must read dashboard/cloud_snapshot.py instead")
+    return _demo_context_live()
+
+
+@lru_cache(maxsize=1)
+def _demo_context_live():
+    from research.context_overlay.prediction_stack import ShadowContextStack
     return ShadowContextStack()
 
 
@@ -152,8 +173,14 @@ def _goalie_engine():
     return GoalieSavesEngine(results)
 
 
-@lru_cache(maxsize=1)
 def build_demo_roster() -> list[DemoPlayer]:
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.demo_roster()
+    return _build_demo_roster_live()
+
+
+@lru_cache(maxsize=1)
+def _build_demo_roster_live() -> list[DemoPlayer]:
     """Part 5/6: real NHL player identities. Named stars (queried real
     IDs) plus real supporting cast queried directly from the corpus for
     each demo team -- not a hand-invented disconnected roster."""
@@ -197,8 +224,14 @@ def build_demo_roster() -> list[DemoPlayer]:
     return roster
 
 
-@lru_cache(maxsize=1)
 def build_demo_goalies() -> list[dict]:
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.demo_goalies()
+    return _build_demo_goalies_live()
+
+
+@lru_cache(maxsize=1)
+def _build_demo_goalies_live() -> list[dict]:
     """Real starter goalies for the demo teams -- named real goalies where
     available, else the team's most recent real starter from
     actual_starters.jsonl."""
@@ -282,6 +315,7 @@ def _conservative_probability(prop: str, engine, mu: float | None, threshold: in
     raw when no overlay applies."""
     if mu is None:
         return raw_p
+    from research.player_sog import count_models as cm
     alpha = getattr(engine, "alpha", None)
     eff_n = 20
     cons_mu = cm.conservative_mu(mu, eff_n)
@@ -289,6 +323,7 @@ def _conservative_probability(prop: str, engine, mu: float | None, threshold: in
 
 
 def _confidence_for(prop: str, engine, player_id: str, team: str, opponent: str, date: str) -> str:
+    from research.player_sog import count_models as cm
     history = engine.index.history_as_of(player_id, date)
     if len(history) < 10:
         return "LOW"
@@ -306,6 +341,9 @@ def player_activity_status(player_id: str, team: str, opponent: str) -> dict:
     zero demo opportunities (e.g. PROJECTED_INACTIVE for insufficient
     recent team games) shows an honest, specific reason instead of a
     bare 'no qualifying market' message that reads like a bug."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.activity_status(player_id, team, opponent)
+    from research.player_sog import live_projection as plp
     stack = _demo_context()
     engine = stack.ctx.sog
     result = plp.project_player_sog(
@@ -320,6 +358,8 @@ def build_demo_opportunities() -> list[dict]:
     """The core demo prop board (Part 11-18): real model probabilities
     for real players, real coherence/decision logic, simulated market
     prices. Deterministic across reruns."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.demo_opportunities()
     stack = _demo_context()
     roster = build_demo_roster()
     game_by_teams = {(g.away, g.home): g for g in build_demo_games()}
@@ -399,6 +439,8 @@ def build_demo_opportunities() -> list[dict]:
 
 def build_demo_market_movement(opportunities: list[dict] | None = None) -> list[dict]:
     """Part 82-86: deterministic simulated movement snapshots."""
+    if opportunities is None and cloud_snapshot.snapshot_active():
+        return cloud_snapshot.market_movement()
     opportunities = opportunities if opportunities is not None else build_demo_opportunities()
     rows = []
     for o in opportunities[:12]:

@@ -19,12 +19,12 @@ from dashboard import data_access as da
 from dashboard import model_view as mv
 
 
-@st.cache_data(show_spinner="Loading real NHL corpus and computing baseline predictions...")
+@st.cache_data(show_spinner="Loading real NHL corpus and computing baseline predictions...", max_entries=8, ttl=3600)
 def _load_predictions() -> list[dict]:
     return da.compute_baseline_predictions()
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=4)
 def _moneypuck_conn():
     try:
         return da.get_moneypuck_connection()

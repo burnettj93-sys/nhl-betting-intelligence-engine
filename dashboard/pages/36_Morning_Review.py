@@ -32,7 +32,7 @@ st.caption("Answers every morning: what worked, what didn't, why, whether it's n
            "production model, threshold, or decision policy -- see PRIVACY_AND_COMPLIANCE-style "
            "boundary in this module's own docstring.")
 
-conn = pb.init_db()
+conn = pb.open_for_dashboard()
 report = dpm.run_daily_postmortem(conn)
 
 st.markdown("## Yesterday's Scoreboard")

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import statistics
 
+from dashboard import cloud_snapshot
 from dashboard import demo_data as dd
-from research.player_context_state import context_state as cs
 
 NEXT5_OPPONENT_POOL = ["CGY", "SEA", "OTT", "PIT", "STL", "ANA", "NSH", "BUF"]
 
@@ -78,6 +78,10 @@ def actual_vs_expected(player_id: str, prop: str = "sog", n: int = 5) -> dict | 
     """Part 52: REAL recent actual production vs REAL model expectation
     -- both computed from the real corpus, nothing simulated here. Uses
     the player's real history strictly before the simulated slate date."""
+    if cloud_snapshot.snapshot_active():
+        if n != 5:
+            raise cloud_snapshot.SnapshotUnavailable("only n=5 is snapshotted for actual_vs_expected")
+        return cloud_snapshot.player_history(player_id)["actual_vs_expected"][prop]
     stack = dd._demo_context()
     engine = getattr(stack.ctx, prop)
     history = engine.index.history_as_of(player_id, dd.SIMULATED_DATE)
@@ -95,6 +99,8 @@ def actual_vs_expected(player_id: str, prop: str = "sog", n: int = 5) -> dict | 
 def multi_window_trend(player_id: str, prop: str) -> dict:
     """Part 53: last-5 / last-10 / season rolling means for the given
     real stat, from real history."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.player_history(player_id)["multi_window_trend"][prop]
     stack = dd._demo_context()
     engine = getattr(stack.ctx, prop) if prop != "toi" else stack.ctx.sog
     history = engine.index.history_as_of(player_id, dd.SIMULATED_DATE)
@@ -111,6 +117,9 @@ def context_evidence(player_id: str, team: str, opponent: str) -> dict | None:
     """Part 56: recompute the SAME real evidence (form ratio, TOI ratio,
     frozen cutoffs) that determined the player's context state -- for
     the transparency panel, not a new signal."""
+    if cloud_snapshot.snapshot_active():
+        return cloud_snapshot.player_history(player_id)["context_evidence"]
+    from research.player_context_state import context_state as cs
     stack = dd._demo_context()
     from dashboard import data_access as da
     results = da.load_json_safely("research/context_overlay_results.json")

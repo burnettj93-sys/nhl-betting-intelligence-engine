@@ -22,32 +22,32 @@ from research.goalie_intelligence import features as gf
 from research.goalie_intelligence import quality as gq
 
 
-@st.cache_data(show_spinner="Loading real NHL corpus...")
+@st.cache_data(show_spinner="Loading real NHL corpus...", max_entries=8, ttl=3600)
 def _load_predictions():
     return da.compute_baseline_predictions()
 
 
-@st.cache_data(show_spinner="Loading real historical starter corpus...")
+@st.cache_data(show_spinner="Loading real historical starter corpus...", max_entries=8, ttl=3600)
 def _load_starter_rows():
     return gf.load_starter_corpus()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_goalie_results():
     return gv.load_results()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _load_quality_results():
     return gqv.load_results()
 
 
-@st.cache_data(show_spinner="Loading real goalie-quality appearance corpus...")
+@st.cache_data(show_spinner="Loading real goalie-quality appearance corpus...", max_entries=8, ttl=3600)
 def _load_quality_rows():
     return gq.load_appearance_corpus()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries=8, ttl=3600)
 def _goalie_name_lookup(_all_rows):
     """BUG-203 (preseason product audit, Section AE performance check):
     leading underscore skips Streamlit's per-call hashing of the ~10.4k-row
