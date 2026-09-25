@@ -19,7 +19,7 @@ NOT_AVAILABLE = "NOT AVAILABLE IN HISTORICAL RESEARCH MODE"
 
 
 _STATE_HEADLINE = {
-    "CURRENT": ("☁️ COMMUNITY CLOUD — LIVE SNAPSHOT (CURRENT)", "ok"),
+    "CURRENT": ("☁️ COMMUNITY CLOUD — SNAPSHOT CURRENT (odds freshness is judged separately)", "ok"),
     "STALE": ("⚠️ DATA STALE — this snapshot is older than the live window; do not treat it as live", "warn"),
     "VERY_STALE": ("🛑 DATA VERY STALE — not live betting intelligence", "bad"),
     "UNAVAILABLE": ("🛑 SNAPSHOT UNAVAILABLE — no usable timestamp; nothing here is verified current", "bad"),
@@ -53,6 +53,16 @@ def cloud_banner_model(fr: dict, meta: dict) -> dict:
              if comps.get(key)]
     if shown:
         lines.append("Component freshness: " + " · ".join(shown))
+    odds_ts = comps.get("odds")
+    if odds_ts or comps.get("recommendations"):
+        from operational import cloud_snapshot_schema as schema
+        parts = []
+        for label, key in (("odds", "odds"), ("recommendations", "recommendations")):
+            if comps.get(key):
+                mf = schema.classify_market_freshness(comps[key])
+                parts.append(f"{label} {mf['state']} (newest {mf['age_minutes']:.0f} min old; limit 180 min, 90 min within 4 h of a game)"
+                             if mf["age_minutes"] is not None else f"{label} {mf['state']}")
+        lines.append("MARKET FRESHNESS (separate from snapshot freshness): " + " · ".join(parts))
     lines.append("Demo board prices are SIMULATED (labeled SIMULATED — DEMO ONLY); real DraftKings rows are "
                  "labeled LIVE — DRAFTKINGS; recorded recommendations are labeled REAL MARKET.")
     return {"headline": headline, "tone": tone, "notices": notices, "lines": lines, "state": fr.get("state")}
@@ -94,6 +104,58 @@ def live_data_state() -> str:
     if not runtime_mode.is_community_cloud():
         return "CURRENT"
     return cloud_snapshot.freshness()["state"]
+
+
+def _snapshot_generated_at() -> str | None:
+    if not runtime_mode.is_community_cloud():
+        return None
+    return cloud_snapshot.freshness().get("last_updated")
+
+
+_REASON_TEXT = {
+    "WITHIN_LIMIT": "within limit", "OLDER_THAN_3H": "price older than 3 h",
+    "NEAR_GAME_OLDER_THAN_90M": "game within 4 h and price older than 90 min",
+    "GAME_STARTED": "game already started", "NO_PRICE_TIMESTAMP": "no price timestamp",
+    "TIMESTAMP_AFTER_SNAPSHOT": "price timestamp is later than the snapshot that carries it",
+    "TIMESTAMP_IN_FUTURE": "price timestamp is in the future",
+}
+
+
+def market_freshness(row: dict) -> dict:
+    """MARKET / RECOMMENDATION freshness of one row, kept apart from SNAPSHOT freshness: a snapshot
+    published a minute ago does not make a three-hour-old sportsbook price current. The displayed
+    state is the stricter of the price's own freshness and (in Community Cloud) the snapshot's.
+    Presentation only -- never changes a stored recommendation."""
+    from operational import cloud_snapshot_schema as schema
+    f = schema.recommendation_freshness(row, snapshot_generated_at=_snapshot_generated_at())
+    snap = live_data_state()
+    f["snapshot_state"] = snap
+    f["market_state"] = f["state"]
+    f["state"] = schema.strictest([f["state"], snap])
+    return f
+
+
+def market_freshness_text(f: dict) -> str:
+    age = f.get("age_minutes")
+    age_txt = "unknown age" if age is None else (f"{age:.0f} min old" if age < 120 else f"{age / 60:.1f} h old")
+    return (f"MARKET FRESHNESS: {f['state'].replace('_', ' ')} — price {age_txt}, "
+            f"{_REASON_TEXT.get(f.get('reason'), f.get('reason'))} (limit {f['limit_minutes']:.0f} min) · "
+            f"snapshot: {f.get('snapshot_state', 'CURRENT').replace('_', ' ')} · "
+            f"created {(f.get('created_at') or '—')[:16]} · price captured {(f.get('market_captured_at') or '—')[:16]} · "
+            f"game start {(f.get('game_start_utc') or '—')[:16]}")
+
+
+def parlay_freshness(legs: list[dict]) -> dict:
+    """A Game Edge Parlay inherits the strictest freshness of its legs (and of the snapshot)."""
+    from operational import cloud_snapshot_schema as schema
+    result = schema.parlay_freshness(legs, snapshot_generated_at=_snapshot_generated_at())
+    snap = live_data_state()
+    result["snapshot_state"] = snap
+    result["state"] = schema.strictest([result["state"], snap])
+    if result["limiting_leg"]:
+        result["limiting_leg"] = {**result["limiting_leg"], "snapshot_state": snap,
+                                  "state": result["state"]}
+    return result
 
 
 def live_label(base_label: str) -> str:

@@ -120,26 +120,31 @@ st.markdown(
 )
 
 # ---- 0. Live Model Edges (real DraftKings, when a verified contract exists) ----
-_live_state = comp.live_data_state()   # CURRENT everywhere except a stale/unavailable Cloud snapshot
+# SNAPSHOT freshness and MARKET freshness are separate: each price is judged on its own capture time
+# (<= 3 h, or <= 90 min when its game starts within 4 h); a stale snapshot only makes it stricter.
 _live_rows = ldk.build_live_moneyline_comparisons()
-_live_priced = [r for r in _live_rows if r.get("status") == "PRICED"]
+_live_priced = [(r, comp.market_freshness(r)) for r in _live_rows if r.get("status") == "PRICED"]
 if _live_priced:
-    st.markdown("## Live Model Edges" if _live_state == "CURRENT" else "## Model Edges — DATA STALE (not live)")
+    _any_current = any(f["state"] == "CURRENT" for _, f in _live_priced)
+    st.markdown("## Live Model Edges" if _any_current else "## Model Edges — ODDS STALE (not live)")
+    _snap_state = _live_priced[0][1]["snapshot_state"]
     st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
-               f"Odds API pull and compared against this engine's real Elo win model. This is not simulated.")
-    for r in sorted(_live_priced, key=lambda r: -abs(r.get("raw_edge") or 0.0))[:6]:
+               f"Odds API pull and compared against this engine's real Elo win model. This is not simulated. "
+               f"SNAPSHOT FRESHNESS: {_snap_state.replace('_', ' ')} (separate from each price's own freshness below).")
+    for r, _f in sorted(_live_priced, key=lambda rf: -abs(rf[0].get("raw_edge") or 0.0))[:6]:
         lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
         lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
         lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
         lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
-        # A stale snapshot never shows an actionable badge: the decision is replaced by STALE.
-        lc4.markdown(comp.label_badge(r["decision"] if _live_state == "CURRENT" else "STALE", "input"),
+        # A price that is not CURRENT never shows an actionable badge (the stored decision is unchanged).
+        lc4.markdown(comp.label_badge(r["decision"] if _f["state"] == "CURRENT" else "STALE", "input"),
                      unsafe_allow_html=True)
         if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
             st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
                        f"real edge, not presented as actionable. {r['decision_reason']}")
         st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
                    f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
+        st.caption(comp.market_freshness_text(_f))
 
 # ---- 0b. Recorded recommendations (real market, paper-tracked) --------------------
 st.markdown("## Recorded Recommendations")
@@ -157,7 +162,8 @@ except cloud_snapshot.SnapshotUnavailable as _exc:
 if _recs is not None:
     st.caption(f"{_recs['provenance']} — recommendations the real engine recorded against real prices "
                f"(paper-tracked, never real money). Kept separate from the simulated demo board below."
-               + ("" if _live_state == "CURRENT" else f"  **{_live_state.replace('_', ' ')} — not current.**"))
+               + f"  SNAPSHOT FRESHNESS: {comp.live_data_state().replace('_', ' ')}. Each row's own MARKET FRESHNESS "
+               f"is shown below; the recorded action is never altered by staleness.")
     if _recs["moneyline"]:
         st.dataframe([{"Game": f"{r.get('opponent')} @ {r.get('team')}" if r.get("side") == r.get("team") else r.get("team"),
                        "Side": r.get("side"), "Status": r.get("prospective_status"),
@@ -165,18 +171,32 @@ if _recs is not None:
                        if r.get("conservative_probability") is not None else "—",
                        "Odds": fmt.format_american_odds(r["odds_american"]) if r.get("odds_american") else "—",
                        "Confidence": r.get("confidence"), "Recorded": (r.get("created_at_utc") or "")[:16],
-                       "Source": r.get("source")} for r in _recs["moneyline"][-30:]], width="stretch")
+                       "Price captured": (_f["market_captured_at"] or "")[:16],
+                       "Game start": (_f["game_start_utc"] or "")[:16],
+                       "Market freshness": _f["state"],
+                       "Shown as": r.get("prospective_status") if _f["state"] == "CURRENT" else "STALE",
+                       "Source": r.get("source")}
+                      for r in _recs["moneyline"][-30:] for _f in [comp.market_freshness(r)]], width="stretch")
     else:
         st.caption("No real-market MONEYLINE recommendation has been recorded yet.")
     if _recs["props"]:
         st.dataframe([{"Player": o.get("player"), "Market": o.get("market"), "Threshold": o.get("threshold"),
-                       "Decision": o.get("decision"),
+                       "Decision": o.get("decision") if comp.market_freshness(o)["state"] == "CURRENT" else "STALE",
+                       "Market freshness": comp.market_freshness(o)["state"],
+                       "Price captured": (comp.market_freshness(o)["market_captured_at"] or "")[:16],
                        "Model P": fmt.format_probability(o["coherent_probability"])
                        if o.get("coherent_probability") is not None else "—"} for o in _recs["props"][-30:]],
                      width="stretch")
     for _p in _recs.get("game_edge_parlays", []):
         _legs = " + ".join(f"{l.get('player')} {l.get('market')} {l.get('threshold')}" for l in _p["combo"]["legs"])
-        st.markdown(f"**Real Game Edge Parlay — {_p['opponent']} @ {_p['team']}:** {_legs}")
+        _pf = comp.parlay_freshness(_p["combo"]["legs"])
+        if _pf["state"] == "CURRENT":
+            st.markdown(f"**Real Game Edge Parlay — {_p['opponent']} @ {_p['team']}:** {_legs}")
+        else:
+            st.markdown(f"**Game Edge Parlay — {_p['opponent']} @ {_p['team']} — {_pf['state'].replace('_', ' ')} "
+                        f"(not a current opportunity):** {_legs}")
+        if _pf["limiting_leg"]:
+            st.caption("Parlay freshness = its stalest leg. " + comp.market_freshness_text(_pf["limiting_leg"]))
 
 # ---- 1. Today's Slate ---------------------------------------------------
 st.markdown("## 1 · Today's Slate")

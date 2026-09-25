@@ -112,6 +112,88 @@ def classify_freshness(data_as_of, now: dt.datetime | None = None) -> str:
     return VERY_STALE
 
 
+# ---- MARKET / RECOMMENDATION freshness (separate from snapshot freshness) ----------------------------
+# A snapshot published a minute ago can still carry a sportsbook price captured hours ago. Snapshot
+# freshness (above) says how recent the PUBLICATION's data is; this says how recent one PRICE is.
+# Presentation only: never alters a stored recommendation or the decision policy.
+MARKET_CURRENT_MAX_MINUTES = 180.0        # ordinary odds / recommendation: <= 3 h
+NEAR_GAME_WINDOW_HOURS = 4.0              # game starts within 4 h ...
+NEAR_GAME_CURRENT_MAX_MINUTES = 90.0      # ... price must be <= 90 min old
+FUTURE_SKEW_MINUTES = 15.0
+REASON_OK, REASON_AGE, REASON_NEAR_GAME_AGE = "WITHIN_LIMIT", "OLDER_THAN_3H", "NEAR_GAME_OLDER_THAN_90M"
+REASON_STARTED, REASON_NO_TS, REASON_AFTER_SNAPSHOT = "GAME_STARTED", "NO_PRICE_TIMESTAMP", "TIMESTAMP_AFTER_SNAPSHOT"
+REASON_FUTURE = "TIMESTAMP_IN_FUTURE"
+
+
+def classify_market_freshness(price_ts, game_start=None, now: dt.datetime | None = None,
+                              snapshot_generated_at=None) -> dict:
+    """CURRENT / STALE / UNAVAILABLE for one market price or recommendation.
+
+    `price_ts` is when the sportsbook price was captured (fall back to the recommendation's created_at
+    only when no price timestamp exists). Rules: age <= 180 min is CURRENT; if the game starts within
+    4 h the limit tightens to 90 min; a game that has already started is never CURRENT. A missing or
+    unparseable timestamp, one in the future, or one later than the snapshot that claims to contain it
+    (impossible/misleading) is UNAVAILABLE -- never CURRENT."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    price = parse_utc(price_ts)
+    start = parse_utc(game_start)
+    out = {"state": UNAVAILABLE, "reason": REASON_NO_TS, "age_minutes": None, "limit_minutes": MARKET_CURRENT_MAX_MINUTES,
+           "price_ts": price_ts, "game_start": game_start}
+    if price is None:
+        return out
+    age_min = (now - price).total_seconds() / 60.0
+    out["age_minutes"] = round(age_min, 1)
+    generated = parse_utc(snapshot_generated_at)
+    if age_min < -FUTURE_SKEW_MINUTES:
+        out["reason"] = REASON_FUTURE
+        return out
+    if generated is not None and (price - generated).total_seconds() / 60.0 > FUTURE_SKEW_MINUTES:
+        out["reason"] = REASON_AFTER_SNAPSHOT
+        return out
+    if start is not None:
+        until_start_h = (start - now).total_seconds() / 3600.0
+        if until_start_h <= 0:
+            out.update(state=STALE, reason=REASON_STARTED)
+            return out
+        if until_start_h <= NEAR_GAME_WINDOW_HOURS:
+            out["limit_minutes"] = NEAR_GAME_CURRENT_MAX_MINUTES
+    if age_min <= out["limit_minutes"]:
+        out.update(state=CURRENT, reason=REASON_OK)
+    else:
+        out.update(state=STALE, reason=REASON_NEAR_GAME_AGE if out["limit_minutes"] == NEAR_GAME_CURRENT_MAX_MINUTES
+                   else REASON_AGE)
+    return out
+
+
+_MARKET_RANK = {CURRENT: 0, STALE: 1, VERY_STALE: 2, UNAVAILABLE: 3}
+
+
+def strictest(states) -> str:
+    """The worst of several freshness states (a parlay is only as fresh as its stalest leg)."""
+    states = list(states)
+    return max(states, key=lambda x: _MARKET_RANK.get(x, 3)) if states else UNAVAILABLE
+
+
+def recommendation_freshness(row: dict, now: dt.datetime | None = None, snapshot_generated_at=None) -> dict:
+    """Market freshness of one recommendation/market row plus the four timestamps a card shows."""
+    price_ts = (row.get("odds_captured_at_utc") or row.get("captured_at_utc")
+                or row.get("market_captured_at_utc") or row.get("created_at_utc"))
+    start = row.get("event_start_utc") or row.get("commence_time_utc")
+    result = classify_market_freshness(price_ts, start, now, snapshot_generated_at)
+    result["created_at"] = row.get("created_at_utc")
+    result["market_captured_at"] = price_ts
+    result["game_start_utc"] = start
+    return result
+
+
+def parlay_freshness(legs: list[dict], now: dt.datetime | None = None, snapshot_generated_at=None) -> dict:
+    """A Game Edge Parlay inherits its STALEST leg; no legs -> UNAVAILABLE."""
+    per_leg = [recommendation_freshness(l, now, snapshot_generated_at) for l in legs]
+    worst = strictest(f["state"] for f in per_leg)
+    worst_leg = next((f for f in per_leg if f["state"] == worst), None)
+    return {"state": worst, "legs": per_leg, "limiting_leg": worst_leg}
+
+
 def age_hours(ts, now: dt.datetime | None = None) -> float | None:
     parsed = parse_utc(ts)
     if parsed is None:

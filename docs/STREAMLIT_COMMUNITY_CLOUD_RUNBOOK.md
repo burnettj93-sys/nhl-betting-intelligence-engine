@@ -62,7 +62,7 @@ and rely on the in-app ADMIN login. Check on the Diagnostics page (ADMIN) after 
 ## 5. Reboot and smoke test
 
 1. Merge the PR (see step 0), or use *Reboot app* after secrets change.
-2. Open the app as ADMIN → the banner should read `LIVE SNAPSHOT (CURRENT)` with `DATA AS OF` and `LAST UPDATED`.
+2. Open the app as ADMIN → the banner should read `SNAPSHOT CURRENT` with `DATA AS OF` and `LAST UPDATED`.
 3. Pages to open: Today, Game Detail, Game Edge Parlay, Paper Performance, Morning Review, Data Status, Diagnostics.
 4. Diagnostics → snapshot source `REMOTE`, fetch status `OK`, schema version 2, content hash present.
 5. As an invited non-admin: Today works; Diagnostics/Morning Review are not listed and are denied by direct URL.
@@ -75,10 +75,18 @@ metrics confirm the app is flat over a day; a steadily rising line means open an
 
 ## 7. Freshness check
 
-`CURRENT` ≤ 13 h since `data_as_of`; `STALE` ≤ 36 h; `VERY_STALE` beyond; `UNAVAILABLE` if the timestamp is
-missing. Stale data shows `DATA STALE`, downgrades "live" badges, and never presents as current. If the banner
-says `REMOTE UPDATE FAILED`, the app is showing the last-known-good snapshot; check the local engine's
-Data Health → CLOUD_SNAPSHOT_PUBLISH and re-run step 1.
+Two separate checks (details: `docs/CLOUD_LIVE_DATA_ARCHITECTURE.md`):
+
+- **Snapshot freshness** (banner, from `data_as_of`): `CURRENT` ≤ 13 h, `STALE` ≤ 36 h, `VERY_STALE` beyond,
+  `UNAVAILABLE` if the timestamp is missing. Governs general/daily data such as Morning Review.
+- **Market freshness** (each price/recommendation, from its own capture time): `CURRENT` ≤ 3 h, or ≤ 90 min when
+  its game starts within 4 h; otherwise `STALE`. A freshly published snapshot does **not** make an old price current.
+  Game Edge Parlays take their stalest leg.
+
+Seeing "ODDS STALE (not live)" with a `CURRENT` snapshot means the snapshot is fine but the newest price is old:
+check the local odds pull (the engine pulls 4×/day) rather than the publisher. If the banner says
+`REMOTE UPDATE FAILED`, the app is showing the last-known-good snapshot; check the local engine's Data Health →
+CLOUD_SNAPSHOT_PUBLISH and re-run step 1.
 
 ## 8. Rollback
 

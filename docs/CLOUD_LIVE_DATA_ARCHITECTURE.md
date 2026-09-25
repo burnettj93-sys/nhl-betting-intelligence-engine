@@ -61,23 +61,46 @@ Not in the snapshot, by construction: model internals, raw API responses, creden
 ### Fix delivered with this sprint: live rows were silently frozen
 `dashboard/live_dk.py` only read *per-event* archive captures; the scheduled moneyline pulls archive a *sport-level list* response, which it skipped. "Live Model Edges" therefore stopped at the last per-event probe (2026-09-15) even locally while fresh captures piled up. It now reads both shapes (33 events, newest 2026-09-25 vs 20 events, 2026-09-15). All rows are still `WAIT` because the pre-existing Elo-staleness safety gate downgrades them (Elo ratings run through 2026-04-16) — that safety is unchanged.
 
-## Freshness (factual only)
+## Freshness (factual only) — two separate questions
 
-`classify_freshness(metadata.data_as_of)`, where `data_as_of` is the newest of the real odds capture and the newest recorded recommendation (falling back to the NHL sync time):
+A snapshot published one minute ago can still carry a sportsbook price captured hours ago. So freshness is judged at **two levels that are never conflated**:
+
+### 1. SNAPSHOT / system freshness (broad, daily-cadence data)
+
+`classify_freshness(metadata.data_as_of)`, where `data_as_of` is the newest of the real odds capture and the newest recorded recommendation (falling back to the NHL sync time). This is the overall health concept and the right yardstick for **general data: Morning Review, settlement, post-mortem, Ledger, Paper Performance, Data Status**, which are produced on a daily cadence.
 
 | State | Age of `data_as_of` |
 |---|---|
-| `CURRENT` | ≤ 13 h (the moneyline job runs 4×/day with a 12 h overnight gap) |
+| `CURRENT` | ≤ 13 h |
 | `STALE` | ≤ 36 h |
 | `VERY_STALE` | > 36 h |
 | `UNAVAILABLE` | missing, unparseable, or in the future — never presented as fresh |
 
-The UI always shows **DATA AS OF** and **LAST UPDATED** (`generated_at`) plus per-component timestamps. Nothing is invented: if the laptop sleeps, `data_as_of` stops advancing and the state degrades honestly.
+### 2. MARKET / RECOMMENDATION freshness (strict, per price)
+
+`classify_market_freshness()` / `recommendation_freshness()` / `parlay_freshness()` in `operational/cloud_snapshot_schema.py`. Applies to **odds, model edges, recorded recommendations and Game Edge Parlays**. The clock is the price's own capture time (`odds_captured_at_utc` / `captured_at_utc`; the recommendation's `created_at_utc` only if no price time exists) — never the snapshot's `generated_at`.
+
+| Situation | CURRENT if price age is | Otherwise |
+|---|---|---|
+| Ordinary market | ≤ 3 h (180 min) | `STALE` (`OLDER_THAN_3H`) |
+| Game starts within 4 h | ≤ 90 min | `STALE` (`NEAR_GAME_OLDER_THAN_90M`) |
+| Game already started | never | `STALE` (`GAME_STARTED`) |
+| No / unparseable price time, price time in the future, or price time later than the snapshot that claims to contain it (impossible/misleading) | never | `UNAVAILABLE` |
+
+Rules that follow from this:
+- The displayed state is the **stricter** of the market state and the snapshot state, so a stale snapshot can only make a price stricter, and a fresh snapshot can never make an old price look current.
+- Each recommendation/market card exposes **created_at**, **price captured at**, **game start** and the **freshness classification** (with age and reason).
+- **Game Edge Parlays inherit the stalest leg.** One stale leg ⇒ the parlay is titled "Game Edge Parlay — STALE (not a current opportunity)", with the limiting leg shown.
+- **Presentation only.** `decision_policy`, `prospective_status` and every stored recommendation are untouched. A non-CURRENT row simply shows `STALE` in place of its actionable badge ("Shown as" column) while the recorded action remains visible.
+- The banner shows `MARKET FRESHNESS (separate from snapshot freshness)` next to DATA AS OF / LAST UPDATED. Its headline now reads "SNAPSHOT CURRENT (odds freshness is judged separately)".
+- Applies in LOCAL as well as Cloud mode (a three-day-old price is not live anywhere). Morning Review and other daily data are *not* subject to the 3 h / 90 min odds rule.
+
+The UI always shows **DATA AS OF** and **LAST UPDATED** (`generated_at`) plus per-component timestamps. Nothing is invented: if the laptop sleeps, timestamps stop advancing and the states degrade honestly. Note the publisher runs after the 4×/day odds pulls, so between pulls prices legitimately age past 3 h (and past 90 min near a game) — that is the intended, honest outcome; more frequent pulls near game time are what keep them CURRENT.
 
 ### Stale-data behavior
-- Banner turns amber (`DATA STALE — … do not treat it as live`) or red (`VERY STALE`, `UNAVAILABLE`) on **every** page.
-- "Live Model Edges" becomes "Model Edges — DATA STALE (not live)", the `LIVE — DRAFTKINGS` label becomes `STALE — LIVE — DRAFTKINGS (NOT CURRENT)`, and the per-row decision badge is replaced by `STALE`, so nothing reads as actionable.
-- Recorded recommendations get an explicit "not current" note.
+- Banner turns amber (`DATA STALE — … do not treat it as live`) or red (`VERY STALE`, `UNAVAILABLE`) on **every** page when the *snapshot* is stale.
+- "Live Model Edges" becomes "Model Edges — ODDS STALE (not live)" when no price is CURRENT; the `LIVE — DRAFTKINGS` label becomes `STALE — LIVE — DRAFTKINGS (NOT CURRENT)` when the snapshot is not CURRENT; each non-CURRENT row's badge is replaced by `STALE`.
+- Recorded recommendations carry Price captured / Game start / Market freshness columns and a "Shown as" column.
 
 ## Publication
 

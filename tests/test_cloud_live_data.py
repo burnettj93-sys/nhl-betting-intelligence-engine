@@ -822,7 +822,7 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
         for state, tone in (("STALE", "warn"), ("VERY_STALE", "bad"), ("UNAVAILABLE", "bad")):
             m = self.model(state=state)
             self.assertEqual(m["tone"], tone)
-            self.assertNotIn("LIVE SNAPSHOT (CURRENT)", m["headline"])
+            self.assertNotIn("SNAPSHOT CURRENT", m["headline"])
         self.assertIn("STALE", self.model(state="STALE")["headline"])
 
     def test_current_data_is_labeled_current_in_green(self):
@@ -834,7 +834,7 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
         m = self.model(state="CURRENT", source="REMOTE_LAST_KNOWN_GOOD", err="HTTP 503")
         self.assertIn("REMOTE UPDATE FAILED", " ".join(m["notices"]))
         self.assertIn("REMOTE UPDATE FAILED", m["headline"], "the headline itself must lead with the failure")
-        self.assertNotIn("LIVE SNAPSHOT (CURRENT)", m["headline"])
+        self.assertNotIn("SNAPSHOT CURRENT", m["headline"])
         self.assertIn("HTTP 503", " ".join(m["notices"]))
         self.assertNotEqual(m["tone"], "ok", "a failed refresh must not look like a healthy current snapshot")
 
@@ -865,14 +865,24 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
 
 
 class TestTodayPageStaleRendering(unittest.TestCase):
-    def _today(self, state):
+    def _today(self, state, price_age_min=30):
         from streamlit.testing.v1 import AppTest
+        from operational import cloud_snapshot_schema as schema
+        _orig = schema.recommendation_freshness
+
+        def _aged(row, now=None, snapshot_generated_at=None):
+            # judge every price as if it were `price_age_min` old (the bundled rows are historical)
+            ts = schema.parse_utc(row.get("captured_at_utc") or row.get("odds_captured_at_utc")
+                                  or row.get("created_at_utc"))
+            at = ts + dt.timedelta(minutes=price_age_min) if ts else now
+            return _orig(row, now=at, snapshot_generated_at=None)
         from operational import auth_store
         from dashboard import components as comp
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.dict(os.environ, {"NHL_ENGINE_SNAPSHOT_SOURCE": "BUNDLED"}), \
              mock.patch.object(auth_store, "DEFAULT_DB_PATH", Path(tmp) / "a.db"), \
              mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
+             mock.patch.object(schema, "recommendation_freshness", _aged), \
              mock.patch.object(comp, "live_data_state", return_value=state):
             at = AppTest.from_file(str(REPO / "dashboard" / "pages" / "21_Today.py"), default_timeout=120)
             at.session_state["_auth_username"] = "t"; at.session_state["_auth_role"] = "USER"
@@ -882,19 +892,138 @@ class TestTodayPageStaleRendering(unittest.TestCase):
 
     def test_a_stale_snapshot_shows_data_stale_and_no_live_edges_heading(self):
         text = self._today("STALE")
-        self.assertIn("DATA STALE (not live)", text)
+        self.assertIn("STALE (not live)", text)
         self.assertNotIn("## Live Model Edges", text)
         self.assertIn("NOT CURRENT", text)
 
     def test_a_current_snapshot_keeps_the_live_heading(self):
         text = self._today("CURRENT")
         self.assertIn("Live Model Edges", text)
-        self.assertNotIn("DATA STALE (not live)", text)
+        self.assertNotIn("STALE (not live)", text)
+        self.assertIn("MARKET FRESHNESS: CURRENT", text)
+
+    def test_a_current_snapshot_with_an_old_price_is_not_live(self):
+        """SNAPSHOT freshness must not launder a stale sportsbook price into a live one."""
+        text = self._today("CURRENT", price_age_min=6 * 60)
+        self.assertIn("ODDS STALE (not live)", text)
+        self.assertNotIn("## Live Model Edges", text)
+        self.assertIn("MARKET FRESHNESS: STALE", text)
+        self.assertIn("SNAPSHOT FRESHNESS: CURRENT", text)
 
     def test_recorded_recommendations_carry_their_own_real_market_label_apart_from_the_demo(self):
         text = self._today("CURRENT")
         self.assertIn("Recorded Recommendations", text)
         self.assertIn("SIMULATED MARKET (DEMO ONLY)", text)
+
+
+# ------------------------------------------------------------------------ market freshness
+class TestMarketFreshness(unittest.TestCase):
+    NOW = dt.datetime(2026, 9, 25, 18, 0, tzinfo=dt.timezone.utc)
+
+    def _price(self, minutes_old):
+        return (self.NOW - dt.timedelta(minutes=minutes_old)).isoformat()
+
+    def _start(self, hours_ahead):
+        return (self.NOW + dt.timedelta(hours=hours_ahead)).isoformat()
+
+    def classify(self, minutes_old, start_hours=None, generated=None):
+        return schema.classify_market_freshness(
+            self._price(minutes_old), None if start_hours is None else self._start(start_hours),
+            self.NOW, generated)
+
+    def test_ordinary_odds_at_or_under_three_hours_are_current(self):
+        for minutes in (0, 60, 179, 180):
+            self.assertEqual(self.classify(minutes, 10)["state"], "CURRENT", minutes)
+        self.assertEqual(self.classify(120)["state"], "CURRENT")           # no game start known
+
+    def test_ordinary_odds_over_three_hours_are_stale(self):
+        for minutes in (181, 240, 13 * 60):
+            r = self.classify(minutes, 10)
+            self.assertEqual((r["state"], r["reason"]), ("STALE", "OLDER_THAN_3H"), minutes)
+
+    def test_game_within_four_hours_price_89_minutes_is_current(self):
+        r = self.classify(89, 3.5)
+        self.assertEqual((r["state"], r["limit_minutes"]), ("CURRENT", 90.0))
+
+    def test_game_within_four_hours_price_91_minutes_is_stale(self):
+        r = self.classify(91, 3.5)
+        self.assertEqual((r["state"], r["reason"]), ("STALE", "NEAR_GAME_OLDER_THAN_90M"))
+
+    def test_the_four_hour_window_boundary(self):
+        self.assertEqual(self.classify(120, 4.0)["state"], "STALE")        # exactly 4 h out: tight rule
+        self.assertEqual(self.classify(120, 4.5)["state"], "CURRENT")      # just outside: 3 h rule
+
+    def test_a_started_game_is_never_current(self):
+        r = self.classify(5, -0.1)
+        self.assertEqual((r["state"], r["reason"]), ("STALE", "GAME_STARTED"))
+
+    def test_missing_or_unparseable_price_time_is_unavailable(self):
+        for bad in (None, "", "garbage"):
+            self.assertEqual(schema.classify_market_freshness(bad, None, self.NOW)["state"], "UNAVAILABLE")
+
+    def test_a_fresh_snapshot_with_an_old_price_is_stale_at_market_level(self):
+        generated = self.NOW.isoformat()                                   # published this minute
+        self.assertEqual(schema.classify_freshness(generated, self.NOW), "CURRENT")
+        r = self.classify(300, 10, generated)                              # price captured 5 h ago
+        self.assertEqual(r["state"], "STALE")
+
+    def test_a_price_later_than_the_snapshot_that_carries_it_is_never_current(self):
+        """Stale snapshot + fresh embedded timestamp: impossible, so it is not trusted."""
+        generated = (self.NOW - dt.timedelta(hours=20)).isoformat()
+        r = self.classify(10, 10, generated)                               # price 10 min ago, snapshot 20 h old
+        self.assertEqual((r["state"], r["reason"]), ("UNAVAILABLE", "TIMESTAMP_AFTER_SNAPSHOT"))
+        self.assertEqual(schema.classify_market_freshness(self._price(-120), None, self.NOW)["state"],
+                         "UNAVAILABLE")                                    # future-dated
+
+    def test_recommendation_freshness_exposes_the_four_facts_and_ignores_the_stored_action(self):
+        row = {"created_at_utc": self._price(200), "odds_captured_at_utc": self._price(20),
+               "event_start_utc": self._start(8), "prospective_status": "BET"}
+        before = dict(row)
+        f = schema.recommendation_freshness(row, self.NOW)
+        self.assertEqual(row, before)                                       # stored recommendation untouched
+        self.assertEqual(f["state"], "CURRENT")                             # price time, not created_at, is judged
+        self.assertEqual((f["created_at"], f["market_captured_at"], f["game_start_utc"]),
+                         (row["created_at_utc"], row["odds_captured_at_utc"], row["event_start_utc"]))
+
+    def test_parlay_inherits_its_stalest_leg(self):
+        fresh = {"odds_captured_at_utc": self._price(20), "event_start_utc": self._start(8)}
+        stale = {"odds_captured_at_utc": self._price(400), "event_start_utc": self._start(8)}
+        self.assertEqual(schema.parlay_freshness([fresh, fresh, fresh], self.NOW)["state"], "CURRENT")
+        p = schema.parlay_freshness([fresh, stale, fresh], self.NOW)
+        self.assertEqual(p["state"], "STALE")
+        self.assertEqual(p["limiting_leg"]["reason"], "OLDER_THAN_3H")
+        self.assertEqual(schema.parlay_freshness([], self.NOW)["state"], "UNAVAILABLE")
+        near = {"odds_captured_at_utc": self._price(100), "event_start_utc": self._start(2)}
+        self.assertEqual(schema.parlay_freshness([fresh, near], self.NOW)["state"], "STALE")
+
+    def test_morning_review_stays_valid_on_its_daily_cadence(self):
+        """Component freshness for settlement/postmortem uses the broad snapshot classes (13 h / 36 h):
+        a daily job 20 h old is STALE-but-usable, not treated as a live-odds violation, and a
+        30-minute odds rule must never be applied to it."""
+        ts = (self.NOW - dt.timedelta(hours=10)).isoformat()
+        self.assertEqual(schema.classify_freshness(ts, self.NOW), "CURRENT")
+        self.assertEqual(schema.classify_market_freshness(ts, None, self.NOW)["state"], "STALE")   # the odds rule would fail it
+        from dashboard import components as comp
+        text = " ".join(comp.cloud_banner_model(
+            {"state": "CURRENT", "data_as_of": ts, "last_updated": ts, "source": "REMOTE",
+             "components": {"postmortem": ts, "settlement": ts}}, {})["lines"])
+        self.assertNotIn("MARKET FRESHNESS", text)                          # no odds/recs -> no market line
+        self.assertIn("post-mortem", text)
+
+    def test_banner_reports_market_freshness_separately(self):
+        from dashboard import components as comp
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=5)).isoformat()
+        model = comp.cloud_banner_model({"state": "CURRENT", "data_as_of": old, "last_updated": "2026-09-25T00:00:00Z",
+                                         "source": "REMOTE", "components": {"odds": old}}, {})
+        self.assertIn("MARKET FRESHNESS (separate from snapshot freshness): odds STALE", " ".join(model["lines"]))
+
+    def test_market_freshness_is_at_least_as_strict_as_the_snapshot_state(self):
+        from dashboard import components as comp
+        row = {"captured_at_utc": (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=10)).isoformat()}
+        with mock.patch.object(comp, "live_data_state", return_value="STALE"):
+            self.assertEqual(comp.market_freshness(row)["state"], "STALE")
+        with mock.patch.object(comp, "live_data_state", return_value="CURRENT"):
+            self.assertEqual(comp.market_freshness(row)["state"], "CURRENT")
 
 
 # --------------------------------------------------------------------------------------- auth
@@ -1062,7 +1191,7 @@ print("RESULT " + json.dumps({
     "exceptions": exceptions, "writes": writes, "urls": sorted(set(urls)), "procs": procs, "base_rss": base,
     "today_rss": today_rss, "max_rss": max(per_page.values()),
     "forbidden_present": [m for m in FORBIDDEN if m in sys.modules],
-    "banner": 'data-testid="cloud-snapshot-banner"' in today_html, "banner_headline_current": "LIVE SNAPSHOT (CURRENT)" in today_html,
+    "banner": 'data-testid="cloud-snapshot-banner"' in today_html, "banner_headline_current": "SNAPSHOT CURRENT" in today_html,
     "diag": diagnostics_view.process_diagnostics()["snapshot"]}))
 '''
 

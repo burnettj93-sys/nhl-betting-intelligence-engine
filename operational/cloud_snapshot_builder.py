@@ -38,7 +38,7 @@ _MONEYLINE_REC_FIELDS = (
     "game_id", "game_date", "event_start_utc", "team", "opponent", "market_id", "market_family", "side",
     "prospective_status", "confidence", "raw_probability", "conservative_probability",
     "market_no_vig_probability", "odds_american", "sportsbook", "created_at_utc", "prediction_checkpoint",
-    "source", "is_demo", "has_real_paper_bet", "player_id", "player_name_snapshot", "threshold",
+    "odds_captured_at_utc", "source", "is_demo", "has_real_paper_bet", "player_id", "player_name_snapshot", "threshold",
 )
 _LEDGER_ROW_FIELDS = (
     "prediction_id", "record_type", "game_id", "game_date", "event_start_utc", "team", "opponent",
