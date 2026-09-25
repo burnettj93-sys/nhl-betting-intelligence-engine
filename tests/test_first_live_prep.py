@@ -25,7 +25,9 @@ LISTED = lambda c: True
 ARMED_DEPS = dict(
     next_cluster=lambda: {"cluster_id": "x", "games": 1}, scheduler=lambda: {"loaded": True, "on_master": True, "branch": "master", "commit": "abc1234"},
     quota=lambda: {"credits_remaining": 367, "sufficient": True, "reason": "OK", "reset_day": {"status": "OWNER_VERIFICATION_REQUIRED"}},
-    publisher=lambda: True, deployment=lambda: "ACTIVE", power=lambda: {"risk": "LOW"}, audit=lambda: {"records": {}})
+    publisher=lambda: True, deployment=lambda: "ACTIVE", power=lambda: {"risk": "LOW"}, audit=lambda: {"records": {}},
+    caffeinate=lambda: {"binary_present": True, "guard_closes_wake_gap": True}, git=lambda: {"branch": "master", "commit": "abc", "worktree_clean": True},
+    wake=lambda: {"state": "SCHEDULED", "detail": "ok"})
 
 
 # ------------------------------------------------------------------------------------------ keep-awake
@@ -49,7 +51,7 @@ class TestHoldWindows(unittest.TestCase):
 
     def test_active_window_bounds(self):
         with mock.patch.object(mp, "archived_listing", return_value=True):
-            for now, expected in ((D(19, 49), False), (D(19, 50), True), (D(20, 30), True), (D(20, 50), True), (D(20, 51), False)):
+            for now, expected in ((D(19, 39), False), (D(19, 40), True), (D(19, 50), True), (D(20, 30), True), (D(20, 50), True), (D(20, 51), False)):
                 self.assertEqual(ka.active_window(now, [D(21)]) is not None, expected, now)
 
 

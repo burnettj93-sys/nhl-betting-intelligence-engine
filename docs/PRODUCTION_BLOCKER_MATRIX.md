@@ -1,6 +1,6 @@
 # Production Blocker Matrix
 
-**As of 2026-09-25** (updated in the First Live Prep block; master `f696662`). Every row below was checked against repo/machine truth in this block; none is speculative. Component states come from `python3 opening_day_readiness.py`.
+**As of 2026-09-25** (updated in the Final Pre-Live Ops block; master `821a339`). Every row below was checked against repo/machine truth in this block; none is speculative. Component states come from `python3 opening_day_readiness.py`.
 
 Categories: **BLOCKING** (a core product function cannot work until fixed) · **WAITING_ON_EXTERNAL_EVENT** (correct fail-closed state; needs the world to change) · **OWNER_ACTION** (only the owner can do it) · **OPTIONAL_IMPROVEMENT** · **FUTURE_RESEARCH**.
 
@@ -30,8 +30,8 @@ Only what is still open:
 | O1 | **Confirm the Odds API monthly reset day** and set `NHL_ENGINE_ODDS_RESET_DAY=<1-28>` in `.env` | Nothing on this machine reveals it (no header, endpoint, log or saved account page). On the-odds-api.com log in → **Account / Usage** and read the date your quota resets (or your subscription's renewal date). Invalid values are rejected. Readiness: `ODDS_RESET_DAY` |
 | O2 | **Give the deployed Streamlit app URL**: add `NHL_ENGINE_STREAMLIT_URL=https://<your-app>.streamlit.app` to `.env` | Not discoverable from the repo, README, GitHub metadata, the Streamlit webhook or deployments (verified). With it, `python3 -m operational.cloud_preflight` performs the anonymous read-only reachability/privacy check |
 | O3 | **Streamlit UI settings** — only the ones you have not done: Settings → Sharing → "Only specific people can view this app" + your emails; Settings → Secrets: `NHL_ENGINE_ADMIN_SETUP_CODE = "<a long random string you make up>"`, `NHL_ENGINE_TRUST_PLATFORM_VIEWER = "ON"`, `NHL_ENGINE_ADMIN_EMAILS = "you@example.com"`; then, signed in, confirm the banner says SNAPSHOT CURRENT, Diagnostics (ADMIN) shows source REMOTE / schema 2, and a non-admin viewer cannot open Diagnostics | Not observable from here, so none is claimed configured. Runbook: `docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md` |
-| O4 | **Mac power for 2026-09-29 ≈ 15:45–16:45 EDT**: plugged in, lid open, logged in. Optional privileged wake: run the `sudo pmset schedule wake ...` lines from `python3 -m operational.keep_awake --plan` | Idle sleep on AC is **1 minute** and only app assertions keep the Mac awake today; the job's self-ending keep-awake starts ≈ 15:50 but cannot wake a sleeping Mac |
-| O5 | **Merge PR "First live prep"** (keep-awake, certification states, pre-flight) before 2026-09-29, and leave the live checkout on clean `master` | The scheduler runs whatever the checkout has; pre-flight reports the branch/commit it executes |
+| O4 | **Schedule the one-time wake** (needs your sudo; never run automatically): `sudo pmset schedule wake "09/29/26 15:45:00" nhl-engine` (or `python3 -m operational.schedule_next_wake --apply`, which fails closed and prints it if a password is needed), then confirm with `pmset -g sched` / `--verify`. On the day: **plugged in, lid OPEN, not shut down** | AC idle sleep is 1 minute; a sleeping Mac runs nothing and `caffeinate` cannot wake it. The wake-guard + caffeinate then hold it through ≈ 16:50. If the Mac is shut down or the lid is closed, the window can still be missed (recorded `MISSED_WINDOW`, never pulled late) |
+| O5 | **Merge the "final pre-live ops" PR** and leave the live checkout on clean `master` | The scheduler executes whatever the checkout has; pre-flight reports NOT_READY on a dirty/feature checkout |
 | O6 | Yahoo: `OWNER_AUTH_REQUIRED` | Isolated; not expanded |
 
 ## OPTIONAL_IMPROVEMENT

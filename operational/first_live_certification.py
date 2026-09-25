@@ -169,7 +169,7 @@ def preflight(now: dt.datetime | None = None, *, deps: dict | None = None) -> di
         c = clusters[0]
         state = mp.load_state()
         return {"cluster_id": c.key, "games": c.games, "expected_start_utc": c.smin.isoformat(), "t35_target_utc": c.target_pull.isoformat(),
-                "t30_anchor_utc": c.anchor.isoformat(), "capture_window_utc": [c.window[0].isoformat(), c.window[1].isoformat()],
+                "t30_anchor_utc": c.anchor.isoformat(), "t40_opens_utc": c.window[0].isoformat(), "capture_window_utc": [c.window[0].isoformat(), c.window[1].isoformat()],
                 "provider_listing": {True: "LISTED (newest archived events response)", False: "NOT_LISTED", None: "UNKNOWN"}[mp.archived_listing(c)],
                 "already_done": (state["clusters"].get(c.key) or {}).get("status") == "DONE"}
 
@@ -191,12 +191,28 @@ def preflight(now: dt.datetime | None = None, *, deps: dict | None = None) -> di
         from operational import keep_awake
         return keep_awake.power_risk()
 
+    def _wake():
+        from operational import schedule_next_wake
+        return schedule_next_wake.verify(now)
+
+    def _caffeinate():
+        import os
+        from operational import keep_awake
+        return {"binary_present": os.path.exists("/usr/bin/caffeinate"), "guard_closes_wake_gap": hasattr(keep_awake, "guard_loop"),
+                "assertion": "caffeinate -i -t <seconds> (idle-sleep only, self-ending), started by a wake-guard within ~5 s of a wake",
+                "limits": "cannot wake a sleeping Mac; cannot override lid-close or explicit sleep/shutdown"}
+
     nxt = dep("next_cluster", _next)
     sched = dep("scheduler", scheduler_code)
     quota = dep("quota", _quota)
     publisher = dep("publisher", _publisher)
     mode = dep("deployment", _deployment)
     power = dep("power", _power)
+    wake = dep("wake", _wake)
+    caffeinate = dep("caffeinate", _caffeinate)
+    repo = str(Path(__file__).resolve().parent.parent)
+    git_state = dep("git", lambda: {"branch": _git(repo, "rev-parse", "--abbrev-ref", "HEAD"), "commit": _git(repo, "rev-parse", "--short", "HEAD"),
+                                    "worktree_clean": not bool(_git(repo, "status", "--porcelain", "--untracked-files=no"))})
     audit = deps["audit"]() if "audit" in deps else mp.load_audit()
     obs = mp.live_observed(audit)
 
@@ -214,12 +230,27 @@ def preflight(now: dt.datetime | None = None, *, deps: dict | None = None) -> di
         problems.append(f"deployment mode is {mode}, not ACTIVE")
     if not getattr(mp, "END_TO_END_CERTIFIED", False):
         problems.append("end-to-end dry run not certified")
+    if not caffeinate.get("binary_present") or not caffeinate.get("guard_closes_wake_gap"):
+        problems.append("keep-awake strategy is not available (caffeinate / wake-guard)")
+    if not git_state.get("worktree_clean"):
+        problems.append("the working tree has uncommitted changes")
     architecture_ready = not problems
     state = overall_state(obs, architecture_ready, bool(nxt))
+    # PRE-FLIGHT verdict: READY / OWNER_ACTION_REQUIRED / NOT_READY (the wake needs the owner's sudo, so it is an owner action)
+    owner_actions = []
+    if nxt and wake.get("state") == "OWNER_ACTION_REQUIRED":
+        owner_actions.append("schedule the one-time wake: " + str(wake.get("command")))
+    if nxt and str(power.get("risk")) == "HIGH" and wake.get("state") != "SCHEDULED":
+        owner_actions.append("or keep the Mac awake yourself (idle sleep is 1 minute on AC); lid open, on AC power")
+    if not (quota.get("reset_day") or {}).get("status", "OWNER_CONFIGURED").startswith("OWNER_CONFIGURED"):
+        owner_actions.append("set NHL_ENGINE_ODDS_RESET_DAY (Odds API Account / Usage)")
+    verdict = "NOT_READY" if not architecture_ready else ("OWNER_ACTION_REQUIRED" if owner_actions else "READY")
     return {"generated_at_utc": now.isoformat(), "state": state, "architecture_ready": architecture_ready,
             "architecture_problems": problems, "next_cluster": nxt, "scheduler": sched, "quota": quota,
             "cloud_publisher_enabled": publisher, "deployment_mode": mode, "machine_power": power,
             "power_risk": power.get("risk"), "live_observed": obs["live_observed"], "live_certified": obs.get("live_certified", False),
+            "git": git_state, "wake": wake, "keep_awake": caffeinate, "preflight_verdict": verdict, "owner_actions": owner_actions,
+            "lid_note": "lid must be OPEN (or an external display attached) and the Mac on AC power; neither pmset nor caffeinate can override closed-lid sleep",
             "paid_requests_made": 0}
 
 
@@ -247,12 +278,26 @@ def main(argv=None) -> int:
     if "--json" in argv:
         print(json.dumps(report, indent=2, default=str))
         return 0
+    if "--wake-plan" in argv:
+        from operational import schedule_next_wake
+        return schedule_next_wake.main(["--verify"])
+    print(f"PRE-FLIGHT: {pre['preflight_verdict']}")
     print(f"MONEYLINE T-35 OVERALL: {report['overall_state']}   (ARCHITECTURE_READY={pre['architecture_ready']}, "
           f"LIVE_OBSERVED={report['live_observed']}, LIVE_CERTIFIED={report['live_certified']})")
     print("\nPRE-FLIGHT (zero paid requests)")
     nc = pre["next_cluster"]
     print("  next cluster: " + (f"{nc['cluster_id']} - {nc['games']} game(s), start {nc['expected_start_utc']}, T-35 target {nc['t35_target_utc']}, "
                                f"T-30 anchor {nc['t30_anchor_utc']}, provider: {nc['provider_listing']}" if nc else "none within 10 days"))
+    if nc:
+        print(f"  T-40 window opens {nc['t40_opens_utc']}  (capture window {nc['capture_window_utc'][0]} .. {nc['capture_window_utc'][1]})")
+    g = pre["git"]
+    print(f"  master commit: {g.get('commit')} on {g.get('branch')}; worktree clean={g.get('worktree_clean')}")
+    w = pre["wake"]
+    print(f"  wake event: {w.get('state')} - {w.get('detail')}")
+    k = pre["keep_awake"]
+    print(f"  keep-awake: caffeinate present={k.get('binary_present')}, wake-guard={k.get('guard_closes_wake_gap')} ({k.get('limits')})")
+    for a in pre["owner_actions"]:
+        print(f"  OWNER ACTION: {a}")
     sc = pre["scheduler"]
     print(f"  scheduler: loaded={sc.get('loaded')} runs={sc.get('runs_since_boot')} code={sc.get('branch')}@{sc.get('commit')} "
           f"on clean master={sc.get('on_master')} ({sc.get('working_directory')})")

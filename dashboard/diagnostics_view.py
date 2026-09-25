@@ -77,7 +77,7 @@ def _t35_row(health: dict) -> dict:
     sc = t35.get("scheduler") or {}
     detail = (f"scheduler loaded={sc.get('loaded')} code {sc.get('branch')}@{sc.get('commit')} (clean master={sc.get('on_master')}); "
               f"credits {t35.get('credits_remaining')} (sufficient={t35.get('quota_sufficient')}); publisher enabled={t35.get('cloud_publisher_enabled')}; "
-              f"sleep risk {t35.get('power_risk')}; "
+              f"sleep risk {t35.get('power_risk')}; wake {((t35.get('wake') or {}).get('state'))}; pre-flight {t35.get('preflight')}; "
               f"ARCHITECTURE_READY={'yes' if t35.get('architecture_ready') else 'no'}; LIVE_OBSERVED=" + ("yes" if t35.get("live_observed") else "no")
               + "; LIVE_CERTIFIED=" + ("yes" if t35.get("live_certified") else "no")
               + (f"; last cluster {last.get('cluster_id')}: {last.get('outcome')} (listed={last.get('provider_listed')}, "

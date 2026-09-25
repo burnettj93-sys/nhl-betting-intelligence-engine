@@ -274,8 +274,54 @@ def load_audit(path: Path | None = None) -> dict:
         return {"records": {}}
 
 
+def milestones_path(audit_path: Path | None = None) -> Path:
+    return (audit_path or AUDIT_PATH).with_name("moneyline_pregame_first_live.json")
+
+
+def load_milestones(audit_path: Path | None = None) -> dict:
+    try:
+        return json.loads(milestones_path(audit_path).read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _preserve_milestones(audit: dict, audit_path: Path | None = None) -> None:
+    """WRITE-ONCE copies of the first real cluster's records, kept OUTSIDE the rolling 200-record audit so the next
+    cluster (or the 200-record cap) can never overwrite them: first_observed (real provider data), first_certified,
+    first_failure. Only the compact audit fields are kept -- no raw responses, no credentials."""
+    path = milestones_path(audit_path)
+    current = load_milestones(audit_path)
+    obs = live_observed(audit)
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    found = {}
+    for key, r in sorted(audit["records"].items()):
+        has_data = r.get("provider_listed") is True and bool(r.get("actual_pull_utc")) and int(r.get("credits_spent") or 0) >= 1 \
+            and bool(r.get("odds_rows_stored"))
+        if has_data and "first_observed" not in found:
+            found["first_observed"] = (key, r)
+        if r.get("provider_listed") is True and not has_data and r.get("outcome") in _FAILED_OUTCOMES and "first_failure" not in found:
+            found["first_failure"] = (key, r)
+        if obs.get("live_certified") and key == obs.get("first_complete_cluster"):
+            found["first_certified"] = (key, r)
+    changed = False
+    for name, (key, r) in found.items():
+        if name not in current:
+            current[name] = {"cluster_id": key, "preserved_at_utc": now, "record": copy_record(r)}
+            changed = True
+    if changed:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(current, indent=2, sort_keys=True))
+        tmp.replace(path)
+
+
+def copy_record(r: dict) -> dict:
+    return json.loads(json.dumps(r))
+
+
 def _save_audit(audit: dict, path: Path | None = None) -> None:
     path = path or AUDIT_PATH
+    _preserve_milestones(audit, path)                 # before the rolling cap can drop anything
     keep = sorted(audit["records"].items(), key=lambda kv: kv[0])[-AUDIT_KEEP:]
     audit["records"] = dict(keep)
     path.parent.mkdir(parents=True, exist_ok=True)
