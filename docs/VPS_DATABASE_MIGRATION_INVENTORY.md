@@ -16,6 +16,8 @@ VPS Production Deployment block (2026-09-24), Part 10. **No database has been mi
 | `fantasy/storage/fantasy_store.db` | REPRODUCIBLE/OPTIONAL | 84K | `4694c551cd40e43cb645755600d22de0fd20fa29f4eaa34689640a1a0bd0de4f` | Recommended -- tiny, and moving it avoids friends having to re-pick their league/team. |
 | `fantasy/storage/yahoo_token.enc` | Not a database (encrypted file) | *does not exist yet -- no Yahoo consent completed in this environment* | -- | No -- re-running the Yahoo connect flow once on the VPS is trivial and normal (a new encryption key is being generated for the VPS anyway; see `docs/VPS_SECRETS_MANAGEMENT.md`). |
 
+**Update (2026-09-25):** the live `nhl.db` is now `operational/runtime/nhl.db` on the local Mac (the repo-root `nhl.db` is a frozen snapshot -- do not copy that one); use `python3 -c "import db; print(db.resolve_db_path())"` to get the real source path for the commands below.
+
 Re-run the size/checksum command below on the actual cutover day -- these are today's real numbers, not a permanent record; `nhl.db` in particular grows every real sync.
 
 ```bash

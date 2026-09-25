@@ -40,6 +40,20 @@ CRITICAL_DATABASES = {
     "auth_store_db": REPO_ROOT / "operational" / "auth_store.db",
 }
 
+def critical_sources() -> dict:
+    """Runtime DB hygiene (2026-09-25): the `nhl_db` entry above names the
+    frozen, git-tracked repo-root snapshot. The LIVE database is wherever
+    db.py resolves it (NHL_DB_PATH / operational/runtime/nhl.db) -- without
+    this, backups would keep faithfully copying a stale file after the
+    runtime split. Only the unmodified default entry is redirected, so
+    tests that patch CRITICAL_DATABASES still control exactly what runs."""
+    sources = dict(CRITICAL_DATABASES)
+    if sources.get("nhl_db") == REPO_ROOT / "nhl.db":
+        import db
+        sources["nhl_db"] = db.resolve_db_path()
+    return sources
+
+
 RETENTION_COUNT = 14  # keep the last 14 backups per database (roughly 2 weeks at a daily cadence)
 
 # Starting-Goalie Certainty + Prop Contract Watch block (2026-09-24),
@@ -140,7 +154,7 @@ def backup_odds_archive(*, source_dir: Path | None = None, backup_root: Path | N
 
 def run_all_backups(*, backup_root: Path | None = None, now: dt.datetime | None = None) -> dict:
     results = {name: backup_one(name, path, backup_root=backup_root, now=now)
-               for name, path in CRITICAL_DATABASES.items()}
+               for name, path in critical_sources().items()}
     results["odds_archive"] = backup_odds_archive(backup_root=backup_root, now=now)
     failures = [r for r in results.values() if r["status"] == "FAILED"]
     overall_status = "FAILED" if failures else "SUCCESS"
