@@ -29,7 +29,9 @@ from pathlib import Path
 from typing import Callable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STATE_PATH = REPO_ROOT / "operational" / "runtime" / "prop_discovery_state.json"
+from operational import state_paths as _sp
+
+STATE_PATH = _sp.path("prop_discovery_state.json")
 
 DISCOVERY_MARKETS = ("player_shots_on_goal", "player_shots_on_goal_alternate", "player_total_saves")
 MARKET_TO_CONTRACT = {"player_shots_on_goal": "PLAYER_SOG", "player_shots_on_goal_alternate": "PLAYER_SOG",
@@ -264,3 +266,21 @@ def status(now: dt.datetime | None = None) -> dict:
     states = market_states()
     return {"mode": mode(states), "market_states": states, "daily_budget": DISCOVERY_DAILY_BUDGET,
             "spent_today": spent_today(now), "sample_events": DISCOVERY_SAMPLE_EVENTS}
+
+
+def health_invariants() -> list[dict]:
+    """Configuration-level health of the discovery budget (no network, no credits): every line must hold."""
+    from operational import live_odds_daily_pull as lop
+    checks = [
+        ("hard daily cap <= 6 credits", DISCOVERY_DAILY_BUDGET <= 6),
+        ("sampled events <= 2", DISCOVERY_SAMPLE_EVENTS <= 2),
+        ("only the three desired markets are ever requested",
+         set(DISCOVERY_MARKETS) == {"player_shots_on_goal", "player_shots_on_goal_alternate", "player_total_saves"}),
+        ("daily job requests exactly the desired markets", set(lop.TARGET_MARKETS.split(",")) == set(DISCOVERY_MARKETS)),
+        ("sweeps request only desired markets", set(lop.FIRST_SWEEP_MARKETS.split(",")) <= set(DISCOVERY_MARKETS)),
+        ("no unrelated market (alternate_team_totals / team_totals) requested anywhere",
+         not ({"alternate_team_totals", "team_totals"} & (set(lop.TARGET_MARKETS.split(",")) | set(lop.FIRST_SWEEP_MARKETS.split(",")) | set(DISCOVERY_MARKETS)))),
+        ("verified mode is derived from the contract registry only", mode({k: PENDING for k in DISCOVERY_MARKETS}) == DISCOVERY
+         and mode({**{k: PENDING for k in DISCOVERY_MARKETS}, "player_total_saves": CANDIDATE}) == DISCOVERY),
+    ]
+    return [{"check": name, "ok": bool(ok)} for name, ok in checks]

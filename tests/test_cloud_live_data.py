@@ -497,7 +497,20 @@ class TestOptInAndScheduling(unittest.TestCase):
             (Path(tmp) / ".env").write_text("NHL_ENGINE_CLOUD_PUBLISH=on\n")
             with mock.patch.dict(os.environ, {}, clear=False):
                 os.environ.pop("NHL_ENGINE_CLOUD_PUBLISH", None)
-                self.assertTrue(pub.publishing_enabled())
+                # a test run never reads the owner's real .env (it once enabled real pushes from unit tests) ...
+                self.assertFalse(pub.publishing_enabled())
+                # ... so the .env path itself is exercised as production (not under test)
+                with mock.patch.object(pub._sp, "under_test", return_value=False):
+                    self.assertTrue(pub.publishing_enabled())
+
+    def test_a_test_run_never_pushes_to_the_real_remote_and_the_hook_never_launches_the_real_publisher(self):
+        r = pub.publish()                                   # no explicit remote, not a dry run
+        self.assertEqual(r["status"], pub.FAILED)
+        self.assertIn("REFUSED_UNDER_TEST", r["reason"])
+        with mock.patch.object(pub, "publishing_enabled", return_value=True), \
+             mock.patch("subprocess.run", side_effect=AssertionError("real publisher launched")):
+            out = hook.publish_after("settlement")           # default (real) runner
+        self.assertEqual((out["status"], out["reason"]), ("SKIPPED", "UNDER_TEST"))
 
     def test_hook_does_nothing_when_disabled(self):
         runner = mock.Mock()
@@ -998,7 +1011,7 @@ class TestOwnerDailyCheck(unittest.TestCase):
 
     def test_answers_every_owner_question(self):
         r = self.rows(self._doc())
-        self.assertEqual(len(r), 11)
+        self.assertEqual(len(r), 12)
         self.assertEqual(r["Is the engine healthy?"]["state"], "YES")
         self.assertEqual(r["Are odds current?"]["state"], "CURRENT")
         self.assertEqual(r["Did settlement run?"]["state"], "YES")

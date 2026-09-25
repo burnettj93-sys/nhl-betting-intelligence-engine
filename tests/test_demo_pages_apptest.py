@@ -90,8 +90,19 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
         self._assert_clean(AppTest.from_file(_page("33_Paper_Performance.py"), default_timeout=90))
 
     def test_today_shows_live_model_edges_section(self):
-        at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
-        at.run()
+        """Deterministic: the section heading depends on how old the newest real price is (<= 3 h is live), which
+        would make this test pass in the morning and fail at night. Judge every price as 30 minutes old."""
+        import datetime as dt
+        from operational import cloud_snapshot_schema as schema
+        real = schema.recommendation_freshness
+
+        def aged(row, now=None, snapshot_generated_at=None):
+            ts = schema.parse_utc(row.get("captured_at_utc") or row.get("odds_captured_at_utc") or row.get("created_at_utc"))
+            return real(row, now=ts + dt.timedelta(minutes=30) if ts else now, snapshot_generated_at=None)
+
+        with mock.patch.object(schema, "recommendation_freshness", aged):
+            at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+            at.run()
         self.assertEqual(len(at.exception), 0)
         markdown_text = " ".join(m.value for m in at.markdown)
         self.assertIn("Live Model Edges", markdown_text)

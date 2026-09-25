@@ -289,7 +289,18 @@ def _main() -> None:
     elif args.mode == "midday":
         result = run_midday_refresh()
     else:
+        # Live Run Reliability block (2026-09-25): this existing 30-minute job is the lightweight periodic
+        # checker. If the Mac was off at the 07:00 slot, recover the morning dependency chain (bounded, locked,
+        # idempotent, STANDBY-aware; a no-op in the normal case). See operational/morning_catchup.py.
+        catchup = None
+        try:
+            from operational import morning_catchup
+            catchup = morning_catchup.run_catchup()
+        except Exception as exc:  # noqa: BLE001 -- must never stop the pregame refresh
+            catchup = {"status": "FAILED", "reason": f"{type(exc).__name__}"}
         result = run_targeted_pregame_refresh()
+        if catchup and catchup.get("reason") != "NOTHING_DUE":
+            result["morning_catchup"] = catchup
 
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
 

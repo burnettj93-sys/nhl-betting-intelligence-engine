@@ -27,8 +27,11 @@ from pathlib import Path
 from typing import Callable, NamedTuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STATE_PATH = REPO_ROOT / "operational" / "runtime" / "moneyline_pregame_state.json"
-LOCK_PATH = REPO_ROOT / "operational" / "runtime" / "moneyline_pregame.lock"
+from operational import state_paths as _sp
+
+STATE_PATH = _sp.path("moneyline_pregame_state.json")
+LOCK_PATH = _sp.path("moneyline_pregame.lock")
+AUDIT_PATH = _sp.path("moneyline_pregame_audit.json")
 
 ANCHOR_MIN = 30                  # decision anchor: puck drop - 30 min       (pricing: prediction_time_for_game)
 TOLERANCE_MIN = 10               # quote must be captured <= 10 min before it (config.ODDS_STALENESS_TIERS)
@@ -97,15 +100,20 @@ def covers(pull_time: dt.datetime, start: dt.datetime) -> bool:
     return anchor - dt.timedelta(minutes=TOLERANCE_MIN) <= pull_time <= anchor
 
 
-def scheduled_starts(now: dt.datetime, hours: float = LOOKAHEAD_H, db_path: Path | None = None) -> list[dt.datetime]:
-    """SCHEDULED game start times in the next `hours`, from the existing NHL schedule (read-only)."""
+LOOKBACK_H = 12                  # missed-window detection needs clusters whose window already closed
+
+
+def scheduled_starts(now: dt.datetime, hours: float = LOOKAHEAD_H, db_path: Path | None = None,
+                     back_hours: float = LOOKBACK_H) -> list[dt.datetime]:
+    """SCHEDULED game start times from `back_hours` ago to `hours` ahead, from the existing NHL schedule
+    (read-only). The lookback only feeds MISSED_WINDOW detection; a closed window is never pulled late."""
     import db
     path = db_path or db.resolve_db_path()
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         rows = conn.execute("SELECT scheduled_start_utc FROM games WHERE game_state = 'SCHEDULED' "
                             "AND scheduled_start_utc >= ? AND scheduled_start_utc <= ?",
-                            ((now - dt.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M"),
+                            ((now - dt.timedelta(hours=back_hours)).strftime("%Y-%m-%dT%H:%M"),
                              (now + dt.timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M"))).fetchall()
     finally:
         conn.close()
@@ -118,7 +126,7 @@ def load_state(path: Path | None = None) -> dict:
     try:
         state = json.loads(path.read_text())
         return state if isinstance(state.get("clusters"), dict) else {"clusters": {}}
-    except (OSError, ValueError):
+    except (OSError, ValueError, AttributeError):
         return {"clusters": {}}
 
 
@@ -150,7 +158,8 @@ def due_clusters(clusters: list[Cluster], now: dt.datetime, state: dict) -> list
 def run_pregame(now: dt.datetime | None = None, *, starts_fn: Callable | None = None,
                 pull_fn: Callable[[], dict] | None = None, guard_fn: Callable[[], dict] | None = None,
                 listing_fn: Callable | None = None,
-                state_path: Path | None = None, lock_path: Path | None = None) -> dict:
+                state_path: Path | None = None, lock_path: Path | None = None,
+                audit_path: Path | None = None) -> dict:
     """One firing. Returns a structured result; `ran` is True only if a paid pull was attempted and the
     API answered. Never raises."""
     now = now or dt.datetime.now(dt.timezone.utc)
@@ -165,18 +174,27 @@ def run_pregame(now: dt.datetime | None = None, *, starts_fn: Callable | None = 
             except OSError:
                 result.update(status="SKIPPED", reason="ANOTHER_INSTANCE_RUNNING")
                 return result
-            return _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_path)
+            return _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_path, audit_path)
     except Exception as exc:  # noqa: BLE001 -- a scheduler job must never crash
         result.update(status="FAILED", reason=f"{type(exc).__name__}: {str(exc)[:160]}")
         return result
 
 
-def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_path):
+def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_path, audit_path=None):
     starts = (starts_fn or scheduled_starts)(now)
     clusters = plan_clusters(starts)
     state = load_state(state_path)
+    # heartbeat: a firing every ~2 minutes; a gap that spans a capture window means the machine (or the job) was
+    # not running -- that is how MACHINE_ASLEEP is told apart from a failed request
+    state["prev_heartbeat_utc"] = state.get("heartbeat_utc")
+    state["heartbeat_utc"] = now.isoformat()
+    state.setdefault("first_heartbeat_utc", now.isoformat())   # windows that closed before the job existed are not "missed"
+    missed = detect_missed_windows(now, clusters, state, audit_path=audit_path)
+    if missed:
+        result["missed_windows"] = [m["cluster_id"] for m in missed]
     due = due_clusters(clusters, now, state)
     if not due:
+        _save_state(state, state_path, now)
         upcoming = [c for c in clusters if c.due_window[1] >= now]
         result.update(reason="NO_CLUSTER_DUE", next_cluster=upcoming[0].key if upcoming else None)
         return result
@@ -185,13 +203,14 @@ def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_pat
     # every cluster whose capture window contains this instant is served by the same single call
     served = [c for c in clusters if c.window[0] <= now <= c.window[1]] or [cluster]
     result["cluster"] = cluster.key
+    result["clusters_detail"] = [_describe(c) for c in served]
 
     guard = (guard_fn or _default_guard)()
     if not guard.get("allow"):
         for c in served:
             state["clusters"].setdefault(c.key, {})["last_skip"] = {"at": now.isoformat(), "reason": guard.get("reason")}
         _save_state(state, state_path, now)
-        result.update(status="DEFERRED", reason=f"QUOTA_{guard.get('reason')}", guard=guard)
+        result.update(status="DEFERRED", reason=f"QUOTA_{guard.get('reason')}", guard=guard, listed=None)
         return result
 
     # The provider does not list every game (e.g. preseason games days out): the free events call tells us
@@ -202,7 +221,7 @@ def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_pat
             state["clusters"].setdefault(c.key, {}).update(status="DONE", outcome="NOT_LISTED_BY_PROVIDER",
                                                           last_attempt_utc=now.isoformat(), credits=0)
         _save_state(state, state_path, now)
-        result.update(status="SKIPPED", reason="NOT_LISTED_BY_PROVIDER (no credit spent)")
+        result.update(status="SKIPPED", reason="NOT_LISTED_BY_PROVIDER (no credit spent)", listed=False)
         return result
 
     for c in served:                       # record intent BEFORE spending: a crash mid-call still counts
@@ -211,6 +230,7 @@ def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_pat
                    games=c.games)
     _save_state(state, state_path, now)
 
+    result["listed"] = listing.get("listed")
     pull = (pull_fn or _default_pull)()
     ok = bool(pull.get("ran")) and not pull.get("api_error")
     captured = pull.get("captured_at_utc")
@@ -228,6 +248,219 @@ def _run_locked(now, result, starts_fn, pull_fn, guard_fn, listing_fn, state_pat
                   status="SUCCESS" if ok else "FAILED", reason=None if ok else state["clusters"][cluster.key]["error"])
     result["ran"] = ok
     return result
+
+
+# ---- classification, missed windows, audit records -----------------------------------------------------------------
+# Outcomes (never one generic FAILED):
+MACHINE_ASLEEP, PROVIDER_NOT_LISTED, QUOTA_DEFERRED = "MACHINE_ASLEEP", "PROVIDER_NOT_LISTED", "QUOTA_DEFERRED"
+NETWORK_FAILED, API_FAILED, EMPTY_RESPONSE = "NETWORK_FAILED", "API_FAILED", "EMPTY_RESPONSE"
+STORED_SUCCESSFULLY, DECISION_SUCCESS, DECISION_DATA_UNAVAILABLE = "STORED_SUCCESSFULLY", "DECISION_SUCCESS", "DECISION_DATA_UNAVAILABLE"
+MISSED_WINDOW = "MISSED_WINDOW"
+AUDIT_KEEP = 200
+LIVE_OBSERVED, ARCHITECTURE_READY_ONLY = "LIVE_OBSERVED", "WAITING_FOR_FIRST_REAL_CLUSTER"
+
+
+def _describe(c: Cluster) -> dict:
+    return {"key": c.key, "smin": c.smin.isoformat(), "smax": c.smax.isoformat(), "games": c.games,
+            "target_pull_utc": c.target_pull.isoformat(), "anchor_utc": c.anchor.isoformat(),
+            "window": [c.window[0].isoformat(), c.window[1].isoformat()]}
+
+
+def load_audit(path: Path | None = None) -> dict:
+    try:
+        data = json.loads((path or AUDIT_PATH).read_text())
+        return data if isinstance(data.get("records"), dict) else {"records": {}}
+    except (OSError, ValueError, AttributeError):
+        return {"records": {}}
+
+
+def _save_audit(audit: dict, path: Path | None = None) -> None:
+    path = path or AUDIT_PATH
+    keep = sorted(audit["records"].items(), key=lambda kv: kv[0])[-AUDIT_KEEP:]
+    audit["records"] = dict(keep)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(audit, indent=2, sort_keys=True))
+    tmp.replace(path)
+
+
+def classify_failure(error: str | None) -> str:
+    """NETWORK_FAILED for transport errors, API_FAILED for an answered-but-rejected request."""
+    text = (error or "").lower()
+    if "network error" in text or "timeout" in text or "connection" in text:
+        return NETWORK_FAILED
+    return API_FAILED
+
+
+def classify_outcome(*, listed, guard_reason=None, api_error=None, pull_ran=False, rows_stored=0,
+                     evaluated=0, data_unavailable=0) -> tuple[str, list[str]]:
+    """(primary outcome, tags). One precise label per cluster."""
+    if listed is False:
+        return PROVIDER_NOT_LISTED, [PROVIDER_NOT_LISTED]
+    if guard_reason:
+        return QUOTA_DEFERRED, [QUOTA_DEFERRED]
+    if api_error:
+        c = classify_failure(api_error)
+        return c, [c]
+    if not pull_ran:
+        return MISSED_WINDOW, [MISSED_WINDOW]
+    if not rows_stored:
+        return EMPTY_RESPONSE, [EMPTY_RESPONSE]
+    tags = [STORED_SUCCESSFULLY]
+    tags.append(DECISION_SUCCESS if evaluated else DECISION_DATA_UNAVAILABLE)
+    return tags[-1], tags
+
+
+def detect_missed_windows(now: dt.datetime, clusters: list[Cluster], state: dict,
+                          audit_path: Path | None = None) -> list[dict]:
+    """A cluster whose capture window has CLOSED without a pull is recorded exactly once as MISSED_WINDOW
+    (subtype MACHINE_ASLEEP when no firing of this job fell inside the window). It is NEVER pulled late: a
+    quote captured after the window cannot satisfy the decision policy, and pretending it does would break
+    temporal integrity -- the decision stays DATA_UNAVAILABLE."""
+    out = []
+    prev = _utc(state.get("prev_heartbeat_utc"))
+    first = _utc(state.get("first_heartbeat_utc"))
+    for c in clusters:
+        lo, hi = c.window
+        if hi >= now or (first is not None and lo < first):
+            continue
+        rec = state["clusters"].setdefault(c.key, {})
+        if rec.get("audited") or rec.get("status") == "DONE":
+            continue
+        rec["audited"] = True
+        error = rec.get("error")
+        skip = (rec.get("last_skip") or {}).get("reason")
+        attempts = int(rec.get("attempts") or 0)
+        if attempts and error:
+            primary, tags = classify_outcome(listed=True, api_error=error)
+        elif skip and not attempts:
+            primary, tags = classify_outcome(listed=None, guard_reason=skip)
+        else:
+            primary, tags = MISSED_WINDOW, [MISSED_WINDOW]
+            if prev is None or prev < lo:
+                tags.append(MACHINE_ASLEEP)
+        record = _base_audit(c)
+        record.update(outcome=primary, tags=tags, attempts=attempts, api_status=error or ("NOT_ATTEMPTED" if not attempts else "UNKNOWN"),
+                      credits_spent=0, odds_rows_stored=0, in_decision_window=False,
+                      note="window closed without a valid pull; NOT pulled late (temporal integrity)",
+                      updated_at=now.isoformat())
+        audit = load_audit(audit_path)
+        audit["records"][c.key] = record
+        _save_audit(audit, audit_path)
+        out.append(record)
+    return out
+
+
+def _base_audit(c: Cluster) -> dict:
+    return {"cluster_id": c.key, "games": c.games, "scheduled_starts": sorted({c.smin.isoformat(), c.smax.isoformat()}),
+            "target_pull_utc": c.target_pull.isoformat(), "decision_anchor_utc": c.anchor.isoformat(),
+            "actual_pull_utc": None, "provider_listed": None, "api_status": "NOT_ATTEMPTED", "credits_spent": 0,
+            "odds_rows_stored": 0, "recommendations_evaluated": 0, "bet_count": 0, "wait_count": 0, "pass_count": 0,
+            "data_unavailable_count": 0, "cloud_publish": None, "outcome": None, "tags": []}
+
+
+def cluster_game_ids(c: Cluster, db_path: Path | None = None) -> set:
+    import db
+    path = db_path or db.resolve_db_path()
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        rows = conn.execute("SELECT game_id FROM games WHERE scheduled_start_utc >= ? AND scheduled_start_utc <= ?",
+                            (c.smin.strftime("%Y-%m-%dT%H:%M"), (c.smax + dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M"))).fetchall()
+    finally:
+        conn.close()
+    return {r[0] for r in rows}
+
+
+def record_audit(result: dict, now: dt.datetime | None = None, *, game_ids_fn: Callable | None = None,
+                 audit_path: Path | None = None) -> list[dict]:
+    """Persist one compact audit record per served cluster after a firing that did something (called by the job
+    AFTER the downstream chain and the cloud publish so those results are included). No raw payloads, no secrets.
+    IDLE firings record nothing."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    details = result.get("clusters_detail") or []
+    if not details or result.get("status") == "IDLE":
+        return []
+    game_ids_fn = game_ids_fn or cluster_game_ids
+    orch = result.get("real_recommendation_orchestrator") or {}
+    bridge = result.get("real_odds_bridge") or {}
+    publish = result.get("cloud_publish") or {}
+    audit = load_audit(audit_path)
+    written = []
+    for d in details:
+        c = Cluster(_utc(d["smin"]), _utc(d["smax"]), d["games"])
+        try:
+            ids = game_ids_fn(c)
+        except Exception:  # noqa: BLE001
+            ids = set()
+        rows = [r for r in (orch.get("results") or []) if r.get("game_id") in ids]
+        counts = {a: sum(1 for r in rows if r.get("action") == a) for a in ("BET", "WAIT", "PASS", "DATA_UNAVAILABLE")}
+        evaluated = counts["BET"] + counts["WAIT"] + counts["PASS"]
+        rows_stored = int(bridge.get("rows_written") or 0) if result.get("ran") else 0
+        skipped = result.get("status") == "SKIPPED"
+        deferred = result.get("status") == "DEFERRED"
+        primary, tags = classify_outcome(
+            listed=False if skipped else result.get("listed"),
+            guard_reason=(result.get("guard") or {}).get("reason") if deferred else None,
+            api_error=None if result.get("ran") or skipped or deferred else (result.get("reason") or result.get("api_error") or "unknown"),
+            pull_ran=bool(result.get("ran")), rows_stored=rows_stored, evaluated=evaluated,
+            data_unavailable=counts["DATA_UNAVAILABLE"])
+        rec = audit["records"].get(c.key) or _base_audit(c)
+        captured = result.get("captured_at_utc")
+        rec.update(
+            provider_listed=result.get("listed"), api_status=("OK" if result.get("ran") else str(result.get("reason") or "NOT_ATTEMPTED")[:120]),
+            actual_pull_utc=captured or rec.get("actual_pull_utc"),
+            credits_spent=int(result.get("credits_spent_this_run") or 0) if result.get("ran") else rec.get("credits_spent", 0),
+            game_ids=sorted(ids) if ids else rec.get("game_ids", []),
+            odds_rows_stored=rows_stored, recommendations_evaluated=evaluated, bet_count=counts["BET"],
+            wait_count=counts["WAIT"], pass_count=counts["PASS"], data_unavailable_count=counts["DATA_UNAVAILABLE"],
+            in_decision_window=bool(captured) and c.window[0] <= _utc(captured) <= c.window[1],
+            cloud_publish={"status": publish.get("status"), "reason": publish.get("reason")} if publish else None,
+            outcome=primary, tags=tags, updated_at=now.isoformat(), attempts=(rec.get("attempts") or 0) + (1 if result.get("ran") or result.get("status") == "FAILED" else 0))
+        audit["records"][c.key] = rec
+        written.append(rec)
+    _save_audit(audit, audit_path)
+    return written
+
+
+def live_observed(audit: dict | None = None) -> dict:
+    """ARCHITECTURE_READY is a property of the code/scheduler; LIVE_OBSERVED is earned only when a REAL,
+    provider-listed cluster has completed the whole chain: triggered, spent the expected credit, stored the quote
+    inside the decision window, fed the orchestrator, produced at least one decision evaluated at T-30 (BET, WAIT
+    or PASS -- a BET is not required) and published the resulting cloud snapshot."""
+    audit = audit if audit is not None else load_audit()
+    complete, partial = [], []
+    for key, r in sorted(audit["records"].items()):
+        if r.get("provider_listed") is not True or not r.get("actual_pull_utc"):
+            continue
+        gaps = []
+        if int(r.get("credits_spent") or 0) < 1:
+            gaps.append("no credit spent")
+        if not r.get("in_decision_window"):
+            gaps.append("quote outside the decision window")
+        if not r.get("odds_rows_stored"):
+            gaps.append("no odds rows stored")
+        if not r.get("recommendations_evaluated"):
+            gaps.append("no decision evaluated")
+        pub = (r.get("cloud_publish") or {}).get("status")
+        if pub not in ("SUCCESS", "PARTIAL_SUCCESS"):
+            gaps.append(f"cloud publish {pub or 'not recorded'}")
+        (partial if gaps else complete).append({"cluster_id": key, "gaps": gaps})
+    if complete:
+        return {"status": LIVE_OBSERVED, "architecture_ready": True, "live_observed": True,
+                "first_complete_cluster": complete[0]["cluster_id"], "complete_clusters": len(complete)}
+    return {"status": ARCHITECTURE_READY_ONLY, "architecture_ready": True, "live_observed": False,
+            "incomplete_real_clusters": partial[-3:], "complete_clusters": 0}
+
+
+def last_cluster_outcome(audit: dict | None = None) -> dict | None:
+    audit = audit if audit is not None else load_audit()
+    if not audit["records"]:
+        return None
+    key = sorted(audit["records"])[-1]
+    r = audit["records"][key]
+    return {"cluster_id": key, "outcome": r.get("outcome"), "tags": r.get("tags"), "games": r.get("games"),
+            "provider_listed": r.get("provider_listed"), "credits_spent": r.get("credits_spent"),
+            "in_decision_window": r.get("in_decision_window"), "cloud_publish": (r.get("cloud_publish") or {}).get("status")}
 
 
 def _default_guard() -> dict:

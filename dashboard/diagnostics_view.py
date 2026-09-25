@@ -70,6 +70,17 @@ def process_diagnostics() -> dict:
     }
 
 
+def _t35_row(health: dict) -> dict:
+    t35 = ((health.get("operations") or {}).get("moneyline_t35")) or {}
+    last = t35.get("last_cluster") or {}
+    state = t35.get("status") or "UNKNOWN"
+    detail = ("ARCHITECTURE_READY=yes; LIVE_OBSERVED=" + ("yes" if t35.get("live_observed") else "no")
+              + (f"; last cluster {last.get('cluster_id')}: {last.get('outcome')} (listed={last.get('provider_listed')}, "
+                 f"credits={last.get('credits_spent')}, in window={last.get('in_decision_window')}, publish={last.get('cloud_publish')})"
+                 if last else "; no cluster audited yet"))
+    return {"question": "Moneyline T-35 live status", "state": state, "detail": detail}
+
+
 def _next_cluster_row(health: dict) -> dict:
     info = ((health.get("operations") or {}).get("next_decision_cluster")) or {}
     if info.get("next_cluster_start_utc"):
@@ -130,6 +141,7 @@ def owner_daily_rows(doc: dict | None, now=None) -> list[dict]:
         {"question": "Odds API credits remaining", "state": "OK" if isinstance(credits, (int, float)) and credits >= 150
          else "LOW" if isinstance(credits, (int, float)) else "UNKNOWN", "detail": f"{credits} of 500/month"},
         _next_cluster_row(health),
+        _t35_row(health),
         {"question": "Any blockers?", "state": "NONE" if not not_ok else "SEE_ABOVE",
          "detail": "no component reports a problem" if not not_ok else f"{len(not_ok)} component(s) not OK"},
     ]

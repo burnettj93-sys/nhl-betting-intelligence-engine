@@ -38,18 +38,42 @@ Read the `OVERALL` line and the table under it. `WAITING_FOR_LIVE_MARKET`, `WAIT
 | every 30 min | `pregame-targeted-refresh` (NHL rosters/goalies) | Starter data stays `PARTIAL` (projection only — no confirmed-starter source) → Saves stays **WAIT_ONLY** |
 | every 15/30 min | `prop-sweep-first/second` | 0 credits until DraftKings posts `player_shots_on_goal` / `player_total_saves`. A new market key is flagged in `New Contract Candidates` — **never** auto-certified |
 
-## Pregame (2–0.5 h before the first puck drop)
+## Pregame — the first REAL moneyline cluster (earliest: 2026-09-29, game 21:00Z → pull ≈ 20:25Z / 16:25 EDT)
 
-The engine prices each game at **puck drop − 30 min** and only accepts a DraftKings quote captured in the 10 minutes before that. The `moneyline-pregame` job (every 2 min, launchd) makes **one league-wide pull ≈ 35 min before each start-time cluster** for games the provider lists (first: 2026-09-29). Games the provider does not list are skipped at 0 credits. Keep the Mac awake and online.
+`ARCHITECTURE_READY = YES`, `LIVE_OBSERVED = NO` until this cycle completes once. PASS / WAIT decisions certify it; a BET is not required. Details: `docs/LIVE_MONEYLINE_CERTIFICATION.md`.
+
+**BEFORE T-35** (do at least 30 minutes ahead)
 
 | Check | Expected |
 |---|---|
-| Diagnostics → **Next decision cluster** / `python3 opening_day_readiness.py` → `NEXT_T35_CLUSTER` | Shows the next cluster, target pull time, decision anchor, scheduler armed, quota sufficient |
-| `operational/runtime/moneyline_pregame_state.json` | After the pull: `status: DONE`, `in_decision_window: true`, `credits: 1` |
-| Today → Live Model Edges | Rows show `WAIT` (Elo staleness / fail-closed gates) and MARKET FRESHNESS; prices > 3 h old (or > 90 min inside 4 h of puck drop) read **STALE — not live** |
-| Any recommendation cards | Show created-at, price captured, game start, freshness. A stale leg makes a Game Edge Parlay "not a current opportunity" |
-| Game Edge Parlay | `NO_QUALIFYING_GAME_EDGE_PARLAY` is the correct answer until a prop contract is verified |
-| Top Conviction | Only the simulated demo slate has cards (each labeled SIMULATED — DEMO ONLY); nothing is forced |
+| Mac on, awake, online, plugged in | a missed window is *never* pulled late — it is recorded `MISSED_WINDOW`/`MACHINE_ASLEEP` |
+| `python3 -m operational.scheduler_audit` | 11 jobs, `moneyline-pregame` loaded, status OK |
+| `python3 opening_day_readiness.py` | `MONEYLINE_T35_ARCHITECTURE READY`, `NEXT_T35_CLUSTER READY` (cluster, target pull, anchor, scheduler armed, quota sufficient), `ODDS API QUOTA` READY |
+| Cloud publisher healthy | `CLOUD SNAPSHOT` READY; `NHL_ENGINE_CLOUD_PUBLISH=ON` |
+
+**AT T-35** — one league-wide DraftKings moneyline request (1 credit), only if the provider lists the game.
+
+| Check | Expected |
+|---|---|
+| `operational/logs/moneyline_pregame.log` | a multi-line JSON block: `status: SUCCESS`, `credits_spent_this_run: 1`, `captured_at_utc` between T-40 and T-30, `real_odds_bridge.rows_written` > 0, `audit` outcome |
+| `operational/runtime/moneyline_pregame_state.json` | cluster `status: DONE`, `in_decision_window: true`, `attempts: 1` |
+
+**AT T-30** — the unchanged engine decides.
+
+| Check | Expected |
+|---|---|
+| `real_recommendation_orchestrator` in the same log block | `data_unavailable` **0** for that cluster's games; each side is BET, WAIT or PASS (`WAIT` is likely at first: Elo-staleness / goalie gates) |
+
+**AFTER**
+
+| Check | Expected |
+|---|---|
+| `python3 -m operational.first_live_certification` | every check PASS (`paper_bet_if_bet` is `NOT_APPLICABLE` unless a BET); `LIVE_OBSERVED=True` |
+| Ledger | immutable MONEYLINE observations for the cluster's games; a `REAL_MARKET_PAPER` bet only for a BET |
+| Cloud | snapshot republished after the pull (`cloud_publish` in the audit record); Today → Recorded Recommendations shows the rows with price captured / game start / freshness; banner odds CURRENT |
+| Diagnostics (ADMIN) | *Moneyline T-35 live status* → `LIVE_OBSERVED` |
+
+If a cluster misses: the audit record says exactly why (`PROVIDER_NOT_LISTED`, `QUOTA_DEFERRED`, `NETWORK_FAILED`, `API_FAILED`, `EMPTY_RESPONSE`, `MISSED_WINDOW`/`MACHINE_ASLEEP`). Nothing is patched afterwards.
 
 ## Postgame (after the last game goes FINAL)
 
@@ -74,3 +98,8 @@ The engine prices each game at **puck drop − 30 min** and only accepts a Draft
 ## Never do on day one
 
 Do not place real money based on this app. Do not loosen any gate to "see a recommendation". Do not add Yahoo or paid providers. Do not deploy the VPS unless free Streamlit fails (`docs/VPS_CUTOVER_RUNBOOK.md`).
+
+
+## If the Mac boots late in the morning
+
+Nothing to do: the next 30-minute NHL refresh runs the bounded morning catch-up (sync → settlement → post-mortem → backup, only the stages that missed their slot, ≥ 30 min after each slot, ≤ 2 attempts per stage per day). Check `operational/runtime/morning_catchup_state.json` or `python3 opening_day_readiness.py` → `NHL_DAILY_SYNC_CATCHUP`.
