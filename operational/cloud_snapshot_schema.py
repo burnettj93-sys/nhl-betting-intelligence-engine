@@ -308,9 +308,23 @@ def _strip_volatile(node):
     return node
 
 
+# Ingestion-health components whose timestamps change WITHOUT any change in what the Cloud shows: the publisher's
+# own bookkeeping (each publish rewrote it, so the very next publish always looked "changed" and NO_CHANGE could
+# never occur) and the 30-minute / daily NHL schedule refreshes. Their per-run timestamps are excluded from the
+# content hash only; the published document still carries them.
+HASH_IGNORED_INGESTION_COMPONENTS = ("cloud_snapshot_publish", "nhl_pregame_targeted_refresh", "nhl_midday_schedule_refresh")
+_INGESTION_STAMP_FIELDS = ("last_attempt_utc", "last_success_utc")
+
+
 def canonical_for_hash(doc: dict) -> dict:
     """The document with publication-only metadata and compute-time stamps removed."""
     out = _strip_volatile(json.loads(strict_dumps(doc)))
+    ingestion = ((out.get("data_status") or {}).get("ingestion_health")) if isinstance(out.get("data_status"), dict) else None
+    if isinstance(ingestion, dict):
+        for comp in HASH_IGNORED_INGESTION_COMPONENTS:
+            if isinstance(ingestion.get(comp), dict):
+                for f in _INGESTION_STAMP_FIELDS:
+                    ingestion[comp].pop(f, None)
     meta_key = "metadata" if "metadata" in out else "meta"
     if isinstance(out.get(meta_key), dict):
         for field in PUBLICATION_ONLY_FIELDS:

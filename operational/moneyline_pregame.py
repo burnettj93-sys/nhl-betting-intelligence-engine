@@ -340,6 +340,7 @@ def detect_missed_windows(now: dt.datetime, clusters: list[Cluster], state: dict
             if prev is None or prev < lo:
                 tags.append(MACHINE_ASLEEP)
         record = _base_audit(c)
+        record["provider_listed"] = archived_listing(c)
         record.update(outcome=primary, tags=tags, attempts=attempts, api_status=error or ("NOT_ATTEMPTED" if not attempts else "UNKNOWN"),
                       credits_spent=0, odds_rows_stored=0, in_decision_window=False,
                       note="window closed without a valid pull; NOT pulled late (temporal integrity)",
@@ -357,6 +358,28 @@ def _base_audit(c: Cluster) -> dict:
             "actual_pull_utc": None, "provider_listed": None, "api_status": "NOT_ATTEMPTED", "credits_spent": 0,
             "odds_rows_stored": 0, "recommendations_evaluated": 0, "bet_count": 0, "wait_count": 0, "pass_count": 0,
             "data_unavailable_count": 0, "cloud_publish": None, "outcome": None, "tags": []}
+
+
+def archived_listing(c: Cluster, archive_dir: Path | None = None) -> bool | None:
+    """Offline hint (NO network): does the newest ARCHIVED provider events response list a game near this
+    cluster? None if there is no archive. Used for missed-window records and the pre-flight report."""
+    try:
+        if archive_dir is None:
+            from research.live_sog_pricing import archive
+            archive_dir = archive.ARCHIVE_DIR
+        files = sorted(Path(archive_dir).glob("*events_na_none.json"))
+        if not files:
+            return None
+        events = json.loads(files[-1].read_text()).get("response") or []
+    except (OSError, ValueError, AttributeError):
+        return None
+    lo = c.smin - dt.timedelta(minutes=LISTING_TOLERANCE_MIN)
+    hi = c.smax + dt.timedelta(minutes=LISTING_TOLERANCE_MIN)
+    for e in events if isinstance(events, list) else []:
+        t = _utc(e.get("commence_time"))
+        if t and lo <= t <= hi:
+            return True
+    return False
 
 
 def cluster_game_ids(c: Cluster, db_path: Path | None = None) -> set:
@@ -414,7 +437,8 @@ def record_audit(result: dict, now: dt.datetime | None = None, *, game_ids_fn: C
             odds_rows_stored=rows_stored, recommendations_evaluated=evaluated, bet_count=counts["BET"],
             wait_count=counts["WAIT"], pass_count=counts["PASS"], data_unavailable_count=counts["DATA_UNAVAILABLE"],
             in_decision_window=bool(captured) and c.window[0] <= _utc(captured) <= c.window[1],
-            cloud_publish={"status": publish.get("status"), "reason": publish.get("reason")} if publish else None,
+            cloud_publish={"status": publish.get("status"), "reason": publish.get("reason"),
+                           "content_hash": publish.get("content_hash")} if publish else None,
             outcome=primary, tags=tags, updated_at=now.isoformat(), attempts=(rec.get("attempts") or 0) + (1 if result.get("ran") or result.get("status") == "FAILED" else 0))
         audit["records"][c.key] = rec
         written.append(rec)
@@ -422,34 +446,57 @@ def record_audit(result: dict, now: dt.datetime | None = None, *, game_ids_fn: C
     return written
 
 
+NOT_READY, ARCHITECTURE_READY, LIVE_CERTIFIED, FAILED_STATE = "NOT_READY", "ARCHITECTURE_READY", "LIVE_CERTIFIED", "FAILED"
+_FAILED_OUTCOMES = (NETWORK_FAILED, API_FAILED, EMPTY_RESPONSE, MISSED_WINDOW, QUOTA_DEFERRED)
+
+
 def live_observed(audit: dict | None = None) -> dict:
-    """ARCHITECTURE_READY is a property of the code/scheduler; LIVE_OBSERVED is earned only when a REAL,
-    provider-listed cluster has completed the whole chain: triggered, spent the expected credit, stored the quote
-    inside the decision window, fed the orchestrator, produced at least one decision evaluated at T-30 (BET, WAIT
-    or PASS -- a BET is not required) and published the resulting cloud snapshot."""
+    """Certification state machine (exact transitions):
+
+      NOT_READY                       prerequisites missing (decided by first_live_certification.preflight)
+      ARCHITECTURE_READY              prerequisites met, but no provider-listed cluster is upcoming yet
+      WAITING_FOR_FIRST_REAL_CLUSTER  prerequisites met and a real (listed) cluster is upcoming / not yet fired
+      LIVE_OBSERVED                   a REAL provider-listed cluster fired and produced real provider data (a credit
+                                      was spent and odds rows were stored) but not every certification gate is met
+      LIVE_CERTIFIED                  one real cluster met EVERY gate: quote captured inside [T-40, T-30], expected
+                                      credit spent, rows stored, a decision (BET / WAIT / PASS -- a BET is not required)
+                                      evaluated at T-30, and the resulting cloud snapshot published. (The read-only
+                                      certification command additionally checks the immutable observation and the
+                                      paper bet rule against the ledgers.) A bare HTTP 200 never certifies.
+      FAILED                          the most recent real cluster ended without provider data
+                                      (network/API failure, empty response, missed window, quota deferral) and no cluster
+                                      has certified; it clears when a later cluster observes or certifies.
+    """
     audit = audit if audit is not None else load_audit()
-    complete, partial = [], []
+    certified, observed, partial, failures = [], [], [], []
     for key, r in sorted(audit["records"].items()):
-        if r.get("provider_listed") is not True or not r.get("actual_pull_utc"):
+        if r.get("provider_listed") is not True:
+            continue
+        has_data = bool(r.get("actual_pull_utc")) and int(r.get("credits_spent") or 0) >= 1 and bool(r.get("odds_rows_stored"))
+        if not has_data:
+            if r.get("outcome") in _FAILED_OUTCOMES:
+                failures.append({"cluster_id": key, "outcome": r.get("outcome")})
             continue
         gaps = []
-        if int(r.get("credits_spent") or 0) < 1:
-            gaps.append("no credit spent")
         if not r.get("in_decision_window"):
             gaps.append("quote outside the decision window")
-        if not r.get("odds_rows_stored"):
-            gaps.append("no odds rows stored")
         if not r.get("recommendations_evaluated"):
             gaps.append("no decision evaluated")
         pub = (r.get("cloud_publish") or {}).get("status")
         if pub not in ("SUCCESS", "PARTIAL_SUCCESS"):
             gaps.append(f"cloud publish {pub or 'not recorded'}")
-        (partial if gaps else complete).append({"cluster_id": key, "gaps": gaps})
-    if complete:
-        return {"status": LIVE_OBSERVED, "architecture_ready": True, "live_observed": True,
-                "first_complete_cluster": complete[0]["cluster_id"], "complete_clusters": len(complete)}
-    return {"status": ARCHITECTURE_READY_ONLY, "architecture_ready": True, "live_observed": False,
-            "incomplete_real_clusters": partial[-3:], "complete_clusters": 0}
+        observed.append(key)
+        (partial if gaps else certified).append({"cluster_id": key, "gaps": gaps})
+    base = {"architecture_ready": True, "complete_clusters": len(certified), "observed_clusters": len(observed),
+            "incomplete_real_clusters": partial[-3:]}
+    if certified:
+        return {**base, "status": LIVE_CERTIFIED, "live_observed": True, "live_certified": True,
+                "first_complete_cluster": certified[0]["cluster_id"]}
+    if observed:
+        return {**base, "status": LIVE_OBSERVED, "live_observed": True, "live_certified": False}
+    if failures:
+        return {**base, "status": FAILED_STATE, "live_observed": False, "live_certified": False, "last_failure": failures[-1]}
+    return {**base, "status": ARCHITECTURE_READY_ONLY, "live_observed": False, "live_certified": False}
 
 
 def last_cluster_outcome(audit: dict | None = None) -> dict | None:

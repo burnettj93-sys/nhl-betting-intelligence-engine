@@ -504,8 +504,8 @@ class TestClusterAuditRecord(PregameCase):
 
 class TestLiveObservedTransition(PregameCase):
     def test_architecture_ready_but_not_live_observed_until_a_real_cluster_completes(self):
-        self.assertEqual(mp.live_observed({"records": {}}), {"status": mp.ARCHITECTURE_READY_ONLY, "architecture_ready": True,
-                                                            "live_observed": False, "incomplete_real_clusters": [], "complete_clusters": 0})
+        obs = mp.live_observed({"records": {}})
+        self.assertEqual((obs["status"], obs["live_observed"], obs["live_certified"]), (mp.ARCHITECTURE_READY_ONLY, False, False))
 
     def test_a_not_listed_cluster_never_counts(self):
         r = self.fire(D(22, 25), listing=lambda c: {"listed": False})
@@ -523,30 +523,37 @@ class TestLiveObservedTransition(PregameCase):
             self.audit.unlink(missing_ok=True)
             self.audited(base, **{**complete, **override})
             obs = mp.live_observed(mp.load_audit(self.audit))
-            self.assertFalse(obs["live_observed"], missing)
-            self.assertTrue(any(missing in g for g in obs["incomplete_real_clusters"][-1]["gaps"]), (missing, obs))
+            self.assertFalse(obs["live_certified"], missing)                    # a real cluster with a broken link never certifies
+            if missing in ("no decision evaluated", "cloud publish"):
+                self.assertTrue(obs["live_observed"], missing)                  # ... but real provider data WAS observed
+                self.assertEqual(obs["status"], mp.LIVE_OBSERVED)
+                self.assertTrue(any(missing in g for g in obs["incomplete_real_clusters"][-1]["gaps"]), (missing, obs))
         self.audit.unlink(missing_ok=True)
         self.audited(base, **complete)                                          # PASS/WAIT only, no BET
         obs = mp.live_observed(mp.load_audit(self.audit))
-        self.assertEqual((obs["status"], obs["live_observed"]), (mp.LIVE_OBSERVED, True))
+        self.assertEqual((obs["status"], obs["live_observed"], obs["live_certified"]), (mp.LIVE_CERTIFIED, True, True))
 
     def test_a_quote_outside_the_window_does_not_certify(self):
         r = self.fire(D(22, 25), pull=lambda: {"ran": True, "captured_at_utc": "2026-09-26T22:33:00Z", "credits_spent_this_run": 1})
         self.audited(r, real_odds_bridge={"rows_written": 40}, real_recommendation_orchestrator=ORCH([101], ["PASS"]),
                      cloud_publish={"status": "SUCCESS"})
-        self.assertFalse(mp.live_observed(mp.load_audit(self.audit))["live_observed"])
+        obs = mp.live_observed(mp.load_audit(self.audit))
+        self.assertFalse(obs["live_certified"])
+        self.assertIn("quote outside the decision window", obs["incomplete_real_clusters"][-1]["gaps"])
 
 
 # --------------------------------------------------------------------------------------- certification command
 class TestFirstLiveCertification(PregameCase):
     def test_reports_waiting_when_no_real_cluster_exists_and_spends_nothing(self):
         rep = flc.certify({"records": {}})
-        self.assertEqual((rep["architecture_ready"], rep["live_observed"], rep["status"]), (True, False, mp.ARCHITECTURE_READY_ONLY))
+        self.assertEqual((rep["architecture_ready"], rep["live_observed"], rep["live_certified"], rep["status"]),
+                         (True, False, False, mp.ARCHITECTURE_READY_ONLY))
         self.assertEqual(rep["checks"]["real_cluster_seen"]["state"], flc.PENDING)
 
     def test_command_is_read_only_and_has_no_path_to_the_paid_api(self):
         src = (REPO / "operational" / "first_live_certification.py").read_text()
-        for banned in ("live_sog_pricing", "requests", "urllib", "get_sport_odds", "run_moneyline_snapshot", "INSERT", "UPDATE ", "DELETE"):
+        for banned in ("live_sog_pricing", "import requests", "urllib", "get_sport_odds", "get_event_odds", "get_nhl_events",
+                       "run_moneyline_snapshot", "INSERT", "UPDATE ", "DELETE"):
             self.assertNotIn(banned, src)
         self.assertIn("mode=ro", src)
 
@@ -567,6 +574,8 @@ class TestFirstLiveCertification(PregameCase):
         with mock.patch.object(flc, "_persisted", return_value=2):
             rep = flc.certify(audit, ledger_path=pl_path, bankroll_path=bk_path)
         self.assertTrue(rep["live_observed"])
+        self.assertTrue(rep["live_certified"])
+        self.assertEqual(rep["post_event"]["snapshot_hash"], None)               # no hash recorded in this fake publish
         states = {k: v["state"] for k, v in rep["checks"].items()}
         self.assertEqual(states["quote_timing_valid"], flc.PASS)
         self.assertEqual(states["observation_persisted"], flc.PASS)
@@ -591,7 +600,8 @@ class TestFirstLiveCertification(PregameCase):
             rep = flc.certify(mp.load_audit(self.audit))
         self.assertEqual(rep["checks"]["observation_persisted"]["state"], flc.FAIL)
         self.assertEqual(rep["checks"]["cloud_published"]["state"], flc.FAIL)
-        self.assertFalse(rep["live_observed"])
+        self.assertFalse(rep["live_certified"])
+        self.assertTrue(rep["live_observed"])                                    # real provider data, but not certified
 
 
 if __name__ == "__main__":
