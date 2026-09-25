@@ -378,26 +378,76 @@ def build_component_states(checks: dict) -> dict:
                                           f"DraftKings MONEYLINE contract verified={ml_verified}; "
                                           f"{quotes.get('tracked_events')} events tracked")
 
-    # Can the current polling cadence ever satisfy the decision policy's quote-age tiers? (measured, not assumed)
+    # Quota + Moneyline Activation block: can the ACTIVE polling architecture feed the (unchanged) decision policy?
+    pregame_armed = None
+    try:
+        from operational import scheduler_audit
+        pregame_armed = scheduler_audit.job_loaded("com.nhlengine.moneyline-pregame")
+    except Exception:  # noqa: BLE001
+        pass
     try:
         from operational import odds_freshness_analysis as ofa
         starts = ofa.upcoming_starts()
         base = ofa.pulls_for(sorted({(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=i)).date() for i in range(-1, 16)}))
-        eligible = ofa.evaluate(starts, base)["decision_policy_quote_available_pct"] if starts else None
+        before = ofa.evaluate(starts, base)["decision_policy_quote_available_pct"] if starts else None
+        cov = ofa.coverage_report(starts, base) if starts else None
+        eligible = (cov["after_pct_worst_phase"] if (pregame_armed and cov) else before)
     except Exception:  # noqa: BLE001
-        eligible = None
+        before = eligible = cov = None
+    try:
+        from operational import moneyline_pregame as mp
+        from operational import odds_quota
+        nxt = mp.next_decision_cluster(armed=pregame_armed)
+        quota_gate = odds_quota.guard(planned=1, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
+        certified = bool(getattr(mp, "END_TO_END_CERTIFIED", False))
+    except Exception:  # noqa: BLE001
+        nxt, quota_gate, certified = {"status": "UNAVAILABLE"}, {"allow": None, "reason": "UNKNOWN"}, False
     if rr["orchestration_status"] != "HEALTHY":
         ml_state, ml_detail = "FAILED", "orchestration not operational"
-    elif eligible is not None and eligible < 50:
+    elif not (pregame_armed and certified and quota_gate.get("allow")):
         ml_state = "PARTIAL"
-        ml_detail = (f"pipeline healthy, {rr['real_moneyline_recommendations_recorded']} recorded; but the current 4x/day "
-                     f"pull cadence leaves only {eligible}% of upcoming games a quote inside the decision policy's "
-                     f"10-minute window (docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md)")
-    elif not rr["real_moneyline_recommendations_recorded"]:
-        ml_state, ml_detail = "NO_REAL_SAMPLE_YET", "pipeline healthy; no real moneyline recommendation recorded yet"
+        missing = [n for n, ok in (("pregame cadence job loaded", pregame_armed), ("end-to-end certified", certified),
+                                   ("quota sufficient", quota_gate.get("allow"))) if not ok]
+        ml_detail = (f"pipeline healthy, {rr['real_moneyline_recommendations_recorded']} recorded; NOT READY until: "
+                     f"{', '.join(missing)} (decision-window coverage now {eligible}%; docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md)")
     else:
-        ml_state, ml_detail = "READY", f"{rr['real_moneyline_recommendations_recorded']} recorded"
+        ml_state = "READY"
+        ml_detail = (f"pregame T-35 cluster pulls armed; decision-window coverage {eligible}% of upcoming games; "
+                     f"{rr['real_moneyline_recommendations_recorded']} recommendation(s) recorded so far")
     out["MONEYLINE RECOMMENDATION PIPELINE"] = _c(ml_state, ml_detail)
+    out["MONEYLINE_DECISION_COVERAGE"] = _c(
+        "READY" if pregame_armed and eligible is not None and eligible >= 95 else "PARTIAL",
+        f"before {before}% (4 fixed pulls/day) -> {eligible}% with T-35 cluster pulls "
+        f"({'armed' if pregame_armed else 'job NOT loaded'}); schedule-based, assumes each pull succeeds and the provider lists the game")
+    try:
+        from operational import prop_discovery
+        ps = prop_discovery.status()
+        cands = [k for k, v in ps["market_states"].items() if v == prop_discovery.CANDIDATE]
+        out["PROP_DISCOVERY_MODE"] = _c("OWNER_ACTION_REQUIRED" if cands else "READY",
+                                        f"{ps['mode']}; market states {ps['market_states']}"
+                                        + ("; CANDIDATE_OBSERVED -> run the deterministic certification (never auto-verified)" if cands else ""))
+        over = ps["mode"] == prop_discovery.DISCOVERY and ps["spent_today"] > ps["daily_budget"]
+        out["PROP_DAILY_BUDGET"] = _c("FAILED" if over else "READY",
+                                      f"{ps['spent_today']} credits spent on props today (discovery cap {ps['daily_budget']}/day; "
+                                      f"observed cost while absent: 0)")
+    except Exception as exc:  # noqa: BLE001
+        out["PROP_DISCOVERY_MODE"] = _c("FAILED", f"{type(exc).__name__}: {exc}")
+        out["PROP_DAILY_BUDGET"] = _c("FAILED", "prop discovery status unavailable")
+    st = nxt.get("status")
+    out["NEXT_T35_CLUSTER"] = _c(
+        "READY" if st == "ARMED" else "WAITING_FOR_LIVE_MARKET" if st == "NO_CLUSTER_SCHEDULED" else "PARTIAL",
+        (f"cluster {nxt.get('next_cluster_start_utc')} ({nxt.get('games_in_cluster')} game(s)): pull ~{nxt.get('target_pull_utc')}, "
+         f"decision anchor {nxt.get('decision_anchor_utc')}, scheduler armed={nxt.get('scheduler_armed')}, "
+         f"quota sufficient={nxt.get('quota_sufficient')}") if nxt.get("next_cluster_start_utc") else str(nxt))
+    try:
+        from operational import scheduler_audit as sa
+        info = sa.launchctl_info("com.nhlengine.daily-nhl-sync")
+        booted = sa.boot_time()
+        out["NHL_SYNC_SCHEDULER"] = _c("READY" if info["loaded"] else "FAILED",
+                                       f"daily-nhl-sync loaded={info['loaded']} runs={info['runs']} (per boot; boot "
+                                       f"{booted.isoformat() if booted else 'unknown'}; launchd does not replay slots missed while off)")
+    except Exception as exc:  # noqa: BLE001
+        out["NHL_SYNC_SCHEDULER"] = _c("PARTIAL", f"could not inspect launchd: {type(exc).__name__}")
 
     def waiting(status):
         return "WAITING_FOR_LIVE_MARKET" if status == "PENDING_LIVE_CONTRACT" else ("READY" if status == "READY" else "PARTIAL")

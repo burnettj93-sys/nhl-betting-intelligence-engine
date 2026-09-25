@@ -70,6 +70,17 @@ def process_diagnostics() -> dict:
     }
 
 
+def _next_cluster_row(health: dict) -> dict:
+    info = ((health.get("operations") or {}).get("next_decision_cluster")) or {}
+    if info.get("next_cluster_start_utc"):
+        return {"question": "Next decision cluster", "state": info.get("status") or "UNKNOWN",
+                "detail": f"{info.get('games_in_cluster')} game(s) at {info['next_cluster_start_utc']}; pull ~{info.get('target_pull_utc')}; "
+                          f"decision anchor {info.get('decision_anchor_utc')}; scheduler armed={info.get('scheduler_armed')}; "
+                          f"quota sufficient={info.get('quota_sufficient')}"}
+    return {"question": "Next decision cluster", "state": info.get("status") or "UNKNOWN",
+            "detail": "none within the lookahead" if info else "not in this snapshot"}
+
+
 def owner_daily_rows(doc: dict | None, now=None) -> list[dict]:
     """The ADMIN's concise answer to "is the engine OK today?", derived ONLY from the published snapshot
     (production activation block, 2026-09-25) so it works in Community Cloud without touching any database:
@@ -118,6 +129,7 @@ def owner_daily_rows(doc: dict | None, now=None) -> list[dict]:
         daily("postmortem", "Did the post-mortem run?"),
         {"question": "Odds API credits remaining", "state": "OK" if isinstance(credits, (int, float)) and credits >= 150
          else "LOW" if isinstance(credits, (int, float)) else "UNKNOWN", "detail": f"{credits} of 500/month"},
+        _next_cluster_row(health),
         {"question": "Any blockers?", "state": "NONE" if not not_ok else "SEE_ABOVE",
          "detail": "no component reports a problem" if not not_ok else f"{len(not_ok)} component(s) not OK"},
     ]

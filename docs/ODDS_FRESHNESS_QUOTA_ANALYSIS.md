@@ -60,3 +60,28 @@ What existing code already supports:
 | Extra refresh only for actionable candidates | Bridge → orchestrator already runs after each moneyline pull and reports per-game status | orchestrator does not tell the poller which games are worth a refresh |
 
 **Proposed design (not implemented):** a `--mode=moneyline-pregame` in `operational/live_odds_daily_pull.py` fired every 5 minutes via `StartInterval` (like the sweeps; most firings return instantly, 0 credits). It acts only when (a) some SCHEDULED game's anchor (start−30 min) is 30–40 min away, (b) no moneyline capture exists within the last 10 min before that anchor, and (c) the daily pregame-pull cap (e.g. 6) and the governor's budget allow it; then it performs the existing `run_moneyline_snapshot()` and the existing downstream chain unchanged. Same-cluster games share the call; idempotency keys already make a duplicate firing harmless. Optional refinement later: skip clusters whose games the Elo/goalie gates would WAIT anyway (saves credits, no policy change). Estimated cost ≈ 4 credits per game day. Because launchd only runs while the Mac is awake and online, the VPS fallback (`docs/VPS_CUTOVER_RUNBOOK.md`) remains the reliability answer if missed pulls stay frequent.
+
+
+## 5. Implemented 2026-09-25 (Quota + Moneyline Activation block)
+
+**Architecture.** One new launchd job, `com.nhlengine.moneyline-pregame` (`deploy/launchd/com.nhlengine.moneyline-pregame.plist`, `StartInterval = 120`), runs `live_odds_daily_pull --mode=moneyline-pregame`. Almost every firing is an instant no-op (≈ 0.25 s, no network, no credit). Logic lives in `operational/moneyline_pregame.py`:
+
+* **Clusters.** SCHEDULED games from the existing NHL schedule (`games.scheduled_start_utc`) are grouped when their start times are within 5 minutes. Audit of the next 30 days: 87 games have only **55 distinct start times** and adjacent starts are either identical or ≥ 20 minutes apart (0–5 min: 32 pairs; 5–20: none), so a 5-minute tolerance changes nothing and keeps every capture window ≥ 5 minutes wide. (A 10-minute spread would leave a zero-width window.)
+* **Timing.** A cluster with starts [smin, smax] is served by any capture in **[smax − 40 min, smin − 30 min]** — exactly the unchanged decision policy (anchor = puck drop − 30, quote ≤ 10 min before the anchor). The job acts only inside that window shrunk by 30 s at each edge; a single game therefore pulls at ≈ **T-35**. Windows that overlap share one call.
+* **One paid call:** `run_moneyline_snapshot("pregame")` — the same league-wide DraftKings `h2h` request as the scheduled pulls (1 credit) — then the unchanged bridge → orchestrator → cloud-publish chain.
+* **Idempotent:** state file (`operational/runtime/moneyline_pregame_state.json`) is written *before* spending; a cluster is pulled once; a FAILED attempt may retry once while the window is open (`MAX_ATTEMPTS = 2`); a lock file prevents concurrent instances. A crash mid-call still counts as an attempt.
+* **Quota guard before every spend** (`operational/odds_quota.py`): hard reserve 20, days left in cycle, daily soft budget (pregame may borrow 3× ahead of the even pace because it is the decision feed). Too little quota → `DEFERRED`, no call.
+* **Free listing check:** the provider does not list every game (its first NHL event is 2026-09-29). The free `/events` call decides whether any game of the cluster is listed; if not, the cluster is `SKIPPED NOT_LISTED_BY_PROVIDER` at **0 credits**.
+* **Network failures.** The client used to make one attempt with a 15 s timeout (8 of 41 scheduled moneyline runs failed). It now makes ≤ 3 attempts with 1 s / 3 s backoff **only** for failures that cannot have been billed (connection never established, HTTP 502/503/504); a `ReadTimeout` is never retried; 401/404/429 are never retried. The pregame job adds one more bounded retry per cluster via its next 2-minute firing.
+
+**Before / after coverage** (83 scheduled games, next 14 days, assuming each pull succeeds; simulated at six launchd phase offsets, worst case shown — `python3 -m operational.odds_freshness_analysis`):
+
+| | 4 fixed pulls/day | + pregame clusters |
+|---|---|---|
+| Games with a decision-window quote | 1 of 83 (**1.2 %**) | **83 of 83 (100 %)** |
+| Missed | 82 | **0** |
+| Extra pulls (credits) | — | 53 clusters over 12 game days ≈ **4.4 / game day** (41 clusters ≈ 4.1/day for games the provider lists) |
+
+This is the schedule-arithmetic result, not a tuned number: 100 % follows because every cluster's due window contains at least two firings of a 2-minute job. Real-world misses come from (a) a failed pull after both attempts, (b) a quota `DEFERRED`, (c) the machine being off/asleep, (d) a game the provider does not list. None can be simulated in advance; each is visible in the state file and the readiness table.
+
+**Dry run (Part 19, `tests/test_quota_moneyline_activation.py::TestEndToEndDryRun`).** With a DraftKings quote captured at T-35 the unchanged pipeline records both sides (BET/PASS as the model decides; a paper bet only for a BET) with `data_unavailable = 0`, and the rows appear in the Cloud recommendations section as `REAL MARKET`, price CURRENT. A quote captured 41 minutes before the start, or 3 hours before, is still `DATA_UNAVAILABLE` — cadence, not policy, was the blocker; policy was not touched.

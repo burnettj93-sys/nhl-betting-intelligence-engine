@@ -407,6 +407,17 @@ class Test08bAutoSnapshotLabel(unittest.TestCase):
 # 9. Two-stage targeted prop sweep (Part 11)
 # ---------------------------------------------------------------------
 class Test09TargetedPropSweep(unittest.TestCase):
+    def setUp(self):
+        # the sweeps now keep per-event de-duplication and a discovery budget in prop_discovery's state file
+        # and consult the quota guard: isolate both from the real machine
+        from operational import odds_quota, prop_discovery
+        self._tmp = tempfile.mkdtemp()
+        for p in (mock.patch.object(prop_discovery, "STATE_PATH", Path(self._tmp) / "pd.json"),
+                  mock.patch.object(odds_quota, "latest_remaining", return_value=400),
+                  mock.patch.object(odds_quota, "credits_spent_today", return_value=0)):
+            p.start()
+            self.addCleanup(p.stop)
+
     def test_invalid_sweep_name_raises(self):
         with self.assertRaises(ValueError):
             lop.run_targeted_prop_sweep("third")

@@ -370,6 +370,7 @@ class TestComponentStates(unittest.TestCase):
     REQUIRED = ("NHL DATA", "MONEYLINE MARKET CONTRACT", "MONEYLINE RECOMMENDATION PIPELINE", "SOG MARKET CONTRACT",
                 "SOG ACTIONABILITY", "SAVES MARKET CONTRACT", "SAVES STARTER DATA", "SAVES ACTIONABILITY",
                 "GAME EDGE PARLAY", "PAPER BETTING", "SETTLEMENT", "CLV", "POSTMORTEM", "CLOUD SNAPSHOT",
+                "MONEYLINE_DECISION_COVERAGE", "PROP_DISCOVERY_MODE", "PROP_DAILY_BUDGET", "NEXT_T35_CLUSTER", "NHL_SYNC_SCHEDULER",
                 "CLOUD PUBLICATION", "CLOUD FRESHNESS", "ODDS API QUOTA", "SCHEDULERS", "BACKUPS", "AUTH", "YAHOO")
 
     def checks(self, **over):
@@ -385,16 +386,27 @@ class TestComponentStates(unittest.TestCase):
         c.update(over)
         return c
 
-    def build(self, checks=None, eligible=1.2, loaded=10):
-        from operational import ingestion_health, publish_cloud_snapshot as pcs
+    def build(self, checks=None, eligible=1.2, loaded=10, pregame_armed=False, quota_ok=True):
+        from operational import ingestion_health, moneyline_pregame, odds_quota, publish_cloud_snapshot as pcs
+        from operational import scheduler_audit
         healthy = {k: {"last_status": "SUCCESS", "last_success_utc": "2999-01-01T00:00:00+00:00"} for k in
                    ("settlement", "postmortem", "database_backups")}
+        cov = {"after_pct_worst_phase": 100.0, "before_pct": eligible}
         fake_ofa = mock.Mock(upcoming_starts=mock.Mock(return_value=[1]), pulls_for=mock.Mock(return_value=[]),
-                             evaluate=mock.Mock(return_value={"decision_policy_quote_available_pct": eligible}))
+                             evaluate=mock.Mock(return_value={"decision_policy_quote_available_pct": eligible}),
+                             coverage_report=mock.Mock(return_value=cov))
+        nxt = {"status": "ARMED" if pregame_armed else "SCHEDULER_NOT_LOADED", "scheduler_armed": pregame_armed,
+               "quota_sufficient": quota_ok, "next_cluster_start_utc": "2026-09-29T21:00:00+00:00", "games_in_cluster": 1,
+               "target_pull_utc": "x", "decision_anchor_utc": "y"}
         with mock.patch.object(ingestion_health, "load_health", return_value=healthy), \
              mock.patch.object(ingestion_health, "component_age_hours", return_value=1.0), \
              mock.patch.dict("sys.modules", {"operational.odds_freshness_analysis": fake_ofa}), \
              mock.patch.object(__import__("operational"), "odds_freshness_analysis", fake_ofa, create=True), \
+             mock.patch.object(scheduler_audit, "job_loaded", return_value=pregame_armed), \
+             mock.patch.object(scheduler_audit, "launchctl_info", return_value={"loaded": True, "runs": 1}), \
+             mock.patch.object(scheduler_audit, "boot_time", return_value=None), \
+             mock.patch.object(moneyline_pregame, "next_decision_cluster", return_value=nxt), \
+             mock.patch.object(odds_quota, "guard", return_value={"allow": quota_ok, "reason": "OK" if quota_ok else "HARD_RESERVE"}), \
              mock.patch.object(odr.sh, "cloud_snapshot_publish_health", return_value={"status": "OK", "message": "ok"}), \
              mock.patch.object(pcs, "publishing_enabled", return_value=True), \
              mock.patch.object(odr, "_launchctl_loaded_count", return_value=loaded), \
@@ -416,9 +428,25 @@ class TestComponentStates(unittest.TestCase):
         self.assertEqual(out["AUTH"]["state"], "OWNER_ACTION_REQUIRED")
         self.assertEqual(out["SCHEDULERS"]["state"], "READY")
 
-    def test_moneyline_pipeline_is_partial_when_the_polling_cadence_cannot_feed_it(self):
-        self.assertEqual(self.build(eligible=1.2)["MONEYLINE RECOMMENDATION PIPELINE"]["state"], "PARTIAL")
-        self.assertEqual(self.build(eligible=97.6)["MONEYLINE RECOMMENDATION PIPELINE"]["state"], "NO_REAL_SAMPLE_YET")
+    def test_moneyline_pipeline_is_ready_only_when_cadence_is_armed_quota_ok_and_certified(self):
+        from operational import moneyline_pregame
+        key = "MONEYLINE RECOMMENDATION PIPELINE"
+        out = self.build(pregame_armed=False)
+        self.assertEqual(out[key]["state"], "PARTIAL")
+        self.assertIn("pregame cadence job loaded", out[key]["detail"])
+        self.assertEqual(out["MONEYLINE_DECISION_COVERAGE"]["state"], "PARTIAL")
+        self.assertEqual(self.build(pregame_armed=True, quota_ok=False)[key]["state"], "PARTIAL")
+        armed = self.build(pregame_armed=True)
+        self.assertEqual(armed[key]["state"], "READY")
+        self.assertEqual(armed["MONEYLINE_DECISION_COVERAGE"]["state"], "READY")
+        self.assertEqual(armed["NEXT_T35_CLUSTER"]["state"], "READY")
+        with mock.patch.object(moneyline_pregame, "END_TO_END_CERTIFIED", False):
+            self.assertEqual(self.build(pregame_armed=True)[key]["state"], "PARTIAL")
+
+    def test_new_scheduler_and_prop_states_are_reported(self):
+        out = self.build(pregame_armed=True)
+        for name in ("MONEYLINE_DECISION_COVERAGE", "PROP_DISCOVERY_MODE", "PROP_DAILY_BUDGET", "NEXT_T35_CLUSTER", "NHL_SYNC_SCHEDULER"):
+            self.assertIn(out[name]["state"], odr.COMPONENT_STATES, name)
 
     def test_scheduler_and_quota_and_nhl_failures_are_surfaced(self):
         self.assertEqual(self.build(loaded=0)["SCHEDULERS"]["state"], "FAILED")

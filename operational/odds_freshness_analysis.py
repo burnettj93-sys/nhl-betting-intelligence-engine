@@ -94,23 +94,43 @@ def evaluate(starts: list[dt.datetime], pulls: list[dt.datetime]) -> dict:
             "per_game": per_game}
 
 
-def add_targeted_pulls(starts: list[dt.datetime], base: list[dt.datetime], lead_min: int = 35,
-                       max_per_day: int = 6) -> list[dt.datetime]:
-    """PROPOSAL model only: one league-wide pull `lead_min` before a game's puck drop when no existing
-    pull already satisfies the decision-policy window. One pull serves every game whose anchor
-    (start - 30 min) falls within 10 min after it, so same-time games share a credit."""
+def add_targeted_pulls(starts: list[dt.datetime], base: list[dt.datetime], *, interval_s: int = 120,
+                       offset_s: int = 0, latency_s: int = 5) -> list[dt.datetime]:
+    """The ACTUAL pregame architecture (operational/moneyline_pregame.py) simulated: games are clustered
+    (start times within CLUSTER_SPREAD_MIN), launchd fires every `interval_s` starting at `offset_s` past the
+    hour, and the first firing inside a cluster's due window makes one pull that lands `latency_s` later.
+    A cluster whose due window contains no firing is a real miss and is left uncovered."""
+    from operational import moneyline_pregame as mp
     pulls = list(base)
-    per_day: dict = {}
-    for s in sorted(starts):
-        if decision_policy_eligible(pulls, s):
+    for c in mp.plan_clusters(starts):
+        lo, hi = c.due_window
+        if lo > hi:
             continue
-        day = (s - dt.timedelta(hours=8)).date()                      # a "hockey day" ends ~08:00 UTC
-        if per_day.get(day, 0) >= max_per_day:
-            continue
-        pulls.append(s - dt.timedelta(minutes=lead_min))
-        per_day[day] = per_day.get(day, 0) + 1
-        pulls.sort()
-    return pulls
+        # first firing time >= lo on the grid  offset_s + k * interval_s (seconds past the hour)
+        hour = lo.replace(minute=0, second=0, microsecond=0)
+        t = hour + dt.timedelta(seconds=offset_s)
+        while t < lo:
+            t += dt.timedelta(seconds=interval_s)
+        if t <= hi:
+            pulls.append(t + dt.timedelta(seconds=latency_s))
+    return sorted(pulls)
+
+
+def coverage_report(starts: list[dt.datetime], base: list[dt.datetime]) -> dict:
+    """BEFORE (fixed 4x/day) vs AFTER (+ pregame clusters), worst case over launchd phase offsets."""
+    before = evaluate(starts, base)
+    afters = [evaluate(starts, add_targeted_pulls(starts, base, offset_s=o)) for o in range(0, 120, 20)]
+    worst = min(afters, key=lambda r: r["decision_policy_quote_available_pct"])
+    missed = [g["start"] for g in worst["per_game"] if not decision_policy_eligible(
+        add_targeted_pulls(starts, base, offset_s=0), dt.datetime.fromisoformat(g["start"]))]
+    from operational import moneyline_pregame as mp
+    clusters = mp.plan_clusters(starts)
+    return {"games": len(starts), "clusters": len(clusters),
+            "before_pct": before["decision_policy_quote_available_pct"],
+            "before_games_covered": round(before["decision_policy_quote_available_pct"] * len(starts) / 100),
+            "after_pct_worst_phase": worst["decision_policy_quote_available_pct"],
+            "after_games_covered": round(worst["decision_policy_quote_available_pct"] * len(starts) / 100),
+            "games_missed_after": missed, "extra_pulls": len(clusters)}
 
 
 def main(argv=None) -> int:
@@ -120,6 +140,7 @@ def main(argv=None) -> int:
     days = sorted({(now + dt.timedelta(days=i)).date() for i in range(-1, 16)})
     base = pulls_for(days)
     targeted = add_targeted_pulls(starts, base)
+    cov = coverage_report(starts, base)
     game_days = len({(s - dt.timedelta(hours=8)).date() for s in starts}) or 1
     report = {
         "generated_at_utc": now.isoformat(), "games_analyzed": len(starts), "game_days": game_days,
@@ -127,6 +148,7 @@ def main(argv=None) -> int:
         "baseline": {k: v for k, v in evaluate(starts, base).items() if k != "per_game"},
         "with_targeted_pregame_pulls": {k: v for k, v in evaluate(starts, targeted).items() if k != "per_game"},
         "extra_credits_per_game_day": round((len([p for p in targeted if p not in base and p > now])) / game_days, 2),
+        "coverage": cov,
     }
     if "--json" in argv:
         print(json.dumps(report, indent=2))
