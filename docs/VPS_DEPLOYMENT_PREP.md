@@ -97,9 +97,11 @@ ExecStart=/opt/nhl_engine/.venv/bin/python3 -m operational.nhl_sync
 
 Repeat this service+timer pair for each of the other 9 real jobs, using each plist's own real `ProgramArguments`/schedule as the source of truth:
 
+**Correction (VPS Production Deployment block, 2026-09-24, Part 4/0):** the table below originally listed `nhlengine-nhl-sync` as running `operational.nhl_sync` directly. Re-auditing the real launchd job against current master found this was never accurate -- `com.nhlengine.daily-nhl-sync.plist` has always run `sync_daily.py` (the root-level wrapper that runs NHL sync, the MoneyPuck daily check, the cross-check, and readiness-cache writing together), not the bare `operational.nhl_sync` module. Corrected below; see `deploy/systemd/` for the real, validated unit files.
+
 | Job | Module + args | Schedule |
 |---|---|---|
-| `nhlengine-nhl-sync` | `operational.nhl_sync` | `07:00` daily |
+| `nhlengine-nhl-sync` | `sync_daily.py` | `07:00` daily |
 | `nhlengine-settlement` | `operational.settle_daily_observations` | `07:15` daily |
 | `nhlengine-postmortem` | `operational.daily_postmortem` | `07:30` daily |
 | `nhlengine-backup` | `operational.backup_databases` | `07:45` daily |

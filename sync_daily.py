@@ -90,5 +90,12 @@ def run(cache_path: Path = READINESS_CACHE_PATH) -> int:
     return 0
 
 
+def main() -> int:
+    from operational import deployment_mode as dm
+    if not dm.require_active_scheduler_or_exit("sync_daily"):
+        return 0
+    return run()
+
+
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(main())

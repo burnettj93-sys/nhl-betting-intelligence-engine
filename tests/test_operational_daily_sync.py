@@ -22,9 +22,36 @@ from pathlib import Path
 from unittest import mock
 
 import db
-from operational import crosscheck, moneypuck_daily as mpd, nhl_sync, readiness
+from operational import crosscheck, ingestion_health, moneypuck_daily as mpd, nhl_sync, readiness
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# VPS Production Deployment block (2026-09-24), Part 13: real bug found
+# via this block's own new production_health_summary() -- nhl_sync.
+# run_nhl_sync() calls ingestion_health.record_run("nhl_sync_full", ...)
+# unconditionally (unlike run_settlement_batch()/run_daily_postmortem(),
+# where that call lives only in main(), never the pure function this
+# file tests directly). Every test in this module that called
+# run_nhl_sync() with no isolation was silently overwriting the REAL
+# operational/ingestion_health_cache.json with fake FAILED/PARTIAL_SUCCESS
+# test artifacts -- confirmed present in the real file, including a
+# fabricated "RuntimeError: network down" entry from this exact suite's
+# own test_sync_failure_is_reported_not_raised. Isolated module-wide, not
+# per-class, since the file's own docstring already claims "no real
+# network calls in this suite" as a blanket guarantee.
+_health_cache_patcher = None
+
+
+def setUpModule():
+    global _health_cache_patcher
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    tmp.close()
+    _health_cache_patcher = mock.patch.object(ingestion_health, "DEFAULT_CACHE_PATH", Path(tmp.name))
+    _health_cache_patcher.start()
+
+
+def tearDownModule():
+    _health_cache_patcher.stop()
 
 
 def _fresh_conn():
@@ -546,6 +573,39 @@ class TestGitignoreCoverage(unittest.TestCase):
             text = f.read()
         self.assertIn("data/raw/moneypuck/**/*.csv", text)
         self.assertIn("data/raw/moneypuck/**/*.zip", text)
+
+
+class TestIngestionHealthCacheIsolation(unittest.TestCase):
+    """VPS Production Deployment block (2026-09-24), Part 13: direct
+    regression guard for the real bug described at this module's
+    setUpModule() -- proves running every run_nhl_sync()-calling test
+    class in this file leaves the REAL operational/ingestion_health_cache.json
+    byte-identical, the same style of guard as
+    TestMoneyPuckStagingIsolation below."""
+
+    def test_running_nhl_sync_test_classes_never_touches_the_real_cache(self):
+        real_path = ingestion_health.DEFAULT_CACHE_PATH
+        # setUpModule already patched DEFAULT_CACHE_PATH for this whole
+        # module's run -- read the REAL path directly (module attribute
+        # lookup, bypassing the active patch) to prove it stays untouched.
+        import operational.ingestion_health as real_ih_module
+        unpatched_real_path = Path(real_ih_module.__file__).resolve().parent.parent / \
+            "operational" / "ingestion_health_cache.json"
+        before = unpatched_real_path.read_bytes() if unpatched_real_path.exists() else None
+
+        loader = unittest.TestLoader()
+        suite = unittest.TestSuite()
+        for cls_name in ("TestNHLSyncIdempotency", "TestNHLSyncWindow",
+                         "TestNHLSyncRosterDegradationIsNonCritical"):
+            suite.addTests(loader.loadTestsFromName(f"tests.test_operational_daily_sync.{cls_name}"))
+        runner = unittest.TextTestRunner(stream=io.StringIO(), verbosity=0)
+        result = runner.run(suite)
+
+        after = unpatched_real_path.read_bytes() if unpatched_real_path.exists() else None
+        self.assertTrue(result.wasSuccessful())
+        self.assertEqual(before, after,
+                          "the REAL operational/ingestion_health_cache.json changed during a "
+                          "supposedly-isolated test run -- this is exactly the bug this test guards against")
 
 
 

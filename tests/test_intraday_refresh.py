@@ -16,6 +16,29 @@ from unittest import mock
 import db
 from operational import ingestion_health, nhl_sync
 
+# VPS Production Deployment block (2026-09-24), Part 13: real gap found
+# -- run_midday_refresh()/run_targeted_pregame_refresh() call
+# ingestion_health.record_run() unconditionally, and only
+# test_records_ingestion_health isolated it via an explicit
+# cache_path= override; every other test in TestMiddayRefresh and
+# TestPregameTargetedRefresh was silently overwriting the REAL
+# operational/ingestion_health_cache.json. TestIngestionHealth below
+# always passes its own explicit cache_path=, so this module-wide
+# DEFAULT_CACHE_PATH patch has no effect on it.
+_health_cache_patcher = None
+
+
+def setUpModule():
+    global _health_cache_patcher
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    tmp.close()
+    _health_cache_patcher = mock.patch.object(ingestion_health, "DEFAULT_CACHE_PATH", Path(tmp.name))
+    _health_cache_patcher.start()
+
+
+def tearDownModule():
+    _health_cache_patcher.stop()
+
 
 def _fresh_conn():
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)

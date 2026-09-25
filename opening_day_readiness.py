@@ -307,7 +307,22 @@ def check_yahoo() -> dict:
 
 
 def _launchctl_loaded_count() -> int | None:
+    """Name kept for existing test-patch compatibility -- VPS Production
+    Deployment block (2026-09-24), Part 14: real second instance of the
+    same launchctl-only gap already found and fixed in
+    operational/system_health.py::live_odds_scheduler_health(). This one
+    fed straight into build_readiness_report()'s hard-failure/warning
+    logic, so on a Linux VPS it would have permanently reported "could
+    not query launchctl" as a warning regardless of how healthy the real
+    systemd timers were. Both label tuples have the same real length
+    (10), so the existing `< len(sh._SCHEDULER_LABELS)` comparison
+    downstream stays correct on either platform."""
+    import platform
     try:
+        if platform.system() == "Linux":
+            result = subprocess.run(["systemctl", "list-timers", "--all", "--no-legend"],
+                                     capture_output=True, text=True, timeout=5)
+            return sum(1 for unit in sh._SYSTEMD_TIMER_UNITS if unit in result.stdout)
         result = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=5)
         return sum(1 for label in sh._SCHEDULER_LABELS if label in result.stdout)
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError):

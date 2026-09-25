@@ -1,0 +1,12 @@
+[Unit]
+Description=Moneyline snapshot at 08:00, 13:00, 17:00, 20:00
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+OnCalendar=*-*-* 13:00:00
+OnCalendar=*-*-* 17:00:00
+OnCalendar=*-*-* 20:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

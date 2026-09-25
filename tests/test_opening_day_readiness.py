@@ -178,6 +178,34 @@ class TestRealPropPipelineCheck(unittest.TestCase):
         self.assertEqual(report["hard_failures"], [])
 
 
+class TestLaunchctlLoadedCountIsCrossPlatform(unittest.TestCase):
+    """VPS Production Deployment block (2026-09-24), Part 14: a second,
+    independent launchctl-only gap (distinct from the one already found
+    and fixed in operational/system_health.py) -- this one feeds
+    build_readiness_report()'s own hard-failure/warning logic directly."""
+
+    def test_counts_via_systemctl_on_linux(self):
+        class _FakeResult:
+            stdout = "\n".join(odr.sh._SYSTEMD_TIMER_UNITS)
+
+        with mock.patch("platform.system", return_value="Linux"), \
+             mock.patch("opening_day_readiness.subprocess.run", return_value=_FakeResult()):
+            self.assertEqual(odr._launchctl_loaded_count(), len(odr.sh._SYSTEMD_TIMER_UNITS))
+
+    def test_counts_via_launchctl_on_macos(self):
+        class _FakeResult:
+            stdout = "\n".join(odr.sh._SCHEDULER_LABELS)
+
+        with mock.patch("platform.system", return_value="Darwin"), \
+             mock.patch("opening_day_readiness.subprocess.run", return_value=_FakeResult()):
+            self.assertEqual(odr._launchctl_loaded_count(), len(odr.sh._SCHEDULER_LABELS))
+
+    def test_returns_none_not_a_crash_when_the_tool_is_missing(self):
+        with mock.patch("platform.system", return_value="Linux"), \
+             mock.patch("opening_day_readiness.subprocess.run", side_effect=FileNotFoundError("no systemctl")):
+            self.assertIsNone(odr._launchctl_loaded_count())
+
+
 class TestVerdictLogic(unittest.TestCase):
     def test_unreachable_database_forces_not_ready(self):
         with mock.patch.object(odr, "check_databases",

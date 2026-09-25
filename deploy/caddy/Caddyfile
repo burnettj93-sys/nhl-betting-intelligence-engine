@@ -1,0 +1,30 @@
+# VPS Production Deployment block (2026-09-24), Part 7.
+#
+# {$NHL_ENGINE_DOMAIN} must be set to the real domain (or the VPS's
+# static IP, if no domain is configured yet) before Caddy starts --
+# this file deliberately does not invent one. Point that domain's DNS A
+# record at the VPS's IP first; Caddy then requests a Let's Encrypt
+# certificate automatically on first run, no manual certbot step.
+#
+# If no domain exists yet, set NHL_ENGINE_DOMAIN to the VPS's bare IP
+# (e.g. "203.0.113.10") -- Caddy serves plain HTTP with no certificate
+# in that case (an IP has no CA that will issue it a public cert); treat
+# that as a temporary state only, not a production config to leave
+# running once friends are using this for real.
+{$NHL_ENGINE_DOMAIN} {
+    reverse_proxy 127.0.0.1:8501
+
+    # Streamlit's own port is bound to 127.0.0.1 only (see
+    # deploy/systemd/nhlengine-dashboard.service) -- Caddy is the only
+    # thing actually reachable from the public internet.
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # No directory browsing, no static file serving from this config --
+    # everything is proxied through Streamlit, which never lists a
+    # directory on its own.
+}

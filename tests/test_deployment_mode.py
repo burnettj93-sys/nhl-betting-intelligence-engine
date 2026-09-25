@@ -98,6 +98,30 @@ class TestJobEntryPointsRespectStandby(unittest.TestCase):
             bd.main()
         mock_run.assert_not_called()
 
+    def test_sync_daily_main_skips_when_standby(self):
+        """VPS Production Deployment block (2026-09-24), Part 3: real gap
+        found -- sync_daily.py (the daily-nhl-sync launchd job's actual
+        entry point, 07:00 daily) called nhl_sync.run_nhl_sync() directly
+        and had NO deployment-mode guard at all, unlike every other
+        scheduled job's entry point. A local Mac put in STANDBY during a
+        VPS cutover would still have run this job for real every
+        morning, writing to nhl.db in parallel with the VPS -- exactly
+        the double-write hazard this module exists to prevent."""
+        import sync_daily
+        with mock.patch.object(dm, "is_active_scheduler", return_value=False), \
+             mock.patch.object(sync_daily, "run") as mock_run:
+            code = sync_daily.main()
+        mock_run.assert_not_called()
+        self.assertEqual(code, 0)
+
+    def test_sync_daily_main_runs_for_real_when_active(self):
+        import sync_daily
+        with mock.patch.object(dm, "is_active_scheduler", return_value=True), \
+             mock.patch.object(sync_daily, "run", return_value=0) as mock_run:
+            code = sync_daily.main()
+        mock_run.assert_called_once()
+        self.assertEqual(code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

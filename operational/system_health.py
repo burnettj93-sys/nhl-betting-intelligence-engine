@@ -304,14 +304,35 @@ _SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.daily-pr
                      "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement",
                      "com.nhlengine.daily-postmortem", "com.nhlengine.database-backup")
 
+# VPS Production Deployment block (2026-09-24), Part 14: the 1:1 mapping
+# from each macOS launchd label above to its VPS systemd timer unit, per
+# docs/VPS_DEPLOYMENT_PREP.md's own naming -- same job order, same count.
+_SYSTEMD_TIMER_UNITS = ("nhlengine-moneyline.timer", "nhlengine-props-pull.timer",
+                        "nhlengine-sweep-first.timer", "nhlengine-sweep-second.timer",
+                        "nhlengine-nhl-sync.timer", "nhlengine-midday-refresh.timer",
+                        "nhlengine-pregame-refresh.timer", "nhlengine-settlement.timer",
+                        "nhlengine-postmortem.timer", "nhlengine-backup.timer")
+
 
 def live_odds_scheduler_health() -> dict:
-    """Part 75 (extended P0.1): LIVE_ODDS_SCHEDULER -- real launchd state
-    via `launchctl list`, a local OS query (never a network call, never
-    an Odds API credit -- Part 26's dashboard-safety rule is about the
-    sportsbook API specifically, not local process introspection). Never
-    assumes installed; checks every real job label, odds and NHL-sync/
-    settlement/post-mortem alike."""
+    """Part 75 (extended P0.1; made cross-platform in the VPS Production
+    Deployment block, 2026-09-24 Part 14): LIVE_ODDS_SCHEDULER -- real
+    scheduler state via a local OS query (never a network call, never an
+    Odds API credit -- Part 26's dashboard-safety rule is about the
+    sportsbook API specifically, not local process introspection).
+    `launchctl list` only exists on macOS; running this unchanged on a
+    Linux VPS always returned FileNotFoundError -> UNKNOWN, permanently,
+    even with every systemd timer enabled and healthy. Real gap found
+    via code inspection, not a query failure that had actually happened
+    yet (no VPS exists). Dispatches on the real platform; never assumes
+    installed."""
+    import platform
+    if platform.system() == "Linux":
+        return _scheduler_health_via_systemctl()
+    return _scheduler_health_via_launchctl()
+
+
+def _scheduler_health_via_launchctl() -> dict:
     import subprocess
     try:
         result = subprocess.run(["launchctl", "list"], capture_output=True, text=True, timeout=5)
@@ -331,6 +352,29 @@ def live_odds_scheduler_health() -> dict:
         message += f" -- missing: {', '.join(missing)}"
     return _health_item(status, "Live Odds Scheduler", dt.datetime.now(dt.timezone.utc).isoformat(),
                          message, "launchctl list", technical_detail=", ".join(loaded))
+
+
+def _scheduler_health_via_systemctl() -> dict:
+    import subprocess
+    try:
+        result = subprocess.run(["systemctl", "list-timers", "--all", "--no-legend"],
+                                 capture_output=True, text=True, timeout=5)
+        listed = result.stdout
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as e:
+        return _health_item("UNKNOWN", "Live Odds Scheduler", None, f"could not query systemctl: {e}",
+                             "systemctl list-timers", technical_detail=repr(e))
+    loaded = [unit for unit in _SYSTEMD_TIMER_UNITS if unit in listed]
+    if not loaded:
+        return _health_item("WAITING", "Live Odds Scheduler", None,
+                             "no scheduler timers loaded -- see docs/VPS_DEPLOYMENT_PREP.md",
+                             "systemctl list-timers")
+    missing = [unit for unit in _SYSTEMD_TIMER_UNITS if unit not in loaded]
+    status = "OK" if not missing else "STALE"
+    message = f"{len(loaded)}/{len(_SYSTEMD_TIMER_UNITS)} scheduler timer(s) loaded"
+    if missing:
+        message += f" -- missing: {', '.join(missing)}"
+    return _health_item(status, "Live Odds Scheduler", dt.datetime.now(dt.timezone.utc).isoformat(),
+                         message, "systemctl list-timers", technical_detail=", ".join(loaded))
 
 
 def _load_cache_safely(path: Path) -> dict | None:
@@ -424,4 +468,45 @@ def build_system_health() -> dict:
         "LIVE_ODDS_SCHEDULER": live_odds_scheduler_health(),
         "NEW_CONTRACT_CANDIDATES": new_contract_candidates_health(),
         "DAILY_POSTMORTEM": postmortem_status_health(),
+    }
+
+
+def _job_health(component: str, max_age_hours: float) -> dict:
+    from operational import ingestion_health as ih
+    ready, reason = ih.dependency_ready(component, max_age_hours=max_age_hours)
+    row = ih.load_health().get(component)
+    return {"status": "OK" if ready else "NOT_READY", "reason": reason,
+            "last_run": row.get("recorded_at_utc") if row else None}
+
+
+def production_health_summary() -> dict:
+    """VPS Production Deployment block (2026-09-24), Part 13: the
+    smallest practical unified health check for ops/monitoring -- APP,
+    DATABASES, NHL_DATA, ODDS, SCHEDULERS, SETTLEMENT, POSTMORTEM,
+    BACKUPS, plus YAHOO reported separately. Reuses every existing
+    granular health/readiness function (build_system_health() above,
+    ingestion_health.dependency_ready() -- already the real dependency
+    mechanism wired into the sync -> settlement -> postmortem -> backup
+    chain, see those modules' own main()) and opening_day_readiness's
+    own check_yahoo() -- no new data source, no new status vocabulary.
+    Yahoo's OWNER_AUTH_REQUIRED/REAUTH_REQUIRED/CONNECTED states are
+    surfaced under their own YAHOO key and never affect any other key
+    here (Part 13/20: Yahoo must never fail betting-side health).
+    Imports opening_day_readiness lazily -- that module already imports
+    this one (for the scheduler-label constants), so a top-level import
+    here would be circular."""
+    import opening_day_readiness as odr
+
+    system = build_system_health()
+    return {
+        "APP": {"status": "OK", "message": "process responding (this call executed)"},
+        "DATABASES": {"status": system["DATABASE"]["status"], "message": system["DATABASE"]["message"]},
+        "NHL_DATA": _job_health("nhl_sync_full", max_age_hours=30.0),
+        "ODDS": {"status": system["ODDS_API"]["status"], "message": system["ODDS_API"]["message"]},
+        "SCHEDULERS": {"status": system["LIVE_ODDS_SCHEDULER"]["status"],
+                       "message": system["LIVE_ODDS_SCHEDULER"]["message"]},
+        "SETTLEMENT": _job_health("settlement", max_age_hours=30.0),
+        "POSTMORTEM": _job_health("postmortem", max_age_hours=30.0),
+        "BACKUPS": _job_health("database_backups", max_age_hours=30.0),
+        "YAHOO": odr.check_yahoo(),
     }

@@ -1,0 +1,8 @@
+[Unit]
+Description=NHL Engine daily NHL+MoneyPuck sync (sync_daily.py)
+
+[Service]
+Type=oneshot
+User=nhlengine
+WorkingDirectory=/opt/nhl-engine/app
+ExecStart=/opt/nhl-engine/app/.venv/bin/python3 sync_daily.py

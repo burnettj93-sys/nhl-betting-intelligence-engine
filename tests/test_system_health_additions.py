@@ -7,6 +7,7 @@ components. Deliberately does NOT re-test the pre-existing components
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from operational import system_health as sh
 
@@ -124,6 +125,54 @@ class Test06LiveOddsSchedulerHealth(unittest.TestCase):
             self.assertEqual(item["status"], "WAITING")
         finally:
             subprocess.run = original
+
+
+class Test06bSchedulerHealthOnLinuxUsesSystemctl(unittest.TestCase):
+    """VPS Production Deployment block (2026-09-24), Part 14: real
+    portability gap found -- `launchctl list` doesn't exist on Linux, so
+    this health check reported permanent UNKNOWN on a VPS regardless of
+    whether every systemd timer was actually healthy. Dispatches on the
+    real platform now; these tests force the Linux branch on this
+    (macOS) test machine via platform.system, mirroring the existing
+    launchctl tests' own generic subprocess.run mocking style."""
+
+    def test_reports_ok_when_all_systemd_timers_are_loaded(self):
+        class _FakeResult:
+            stdout = "\n".join(sh._SYSTEMD_TIMER_UNITS)
+
+        with mock.patch("platform.system", return_value="Linux"), \
+             mock.patch("subprocess.run", return_value=_FakeResult()):
+            item = sh.live_odds_scheduler_health()
+        self.assertEqual(item["status"], "OK")
+        self.assertIn("systemctl", item["source"])
+
+    def test_reports_waiting_when_no_systemd_timers_loaded(self):
+        class _FakeResult:
+            stdout = ""
+
+        with mock.patch("platform.system", return_value="Linux"), \
+             mock.patch("subprocess.run", return_value=_FakeResult()):
+            item = sh.live_odds_scheduler_health()
+        self.assertEqual(item["status"], "WAITING")
+
+    def test_never_raises_even_if_systemctl_is_unavailable(self):
+        def _boom(*a, **k):
+            raise FileNotFoundError("no systemctl on this platform")
+
+        with mock.patch("platform.system", return_value="Linux"), \
+             mock.patch("subprocess.run", side_effect=_boom):
+            item = sh.live_odds_scheduler_health()
+        self.assertEqual(item["status"], "UNKNOWN")
+
+    def test_macos_still_uses_launchctl_not_systemctl(self):
+        class _FakeResult:
+            stdout = "\n".join(sh._SCHEDULER_LABELS)
+
+        with mock.patch("platform.system", return_value="Darwin"), \
+             mock.patch("subprocess.run", return_value=_FakeResult()) as mock_run:
+            item = sh.live_odds_scheduler_health()
+        self.assertEqual(item["status"], "OK")
+        self.assertEqual(mock_run.call_args[0][0][0], "launchctl")
 
 
 class Test07OddsCollectionStatus(unittest.TestCase):
