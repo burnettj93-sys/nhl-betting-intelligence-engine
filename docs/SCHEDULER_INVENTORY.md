@@ -42,3 +42,29 @@ Audited whether all three remain independently justified before wiring the new r
 - `prop-sweep-first`/`prop-sweep-second` (rows 9-10) are **narrow**, SOG/Saves-**only** (`FIRST_SWEEP_MARKETS = "player_shots_on_goal,player_total_saves"`), windowed to the pregame hours the owner's own stated priority (SOG/Saves as the primary prop focus) calls for, and write to a separate cache from `daily-props-pull`.
 
 These serve genuinely different purposes (broad daily coverage vs. narrow high-priority pregame refresh) and no consolidation was made.
+
+---
+
+## Re-audit — 2026-09-25 (Production Activation block, Part 10)
+
+**Method:** `plutil -convert json` of every `~/Library/LaunchAgents/com.nhlengine.*.plist`, `launchctl print gui/$UID/<label>` (run counts), job logs under `operational/logs/`, `ingestion_health_cache.json`, and each target module's source. **Inventory is still 10 jobs** (no additions, none removed). All 10 plists lint OK (`plutil -lint`), all target modules exist, every `WorkingDirectory` points at the current repo (`.../Downloads/nhl_engine 2`) — **no obsolete paths, no duplicate jobs, no dead jobs**. Times are the Mac's local time (EDT = UTC−4).
+
+| Job | Cadence | Last run / result | Next expected | Writes | Odds credits? | Publishes cloud snapshot? |
+|---|---|---|---|---|---|---|
+| `daily-nhl-sync` | 07:00 EDT | **NEVER fired by launchd** (`runs = 0`, "job state = uninitialized", no log file). `nhl_sync_full` last SUCCESS 07:44 EDT today came from a manual run | 09-26 07:00 (unless reloaded) | `nhl.db`, health cache | No | No |
+| `daily-settlement` | 07:15 | 09-25 07:15 — SUCCESS (0 PENDING) | 09-26 07:15 | `prospective_observations.db` (settlement columns), health | No | **Yes** (after SUCCESS) |
+| `daily-postmortem` | 07:30 | 09-25 07:30 — SUCCESS (`WAITING_FOR_SETTLED_DATA`) | 09-26 07:30 | `reports/daily/postmortem_*.md`, health | No | **Yes** |
+| `database-backup` | 07:45 | 09-25 07:45 — SUCCESS | 09-26 07:45 | backup copies | No | No |
+| `daily-props-pull` | 08:15 | 09-25 08:15 — ran, **31 credits** (09-24: skipped, "preseason start not yet known") | 09-26 08:15 | odds archive, board cache | **Yes (~30/day)** | **Yes** when it ran |
+| `moneyline-snapshot` | 08:00, 13:00, 17:00, 20:00 | 09-25 13:00 EDT — ran, 1 credit, 20/33 events priced; bridge wrote 40 rows; orchestrator 0 recs (all DATA_UNAVAILABLE) | 09-25 17:00 EDT | moneyline cache, `odds_snapshots`, ledger/bankroll via orchestrator | **Yes (1/pull)** | **Yes** when it ran |
+| `midday-schedule-refresh` | 13:00 | 09-25 13:00 — SUCCESS | 09-26 13:00 | `nhl.db` schedule | No | No |
+| `pregame-targeted-refresh` | every 30 min | 09-25 13:09 — SUCCESS (stderr = `datetime.utcnow()` DeprecationWarnings only) | +30 min | `nhl.db` rosters/goalies | No | No (tested) |
+| `prop-sweep-first` | every 30 min | 09-25 13:09 — ran, 0 credits | +30 min | sweep cache, archive | Yes, windowed (0 today) | **Only if it recorded a recommendation/paper bet** (fixed this block) |
+| `prop-sweep-second` | every 15 min | 09-25 13:24 — ran, 0 credits | +15 min | sweep cache, archive | Yes, windowed (0 today) | Same as above |
+
+### Findings
+1. **`daily-nhl-sync` has never run under launchd** (defect, OWNER_ACTION): the plist was created 09-24 10:01 and today's 07:00 firing never happened, while jobs created later fired normally. Settlement/postmortem currently pass their dependency check only because a manual sync ran at 07:44 today; `settle_daily_observations` defers when `nhl_sync_full` is > 30 h old, so **settlement starts DEFERRING at the 09-27 07:15 run (sync > 30 h old) unless a full sync runs first**. Fix (owner, terminal): `launchctl bootout gui/$(id -u)/com.nhlengine.daily-nhl-sync; launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.nhlengine.daily-nhl-sync.plist`, then confirm with `launchctl print gui/$(id -u)/com.nhlengine.daily-nhl-sync | grep runs` after 07:00.
+2. **Publish trigger fixed this block:** the two sweep jobs (≈ 100 firings/day) each triggered a cloud publication because the snapshot embedded the sweep's own `last_updated_utc`. That timestamp is now excluded and sweeps publish only when they actually record something (`live_odds_daily_pull.cloud_publish_warranted`; regression tests added).
+3. **Reliability:** 8 of 41 logged moneyline runs failed on network errors and the 09-24 20:00 EDT pull is missing — the Mac must be awake and online at pull times.
+4. **Runtime-mode guards:** launchd jobs run in the default LOCAL/`ACTIVE` mode by design; none is reachable from Community Cloud (no Cloud page imports a scheduler or API client — `python3 -m operational.cloud_preflight` proves it). `standby` deployment mode is respected by the publish hook.
+5. **No unbounded jobs:** every job is a single bounded process; the publisher subprocess has a 240 s timeout.

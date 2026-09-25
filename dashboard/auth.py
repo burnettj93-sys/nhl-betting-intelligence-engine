@@ -182,6 +182,14 @@ def render_login_form() -> bool:
     return True
 
 
+def _hide_navigation_until_signed_in() -> None:
+    """Before sign-in Streamlit's sidebar still lists every file in pages/ (st.navigation has not run yet
+    because the gate stops first), which would show anonymous visitors the internal page names. Only the
+    login / bootstrap form should be visible."""
+    st.markdown("<style>[data-testid='stSidebar'], [data-testid='stSidebarCollapsedControl'], "
+                "[data-testid='stSidebarNav'] {display: none !important;}</style>", unsafe_allow_html=True)
+
+
 def render_auth_gate() -> dict | None:
     """The single call dashboard/app.py makes before building any real
     navigation/content. Returns the logged-in user dict once
@@ -200,6 +208,8 @@ def render_auth_gate() -> dict | None:
         if email:
             _set_session(email, platform_role_for(email))
             return current_user()
+
+    _hide_navigation_until_signed_in()
 
     conn = auth_store.get_connection()
     no_users_yet = len(auth_store.list_users(conn)) == 0

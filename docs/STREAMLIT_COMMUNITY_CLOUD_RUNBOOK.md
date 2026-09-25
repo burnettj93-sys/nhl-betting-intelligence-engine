@@ -11,7 +11,22 @@ design (no `cloud-data` branch yet → the app shows the bundled fallback, clear
 `REMOTE SNAPSHOT UNAVAILABLE — BUNDLED FALLBACK`), but do steps 1–2 first if you want the first view to be live.
 Nothing in this sprint changed any Streamlit setting or rebooted the app.
 
-## 1. Publish the first snapshot (local machine, once)
+## 0b. Status and preflight (2026-09-25)
+
+PR #6 is merged (`336cf80`); the `cloud-data` branch exists and has been published (verified: raw URL 200, schema 2,
+content hash equal to the local publication) and `NHL_ENGINE_CLOUD_PUBLISH=ON` is set in the local `.env`.
+Run the one-command preflight any time:
+
+```bash
+python3 -m operational.cloud_preflight            # add --offline to skip the snapshot fetch
+```
+
+It verifies entrypoint, Cloud requirements file, Community Cloud mode, the ADMIN setup-code requirement, the Cloud page
+registry (no scheduler / API client / Yahoo imports), a Today render with **no database writes, no network and RSS under
+250 MB**, and the live snapshot. Anything it cannot see (Streamlit UI settings, the deployed app) is reported as
+`OWNER_ACTION_REQUIRED`, never guessed.
+
+## 1. Publish the first snapshot (local machine, once) — DONE, kept for reference
 
 ```bash
 python3 -m operational.publish_cloud_snapshot --dry-run   # builds + validates, pushes nothing
@@ -32,6 +47,19 @@ NHL_ENGINE_CLOUD_PUBLISH=ON
 
 Publication then follows the odds pull, settlement and postmortem jobs (not every 30-minute pregame run).
 A publish failure only marks health `DEGRADED`/`FAILED`; it never undoes operational work.
+
+## 2b. Which Streamlit secrets are actually required?
+
+| Secret | Required? | Purpose | Safe example |
+|---|---|---|---|
+| `NHL_ENGINE_ADMIN_SETUP_CODE` | **REQUIRED** | Without it nobody can create the ADMIN account in Cloud (the first anonymous visitor is never promoted). Also the fallback when platform identity is not available. | `"<20+ random characters>"` |
+| `NHL_ENGINE_TRUST_PLATFORM_VIEWER` | **REQUIRED for friends without app accounts** | Lets the platform's signed-in viewer (already restricted by the Sharing allow-list) be a USER with no local account (Cloud's filesystem is ephemeral). Falls back to the login form if the platform supplies no email. **Verify `st.user.email` is populated for your app** (not checkable from here). | `"ON"` |
+| `NHL_ENGINE_ADMIN_EMAILS` | **REQUIRED if the line above is ON** | Viewer emails that get ADMIN (Diagnostics, Morning Review, Data Status). Everyone else is USER. | `"you@example.com"` |
+| `NHL_ENGINE_SNAPSHOT_SOURCE` | OPTIONAL | Defaults to `REMOTE` in Cloud; `BUNDLED` forces the frozen fallback (rollback switch). | `"REMOTE"` |
+| `NHL_ENGINE_SNAPSHOT_URL` / `NHL_ENGINE_SNAPSHOT_TOKEN` | OPTIONAL | Only if the data source is ever moved (private repo). The default URL is correct today. | — |
+| `NHL_ENGINE_RUNTIME_MODE` | OPTIONAL | Auto-detected under `/mount/src/`; set `COMMUNITY_CLOUD_MODE` to be explicit. | `"COMMUNITY_CLOUD_MODE"` |
+
+Never put the Odds API key, Yahoo credentials or any provider key in Streamlit secrets.
 
 ## 3. Streamlit app secrets (App → Settings → Secrets)
 

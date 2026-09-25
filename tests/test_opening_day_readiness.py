@@ -206,6 +206,22 @@ class TestLaunchctlLoadedCountIsCrossPlatform(unittest.TestCase):
             self.assertIsNone(odr._launchctl_loaded_count())
 
 
+_REAL_BUILD_COMPONENT_STATES = odr.build_component_states
+
+
+def setUpModule():
+    """The per-component table reads this machine's real state (launchd, caches, network-free but live);
+    the verdict-logic tests below inject their own checks, so it is stubbed out for them and exercised
+    directly (with injected checks) in TestComponentStates."""
+    global _patcher
+    _patcher = mock.patch.object(odr, "build_component_states", return_value={})
+    _patcher.start()
+
+
+def tearDownModule():
+    _patcher.stop()
+
+
 class TestVerdictLogic(unittest.TestCase):
     def test_unreachable_database_forces_not_ready(self):
         with mock.patch.object(odr, "check_databases",
@@ -345,6 +361,78 @@ class TestVerdictLogic(unittest.TestCase):
         self.assertEqual(report["verdict"], odr.READY)
         self.assertEqual(report["hard_failures"], [])
         self.assertEqual(report["warnings"], [])
+
+
+class TestComponentStates(unittest.TestCase):
+    """The per-component states requested by the Production Activation block: independent, precise,
+    never a bare READY / NOT_READY."""
+
+    REQUIRED = ("NHL DATA", "MONEYLINE MARKET CONTRACT", "MONEYLINE RECOMMENDATION PIPELINE", "SOG MARKET CONTRACT",
+                "SOG ACTIONABILITY", "SAVES MARKET CONTRACT", "SAVES STARTER DATA", "SAVES ACTIONABILITY",
+                "GAME EDGE PARLAY", "PAPER BETTING", "SETTLEMENT", "CLV", "POSTMORTEM", "CLOUD SNAPSHOT",
+                "CLOUD PUBLICATION", "CLOUD FRESHNESS", "ODDS API QUOTA", "SCHEDULERS", "BACKUPS", "AUTH", "YAHOO")
+
+    def checks(self, **over):
+        c = {"nhl": {"last_sync_status": "SUCCESS", "last_sync_success_age_hours": 2.0, "most_recent_game_date_on_file": "2026-10-09"},
+             "odds": {"collection_status": {"status": "OK", "credits_remaining": 368, "tracked_events": 33}},
+             "real_recommendation_pipeline": {"orchestration_status": "HEALTHY", "real_moneyline_recommendations_recorded": 0,
+                                              "real_market_paper_bets_placed": 0},
+             "real_prop_pipeline": {"sog_status": "PENDING_LIVE_CONTRACT", "saves_status": "PENDING_LIVE_CONTRACT",
+                                    "saves_starter_data_status": "PARTIAL", "saves_actionability_status": "WAIT_ONLY",
+                                    "game_edge_parlay_status": "PARTIAL", "real_sog_recommendations_recorded": 0,
+                                    "real_saves_recommendations_recorded": 0},
+             "predictions": {}, "yahoo": {"status": "OWNER_AUTH_REQUIRED"}}
+        c.update(over)
+        return c
+
+    def build(self, checks=None, eligible=1.2, loaded=10):
+        from operational import ingestion_health, publish_cloud_snapshot as pcs
+        healthy = {k: {"last_status": "SUCCESS", "last_success_utc": "2999-01-01T00:00:00+00:00"} for k in
+                   ("settlement", "postmortem", "database_backups")}
+        fake_ofa = mock.Mock(upcoming_starts=mock.Mock(return_value=[1]), pulls_for=mock.Mock(return_value=[]),
+                             evaluate=mock.Mock(return_value={"decision_policy_quote_available_pct": eligible}))
+        with mock.patch.object(ingestion_health, "load_health", return_value=healthy), \
+             mock.patch.object(ingestion_health, "component_age_hours", return_value=1.0), \
+             mock.patch.dict("sys.modules", {"operational.odds_freshness_analysis": fake_ofa}), \
+             mock.patch.object(__import__("operational"), "odds_freshness_analysis", fake_ofa, create=True), \
+             mock.patch.object(odr.sh, "cloud_snapshot_publish_health", return_value={"status": "OK", "message": "ok"}), \
+             mock.patch.object(pcs, "publishing_enabled", return_value=True), \
+             mock.patch.object(odr, "_launchctl_loaded_count", return_value=loaded), \
+             mock.patch.object(odr.db, "get_conn", side_effect=RuntimeError("no db in test")):
+            return _REAL_BUILD_COMPONENT_STATES(checks or self.checks())
+
+    def test_every_named_component_is_reported_with_a_precise_state(self):
+        out = self.build()
+        for name in self.REQUIRED:
+            self.assertIn(name, out)
+            self.assertIn(out[name]["state"], odr.COMPONENT_STATES, name)
+
+    def test_expected_day_one_states(self):
+        out = self.build()
+        self.assertEqual(out["SOG MARKET CONTRACT"]["state"], "WAITING_FOR_LIVE_MARKET")
+        self.assertEqual(out["SAVES ACTIONABILITY"]["state"], "WAIT_ONLY")
+        self.assertEqual(out["PAPER BETTING"]["state"], "NO_REAL_SAMPLE_YET")
+        self.assertEqual(out["YAHOO"]["state"], "OWNER_AUTH_REQUIRED")
+        self.assertEqual(out["AUTH"]["state"], "OWNER_ACTION_REQUIRED")
+        self.assertEqual(out["SCHEDULERS"]["state"], "READY")
+
+    def test_moneyline_pipeline_is_partial_when_the_polling_cadence_cannot_feed_it(self):
+        self.assertEqual(self.build(eligible=1.2)["MONEYLINE RECOMMENDATION PIPELINE"]["state"], "PARTIAL")
+        self.assertEqual(self.build(eligible=97.6)["MONEYLINE RECOMMENDATION PIPELINE"]["state"], "NO_REAL_SAMPLE_YET")
+
+    def test_scheduler_and_quota_and_nhl_failures_are_surfaced(self):
+        self.assertEqual(self.build(loaded=0)["SCHEDULERS"]["state"], "FAILED")
+        self.assertEqual(self.build(loaded=9)["SCHEDULERS"]["state"], "PARTIAL")
+        low = self.checks(odds={"collection_status": {"status": "OK", "credits_remaining": 15, "tracked_events": 1}})
+        self.assertEqual(self.build(low)["ODDS API QUOTA"]["state"], "FAILED")
+        stale = self.checks(nhl={"last_sync_status": "SUCCESS", "last_sync_success_age_hours": 40.0, "most_recent_game_date_on_file": "x"})
+        self.assertEqual(self.build(stale)["NHL DATA"]["state"], "STALE")
+
+    def test_a_broken_component_builder_never_breaks_the_verdict(self):
+        with mock.patch.object(odr, "build_component_states", side_effect=RuntimeError("boom")):
+            report = odr.build_readiness_report()
+        self.assertEqual(report["components"], {})
+        self.assertTrue(any("per-component states unavailable" in w for w in report["warnings"]))
 
 
 if __name__ == "__main__":

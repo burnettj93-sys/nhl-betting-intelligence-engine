@@ -329,6 +329,147 @@ def _launchctl_loaded_count() -> int | None:
         return None
 
 
+# ---- per-component states (Production Activation block, 2026-09-25) ------------------------------------------
+# The single verdict above answers "may we run?"; this answers "what exactly is ready, waiting, or blocked?"
+# Precise states, never a bare READY / NOT_READY. Read-only; no network, no Odds API credit.
+COMPONENT_STATES = ("READY", "READY_WITH_WARNINGS", "WAITING_FOR_LIVE_MARKET", "WAIT_ONLY", "NO_REAL_SAMPLE_YET",
+                    "PARTIAL", "STALE", "OWNER_ACTION_REQUIRED", "OWNER_AUTH_REQUIRED", "FAILED")
+_QUOTA_WARN_BELOW, _QUOTA_FAIL_BELOW = 150, 20      # 20 == live_odds_daily_pull.DEFAULT_SAFETY_FLOOR
+
+
+def _c(state: str, detail: str) -> dict:
+    return {"state": state, "detail": detail}
+
+
+def _health_component(health: dict, key: str, max_hours: float, label: str) -> dict:
+    row = health.get(key)
+    if row is None:
+        return _c("STALE", f"{label}: never run")
+    age = ingestion_health.component_age_hours(row)
+    status = row.get("last_status")
+    if status in ("FAILED", "ERROR"):
+        return _c("FAILED", f"{label}: last status {status}")
+    if status == "DEFERRED":
+        return _c("PARTIAL", f"{label}: DEFERRED (upstream dependency not ready)")
+    if age is None or age > max_hours:
+        return _c("STALE", f"{label}: last success {age if age is None else round(age, 1)} h ago (limit {max_hours} h)")
+    return _c("READY", f"{label}: last success {round(age, 1)} h ago")
+
+
+def build_component_states(checks: dict) -> dict:
+    """Independent state per component named by the opening-day block. Pure over `checks`
+    (plus read-only local state), so it is testable without a live machine."""
+    from operational import cloud_snapshot_schema as schema
+    health = ingestion_health.load_health()
+    out: dict = {}
+    nhl, odds, rp = checks["nhl"], checks["odds"], checks["real_prop_pipeline"]
+    rr, preds = checks["real_recommendation_pipeline"], checks["predictions"]
+
+    age = nhl.get("last_sync_success_age_hours")
+    out["NHL DATA"] = _c("FAILED" if nhl.get("last_sync_status") in ("FAILED", "ERROR") else
+                         "STALE" if age is None or age > 30 else "READY",
+                         f"last full sync {None if age is None else round(age, 1)} h ago; newest game on file "
+                         f"{nhl.get('most_recent_game_date_on_file')}")
+
+    from research.generic_prop_pricing import provider_adapter as pa
+    ml_verified = pa.is_contract_verified("draftkings", "MONEYLINE")
+    quotes = odds["collection_status"]
+    out["MONEYLINE MARKET CONTRACT"] = _c("READY" if ml_verified else "WAITING_FOR_LIVE_MARKET",
+                                          f"DraftKings MONEYLINE contract verified={ml_verified}; "
+                                          f"{quotes.get('tracked_events')} events tracked")
+
+    # Can the current polling cadence ever satisfy the decision policy's quote-age tiers? (measured, not assumed)
+    try:
+        from operational import odds_freshness_analysis as ofa
+        starts = ofa.upcoming_starts()
+        base = ofa.pulls_for(sorted({(dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=i)).date() for i in range(-1, 16)}))
+        eligible = ofa.evaluate(starts, base)["decision_policy_quote_available_pct"] if starts else None
+    except Exception:  # noqa: BLE001
+        eligible = None
+    if rr["orchestration_status"] != "HEALTHY":
+        ml_state, ml_detail = "FAILED", "orchestration not operational"
+    elif eligible is not None and eligible < 50:
+        ml_state = "PARTIAL"
+        ml_detail = (f"pipeline healthy, {rr['real_moneyline_recommendations_recorded']} recorded; but the current 4x/day "
+                     f"pull cadence leaves only {eligible}% of upcoming games a quote inside the decision policy's "
+                     f"10-minute window (docs/ODDS_FRESHNESS_QUOTA_ANALYSIS.md)")
+    elif not rr["real_moneyline_recommendations_recorded"]:
+        ml_state, ml_detail = "NO_REAL_SAMPLE_YET", "pipeline healthy; no real moneyline recommendation recorded yet"
+    else:
+        ml_state, ml_detail = "READY", f"{rr['real_moneyline_recommendations_recorded']} recorded"
+    out["MONEYLINE RECOMMENDATION PIPELINE"] = _c(ml_state, ml_detail)
+
+    def waiting(status):
+        return "WAITING_FOR_LIVE_MARKET" if status == "PENDING_LIVE_CONTRACT" else ("READY" if status == "READY" else "PARTIAL")
+
+    out["SOG MARKET CONTRACT"] = _c(waiting(rp["sog_status"]), f"sog_status={rp['sog_status']}")
+    out["SOG ACTIONABILITY"] = _c("WAITING_FOR_LIVE_MARKET" if rp["sog_status"] == "PENDING_LIVE_CONTRACT" else "READY",
+                                  f"{rp['real_sog_recommendations_recorded']} real SOG recommendations recorded")
+    out["SAVES MARKET CONTRACT"] = _c(waiting(rp["saves_status"]), f"saves_status={rp['saves_status']}")
+    out["SAVES STARTER DATA"] = _c("PARTIAL" if rp["saves_starter_data_status"] != "READY" else "READY",
+                                   f"{rp['saves_starter_data_status']} (no real confirmed-starter source; projection only)")
+    out["SAVES ACTIONABILITY"] = _c("WAIT_ONLY" if rp["saves_actionability_status"] == "WAIT_ONLY" else "READY",
+                                    f"{rp['saves_actionability_status']} (starter-certainty gate intact)")
+    out["GAME EDGE PARLAY"] = _c("WAITING_FOR_LIVE_MARKET" if rp["game_edge_parlay_status"] == "PARTIAL"
+                                 else rp["game_edge_parlay_status"],
+                                 "no real qualifying legs exist until a prop contract is verified; "
+                                 "NO_QUALIFYING_GAME_EDGE_PARLAY is the correct state")
+    n_bets = rr["real_market_paper_bets_placed"]
+    out["PAPER BETTING"] = _c("READY" if n_bets else "NO_REAL_SAMPLE_YET",
+                              f"{n_bets} REAL_MARKET_PAPER bet(s); zero is a valid outcome")
+    out["SETTLEMENT"] = _health_component(health, "settlement", 30.0, "settlement")
+    out["CLV"] = _c("NO_REAL_SAMPLE_YET" if not n_bets else "READY",
+                    "CLV is computed at settlement for real paper bets with a closing quote")
+    out["POSTMORTEM"] = _health_component(health, "postmortem", 30.0, "postmortem")
+
+    # cloud: publication + freshness (no network; the last publish is recorded locally)
+    cph = sh.cloud_snapshot_publish_health()
+    pub_status = cph.get("status")
+    out["CLOUD SNAPSHOT"] = _c("READY" if pub_status in ("OK",) else
+                               "OWNER_ACTION_REQUIRED" if pub_status in ("WAITING", "NOT_REQUIRED") else
+                               "STALE" if pub_status == "STALE" else "PARTIAL" if pub_status == "DEGRADED" else "FAILED",
+                               cph.get("message") or "")
+    from operational import publish_cloud_snapshot as pcs
+    out["CLOUD PUBLICATION"] = _c("READY" if pcs.publishing_enabled() else "OWNER_ACTION_REQUIRED",
+                                  "automatic publication after odds/settlement/postmortem jobs "
+                                  + ("is ON" if pcs.publishing_enabled() else "is OFF (set NHL_ENGINE_CLOUD_PUBLISH=ON)"))
+    try:                         # newest real DraftKings MONEYLINE price actually captured (not the last sweep)
+        conn = db.get_conn()
+        row = conn.execute("SELECT MAX(captured_at_utc) m FROM odds_snapshots WHERE market = 'MONEYLINE'").fetchone()
+        newest_odds = row["m"]
+        conn.close()
+    except Exception:  # noqa: BLE001
+        newest_odds = None
+    mf = schema.classify_market_freshness(newest_odds) if newest_odds else {"state": "UNAVAILABLE", "age_minutes": None}
+    out["CLOUD FRESHNESS"] = _c("READY" if mf["state"] == "CURRENT" and pub_status == "OK" else "STALE" if mf["state"] != "CURRENT" else "READY_WITH_WARNINGS",
+                                f"newest DK moneyline price {newest_odds}: {mf['state']} ({mf['age_minutes']} min old; limit 180); "
+                                f"publisher {pub_status}")
+
+    remaining = quotes.get("credits_remaining")
+    out["ODDS API QUOTA"] = _c("FAILED" if remaining is not None and remaining <= _QUOTA_FAIL_BELOW else
+                               "READY_WITH_WARNINGS" if remaining is None or remaining < _QUOTA_WARN_BELOW else "READY",
+                               f"{remaining} credits remaining (500/month plan; reset day assumed = 1st, unverified)")
+    loaded = _launchctl_loaded_count()
+    out["SCHEDULERS"] = _c("FAILED" if loaded == 0 else "READY" if loaded == len(sh._SCHEDULER_LABELS) else "PARTIAL",
+                           f"{loaded}/{len(sh._SCHEDULER_LABELS)} jobs loaded")
+    out["BACKUPS"] = _health_component(health, "database_backups", 30.0, "backups")
+    out["AUTH"] = _c("OWNER_ACTION_REQUIRED",
+                     "Streamlit secrets/viewer allow-list are not verifiable from this machine "
+                     "(see docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md)")
+    out["YAHOO"] = _c("OWNER_AUTH_REQUIRED" if checks["yahoo"]["status"] == "OWNER_AUTH_REQUIRED" else
+                      "READY" if checks["yahoo"]["status"] == "CONNECTED" else checks["yahoo"]["status"],
+                      "isolated from betting/cloud data; never blocks betting readiness")
+    return out
+
+
+def overall_summary(components: dict) -> dict:
+    counts: dict = {}
+    for row in components.values():
+        counts[row["state"]] = counts.get(row["state"], 0) + 1
+    blocking = [k for k, v in components.items() if v["state"] in ("FAILED", "PARTIAL", "STALE")]
+    return {"state_counts": counts, "attention": blocking}
+
+
 def build_readiness_report() -> dict:
     databases = check_databases()
     nhl = check_nhl()
@@ -397,6 +538,18 @@ def build_readiness_report() -> dict:
             f"real prop (SOG/Saves) pipeline NOT_OPERATIONAL: "
             f"{real_prop_pipeline['orchestration_import_error'] or real_prop_pipeline['query_error']}")
 
+    try:
+        components = build_component_states({
+            "databases": databases, "nhl": nhl, "odds": odds, "models": models, "pipeline": pipeline,
+            "context": context, "predictions": predictions, "real_recommendation_pipeline": real_pipeline,
+            "real_prop_pipeline": real_prop_pipeline, "yahoo": yahoo})
+    except Exception as exc:  # noqa: BLE001 -- the per-component table is additive; it must never break the verdict
+        components = {}
+        warnings.append(f"per-component states unavailable: {type(exc).__name__}: {exc}")
+    for name, row in components.items():
+        if row["state"] in ("PARTIAL", "STALE") and name != "SAVES STARTER DATA":
+            warnings.append(f"{name}: {row['state']} -- {row['detail']}")
+
     if hard_failures:
         verdict = NOT_READY
     elif warnings:
@@ -404,24 +557,30 @@ def build_readiness_report() -> dict:
     else:
         verdict = READY
 
+    checks = {
+        "databases": databases, "nhl": nhl, "odds": odds, "models": models,
+        "pipeline": pipeline, "context": context, "predictions": predictions,
+        "real_recommendation_pipeline": real_pipeline, "real_prop_pipeline": real_prop_pipeline,
+        "yahoo": yahoo,
+    }
     return {
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
         "verdict": verdict,
+        "overall": overall_summary(components),
+        "components": components,
         "hard_failures": hard_failures,
         "warnings": warnings,
-        "checks": {
-            "databases": databases, "nhl": nhl, "odds": odds, "models": models,
-            "pipeline": pipeline, "context": context, "predictions": predictions,
-            "real_recommendation_pipeline": real_pipeline, "real_prop_pipeline": real_prop_pipeline,
-            "yahoo": yahoo,
-        },
+        "checks": checks,
     }
 
 
 def main() -> int:
     report = build_readiness_report()
     print(json.dumps(report, indent=2, sort_keys=True, default=str))
-    print(f"\n{'=' * 60}\nVERDICT: {report['verdict']}\n{'=' * 60}")
+    print(f"\n{'=' * 60}\nOVERALL: {report['verdict']}   {report['overall']['state_counts']}\n{'=' * 60}")
+    for name, row in report["components"].items():
+        print(f"  {name:<36} {row['state']:<25} {row['detail']}")
+    print(f"\nVERDICT: {report['verdict']}")
     if report["hard_failures"]:
         print("HARD FAILURES:")
         for f in report["hard_failures"]:

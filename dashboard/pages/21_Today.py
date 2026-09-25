@@ -238,7 +238,9 @@ for i, g in enumerate(dd.build_demo_games()):
 # ---- 2. Top Conviction ---------------------------------------------------
 st.divider()
 st.markdown("## 2 · Top Conviction")
-st.caption("Highest-confidence model edges from today's slate")
+st.caption("Highest-confidence model edges from today's SIMULATED demo slate — SIMULATED — DEMO ONLY: these are not "
+           "real DraftKings prices and not recorded recommendations. Real recommendations appear under "
+           "Recorded Recommendations above.")
 top = cv.top_conviction(opportunities)
 if not top:
     comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES",
@@ -252,7 +254,7 @@ else:
                 if st.button(o["player"], key=f"conv_{o['player_id']}_{o['prop']}_{o['threshold']}"):
                     st.session_state["selected_player_id"] = o["player_id"]
                     st.switch_page("pages/25_Player_Intelligence.py")
-                st.caption(f"{o['market']} {o['threshold']}")
+                st.caption(f"{o['market']} {o['threshold']} · SIMULATED — DEMO ONLY")
                 st.metric("Model", fmt.format_probability(o["coherent_probability"]))
                 st.caption(f"Conservative {fmt.format_probability(o['conservative_probability'])}")
                 st.caption(f"Fair {fmt.format_american_odds(o['fair_odds'])} · "

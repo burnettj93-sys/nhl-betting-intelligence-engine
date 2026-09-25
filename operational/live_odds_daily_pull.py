@@ -580,6 +580,22 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
     return summary
 
 
+def cloud_publish_warranted(mode: str, result: dict) -> bool:
+    """Publish only when this run materially changed what the Cloud shows. A moneyline / broad-props pull that
+    ran brings new prices, so it publishes. The 15/30-minute SOG/Saves sweeps fire ~100x a day and are almost
+    always no-ops for the product, so they publish only if they actually recorded a recommendation or paper
+    bet (the orchestrators' own counters) -- never merely because they ran."""
+    if not result.get("ran"):
+        return False
+    if mode not in ("sweep-first", "sweep-second"):
+        return True
+    changed = 0
+    for key in ("real_sog_orchestrator", "real_saves_orchestrator"):
+        summary = result.get(key) or {}
+        changed += int(summary.get("recommendations_recorded") or 0) + int(summary.get("paper_bets_created") or 0)
+    return changed > 0
+
+
 def _main() -> None:
     import argparse
 
@@ -637,7 +653,7 @@ def _main() -> None:
     # compact Cloud snapshot IF the owner enabled it (NHL_ENGINE_CLOUD_PUBLISH=ON).
     # Downstream, opt-in, bounded, never raises, never changes this job's result
     # beyond attaching its own status (operational/cloud_publish_hook.py).
-    if result.get("ran"):
+    if cloud_publish_warranted(args.mode, result):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after(f"live_odds_daily_pull:{args.mode}")
 

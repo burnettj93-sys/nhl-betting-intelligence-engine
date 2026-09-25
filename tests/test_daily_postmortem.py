@@ -229,6 +229,11 @@ class TestRunDailyPostmortem(unittest.TestCase):
             self.assertFalse(registry_path.exists())  # never auto-written
         self.assertEqual(len(report["challenger_ideas"]), 1)
 
+    def test_zero_settled_results_is_no_data_not_a_variance_conclusion(self):
+        report = dpm.run_daily_postmortem(self.conn)
+        self.assertTrue(report["normal_variance_vs_systematic"].startswith("NO_DATA"))
+        self.assertNotIn("NORMAL_VARIANCE", report["normal_variance_vs_systematic"])
+
     def test_report_has_all_required_sections(self):
         report = dpm.run_daily_postmortem(self.conn)
         for key in ("what_worked", "what_didnt", "why", "normal_variance_vs_systematic",
