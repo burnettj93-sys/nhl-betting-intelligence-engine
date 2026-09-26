@@ -370,10 +370,24 @@ class TestPreflightVerdict(unittest.TestCase):
         self.assertTrue(any("pmset schedule wake" in a for a in p["owner_actions"]))
         self.assertTrue(p["architecture_ready"])                                    # the ENGINE is ready; the owner still has to act
 
-    def test_an_unset_reset_day_is_an_owner_action(self):
+    def test_an_unset_reset_day_is_a_warning_not_a_blocker_when_credits_are_sufficient(self):
         p = self.pre(quota=lambda: {"credits_remaining": 367, "sufficient": True, "reason": "OK", "reset_day": {"status": "OWNER_VERIFICATION_REQUIRED"}})
-        self.assertEqual(p["preflight_verdict"], "OWNER_ACTION_REQUIRED")
-        self.assertTrue(any("RESET_DAY" in a for a in p["owner_actions"]))
+        self.assertEqual(p["preflight_verdict"], "READY")
+        self.assertEqual(p["owner_actions"], [])
+        self.assertTrue(any("RESET_DAY" in w for w in p["warnings"]))
+
+    def test_an_unset_reset_day_with_insufficient_credits_is_still_not_ready(self):
+        p = self.pre(quota=lambda: {"credits_remaining": 20, "sufficient": False, "reason": "HARD_RESERVE", "reset_day": {"status": "OWNER_VERIFICATION_REQUIRED"}})
+        self.assertEqual(p["preflight_verdict"], "NOT_READY")
+        self.assertTrue(any("quota not sufficient" in x for x in p["architecture_problems"]))
+
+    def test_the_real_guard_enforces_the_reserve_without_a_reset_day(self):
+        from operational import odds_quota as oq
+        ok = oq.guard(1, now=D(12), soft_multiplier=oq.PREGAME_SOFT_MULTIPLIER, remaining=365, spent_today=0)
+        self.assertTrue(ok["allow"])
+        low = oq.guard(1, now=D(12), soft_multiplier=oq.PREGAME_SOFT_MULTIPLIER, remaining=oq.RESERVE, spent_today=0)
+        self.assertFalse(low["allow"])
+        self.assertEqual(low["reason"], "HARD_RESERVE")
 
     def test_dirty_tree_feature_branch_or_missing_keep_awake_is_not_ready(self):
         self.assertEqual(self.pre(git=lambda: {"branch": "master", "commit": "a", "worktree_clean": False})["preflight_verdict"], "NOT_READY")
