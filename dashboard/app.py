@@ -73,9 +73,12 @@ with st.sidebar:
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
         st.caption("☁️ Community Cloud mode — read-only snapshot view")
     st.divider()
-    st.caption(f"Signed in as **{_user['username']}** ({_user['role']})")
-    if st.button("Log out"):
-        auth.logout()
-        st.rerun()
+    if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
+        st.caption("🔒 Access is controlled by Streamlit private sharing")
+    else:
+        st.caption(f"Signed in as **{_user['username']}** ({_user['role']})")
+        if st.button("Log out"):
+            auth.logout()
+            st.rerun()
 
 pg.run()

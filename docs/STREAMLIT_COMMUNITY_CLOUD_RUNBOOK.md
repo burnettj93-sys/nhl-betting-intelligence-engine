@@ -48,44 +48,15 @@ NHL_ENGINE_CLOUD_PUBLISH=ON
 Publication then follows the odds pull, settlement and postmortem jobs (not every 30-minute pregame run).
 A publish failure only marks health `DEGRADED`/`FAILED`; it never undoes operational work.
 
-## 2b. Which Streamlit secrets are actually required?
+## 2b. Access model and secrets (updated 2026-09-26)
 
-| Secret | Required? | Purpose | Safe example |
-|---|---|---|---|
-| `NHL_ENGINE_ADMIN_SETUP_CODE` | **REQUIRED** | Without it nobody can create the ADMIN account in Cloud (the first anonymous visitor is never promoted). Also the fallback when platform identity is not available. | `"<20+ random characters>"` |
-| `NHL_ENGINE_TRUST_PLATFORM_VIEWER` | **REQUIRED for friends without app accounts** | Lets the platform's signed-in viewer (already restricted by the Sharing allow-list) be a USER with no local account (Cloud's filesystem is ephemeral). Falls back to the login form if the platform supplies no email. **Verify `st.user.email` is populated for your app** (not checkable from here). | `"ON"` |
-| `NHL_ENGINE_ADMIN_EMAILS` | **REQUIRED if the line above is ON** | Viewer emails that get ADMIN (Diagnostics, Morning Review, Data Status). Everyone else is USER. | `"you@example.com"` |
-| `NHL_ENGINE_SNAPSHOT_SOURCE` | OPTIONAL | Defaults to `REMOTE` in Cloud; `BUNDLED` forces the frozen fallback (rollback switch). | `"REMOTE"` |
-| `NHL_ENGINE_SNAPSHOT_URL` / `NHL_ENGINE_SNAPSHOT_TOKEN` | OPTIONAL | Only if the data source is ever moved (private repo). The default URL is correct today. | — |
-| `NHL_ENGINE_RUNTIME_MODE` | OPTIONAL | Auto-detected under `/mount/src/`; set `COMMUNITY_CLOUD_MODE` to be explicit. | `"COMMUNITY_CLOUD_MODE"` |
+**Streamlit private sharing is the access gate.** Settings → Sharing → "Only specific people can view this app" (already set; anonymous visitors are redirected to Streamlit sign-in). Whoever can reach the app may use it; the deployed app has **no login, no USER/ADMIN accounts, no admin setup code, and does not read `st.user.email`**. The Cloud surface is read-only presentation of the published snapshot (no credentials, no Yahoo, no writes, no ingestion, no destructive controls; enforced by tests). LOCAL and PRODUCTION keep the full account system.
 
-Never put the Odds API key, Yahoo credentials or any provider key in Streamlit secrets.
+**No auth-related secrets are needed.** `NHL_ENGINE_ADMIN_SETUP_CODE`, `NHL_ENGINE_TRUST_PLATFORM_VIEWER` and `NHL_ENGINE_ADMIN_EMAILS` are **no longer used**: the code ignores them if present, and they can be deleted from Streamlit Secrets after you have verified the deployment (delete the lines, Save, reboot). Optional: `NHL_ENGINE_SNAPSHOT_SOURCE` (default `REMOTE`; `BUNDLED` forces the frozen fallback), `NHL_ENGINE_SNAPSHOT_URL`, `NHL_ENGINE_SNAPSHOT_TOKEN`, `NHL_ENGINE_RUNTIME_MODE` (auto-detected under `/mount/src/`). Never put the Odds API key, Yahoo credentials or any provider key in Streamlit Secrets.
 
-## 3. Streamlit app secrets (App → Settings → Secrets)
+## 3. Inviting friends (App → Settings → Sharing)
 
-```toml
-NHL_ENGINE_ADMIN_SETUP_CODE = "<long random string>"   # required to create the first ADMIN account
-NHL_ENGINE_TRUST_PLATFORM_VIEWER = "ON"                # optional: use Streamlit's signed-in viewer email
-NHL_ENGINE_ADMIN_EMAILS = "you@example.com"            # optional: viewer emails that are ADMIN
-# NHL_ENGINE_RUNTIME_MODE = "COMMUNITY_CLOUD_MODE"     # optional: auto-detected under /mount/src/
-# NHL_ENGINE_SNAPSHOT_SOURCE = "REMOTE"                # default; BUNDLED forces the frozen fallback
-# NHL_ENGINE_SNAPSHOT_URL = "https://raw.githubusercontent.com/<owner>/<repo>/cloud-data/current/snapshot.json"
-# NHL_ENGINE_SNAPSHOT_TOKEN = "<read-only token>"      # only if the data source is ever made private
-```
-
-Do NOT add Yahoo credentials, the Odds API key, or any provider key to the Cloud app: it does not use them.
-The setup code is never shown in the UI or logs; without it nobody can become ADMIN (the first anonymous
-visitor is never promoted).
-
-## 4. Viewer access (App → Settings → Sharing)
-
-Set the app to **Only specific people can view this app** and add friends' emails. This is the primary USER
-gate in Cloud mode. Invited viewers see betting pages; they cannot open Diagnostics, Morning Review, Data
-Status, Yahoo, or admin controls (ADMIN-only, enforced server-side).
-
-Limits: whether `st.user` carries a verified email depends on the platform; the app treats it as a role hint
-only when `NHL_ENGINE_TRUST_PLATFORM_VIEWER=ON`, and never fabricates identity. If unsure, leave it OFF
-and rely on the in-app ADMIN login. Check on the Diagnostics page (ADMIN) after enabling.
+Add each friend's email under "Invite viewers by email" → Save. They sign in with Streamlit and land directly in the app.
 
 ## 5. Reboot and smoke test
 
@@ -132,23 +103,9 @@ no paths). If that is unacceptable, make the repo private and set `NHL_ENGINE_SN
 (fine-grained, contents:read) in Streamlit secrets — Community Cloud can read private repos via its GitHub link.
 
 
-## Owner completion (what only you can do — exact steps)
+## Owner completion (what remains)
 
-None of the following is observable from the repo or this machine, so none is claimed done. `python3 opening_day_readiness.py` reports `STREAMLIT_URL` and `STREAMLIT_OWNER_CONFIG` as `OWNER_ACTION_REQUIRED` until you finish.
-
-1. **Tell the engine the app URL** (enables the anonymous, read-only smoke check): open the app in your browser, copy the address (`https://<name>.streamlit.app`), and add one line to the gitignored `.env`:
-   `NHL_ENGINE_STREAMLIT_URL=https://<name>.streamlit.app`
-   then run `python3 -m operational.cloud_preflight` — it makes two anonymous GETs and reports whether the app answers and whether anonymous visitors are redirected to sign-in (private mode).
-2. **Private sharing:** share.streamlit.io → your app → ⋮ → **Settings → Sharing** → choose **"Only specific people can view this app"** → add each friend's email (and your own) → Save.
-3. **Secrets:** ⋮ → **Settings → Secrets** → paste (values are yours; never share them):
-   ```toml
-   NHL_ENGINE_ADMIN_SETUP_CODE = "<make up a long random string>"
-   NHL_ENGINE_TRUST_PLATFORM_VIEWER = "ON"
-   NHL_ENGINE_ADMIN_EMAILS = "you@example.com"
-   ```
-   (`NHL_ENGINE_SNAPSHOT_SOURCE` is optional; the default `REMOTE` is correct.) Save → the app reboots.
-4. **Verify while signed in** (this cannot be automated without weakening privacy):
-   - as **you (ADMIN)**: Today loads; banner says *SNAPSHOT CURRENT*; **Diagnostics** opens and shows source **REMOTE**, schema **2**, a content hash equal to the newest `cloud-data` snapshot, RSS well under 1 GB;
-   - as an **invited friend (USER)**: Today, Game Detail and Paper Performance work; **Diagnostics, Morning Review and Data Status are denied**;
-   - `st.user.email` is populated when you are signed in (Diagnostics shows you as ADMIN without typing a password — if it asks for a login instead, the platform did not supply your email; use the setup-code login once).
-5. **Odds API reset day:** the-odds-api.com → log in → **Account / Usage** → note the date your monthly quota renews → add `NHL_ENGINE_ODDS_RESET_DAY=<day of month, 1-28>` to `.env` → `python3 opening_day_readiness.py` shows `ODDS_RESET_DAY: READY`. (Invalid values are rejected and treated as unset; the day is never inferred.)
+1. **Invite friends** (optional): Settings → Sharing → add emails.
+2. **Delete the unused auth secrets** from Streamlit Secrets after you have confirmed the app works (optional cleanup).
+3. **Odds API reset day:** the-odds-api.com → **Account / Usage** → note the date your quota renews → add `NHL_ENGINE_ODDS_RESET_DAY=<day 1-28>` to the gitignored `.env`.
+4. **Check while signed in:** the app opens straight to Today (no login screen); Diagnostics shows source **REMOTE**, schema **2**, a content hash equal to the newest `cloud-data` snapshot, and RSS well under 1 GB.

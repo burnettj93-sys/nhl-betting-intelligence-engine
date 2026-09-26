@@ -358,16 +358,13 @@ def _health_component(health: dict, key: str, max_hours: float, label: str) -> d
 
 
 def cloud_owner_configuration() -> dict:
-    """What can and cannot be observed about the Streamlit Community Cloud deployment from this machine. Never
-    guessed: anything only visible in the Streamlit UI is OWNER_ACTION_REQUIRED."""
-    obs = {"APP DEPLOYED": "OWNER_ACTION_REQUIRED (GitHub shows an active Streamlit webhook, so the repo is connected, "
-                           "but the app URL is not in the repo -- confirm it loads)",
-           "REMOTE SNAPSHOT READER ACTIVE": "OWNER_ACTION_REQUIRED (code ships the reader and cloud-data is reachable; the deployed process is not observable)",
-           "PRIVATE VIEWER MODE CONFIGURED": "OWNER_ACTION_REQUIRED (Settings -> Sharing)",
-           "ADMIN SETUP CODE CONFIGURED": "OWNER_ACTION_REQUIRED (Streamlit secrets)",
-           "ADMIN EMAILS CONFIGURED": "OWNER_ACTION_REQUIRED (Streamlit secrets)",
-           "st.user.email VERIFIED": "OWNER_ACTION_REQUIRED (only observable when signed in to the deployed app)"}
-    return obs
+    """Community Cloud needs NO application-level accounts or auth secrets: Streamlit's private-sharing setting is the
+    single access control. What remains observable/owner-only is listed here, never guessed."""
+    return {"ACCESS GATE": "Streamlit private sharing ('Only specific people can view this app'); verified by an anonymous request "
+                           "being redirected to sign-in (python3 -m operational.cloud_preflight)",
+            "APP-LEVEL AUTH": "none in Community Cloud -- no longer used (NHL_ENGINE_ADMIN_SETUP_CODE / NHL_ENGINE_TRUST_PLATFORM_VIEWER / "
+                              "NHL_ENGINE_ADMIN_EMAILS are no longer used and may be deleted from Streamlit Secrets)",
+            "INVITED VIEWERS": "OWNER_ACTION (optional): add friends' emails in Settings -> Sharing"}
 
 
 def build_component_states(checks: dict) -> dict:
@@ -551,10 +548,12 @@ def build_component_states(checks: dict) -> dict:
         out["STREAMLIT_URL"] = _c("READY" if _url else "OWNER_ACTION_REQUIRED",
                                   "configured (NHL_ENGINE_STREAMLIT_URL)" if _url else
                                   "not discoverable from the repo or GitHub: add NHL_ENGINE_STREAMLIT_URL=https://<your-app>.streamlit.app to .env")
-        out["STREAMLIT_OWNER_CONFIG"] = _c("OWNER_ACTION_REQUIRED",
-                                           "not observable from here: NHL_ENGINE_ADMIN_SETUP_CODE, NHL_ENGINE_TRUST_PLATFORM_VIEWER=\"ON\", "
-                                           "NHL_ENGINE_ADMIN_EMAILS (Streamlit Secrets); Sharing = only specific people; st.user.email populated "
-                                           "-- see docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md 'Owner completion'")
+        _app = cloud_preflight.check_deployed_app() if _url else {"state": "OWNER_ACTION_REQUIRED"}
+        out["STREAMLIT_OWNER_CONFIG"] = _c(
+            "READY" if _app.get("private_viewer_mode") else "OWNER_ACTION_REQUIRED",
+            "private sharing is the only access gate (anonymous visitors are redirected to Streamlit sign-in); no app-level login or auth "
+            "secrets are used in Community Cloud" if _app.get("private_viewer_mode") else
+            "could not confirm private sharing: set Settings -> Sharing to 'Only specific people can view this app'")
     except Exception as exc:  # noqa: BLE001
         out["STREAMLIT_URL"] = _c("PARTIAL", f"{type(exc).__name__}")
     try:
@@ -565,7 +564,7 @@ def build_component_states(checks: dict) -> dict:
     except Exception as exc:  # noqa: BLE001
         out["CLOUD_DEPLOYMENT"] = _c("PARTIAL", f"deployment check failed: {type(exc).__name__}")
     out["CLOUD_OWNER_CONFIGURATION"] = _c(
-        "OWNER_ACTION_REQUIRED",
+        "READY" if (out.get("STREAMLIT_OWNER_CONFIG") or {}).get("state") == "READY" else "OWNER_ACTION_REQUIRED",
         "; ".join(f"{k}: {v}" for k, v in cloud_owner_configuration().items()))
 
     try:
@@ -632,9 +631,8 @@ def build_component_states(checks: dict) -> dict:
     out["SCHEDULERS"] = _c("FAILED" if loaded == 0 else "READY" if loaded == len(sh._SCHEDULER_LABELS) else "PARTIAL",
                            f"{loaded}/{len(sh._SCHEDULER_LABELS)} jobs loaded")
     out["BACKUPS"] = _health_component(health, "database_backups", 30.0, "backups")
-    out["AUTH"] = _c("OWNER_ACTION_REQUIRED",
-                     "Streamlit secrets/viewer allow-list are not verifiable from this machine "
-                     "(see docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md)")
+    out["AUTH"] = _c("READY", "Community Cloud: Streamlit private sharing is the only gate (no app-level accounts or auth secrets); "
+                             "LOCAL/PRODUCTION keep the account system")
     out["YAHOO"] = _c("OWNER_AUTH_REQUIRED" if checks["yahoo"]["status"] == "OWNER_AUTH_REQUIRED" else
                       "READY" if checks["yahoo"]["status"] == "CONNECTED" else checks["yahoo"]["status"],
                       "isolated from betting/cloud data; never blocks betting readiness")

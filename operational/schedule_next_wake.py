@@ -46,13 +46,13 @@ def next_wake(now: dt.datetime | None = None, starts_fn: Callable | None = None,
     return None
 
 
-def verify(now: dt.datetime | None = None, *, nxt: dict | None = None, runner: Callable = ka._run) -> dict:
+def verify(now: dt.datetime | None = None, *, nxt: dict | None = None, runner: Callable | None = None) -> dict:
     """Is a wake event that covers the next opportunity actually in the OS list?"""
     now = now or dt.datetime.now(dt.timezone.utc)
     nxt = nxt if nxt is not None else next_wake(now)
     if not nxt:
         return {"state": "WAITING_FOR_EVENT", "detail": "no provider-listed cluster ahead", "scheduled": None}
-    events = ka.scheduled_wakes(runner)
+    events = ka.scheduled_wakes(runner or ka._run)      # resolved at call time (patchable), never bound at import
     hit = ka.wake_covers(nxt["window"], events)
     if hit:
         return {"state": "SCHEDULED", "scheduled": True, "when_utc": hit["when_utc"].isoformat(), "type": hit["type"], "owner": hit["owner"],

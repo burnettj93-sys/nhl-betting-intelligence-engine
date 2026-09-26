@@ -425,7 +425,7 @@ class TestComponentStates(unittest.TestCase):
         self.assertEqual(out["SAVES ACTIONABILITY"]["state"], "WAIT_ONLY")
         self.assertEqual(out["PAPER BETTING"]["state"], "NO_REAL_SAMPLE_YET")
         self.assertEqual(out["YAHOO"]["state"], "OWNER_AUTH_REQUIRED")
-        self.assertEqual(out["AUTH"]["state"], "OWNER_ACTION_REQUIRED")
+        self.assertEqual(out["AUTH"]["state"], "READY")                       # Cloud has no app-level auth; nothing to configure
         self.assertEqual(out["SCHEDULERS"]["state"], "READY")
 
     def test_moneyline_pipeline_is_ready_only_when_cadence_is_armed_quota_ok_and_certified(self):

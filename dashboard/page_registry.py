@@ -44,9 +44,6 @@ class PageSpec:
     cloud: bool
     default: bool = False
     admin_only: bool = False
-    # ADMIN-only in COMMUNITY_CLOUD_MODE only (Cloud live-data sprint): Morning Review and the
-    # Data Status / health detail are operational surfaces. LOCAL/PRODUCTION visibility is unchanged.
-    cloud_admin_only: bool = False
 
 
 PAGES: tuple[PageSpec, ...] = (
@@ -66,9 +63,9 @@ PAGES: tuple[PageSpec, ...] = (
     PageSpec("22_Model_Health.py", "Model Health", "🩺", "Track & Monitor", CORE_USER, True),
     PageSpec("32_Model_Learning.py", "Model Learning", "🔄", "Track & Monitor", CORE_USER, True),
     PageSpec("33_Paper_Performance.py", "Paper Performance", "💰", "Track & Monitor", CORE_USER, True),
-    PageSpec("36_Morning_Review.py", "Morning Review", "🧭", "Track & Monitor", LIGHTWEIGHT_ADMIN, True, cloud_admin_only=True),
+    PageSpec("36_Morning_Review.py", "Morning Review", "🧭", "Track & Monitor", LIGHTWEIGHT_ADMIN, True),
     PageSpec("23_Ledger.py", "Ledger", "📒", "Track & Monitor", CORE_USER, True),
-    PageSpec("9_Data_Status.py", "Data Status", "🗂️", "Track & Monitor", LIGHTWEIGHT_ADMIN, True, cloud_admin_only=True),
+    PageSpec("9_Data_Status.py", "Data Status", "🗂️", "Track & Monitor", LIGHTWEIGHT_ADMIN, True),
     PageSpec("13_Play_By_Play_Status.py", "Play-by-Play Status", "🧩", "Track & Monitor", LEGACY, False),
     PageSpec("3_Team_Ratings.py", "Team Ratings", "📊", "Track & Monitor", HEAVY_RESEARCH, False),
     # ---- Research
@@ -104,8 +101,6 @@ def page_available(spec: PageSpec, role: str, mode: str | None = None) -> bool:
         return False
     if mode == runtime_mode.COMMUNITY_CLOUD_MODE:
         if not spec.cloud:
-            return False
-        if spec.cloud_admin_only and role != "ADMIN":
             return False
     return True
 
