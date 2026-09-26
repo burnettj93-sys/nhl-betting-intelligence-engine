@@ -67,12 +67,17 @@ if failing:
 _odds_status = (_cloud_health.get("odds_status") if runtime_mode.is_community_cloud() and _cloud_health
                 else None) or odds_collection_status()
 oc1, oc2, oc3, oc4, oc5, oc6 = st.columns(6)
-oc1.metric("Odds last updated", (_odds_status["last_updated_utc"] or "—")[:16])
-oc2.metric("Credits remaining", _odds_status["credits_remaining"] if _odds_status["credits_remaining"] is not None else "—")
+# The published snapshot deliberately omits the volatile per-sweep `last_updated_utc` (it would make every snapshot
+# look changed); in Cloud the newest real price time comes from the snapshot's odds freshness component instead.
+_odds_last = _odds_status.get("last_updated_utc")
+if not _odds_last and runtime_mode.is_community_cloud():
+    _odds_last = ((cloud_snapshot.freshness().get("components") or {}).get("odds"))
+oc1.metric("Odds last updated", (_odds_last or "—")[:16])
+oc2.metric("Credits remaining", _odds_status.get("credits_remaining") if _odds_status.get("credits_remaining") is not None else "—")
 oc3.metric("Next refresh", "scheduler-driven")
 oc4.metric("Verified DK contracts", len(VERIFIED_CONTRACTS))
-oc5.metric("Player prop quotes", _odds_status["player_prop_quotes"])
-oc6.metric("Tracked events", _odds_status["tracked_events"])
+oc5.metric("Player prop quotes", _odds_status.get("player_prop_quotes", "—"))
+oc6.metric("Tracked events", _odds_status.get("tracked_events", "—"))
 
 with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
     if runtime_mode.is_community_cloud():
