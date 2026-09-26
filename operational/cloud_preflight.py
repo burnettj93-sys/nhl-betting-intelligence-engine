@@ -201,7 +201,13 @@ def check_deployed_app(url: str | None = None, fetch=None) -> dict:
             class _NoRedirect(urllib.request.HTTPRedirectHandler):
                 def redirect_request(self, *a, **k):
                     return None
-            opener = urllib.request.build_opener(_NoRedirect)
+            import ssl
+            try:                                   # python.org macOS builds ship without a CA bundle: prefer certifi's
+                import certifi
+                ctx = ssl.create_default_context(cafile=certifi.where())
+            except Exception:  # noqa: BLE001
+                ctx = ssl.create_default_context()
+            opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ctx))
             try:
                 with opener.open(urllib.request.Request(u, headers={"User-Agent": "nhl-engine-preflight/1"}), timeout=15) as r:
                     return r.status, r.read(2000).decode("utf-8", "replace"), dict(r.headers)
