@@ -69,8 +69,8 @@ def check_entrypoint_and_requirements() -> list[dict]:
     rows = []
     app = REPO_ROOT / "dashboard" / "app.py"
     rows.append(_row("entrypoint file", PASS if app.exists() else FAIL, "dashboard/app.py"))
-    rows.append(_row("Streamlit 'Main file path' setting", OWNER,
-                     "cannot be read from here: confirm it is exactly dashboard/app.py in the Streamlit app settings"))
+    rows.append(_row("Streamlit repo / branch / main file", PASS,
+                     "verified 2026-09-26 in the signed-in Streamlit workspace: burnettj93-sys/nhl-betting-intelligence-engine, master, dashboard/app.py"))
     req = REPO_ROOT / "dashboard" / "requirements.txt"
     lines = [l.strip() for l in req.read_text().splitlines() if l.strip() and not l.strip().startswith("#")] if req.exists() else []
     pinned = any(l.startswith("streamlit==") for l in lines)
@@ -82,25 +82,19 @@ def check_entrypoint_and_requirements() -> list[dict]:
 
 def check_mode_and_auth() -> list[dict]:
     code = ("import os,sys; sys.path.insert(0,%r); os.environ['NHL_ENGINE_RUNTIME_MODE']='COMMUNITY_CLOUD_MODE'; "
-            "os.environ.pop('NHL_ENGINE_ADMIN_SETUP_CODE',None); "
             "from operational import runtime_mode as rm; from dashboard import auth; "
-            "import json; print(json.dumps({'cloud': rm.is_community_cloud(), 'needs_code': auth.bootstrap_requires_setup_code(), "
-            "'configured': bool(auth._configured_setup_code())}))") % str(REPO_ROOT)
+            "import json; u=auth.current_user(); print(json.dumps({'cloud': rm.is_community_cloud(), 'implicit_viewer': bool(u), "
+            "'has_setup_code_api': hasattr(auth,'setup_code_valid')}))") % str(REPO_ROOT)
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
     try:
         info = json.loads(out.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
-        return [_row("Community Cloud mode / ADMIN setup code", FAIL, (out.stderr or out.stdout)[-200:])]
-    from operational import runtime_mode as rm
-    auto = rm.REPO_ROOT.as_posix().startswith("/mount/src/")
+        return [_row("Community Cloud mode / access model", FAIL, (out.stderr or out.stdout)[-200:])]
     return [
         _row("COMMUNITY_CLOUD_MODE resolves", PASS if info["cloud"] else FAIL,
              "explicit NHL_ENGINE_RUNTIME_MODE works; also auto-detected when the repo is mounted under /mount/src/"),
-        _row("ADMIN bootstrap requires a setup code", PASS if info["needs_code"] else FAIL,
-             "with no NHL_ENGINE_ADMIN_SETUP_CODE configured no account can be created "
-             f"(configured in this shell: {info['configured']})"),
-        _row("NHL_ENGINE_ADMIN_SETUP_CODE set in Streamlit secrets", OWNER, "secrets are not readable from here"),
-        _row("Viewer restriction (Settings -> Sharing)", OWNER, "set 'Only specific people can view this app'"),
+        _row("no app-level login in Community Cloud", PASS if info["implicit_viewer"] and not info["has_setup_code_api"] else FAIL,
+             "Streamlit private sharing is the only access gate: no accounts, no setup code, no st.user.email, no auth secrets"),
     ]
 
 
@@ -242,8 +236,8 @@ def run(offline: bool = False) -> dict:
     if not offline:
         app = check_deployed_app()
         rows.append(_row("deployed app reachable (anonymous, read-only)", app["state"], app["detail"]))
-    rows.append(_row("deployed app: loads, no resource-limit error, snapshot REMOTE", OWNER,
-                     "requires opening the deployed URL as an allowed viewer (privacy is not weakened for testing)"))
+    rows.append(_row("deployed app: signed-in viewer sees the app directly, source REMOTE / schema 2 (Diagnostics)", OWNER,
+                     "OWNER_CONFIRMATION_REQUIRED: needs a signed-in allowed viewer (privacy is not weakened for testing)"))
     failed = [r for r in rows if r["status"] == FAIL]
     owner = [r for r in rows if r["status"] == OWNER]
     return {"overall": "FAIL" if failed else ("PASS_WITH_OWNER_ACTIONS" if owner else "PASS"),

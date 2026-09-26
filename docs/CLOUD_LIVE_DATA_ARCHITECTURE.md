@@ -170,6 +170,8 @@ Recommendation: ship public (it changes no exposure the repo doesn't already hav
 
 ## Authentication in COMMUNITY_CLOUD_MODE
 
+> **Superseded 2026-09-26:** Community Cloud has no application-level authentication. Streamlit private sharing is the only access gate; the platform-viewer / ADMIN-email / setup-code mechanism described below was removed (Community Cloud does not supply `st.user.email`, and the ephemeral filesystem cannot hold accounts). The text below is historical.
+
 Community Cloud's filesystem is ephemeral, so custom accounts cannot be relied on for friend identity. Cloud mode therefore uses the **platform's private-viewer gate** as the primary access control, with the app enforcing ADMIN-only pages itself. LOCAL/PRODUCTION auth is unchanged.
 
 1. **Platform viewer identity (opt-in).** If the owner sets the secret `NHL_ENGINE_TRUST_PLATFORM_VIEWER=ON` — an explicit declaration that the app is restricted to an invited viewer list in Streamlit's Sharing settings — the signed-in viewer's platform email is the identity: `ADMIN` if it is in the secret `NHL_ENGINE_ADMIN_EMAILS` (comma-separated), otherwise `USER`. No login form appears. The app cannot verify from the inside that the platform gate is on, so nothing is trusted without that declaration; with no email present it falls back to the custom gate. **It never mints ADMIN unless the email is listed.**

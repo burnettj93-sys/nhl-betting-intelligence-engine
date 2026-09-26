@@ -28,7 +28,7 @@ Times are computed from the schedule: `python3 -m operational.first_live_certifi
 | you | Mac plugged in, **prevent sleep** while the lid is closed or use `caffeinate -s` (missed pulls were the top reliability problem: 8 of 41 moneyline runs failed offline). |
 | you | `python3 -m operational.scheduler_audit` — 11 jobs, status `OK`. (`runs` restarts at every boot; a 0 after a late boot is normal — see `docs/SCHEDULER_INVENTORY.md`.) |
 | you | `python3 -m operational.cloud_preflight` → `PASS_WITH_OWNER_ACTIONS`; do the owner actions in `docs/STREAMLIT_COMMUNITY_CLOUD_RUNBOOK.md`. |
-| you | Open the Cloud app as an allowed viewer: banner shows **SNAPSHOT CURRENT**, Diagnostics (ADMIN) shows source `REMOTE`, fetch `OK`, schema 2. |
+| you | Open the Cloud app (Streamlit private sharing is the only gate; no app login): banner shows **SNAPSHOT CURRENT**; Diagnostics shows source `REMOTE`, fetch `OK`, schema 2. |
 
 ## Morning (07:00–09:00)
 
@@ -84,7 +84,7 @@ Times are computed from the schedule: `python3 -m operational.first_live_certifi
 | `python3 -m operational.first_live_certification` | every check PASS (`paper_bet_if_bet` is `NOT_APPLICABLE` unless a BET); `LIVE_OBSERVED=True` |
 | Ledger | immutable MONEYLINE observations for the cluster's games; a `REAL_MARKET_PAPER` bet only for a BET |
 | Cloud | snapshot republished after the pull (`cloud_publish` in the audit record); Today → Recorded Recommendations shows the rows with price captured / game start / freshness; banner odds CURRENT |
-| Diagnostics (ADMIN) | *Moneyline T-35 live status* → `LIVE_OBSERVED` |
+| Diagnostics | *Moneyline T-35 live status* → `LIVE_OBSERVED` |
 
 If a cluster misses: the audit record says exactly why (`PROVIDER_NOT_LISTED`, `QUOTA_DEFERRED`, `NETWORK_FAILED`, `API_FAILED`, `EMPTY_RESPONSE`, `MISSED_WINDOW`/`MACHINE_ASLEEP`). Nothing is patched afterwards.
 

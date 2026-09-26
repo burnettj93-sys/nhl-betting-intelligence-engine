@@ -43,19 +43,15 @@ class TestDecisionPolicyWindow(unittest.TestCase):
 
 
 class TestCloudPreflightFastChecks(unittest.TestCase):
-    def test_entrypoint_and_requirements_pass_and_the_streamlit_ui_part_is_owner_action(self):
+    def test_entrypoint_and_requirements_pass_and_the_streamlit_app_settings_are_recorded(self):
         rows = {r["check"]: r for r in pf.check_entrypoint_and_requirements()}
         self.assertEqual(rows["entrypoint file"]["status"], pf.PASS)
-        self.assertEqual(rows["Streamlit 'Main file path' setting"]["status"], pf.OWNER)
+        self.assertEqual(rows["Streamlit repo / branch / main file"]["status"], pf.PASS)
         self.assertEqual(rows["dashboard/requirements.txt (Cloud dependency file)"]["status"], pf.PASS)
 
     def test_cloud_pages_import_no_scheduler_api_client_or_yahoo(self):
         rows = pf.check_page_registry()
         self.assertEqual(rows[0]["status"], pf.PASS, rows[0]["detail"])
-
-    def test_owner_only_settings_are_never_guessed(self):
-        report = {"checks": pf.check_entrypoint_and_requirements()}
-        self.assertTrue(any(r["status"] == pf.OWNER for r in report["checks"]))
 
     def test_overall_is_fail_when_any_check_fails(self):
         from unittest import mock

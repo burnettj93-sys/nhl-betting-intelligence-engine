@@ -26,9 +26,22 @@ _SESSION_KEY_USERNAME = "_auth_username"
 _SESSION_KEY_ROLE = "_auth_role"
 
 
+# COMMUNITY_CLOUD_MODE has NO application-level accounts. Streamlit's own private-sharing setting ("Only specific
+# people can view this app") is the single access control: whoever can reach the app may use it. Every page that
+# stays available in Cloud is a read-only presentation of the published snapshot (no credentials, no Yahoo, no
+# writes, no destructive or ingestion controls -- see dashboard/page_registry.py and the tests that scan the Cloud
+# pages), so one implicit viewer identity is used. The role string is "ADMIN" only because the existing per-page
+# guards compare against it; in Cloud it grants nothing beyond the read-only surface. LOCAL_MODE and PRODUCTION_MODE
+# keep the full account system unchanged.
+CLOUD_VIEWER = {"username": "Streamlit viewer", "role": "ADMIN"}
+
+
 def current_user() -> dict | None:
     """Returns {"username": ..., "role": ...} if logged in this
-    session, else None. Never raises."""
+    session, else None. Never raises. In COMMUNITY_CLOUD_MODE every session that reaches the app (already
+    admitted by Streamlit's private sharing) is the implicit read-only viewer."""
+    if runtime_mode.is_community_cloud():
+        return dict(CLOUD_VIEWER)
     username = st.session_state.get(_SESSION_KEY_USERNAME)
     role = st.session_state.get(_SESSION_KEY_ROLE)
     if username is None or role is None:
@@ -46,11 +59,6 @@ def logout() -> None:
     st.session_state.pop(_SESSION_KEY_ROLE, None)
 
 
-SETUP_CODE_ENV = "NHL_ENGINE_ADMIN_SETUP_CODE"
-TRUST_PLATFORM_ENV = "NHL_ENGINE_TRUST_PLATFORM_VIEWER"
-ADMIN_EMAILS_ENV = "NHL_ENGINE_ADMIN_EMAILS"
-
-
 def _setting(name: str) -> str | None:
     value = (os.environ.get(name) or "").strip()
     if value:
@@ -61,64 +69,6 @@ def _setting(name: str) -> str | None:
         return None
 
 
-def platform_identity_trusted() -> bool:
-    """COMMUNITY_CLOUD_MODE only, and only when the owner has EXPLICITLY declared (secret
-    NHL_ENGINE_TRUST_PLATFORM_VIEWER=ON) that the Community Cloud app is restricted to an invited
-    viewer list in its Sharing settings. Without that declaration no platform identity is
-    trusted -- we cannot verify from inside the app that the platform gate is enabled, and a
-    public app must never mint a role from an unverifiable header."""
-    return runtime_mode.is_community_cloud() and (_setting(TRUST_PLATFORM_ENV) or "").upper() in ("ON", "1", "TRUE", "YES")
-
-
-def platform_viewer_email() -> str | None:
-    """The viewer email Streamlit reports for a signed-in Community Cloud viewer (None when the
-    platform provides none, e.g. local runs or a public app)."""
-    for attr in ("user", "experimental_user"):
-        try:
-            proxy = getattr(st, attr)
-            email = proxy.get("email") if hasattr(proxy, "get") else getattr(proxy, "email", None)
-        except Exception:
-            continue
-        if email:
-            return str(email).strip().lower()
-    return None
-
-
-def platform_role_for(email: str) -> str:
-    """ADMIN only for an address listed in NHL_ENGINE_ADMIN_EMAILS (comma-separated secret);
-    every other invited viewer is a USER. No list configured -> nobody is ADMIN via the platform
-    (the setup-code bootstrap remains the only way to obtain ADMIN)."""
-    admins = {e.strip().lower() for e in (_setting(ADMIN_EMAILS_ENV) or "").split(",") if e.strip()}
-    return "ADMIN" if email.strip().lower() in admins else "USER"
-
-
-def _configured_setup_code() -> str | None:
-    value = (os.environ.get(SETUP_CODE_ENV) or "").strip()
-    if value:
-        return value
-    try:
-        return (st.secrets.get(SETUP_CODE_ENV) or "").strip() or None
-    except Exception:
-        return None
-
-
-def bootstrap_requires_setup_code() -> bool:
-    """Community Cloud memory sprint (2026-09-25): on Streamlit Community
-    Cloud there is no auth_store.db in git and the filesystem is ephemeral, so
-    the "no users yet" first-visit form would let ANY stranger who reaches the
-    public URL first (and again after every restart) create the ADMIN account.
-    In COMMUNITY_CLOUD_MODE the bootstrap therefore requires a setup code held
-    in a secret (NHL_ENGINE_ADMIN_SETUP_CODE, env or st.secrets); with no code
-    configured, no account can be created at all. LOCAL/PRODUCTION are
-    unchanged."""
-    return runtime_mode.is_community_cloud()
-
-
-def setup_code_valid(submitted: str) -> bool:
-    configured = _configured_setup_code()
-    return bool(configured) and hmac.compare_digest(submitted.encode(), configured.encode())
-
-
 def render_bootstrap_admin_form() -> bool:
     """Shown instead of the login form when zero users exist yet (a
     fresh install) -- creates the first account, always as ADMIN (the
@@ -127,21 +77,12 @@ def render_bootstrap_admin_form() -> bool:
     page again once at least one user exists."""
     st.title("First-time setup: create the administrator account")
     st.caption("This form only appears once, before any account exists.")
-    needs_code = bootstrap_requires_setup_code()
-    if needs_code and not _configured_setup_code():
-        st.error("Administrator setup is disabled on this deployment: no setup code is configured "
-                 f"({SETUP_CODE_ENV}). Configure it as a secret, then reload.")
-        return False
     with st.form("bootstrap_admin_form"):
         username = st.text_input("Admin username")
         password = st.text_input("Password", type="password")
         confirm = st.text_input("Confirm password", type="password")
-        setup_code = st.text_input("Setup code", type="password") if needs_code else ""
         submitted = st.form_submit_button("Create administrator account")
     if not submitted:
-        return False
-    if needs_code and not setup_code_valid(setup_code):
-        st.error("Invalid setup code.")
         return False
     if not username or not password:
         st.error("Username and password are required.")
@@ -198,16 +139,7 @@ def render_auth_gate() -> dict | None:
     rendering the rest of the app for that run."""
     user = current_user()
     if user is not None:
-        return user
-
-    # Community Cloud: the platform's private-viewer gate is the primary USER access control
-    # (accounts on Cloud's ephemeral filesystem cannot be relied on). Mode-specific and opt-in;
-    # LOCAL/PRODUCTION never reach this branch.
-    if platform_identity_trusted():
-        email = platform_viewer_email()
-        if email:
-            _set_session(email, platform_role_for(email))
-            return current_user()
+        return user                       # Community Cloud: always the implicit viewer -- no login, no bootstrap form
 
     _hide_navigation_until_signed_in()
 
