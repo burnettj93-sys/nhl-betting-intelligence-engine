@@ -282,6 +282,13 @@ class TestDeployedAppCheck(unittest.TestCase):
             raise OSError("dns")
         self.assertEqual(pf.check_deployed_app("https://x.streamlit.app", fetch=fetch)["state"], pf.FAIL)
 
+    def test_the_default_fetch_trusts_certifi_so_a_bundle_less_python_can_verify_https(self):
+        """Found live: python.org macOS builds ship no CA bundle, so the anonymous check reported the real app as
+        'unreachable: URLError (CERTIFICATE_VERIFY_FAILED)'."""
+        src = (REPO / "operational" / "cloud_preflight.py").read_text()
+        self.assertIn("certifi.where()", src)
+        self.assertIn("HTTPSHandler(context=ctx)", src)
+
     def test_the_url_comes_only_from_owner_configuration(self):
         with mock.patch.dict("os.environ", {pf.APP_URL_ENV: "https://mine.streamlit.app"}):
             self.assertEqual(pf.app_url(), "https://mine.streamlit.app")
