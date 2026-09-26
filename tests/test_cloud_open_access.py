@@ -83,6 +83,28 @@ class TestCloudNeedsNoAppLogin(unittest.TestCase):
         self.assertNotIn("Signed in as", _text(at))
 
 
+class TestTodayWithTheRealPublishedSnapshotShape(unittest.TestCase):
+    """Regression (found on the live app): the published snapshot's odds_status has no `last_updated_utc`, and Today
+    raised KeyError on it."""
+
+    def test_today_renders_when_odds_status_omits_last_updated_utc(self):
+        from dashboard import cloud_snapshot
+        real = cloud_snapshot.health_section
+
+        def health():
+            h = dict(real())
+            h["odds_status"] = {"status": "OK", "credits_remaining": 365, "tracked_events": 33, "player_prop_quotes": 744}
+            return h
+        with mock.patch.object(cloud_snapshot, "health_section", health):
+            at = _run_app(rm.COMMUNITY_CLOUD_MODE)
+        self.assertEqual([str(e.value)[:80] for e in at.exception], [])
+        self.assertIn("Odds last updated", " ".join(m.label for m in at.metric))
+
+    def test_the_page_never_indexes_the_optional_odds_status_keys(self):
+        src = (REPO / "dashboard" / "pages" / "21_Today.py").read_text()
+        self.assertNotIn('_odds_status["last_updated_utc"]', src)
+
+
 class TestCloudSurfaceHasNoRiskyControls(unittest.TestCase):
     RISKY = re.compile(r"subprocess|os\.system|requests\.|urllib|file_uploader|st\.secrets|type=\"password\"|\.execute\(|executescript|"
                        r"INSERT |DELETE |UPDATE |write_text|\.unlink|shutil|download_button|auth_store|token_store|fantasy|yahoo", re.I)
