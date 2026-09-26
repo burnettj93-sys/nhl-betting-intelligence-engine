@@ -242,14 +242,18 @@ def preflight(now: dt.datetime | None = None, *, deps: dict | None = None) -> di
         owner_actions.append("schedule the one-time wake: " + str(wake.get("command")))
     if nxt and str(power.get("risk")) == "HIGH" and wake.get("state") != "SCHEDULED":
         owner_actions.append("or keep the Mac awake yourself (idle sleep is 1 minute on AC); lid open, on AC power")
+    # An unknown quota RESET DATE is a warning, never a blocker: the spend guard's hard reserve depends only on the real
+    # `x-requests-remaining`, so a 1-credit pull is safe whenever `quota.sufficient` is true (checked above, in `problems`).
+    warnings = []
     if not (quota.get("reset_day") or {}).get("status", "OWNER_CONFIGURED").startswith("OWNER_CONFIGURED"):
-        owner_actions.append("set NHL_ENGINE_ODDS_RESET_DAY (Odds API Account / Usage)")
+        warnings.append("ODDS_RESET_DAY: OWNER VERIFICATION PENDING - set NHL_ENGINE_ODDS_RESET_DAY (Odds API Account / Usage); "
+                        "the reserve floor is enforced from the real remaining credits, only the daily-pace projection assumes the 1st")
     verdict = "NOT_READY" if not architecture_ready else ("OWNER_ACTION_REQUIRED" if owner_actions else "READY")
     return {"generated_at_utc": now.isoformat(), "state": state, "architecture_ready": architecture_ready,
             "architecture_problems": problems, "next_cluster": nxt, "scheduler": sched, "quota": quota,
             "cloud_publisher_enabled": publisher, "deployment_mode": mode, "machine_power": power,
             "power_risk": power.get("risk"), "live_observed": obs["live_observed"], "live_certified": obs.get("live_certified", False),
-            "git": git_state, "wake": wake, "keep_awake": caffeinate, "preflight_verdict": verdict, "owner_actions": owner_actions,
+            "git": git_state, "wake": wake, "keep_awake": caffeinate, "preflight_verdict": verdict, "owner_actions": owner_actions, "warnings": warnings,
             "lid_note": "lid must be OPEN (or an external display attached) and the Mac on AC power; neither pmset nor caffeinate can override closed-lid sleep",
             "paid_requests_made": 0}
 
@@ -298,6 +302,8 @@ def main(argv=None) -> int:
     print(f"  keep-awake: caffeinate present={k.get('binary_present')}, wake-guard={k.get('guard_closes_wake_gap')} ({k.get('limits')})")
     for a in pre["owner_actions"]:
         print(f"  OWNER ACTION: {a}")
+    for a in pre.get("warnings", []):
+        print(f"  WARNING: {a}")
     sc = pre["scheduler"]
     print(f"  scheduler: loaded={sc.get('loaded')} runs={sc.get('runs_since_boot')} code={sc.get('branch')}@{sc.get('commit')} "
           f"on clean master={sc.get('on_master')} ({sc.get('working_directory')})")

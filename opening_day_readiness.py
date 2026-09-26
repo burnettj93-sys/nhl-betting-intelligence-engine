@@ -510,9 +510,9 @@ def build_component_states(checks: dict) -> dict:
     try:
         from operational import odds_quota
         rs = odds_quota.reset_status()
-        out["ODDS_RESET_DAY"] = _c("READY" if rs["status"] == "OWNER_CONFIGURED" else "OWNER_ACTION_REQUIRED",
+        out["ODDS_RESET_DAY"] = _c("READY" if rs["status"] == "OWNER_CONFIGURED" else "READY_WITH_WARNINGS",
                                    f"reset day {rs['reset_day']} (owner-configured)" if rs["status"] == "OWNER_CONFIGURED" else
-                                   "OWNER_VERIFICATION_REQUIRED: the provider exposes no reset date; check the account dashboard and set "
+                                   "WARNING - OWNER VERIFICATION PENDING (does not block paid pulls; the reserve is enforced from real remaining credits): the provider exposes no reset date; check the account dashboard and set "
                                    "NHL_ENGINE_ODDS_RESET_DAY=<1-28> in .env" + ("; the configured value is INVALID" if rs.get("invalid") else "")
                                    + f" (calendar-month day {rs['reset_day']} is only an assumption)")
     except Exception as exc:  # noqa: BLE001
