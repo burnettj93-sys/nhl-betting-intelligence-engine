@@ -227,17 +227,45 @@ class TestSogAlternateAdapter(unittest.TestCase):
         self.assertEqual(legs, [])
         self.assertTrue(any("CONTRACT_NOT_VERIFIED" in e["reason"] for e in excluded))
 
-    def test_unresolved_identity_is_excluded_real_finding(self):
-        # The REAL, unmocked player_mapping against the REAL (but narrow)
-        # research/player_sog identity corpus -- every player in this real
-        # fixture is genuinely IDENTITY_UNMATCHED today (a real, disclosed
-        # corpus-coverage gap, not fabricated by this test).
+    def test_real_identity_resolves_after_the_p0_corpus_repair(self):
+        # P0 block (2026-09-29): research/player_sog/player_game_sog.jsonl was
+        # a stale build artifact (26,465 rows, 378 players -- generated
+        # 2026-09-01, never re-run since, the identical bug already found and
+        # fixed for the Blocks corpus the same day) missing every one of this
+        # fixture's real players entirely, including both Tkachuks. Re-running
+        # the existing, unmodified build_sog_corpus.py against its own
+        # already-complete raw CSVs produced the real, correct 188,863-row/
+        # 1,356-player corpus -- confirmed a pure staleness bug, not a data
+        # gap or an extraction-logic bug. With NOW (a stale reference time),
+        # every real quote is still excluded, but for STALE_PRICE /
+        # MODEL_THRESHOLD_NOT_ACTIONABLE now -- never IDENTITY_UNMATCHED.
         payload = self._load_payload()
         conn = self._schedule_conn()
         legs, excluded = adapter.sog_alternate_candidate_legs(conn, [payload], now=NOW)
         self.assertEqual(legs, [])
-        self.assertTrue(all("IDENTITY_UNMATCHED" in e["reason"] for e in excluded))
         self.assertGreater(len(excluded), 0)
+        self.assertFalse(any("IDENTITY_UNMATCHED" in e["reason"] for e in excluded))
+        self.assertTrue(all(e["reason"].split(":")[0].split("(")[0].strip()
+                             in ("STALE_PRICE", "MODEL_THRESHOLD_NOT_ACTIONABLE", "IDENTITY_AMBIGUOUS")
+                             for e in excluded))
+
+    def test_real_identity_resolves_near_the_real_capture_time(self):
+        # Evaluated near the quote's OWN real capture time (12:14:34Z) rather
+        # than a stale reference -- proves real players genuinely map to real
+        # eligible legs with real model probabilities, not just "no longer
+        # unmatched."
+        payload = self._load_payload()
+        conn = self._schedule_conn()
+        fresh_now = dt.datetime(2026, 9, 29, 12, 20, 0, tzinfo=dt.timezone.utc)
+        legs, excluded = adapter.sog_alternate_candidate_legs(conn, [payload], now=fresh_now)
+        self.assertGreater(len(legs), 0)
+        for leg in legs:
+            self.assertTrue(0.0 < leg.conservative_probability < 1.0)
+        # Brady Tkachuk's real most-recent-known team (per the real corpus)
+        # doesn't match this fixture's CAR/FLA game -- correctly AMBIGUOUS,
+        # never guessed past.
+        self.assertTrue(any("IDENTITY_AMBIGUOUS" in e["reason"] and "Brady Tkachuk" in e["identifier"]
+                             for e in excluded))
 
     def test_unmatched_event_is_excluded(self):
         payload = dict(self._load_payload())

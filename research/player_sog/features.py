@@ -23,7 +23,9 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-CORPUS_PATH = Path(__file__).resolve().parent / "player_game_sog.jsonl"
+CORPUS_PATH = Path(__file__).resolve().parent / "player_game_sog.jsonl"  # legacy single-file path, kept only
+                                                                          # as an explicit-override option below
+CORPUS_SHARD_DIR = Path(__file__).resolve().parent / "corpus"
 
 # Effective-sample-size shrinkage constants (games-based, not shots-based
 # -- H2H and home/road samples are naturally small game COUNTS, unlike
@@ -38,13 +40,38 @@ ELIGIBILITY_WINDOW_TEAM_GAMES = 10
 ELIGIBILITY_MIN_APPEARANCES = 4
 
 
-def load_sog_corpus(path: str | Path = CORPUS_PATH) -> list[dict]:
+def _read_jsonl(path: Path) -> list[dict]:
     rows = []
     with open(path) as f:
         for line in f:
             line = line.strip()
             if line:
                 rows.append(json.loads(line))
+    return rows
+
+
+def load_sog_corpus(path: str | Path | None = None) -> list[dict]:
+    """Real player-game SOG corpus loader. GitHub's 100MB file limit made a
+    single monolithic player_game_sog.jsonl impossible once the corpus was
+    repaired to its real, complete size (188,863 rows) -- research/player_sog/
+    build_sog_corpus.py now writes one shard per raw season under
+    research/player_sog/corpus/ instead. This function reads every shard in
+    that directory transparently: every existing caller keeps calling
+    load_sog_corpus() with no argument and gets the identical combined,
+    deterministically-sorted row set as before the split -- no caller needs
+    to know sharding exists. `path` remains available for tests or a one-off
+    override: a directory reads every *.jsonl file in it (sorted by name for
+    a deterministic read order before the final global sort below); a single
+    file reads just that file, unchanged legacy behavior."""
+    if path is None:
+        path = CORPUS_SHARD_DIR
+    path = Path(path)
+    if path.is_dir():
+        rows = []
+        for shard in sorted(path.glob("*.jsonl")):
+            rows.extend(_read_jsonl(shard))
+    else:
+        rows = _read_jsonl(path)
     rows.sort(key=lambda r: (r["game_date"], r["game_id"], r["player_id"]))
     return rows
 
