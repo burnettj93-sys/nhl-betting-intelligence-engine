@@ -23,6 +23,14 @@ from research.model_registry import MODEL_REGISTRY
 st.title("Model Health")
 comp.render_model_status_header()
 st.caption("Driven live from research/model_registry.py — not a static demo table.")
+st.caption(
+    "Each card shows two INDEPENDENT dimensions, left to right: **MODEL VALIDATION** (did the "
+    "statistical model clear this project's evidence bar on the historical corpus?) and "
+    "**PRODUCTION STATUS** (is it actually wired into a live decision today?). A model can be "
+    "VALIDATED and still show PRODUCTION: RESEARCH — validation is necessary but not sufficient "
+    "for production use (live contract, settlement, and any starter/lineup gate are separate "
+    "requirements). These two badges are not contradictory even when they differ."
+)
 
 status_map = {"VALIDATED": "VALIDATED", "PARTIAL": "PARTIAL", "REJECTED": "REJECTED",
               "ATTEMPTED_NOT_VALIDATED": "REJECTED", "EMPIRICAL_BASELINE_REMAINS_CHAMPION": "PARTIAL",
@@ -36,11 +44,11 @@ for entry in MODEL_REGISTRY:
             st.caption(entry.model_id)
         with cols[1]:
             badge_status = status_map.get(entry.status, "RESEARCH")
-            comp.render_status_banner(badge_status, entry.status)
+            comp.render_status_banner(badge_status, entry.status, detail="MODEL VALIDATION")
         with cols[2]:
             comp.render_status_banner(
                 entry.operational_status if entry.operational_status in comp.STATUS_BANNER_STYLES
-                else "RESEARCH", entry.operational_status.replace("_", " "))
+                else "RESEARCH", entry.operational_status.replace("_", " "), detail="PRODUCTION STATUS")
 
         threshold_bits = []
         if entry.validated_thresholds:
