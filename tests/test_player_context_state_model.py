@@ -494,9 +494,9 @@ class Test52ProductionBoundaryUnchanged(unittest.TestCase):
         self.assertEqual(_file_sha256("config.py"),
                           "c019568da204ace99222954d4f02546a25c31029453c36ed3b0ed4bf97d3df8a")
         self.assertEqual(_file_sha256("db.py"),
-                          "02361fb58b22797638a8b3ff2bde98861f8cb1083c8ad3bcfd4088cfac0e9be8")
+                          "e30ecffb2673cfa209913aa4db6c365c104fdcd23b2d508d088f418bba881d09")
         self.assertEqual(_file_sha256("schema.sql"),
-                          "ff19dd3b0c4cd8a61371d77751a045f222bdce7636d119d90c013f58ef64f31f")
+                          "eb1ba2e3c3b305514189a46f4e1529acbfb98611b43c07c9d361bab97879488d")
 
 
 if __name__ == "__main__":

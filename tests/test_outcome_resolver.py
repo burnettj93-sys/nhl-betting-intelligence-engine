@@ -36,13 +36,22 @@ def _insert_game(conn, game_id, home_team="EDM", away_team="CHI", game_state="FI
     conn.commit()
 
 
-def _insert_player_stat(conn, game_id, player_id, team_id, goals=0, assists=0, shots=0, played=1):
+def _insert_player_stat(conn, game_id, player_id, team_id, goals=0, assists=0, shots=0, played=1,
+                        hits=None, blocked_shots=None):
     conn.execute(
         """INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals,
-           assists, shots, played, revision_number, effective_at_utc, observed_at_utc, source)
-           VALUES (?,?,?,?,?,?,?,?,1,?,?,?)""",
-        (game_id, player_id, team_id, 18.0, goals, assists, shots, played,
+           assists, shots, hits, blocked_shots, played, revision_number, effective_at_utc,
+           observed_at_utc, source) VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?)""",
+        (game_id, player_id, team_id, 18.0, goals, assists, shots, hits, blocked_shots, played,
          "2026-10-15T23:00:00Z", "2026-10-15T23:00:00Z", "test_fixture"))
+    conn.commit()
+
+
+def _insert_team_stat(conn, game_id, team_id, sog):
+    conn.execute(
+        """INSERT INTO team_game_stats (game_id, team_id, sog, revision_number,
+           effective_at_utc, observed_at_utc, source) VALUES (?,?,?,1,?,?,?)""",
+        (game_id, team_id, sog, "2026-10-15T23:00:00Z", "2026-10-15T23:00:00Z", "test_fixture"))
     conn.commit()
 
 
@@ -162,11 +171,60 @@ class Test06BlocksNotIngested(unittest.TestCase):
 
 
 class Test07TeamSOGNotIngested(unittest.TestCase):
-    def test_team_sog_fails_closed_never_guesses(self):
+    def test_team_sog_fails_closed_when_no_row_ingested(self):
+        """Hits/Blocked-Shots Settlement Enablement block (2026-09-29): Team SOG is now genuinely
+        wired (see Test07bTeamSOGSettlement below) -- this proves it still fails closed, rather than
+        guessing, when a team's row was never actually ingested for this game."""
         conn = _fresh_db()
         _insert_game(conn, 1)
         result = resolver.resolve_team_sog(conn, game_id=1, team_id="EDM", threshold=30)
         self.assertEqual(result["status"], resolver.TEAM_SOG_NOT_INGESTED)
+        self.assertIsNone(result["actual_value"])
+
+
+class Test07bTeamSOGSettlement(unittest.TestCase):
+    """Hits/Blocked-Shots Settlement Enablement block (2026-09-29): Team SOG now genuinely resolves
+    from team_game_stats (TEAM_SOG_VALIDATION_REPORT.md already established this field is safe --
+    99.15% concordant with the model's own training source, unlike Blocks)."""
+
+    def test_over_hits(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_team_stat(conn, 1, "EDM", sog=32)
+        result = resolver.resolve_team_sog(conn, game_id=1, team_id="EDM", threshold=30)
+        self.assertEqual(result["status"], resolver.RESOLVED)
+        self.assertEqual(result["actual_value"], 32)
+        self.assertTrue(result["outcome_hit"])
+        self.assertEqual(result["resolution_source"], "OFFICIAL_NHL_BOXSCORE")
+
+    def test_over_misses_boundary(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_team_stat(conn, 1, "EDM", sog=30)
+        result = resolver.resolve_team_sog(conn, game_id=1, team_id="EDM", threshold=30)
+        self.assertTrue(result["outcome_hit"])    # 30 >= 30
+        result2 = resolver.resolve_team_sog(conn, game_id=1, team_id="EDM", threshold=31)
+        self.assertFalse(result2["outcome_hit"])  # 30 < 31
+
+    def test_identity_is_by_game_id_and_team_id_never_by_name_guessing(self):
+        """A DIFFERENT team in the same game must never resolve from the wrong row."""
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_team_stat(conn, 1, "EDM", sog=32)
+        result = resolver.resolve_team_sog(conn, game_id=1, team_id="CHI", threshold=30)
+        self.assertEqual(result["status"], resolver.TEAM_SOG_NOT_INGESTED)   # CHI's own row never inserted
+
+    def test_resolve_prediction_dispatch_uses_the_real_team_column_not_the_nonexistent_team_id(self):
+        """Regression: the dispatch used to read prediction['team_id'], a column the prospective
+        ledger schema has never had (the real column is 'team') -- harmless only while Team SOG failed
+        closed unconditionally. Now that it's wired, this would have silently never settled anything."""
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_team_stat(conn, 1, "EDM", sog=32)
+        prediction = {"market_id": "TEAM_SOG_30PLUS", "threshold": "30+", "game_id": 1, "team": "EDM"}
+        result = resolver.resolve_prediction(conn, prediction)
+        self.assertEqual(result["status"], resolver.RESOLVED)
+        self.assertEqual(result["actual_value"], 32)
 
 
 class Test08GoalieSavesSettlement(unittest.TestCase):
@@ -304,6 +362,107 @@ class Test15ResolverVersionStamped(unittest.TestCase):
         result = resolver.resolve_player_stat_threshold(
             conn, market_family="SOG", game_id=1, player_id="P1", threshold=3)
         self.assertEqual(result["resolver_version"], resolver.RESOLVER_VERSION)
+
+
+class Test16HitsUnverifiedVsModelSource(unittest.TestCase):
+    """Hits/Blocked-Shots Settlement Enablement block (2026-09-29): a real hits value is now
+    ingested and readable, but is deliberately NEVER returned as RESOLVED -- it has not been
+    reconciled against MoneyPuck's I_F_hits, the field the validated Hits model actually trains on
+    (unlike Team SOG, which WAS reconciled at 99.15% before being trusted). Never a guess, never
+    silently promoted to a real settlement."""
+
+    def test_a_real_ingested_hits_value_is_available_but_not_resolved(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM", hits=3)
+        result = resolver.resolve_player_stat_threshold(
+            conn, market_family="HITS", game_id=1, player_id="P1", threshold=2)
+        self.assertEqual(result["status"], resolver.HITS_UNVERIFIED_VS_MODEL_SOURCE)
+        self.assertEqual(result["actual_value"], 3)     # the real value IS surfaced ...
+        self.assertIsNone(result["outcome_hit"])         # ... but never converted into a WIN/LOSS decision
+
+    def test_missing_hits_value_still_fails_closed_the_same_way(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM")   # hits left NULL
+        result = resolver.resolve_player_stat_threshold(
+            conn, market_family="HITS", game_id=1, player_id="P1", threshold=2)
+        self.assertEqual(result["status"], resolver.HITS_UNVERIFIED_VS_MODEL_SOURCE)
+        self.assertIsNone(result["actual_value"])
+
+    def test_dispatches_by_player_hits_market_id_prefix(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM", hits=4)
+        prediction = {"market_id": "PLAYER_HITS_2PLUS", "threshold": "2+", "game_id": 1, "player_id": "P1"}
+        result = resolver.resolve_prediction(conn, prediction)
+        self.assertEqual(result["status"], resolver.HITS_UNVERIFIED_VS_MODEL_SOURCE)
+        self.assertEqual(result["actual_value"], 4)
+
+    def test_game_not_final_still_fails_closed_before_reaching_the_hits_branch(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1, game_state="LIVE")
+        result = resolver.resolve_player_stat_threshold(
+            conn, market_family="HITS", game_id=1, player_id="P1", threshold=2)
+        self.assertEqual(result["status"], resolver.GAME_NOT_FINAL)
+
+
+class Test17BlocksStillFailsClosedAfterColumnAdded(unittest.TestCase):
+    """Confirms Section 8's requirement directly: the new blocked_shots column existing (and even
+    containing a real ingested value) must NOT cause Blocks to silently start settling -- the
+    documented methodology mismatch (MoneyPuck training source vs. boxscore field, 0%->9.23% known
+    drift) is still unreconciled, so this stays fail-closed exactly as before this block."""
+
+    def test_blocks_fails_closed_even_with_a_real_blocked_shots_value_present(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM", blocked_shots=3)
+        result = resolver.resolve_blocks(conn, game_id=1, player_id="P1", threshold=2)
+        self.assertEqual(result["status"], resolver.BLOCKS_NOT_INGESTED)
+        self.assertIsNone(result["actual_value"])
+        self.assertIsNone(result["outcome_hit"])
+
+
+class Test18ExistingSogSettlementUnaffected(unittest.TestCase):
+    """Regression: SOG/Goals/Assists/Points settlement must be byte-for-byte unaffected by adding
+    hits/blocked_shots columns and the HITS dispatch branch alongside them."""
+
+    def test_sog_still_resolves_exactly_as_before(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM", shots=5, hits=None, blocked_shots=None)
+        result = resolver.resolve_player_stat_threshold(
+            conn, market_family="SOG", game_id=1, player_id="P1", threshold=3)
+        self.assertEqual(result["status"], resolver.RESOLVED)
+        self.assertEqual(result["actual_value"], 5)
+        self.assertTrue(result["outcome_hit"])
+
+    def test_points_still_resolves_exactly_as_before(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "EDM", goals=2, assists=1)
+        result = resolver.resolve_player_stat_threshold(
+            conn, market_family="POINTS", game_id=1, player_id="P1", threshold=2)
+        self.assertEqual(result["status"], resolver.RESOLVED)
+        self.assertEqual(result["actual_value"], 3)
+
+
+class Test19MoneylineAndT35Unaffected(unittest.TestCase):
+    """Structural proof: this block never touched pricing/, models/, operational/moneyline_pregame.py,
+    or operational/moneyline_freshness.py -- outcome_resolver.py's moneyline path is untouched."""
+
+    def test_moneyline_resolution_unaffected(self):
+        conn = _fresh_db()
+        _insert_game(conn, 1, home_score=4, away_score=2)
+        result = resolver.resolve_moneyline(conn, game_id=1, side_team_id="EDM")
+        self.assertEqual(result["status"], resolver.RESOLVED)
+        self.assertTrue(result["outcome_hit"])
+
+    def test_moneyline_pregame_module_not_imported_by_this_blocks_changes(self):
+        import inspect
+        src = inspect.getsource(resolver)
+        self.assertNotIn("moneyline_pregame", src)
+        self.assertNotIn("moneyline_freshness", src)
 
 
 if __name__ == "__main__":
