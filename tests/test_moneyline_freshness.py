@@ -216,21 +216,200 @@ class TestGatedCLIIntegration(unittest.TestCase):
             lop._main()
         mock_pub.assert_not_called()   # zero-credit dashboard-load-equivalent firing -- nothing to publish
 
-    def test_legacy_fixed_moneyline_mode_is_completely_unchanged(self):
-        """The pre-existing --mode=moneyline automation-trigger contract (Part 22) is untouched by this
-        block -- it still calls run_moneyline_snapshot() directly and unconditionally."""
+    def test_legacy_fixed_moneyline_mode_now_defaults_to_due_gated(self):
+        """Production Hardening block (2026-09-29), Part A2: the pre-existing --mode=moneyline entry
+        point (what the fixed 8/13/17/20 launchd slots call) no longer spends unconditionally -- with no
+        flag, it now routes through the exact same due-check as the 2-minute pregame firing."""
         from operational import live_odds_daily_pull as lop
-        with mock.patch.object(lop, "run_moneyline_snapshot", return_value={"ran": True}) as mock_snap, \
+        with mock.patch.object(lop, "run_moneyline_snapshot") as mock_snap, \
+             mock.patch("operational.moneyline_freshness.due",
+                         return_value={"due": False, "reason": "WITHIN_TARGET",
+                                       "target_max_age_min": 150.0, "age_min": 10.0}), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch("sys.argv", ["lop", "--mode", "moneyline"]), mock.patch("builtins.print") as printed:
+            lop._main()
+        mock_snap.assert_not_called()   # not due -> 0 credits, exactly Part A2's required behavior
+        out = json.loads(printed.call_args[0][0])
+        self.assertFalse(out["ran"])
+
+    def test_force_flag_bypasses_due_check_but_still_respects_the_hard_reserve(self):
+        """Part A1/A3: --force is the MANUAL path -- it bypasses ONLY the due-check. The quota guard,
+        the lock, and normal store/publish behavior are unchanged, proven here by a reserve-exhausted
+        guard still blocking the request even with --force."""
+        from operational import live_odds_daily_pull as lop
+        with mock.patch.object(lop, "run_moneyline_snapshot") as mock_snap, \
+             mock.patch("operational.odds_quota.guard", return_value={"allow": False, "reason": "HARD_RESERVE"}), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch("sys.argv", ["lop", "--mode", "moneyline", "--force"]), mock.patch("builtins.print") as printed:
+            lop._main()
+        mock_snap.assert_not_called()   # forced past the due-check, but the reserve still says no
+        out = json.loads(printed.call_args[0][0])
+        self.assertEqual(out["action"], "DEFERRED")
+        self.assertEqual(out["reason"], "QUOTA_HARD_RESERVE")
+
+    def test_force_flag_pulls_regardless_of_freshness_when_quota_allows(self):
+        """CLI-boundary test: --force routes to run_forced(), proven directly (Part A1/A3's core claim);
+        run_forced()'s own bypass-the-due-check behavior is proven at the unit level in
+        TestRunIfDue/test_a_due_and_allowed_refresh_calls_the_pull_exactly_once via injected due_fn."""
+        from operational import live_odds_daily_pull as lop
+        with mock.patch("operational.moneyline_freshness.run_forced",
+                         return_value={"ran": True, "credits_spent_this_run": 1}) as mock_forced, \
              mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots",
                          return_value={"status": "SUCCESS"}) as mock_bridge, \
              mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations",
                          return_value={"status": "SUCCESS"}) as mock_orch, \
              mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
-             mock.patch("sys.argv", ["lop", "--mode", "moneyline"]), mock.patch("builtins.print"):
+             mock.patch("sys.argv", ["lop", "--mode", "moneyline", "--force"]), mock.patch("builtins.print"):
             lop._main()
-        mock_snap.assert_called_once()
+        mock_forced.assert_called_once()
         mock_bridge.assert_called_once()
         mock_orch.assert_called_once()
+
+    def test_run_forced_itself_bypasses_a_not_due_decision(self):
+        """Unit-level proof of Part A1/A3's core claim, independent of any CLI plumbing: run_forced()
+        pulls even when due() says WITHIN_TARGET, using an injected pull_fn (never touches the real
+        under-test guard rail, which correctly refuses a real network call with no injected pull_fn)."""
+        pull = mock.Mock(return_value={"ran": True, "credits_spent_this_run": 1})
+        tmp = tempfile.mkdtemp()
+        out = mf.run_forced(
+            D(12), pull_fn=pull, guard_fn=lambda now: {"allow": True, "reason": "OK"},
+            state_path=Path(tmp) / "state.json", lock_path=Path(tmp) / "lock", active_fn=lambda: True,
+        )
+        self.assertEqual(out["action"], "RAN")
+        self.assertTrue(out["ran"])
+        pull.assert_called_once()
+
+
+# ------------------------------------------------------------------------------------- A5: double-spend prevention
+class TestDoubleSpendPrevention(unittest.TestCase):
+    """Production Hardening block (2026-09-29), Part A5: a dynamic due-check and the (now also
+    due-gated) fixed calendar slot share ONE state machine -- whichever fires first satisfies the
+    other, in either ordering, and two truly simultaneous firings can never both spend."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cache_path = self.tmp / "moneyline_cache.json"
+        self.state_path = self.tmp / "state.json"
+        self.lock_path = self.tmp / "lock"
+
+    def _due_fn(self, now):
+        return mf.due(now, unstarted_starts_fn=lambda _n: [D(17)], cache_path=self.cache_path)
+
+    def _pull_fn(self, calls):
+        def _pull():
+            calls.append(1)
+            self.cache_path.write_text(json.dumps({"generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat()}))
+            return {"ran": True, "credits_spent_this_run": 1}
+        return _pull
+
+    def _run(self, now, calls):
+        return mf.run_if_due(now, due_fn=self._due_fn, pull_fn=self._pull_fn(calls),
+                              guard_fn=lambda n: {"allow": True, "reason": "OK"},
+                              state_path=self.state_path, lock_path=self.lock_path, active_fn=lambda: True)
+
+    def test_dynamic_refresh_at_1258_then_fixed_slot_at_1300_only_one_paid_call(self):
+        calls = []
+        first = self._run(D(12, 58), calls)
+        self.assertEqual(first["action"], "RAN")
+        second = self._run(D(13, 0), calls)
+        self.assertNotEqual(second["action"], "RAN")
+        self.assertEqual(len(calls), 1)
+
+    def test_fixed_slot_at_1300_then_dynamic_refresh_afterward_only_one_paid_call(self):
+        calls = []
+        first = self._run(D(13, 0), calls)
+        self.assertEqual(first["action"], "RAN")
+        second = self._run(D(13, 2), calls)
+        self.assertNotEqual(second["action"], "RAN")
+        self.assertEqual(len(calls), 1)
+
+    def test_two_truly_simultaneous_firings_cannot_both_spend(self):
+        import fcntl
+        calls = []
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        held = open(self.lock_path, "w")
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            out = mf.run_if_due(D(13, 0), due_fn=lambda now: {"due": True, "reason": "NEVER_CAPTURED",
+                                                                "target_max_age_min": 150.0, "age_min": None},
+                                 pull_fn=self._pull_fn(calls), guard_fn=lambda n: {"allow": True, "reason": "OK"},
+                                 state_path=self.state_path, lock_path=self.lock_path, active_fn=lambda: True)
+        finally:
+            held.close()
+        self.assertEqual(out["action"], "SKIPPED")
+        self.assertEqual(out["reason"], "ANOTHER_INSTANCE_RUNNING")
+        self.assertEqual(len(calls), 0)
+
+
+# ------------------------------------------------------------------------------------- A6: no-game day
+class TestNoGameDay(unittest.TestCase):
+    def test_ordinary_scheduled_spend_is_zero_with_no_unstarted_games_today(self):
+        from operational import live_odds_daily_pull as lop
+        with mock.patch.object(lop, "run_moneyline_snapshot") as mock_snap, \
+             mock.patch("operational.moneyline_freshness.today_unstarted_game_starts", return_value=[]), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch("sys.argv", ["lop", "--mode", "moneyline"]), mock.patch("builtins.print") as printed:
+            lop._main()
+        mock_snap.assert_not_called()
+        out = json.loads(printed.call_args[0][0])
+        self.assertFalse(out["ran"])
+        self.assertEqual(out["reason"], "NO_UNSTARTED_GAME_TODAY")
+
+    def test_pregame_firings_ordinary_refresh_is_also_zero_with_no_games_today(self):
+        from operational import live_odds_daily_pull as lop
+        t35_idle = {"mode": "moneyline-pregame", "ran": False, "status": "IDLE", "reason": "NO_CLUSTER_DUE"}
+        with mock.patch("operational.moneyline_pregame.run_pregame", return_value=dict(t35_idle)), \
+             mock.patch.object(lop, "_moneyline_downstream"), \
+             mock.patch("operational.moneyline_pregame.record_audit", return_value=[]), \
+             mock.patch("operational.keep_awake.ensure_holding", return_value={"action": "NONE"}), \
+             mock.patch("operational.keep_awake.ensure_guard", return_value={"guard": "NONE"}), \
+             mock.patch("operational.moneyline_freshness.today_unstarted_game_starts", return_value=[]), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch("sys.argv", ["lop", "--mode=moneyline-pregame"]), mock.patch("builtins.print") as printed:
+            lop._main()
+        out = json.loads(printed.call_args[0][0])
+        self.assertNotIn("ordinary_refresh", out)   # action=="NONE" -> never attached to the result
+
+
+# ------------------------------------------------------------------------------------- A7: T-35 isolation
+class TestT35IsolationProof(unittest.TestCase):
+    """Production Hardening block (2026-09-29), Part A7: an ordinary refresh must be structurally
+    incapable of touching T-35 cluster state -- proven by running a real ordinary refresh against a
+    real temp moneyline_pregame state file and confirming it is byte-for-byte unchanged."""
+
+    def test_ordinary_refresh_cannot_mark_a_t35_cluster_done_or_consume_its_attempt(self):
+        from operational import moneyline_pregame as mp
+        tmp = Path(tempfile.mkdtemp())
+        t35_state_path = tmp / "moneyline_pregame_state.json"
+        cluster_state = {"clusters": {"2026-09-29T21:00/2026-09-29T21:00": {"status": "ATTEMPTING", "attempts": 1}}}
+        t35_state_path.write_text(json.dumps(cluster_state, indent=2, sort_keys=True))
+        before = t35_state_path.read_text()
+
+        out = mf.run_if_due(
+            D(13), due_fn=lambda now: {"due": True, "reason": "NEVER_CAPTURED",
+                                        "target_max_age_min": 150.0, "age_min": None},
+            pull_fn=lambda: {"ran": True, "credits_spent_this_run": 1},
+            guard_fn=lambda now: {"allow": True, "reason": "OK"},
+            state_path=tmp / "freshness_state.json", lock_path=tmp / "freshness_lock", active_fn=lambda: True,
+        )
+        self.assertEqual(out["action"], "RAN")
+        after = t35_state_path.read_text()
+        self.assertEqual(before, after)  # byte-for-byte unchanged -- the ordinary refresh never even opened it
+        # And the reverse direction: moneyline_pregame's OWN state loader, pointed at the real
+        # moneyline_pregame_state.json path this test uses, still reports the same attempt count.
+        state = mp.load_state(t35_state_path)
+        self.assertEqual(state["clusters"]["2026-09-29T21:00/2026-09-29T21:00"]["attempts"], 1)
+
+    def test_t35_timing_and_quote_contract_are_untouched(self):
+        """moneyline_pregame.Cluster's T-40/T-35/T-30 arithmetic is defined entirely inside
+        moneyline_pregame.py, which this block's tests already proved never imports
+        moneyline_freshness -- re-confirm the concrete numbers are exactly what they were before this
+        block (ANCHOR_MIN=30, TOLERANCE_MIN=10, i.e. T-35 target at the due_window midpoint)."""
+        from operational import moneyline_pregame as mp
+        c = mp.plan_clusters([D(21, 0)])[0]
+        self.assertEqual(c.anchor, D(20, 30))          # T-30
+        self.assertEqual(c.target_pull, D(20, 25))     # T-35
+        self.assertEqual(c.window, (D(20, 20), D(20, 30)))  # T-40 .. T-30
 
 
 if __name__ == "__main__":

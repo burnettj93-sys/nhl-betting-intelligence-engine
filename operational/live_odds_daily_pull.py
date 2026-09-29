@@ -660,6 +660,11 @@ def _main() -> None:
                          default="props")
     parser.add_argument("--label", default=None,
                          help="operational label for --mode=moneyline (auto-derived from wall-clock hour if omitted)")
+    parser.add_argument("--force", action="store_true",
+                         help="--mode=moneyline only: MANUAL FORCE (Part A1/A3) -- deliberately invoked by the "
+                              "owner, bypasses ONLY the freshness due-check (see operational/moneyline_freshness.py "
+                              "run_forced()). Still respects the quota hard reserve and the single-instance lock. "
+                              "Never used by the scheduled launchd job -- the default (no flag) is due-aware.")
     args = parser.parse_args()
 
     if args.mode == "props":
@@ -691,12 +696,16 @@ def _main() -> None:
             _moneyline_downstream(ordinary_refresh)
             result["ordinary_refresh"] = ordinary_refresh
     elif args.mode == "moneyline":
-        # Deliberately UNCHANGED (Game-Day Moneyline Freshness block, 2026-09-29): this fixed 4x/day
-        # calendar slot keeps its pre-existing unconditional behavior -- converting it to the new
-        # due-gate would touch this exact, already-tested automation-trigger contract (Part 22) for no
-        # real benefit, since the new --mode=moneyline-pregame due-check below already closes the
-        # freshness gaps on its own, every 2 minutes, every game day.
-        result = run_moneyline_snapshot(args.label)
+        # Production Hardening block (2026-09-29), Part A1/A2: this fixed 4x/day calendar slot used to
+        # spend UNCONDITIONALLY with no quota guard at all -- identical cost on a game day and a
+        # no-game day. It is now routed through the SAME ordinary-refresh freshness logic as the
+        # every-2-minute moneyline-pregame due-check (one shared state machine, not two competing
+        # ones): --force (owner-invoked only, never by the scheduled job) bypasses ONLY the due-check;
+        # the quota hard reserve, the single-instance lock, and normal store/publish behavior are
+        # identical either way. Default (no flag, what the launchd plist calls) is due-aware.
+        from operational import moneyline_freshness
+        result = (moneyline_freshness.run_forced(label=args.label) if args.force
+                  else moneyline_freshness.run_if_due(label=args.label))
         # Real Recommendation Pipeline block (2026-09-24), Part 22: the
         # chosen automation trigger is "a fresh real moneyline snapshot
         # just landed" -- reusing this ALREADY-scheduled job rather than

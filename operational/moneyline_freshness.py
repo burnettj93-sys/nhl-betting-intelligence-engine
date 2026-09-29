@@ -200,6 +200,16 @@ def run_if_due(now: dt.datetime | None = None, label: str | None = "ordinary_due
     return out
 
 
+def run_forced(now: dt.datetime | None = None, label: str | None = "owner_forced", **kwargs) -> dict:
+    """MANUAL FORCE mode (Part A1/A3, Production Hardening block, 2026-09-29): deliberately invoked by
+    the owner. Bypasses ONLY the freshness due-check -- the quota hard reserve, the single-instance
+    lock, the retry-gap check, and normal store/publish behavior are all IDENTICAL to run_if_due() (same
+    function, same code path, just a due_fn that always says yes). Never used by the scheduled job."""
+    def _always_due(_now):
+        return {"due": True, "reason": "FORCED_BY_OWNER", "target_max_age_min": None, "age_min": None}
+    return run_if_due(now, label=label, due_fn=_always_due, **kwargs)
+
+
 def status(now: dt.datetime | None = None) -> dict:
     """Read-only summary for System Health / readiness: the next ordinary refresh, distinguished from
     the next T-35 execution capture (Part 12's explicit instruction -- never blur the two concepts)."""
