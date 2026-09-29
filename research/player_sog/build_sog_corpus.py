@@ -31,8 +31,13 @@ from research import elo_comparison as ec
 from research.moneypuck_ingestion.ingest import derive_game_type, derive_nhl_season, REGULAR_SEASON_GAME_TYPE
 
 RAW_DIR = Path(__file__).resolve().parent / "raw"
-OUT_PATH = Path(__file__).resolve().parent / "player_game_sog.jsonl"
+SHARD_DIR = Path(__file__).resolve().parent / "corpus"
+OUT_PATH = Path(__file__).resolve().parent / "player_game_sog.jsonl"  # legacy monolith path, no longer written
 SEASONS = [2022, 2023, 2024, 2025]
+
+
+def shard_path(season: int) -> Path:
+    return SHARD_DIR / f"player_game_sog_{season}.jsonl"
 
 
 def _iso_date(raw: str) -> str:
@@ -51,10 +56,13 @@ def build_corpus() -> dict:
         REPO_ROOT / "research" / "real_nhl_results" / "normalized_regular_season_games.jsonl"))}
 
     stats = {"raw_all_situation_rows_read": 0, "regular_season_rows": 0,
-             "excluded_not_in_real_corpus": 0, "rows_written": 0, "rows_with_pp_data": 0}
+             "excluded_not_in_real_corpus": 0, "rows_written": 0, "rows_with_pp_data": 0,
+             "shards": {}}
 
-    written = []
+    SHARD_DIR.mkdir(parents=True, exist_ok=True)
+    all_written = []
     for season in SEASONS:
+        written = []
         path = RAW_DIR / f"{season}.csv"
         # Pass 1: index every 5on4 (power-play) row for this season by
         # (playerId, gameId), so the "all"-situation pass below can attach
@@ -119,16 +127,24 @@ def build_corpus() -> dict:
                 })
                 stats["rows_written"] += 1
 
-    written.sort(key=lambda r: (r["game_date"], r["game_id"], r["player_id"]))
-    with open(OUT_PATH, "w") as f:
-        for row in written:
-            f.write(json.dumps(row, sort_keys=True) + "\n")
+        # Deterministic within-shard order (identical to the old monolith's own
+        # sort key); shards are read back in SEASONS order by the loader, and
+        # raw seasons never overlap in game_date, so concatenating the shards
+        # in this order reproduces the old monolithic file's row sequence
+        # exactly -- never a re-ordering, just a physical split.
+        written.sort(key=lambda r: (r["game_date"], r["game_id"], r["player_id"]))
+        out_path = shard_path(season)
+        with open(out_path, "w") as f:
+            for row in written:
+                f.write(json.dumps(row, sort_keys=True) + "\n")
+        stats["shards"][str(season)] = {"path": str(out_path), "rows": len(written)}
+        all_written.extend(written)
 
-    stats["unique_players"] = len({r["player_id"] for r in written})
+    stats["unique_players"] = len({r["player_id"] for r in all_written})
     return stats
 
 
 if __name__ == "__main__":
     stats = build_corpus()
     print(json.dumps(stats, indent=2))
-    print(f"wrote {OUT_PATH}")
+    print(f"wrote {len(SEASONS)} shards to {SHARD_DIR}")
