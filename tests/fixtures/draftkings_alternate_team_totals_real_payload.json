@@ -1,0 +1,46 @@
+{
+  "id": "8112572f236320d4d4c99b6eb0989b94",
+  "sport_key": "icehockey_nhl",
+  "sport_title": "NHL",
+  "commence_time": "2026-10-07T23:40:00Z",
+  "home_team": "Washington Capitals",
+  "away_team": "Pittsburgh Penguins",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "markets": [
+        {
+          "key": "alternate_team_totals",
+          "last_update": "2026-09-25T12:14:30Z",
+          "outcomes": [
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 0.5, "price": -2200},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 0.5, "price": 900},
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 1.5, "price": -385},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 1.5, "price": 265},
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 2.5, "price": -140},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 2.5, "price": 100},
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 3.5, "price": 180},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 3.5, "price": -245},
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 4.5, "price": 420},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 4.5, "price": -700},
+            {"description": "Pittsburgh Penguins", "name": "Over", "point": 5.5, "price": 1000},
+            {"description": "Pittsburgh Penguins", "name": "Under", "point": 5.5, "price": -2800},
+            {"description": "Washington Capitals", "name": "Over", "point": 0.5, "price": -6000},
+            {"description": "Washington Capitals", "name": "Under", "point": 0.5, "price": 1300},
+            {"description": "Washington Capitals", "name": "Over", "point": 1.5, "price": -675},
+            {"description": "Washington Capitals", "name": "Under", "point": 1.5, "price": 410},
+            {"description": "Washington Capitals", "name": "Over", "point": 2.5, "price": -230},
+            {"description": "Washington Capitals", "name": "Under", "point": 2.5, "price": 170},
+            {"description": "Washington Capitals", "name": "Over", "point": 3.5, "price": -105},
+            {"description": "Washington Capitals", "name": "Under", "point": 3.5, "price": -135},
+            {"description": "Washington Capitals", "name": "Over", "point": 4.5, "price": 225},
+            {"description": "Washington Capitals", "name": "Under", "point": 4.5, "price": -320},
+            {"description": "Washington Capitals", "name": "Over", "point": 5.5, "price": 530},
+            {"description": "Washington Capitals", "name": "Under", "point": 5.5, "price": -950}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,17 @@ TestMoneylineContractParity). The guard here now asserts the new real
 fact precisely (exactly MONEYLINE, nothing else) rather than the old
 "always empty" fact -- the spirit (never let an unverified contract
 appear without a real, tested payload behind it) is unchanged.
+
+SOG Contract Certification block (2026-09-29): two more real, archived
+payloads certified -- (draftkings, PLAYER_SOG_ALTERNATE) via
+player_shots_on_goal_alternate (FLA@CAR) and (draftkings,
+ALTERNATE_TEAM_TOTAL) via alternate_team_totals (PIT@WSH). See
+tests/test_generic_prop_pricing.py::TestPlayerSogAlternateContractParity /
+TestAlternateTeamTotalContractParity. PLAYER_SOG_ALTERNATE, not bare
+PLAYER_SOG: only the alternate ladder shape was ever observed -- the
+standard player_shots_on_goal Over/Under shape remains genuinely
+unverified (test_sog_is_not_verified_despite_being_the_reference_implementation
+below still holds for the same reason it always did).
 """
 from __future__ import annotations
 
@@ -24,10 +35,14 @@ from research.generic_prop_pricing.evaluator import CONTRACT_NOT_VERIFIED
 
 class Test01NoContractsVerifiedYet(unittest.TestCase):
     def test_verified_contracts_is_exactly_moneyline_and_nothing_else(self):
-        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({("draftkings", "MONEYLINE")}),
-                          "MONEYLINE is the only real, live-observed DraftKings payload contract "
-                          "as of the Live DK completion sprint (2026-08-31) -- every other market "
-                          "family must stay unverified until its own real payload is observed")
+        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({
+            ("draftkings", "MONEYLINE"),
+            ("draftkings", "PLAYER_SOG_ALTERNATE"),
+            ("draftkings", "ALTERNATE_TEAM_TOTAL"),
+        }), "SOG Contract Certification block (2026-09-29): MONEYLINE, PLAYER_SOG_ALTERNATE, and "
+            "ALTERNATE_TEAM_TOTAL are the three real, live-observed DraftKings payload contracts "
+            "as of this block -- every other market family must stay unverified until its own "
+            "real payload is observed")
 
     def test_sog_is_not_verified_despite_being_the_reference_implementation(self):
         self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG_3PLUS"))

@@ -337,13 +337,17 @@ class Test12ZeroAndLowSampleHandling(unittest.TestCase):
         verified contract exists with no drift-monitoring built yet) --
         this must still surface normally once there's enough real data
         that the top-level status isn't overridden to NO_DATA/
-        INSUFFICIENT_SAMPLE."""
+        INSUFFICIENT_SAMPLE.
+
+        SOG Contract Certification block (2026-09-29): verified_contracts is now 3
+        (MONEYLINE, PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL), up from MONEYLINE alone --
+        see research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS."""
         conn = pl.init_db(db_path=":memory:")
         self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW + 5)
         result = dmr.run_daily_review(conn, now_utc=NOW)
         self.assertEqual(result["engine_status"], "WATCH")
         self.assertNotIn("incomplete", result)
-        self.assertEqual(result["contract_status"]["verified_contracts"], 1)
+        self.assertEqual(result["contract_status"]["verified_contracts"], 3)
 
     def test_valid_promotion_candidate_case_still_works_above_minimum(self):
         """promotion_candidates()/recommendation are challenger-registry

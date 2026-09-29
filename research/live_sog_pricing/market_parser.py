@@ -157,3 +157,29 @@ def group_standard_two_sided(quotes: list[dict], market_key: str = STANDARD_MARK
         groups.setdefault(key, {"over": None, "under": None})
         groups[key]["over" if q["side"] == "OVER" else "under"] = q
     return groups
+
+
+def group_alternate_ladder(quotes: list[dict], market_key: str = ALTERNATE_MARKET_KEY) -> dict[tuple, dict]:
+    """SOG Contract Certification block (2026-09-29): groups ALTERNATE-market quotes by
+    (provider_event_id, bookmaker, player_name_raw, market_last_update_utc) into
+    {point: quote} -- the real, now-CONFIRMED shape (see
+    PLAYER_SOG_LIVE_PRICING_REPORT.md's successor finding: a real archived DraftKings
+    player_shots_on_goal_alternate payload, 2026-09-29T12:15:00Z, FLA@CAR, 22 players --
+    every outcome is `name="Over"` at a distinct `point`, never paired with an "Under" at
+    the same line). This is DELIBERATELY NOT group_standard_two_sided(): the alternate
+    ladder is a set of independent Over-only milestone lines per player, not Over/Under
+    pairs at one line -- pairing logic does not apply here at all.
+
+    Only `shape == "over_under"` quotes are grouped (the real, now-confirmed shape); any
+    genuine `shape == "milestone"` quote (documented as a plausible alternative that has
+    never actually been observed) is intentionally excluded here rather than silently
+    coerced into the same {point: quote} shape it doesn't have -- callers needing that
+    shape must handle it separately once/if it is ever actually observed."""
+    groups: dict[tuple, dict[float, dict]] = {}
+    for q in quotes:
+        if q["market_key"] != market_key or q["shape"] != "over_under":
+            continue
+        key = (q["provider_event_id"], q["bookmaker"], q["player_name_raw"], q["market_last_update_utc"])
+        groups.setdefault(key, {})
+        groups[key][q["point"]] = q
+    return groups

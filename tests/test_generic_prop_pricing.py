@@ -14,7 +14,9 @@ import unittest
 
 from research.generic_prop_pricing import evaluator as ge
 from research.generic_prop_pricing import provider_adapter as pa
+from research.generic_prop_pricing import team_totals_parser as ttp
 from research.generic_prop_pricing.normalized_market import NormalizedPropMarket
+from research.live_sog_pricing import market_parser as sog_market_parser
 from research.live_sog_pricing import pricing as sog_pricing
 
 
@@ -201,8 +203,23 @@ class TestMoneylineContractParity(unittest.TestCase):
         with open(path) as f:
             return json.load(f)
 
-    def test_moneyline_is_the_only_verified_contract(self):
-        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({("draftkings", "MONEYLINE")}))
+    def test_verified_contracts_is_exactly_these_three_real_observed_payloads(self):
+        """SOG Contract Certification block (2026-09-29): two more real, archived payloads
+        certified (PLAYER_SOG_ALTERNATE via player_shots_on_goal_alternate, ALTERNATE_TEAM_TOTAL
+        via alternate_team_totals) -- see TestPlayerSogAlternateContractParity /
+        TestAlternateTeamTotalContractParity below. Still exactly these three, never a
+        fourth without its own real payload.
+
+        Named PLAYER_SOG_ALTERNATE, never bare "PLAYER_SOG": only the alternate ladder shape
+        was ever actually observed -- the standard player_shots_on_goal Over/Under shape
+        remains genuinely unverified (see test_other_prop_families_remain_unverified) and a
+        bare family entry here would have silently verified it too via every caller keyed on
+        that bare string (operational/real_prop_orchestrator.py, operational/prop_discovery.py)."""
+        self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({
+            ("draftkings", "MONEYLINE"),
+            ("draftkings", "PLAYER_SOG_ALTERNATE"),
+            ("draftkings", "ALTERNATE_TEAM_TOTAL"),
+        }))
 
     def test_parses_the_real_payload_correctly(self):
         payload = self._load_fixture()
@@ -245,12 +262,181 @@ class TestMoneylineContractParity(unittest.TestCase):
         self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
 
     def test_other_prop_families_remain_unverified(self):
-        # Part 16: one observed payload (h2h) must never overgeneralize to
-        # families that were never actually parsed against a real payload.
+        # Part 16: one observed payload must never overgeneralize to families
+        # that were never actually parsed against a real payload. ALTERNATE_TEAM_TOTAL
+        # was removed from this list by the SOG Contract Certification block (2026-09-29)
+        # -- it now has its own real, archived payload and regression test (see
+        # TestAlternateTeamTotalContractParity below). Everything else here still has
+        # zero observed payload evidence and must stay unverified.
+        #
+        # PLAYER_SOG (bare) is explicitly INCLUDED here, not removed: only the
+        # player_shots_on_goal_alternate ladder shape was ever observed and certified
+        # (as PLAYER_SOG_ALTERNATE, a distinct, more specific id -- see
+        # TestPlayerSogAlternateContractParity). The standard player_shots_on_goal
+        # Over/Under shape has never been observed against a real payload and must stay
+        # CONTRACT_NOT_VERIFIED -- this is exactly what operational/real_prop_orchestrator.py
+        # and operational/prop_discovery.py check via this bare string.
         for market_id in ("PLAYER_SOG", "PLAYER_GOALS", "PLAYER_ASSISTS",
                            "PLAYER_POINTS", "GOALIE_SAVES", "SPREADS", "TOTALS"):
             self.assertFalse(pa.is_contract_verified("draftkings", market_id),
                               f"{market_id} must remain CONTRACT_NOT_VERIFIED")
+
+
+class TestPlayerSogAlternateContractParity(unittest.TestCase):
+    """SOG Contract Certification block (2026-09-29): the real-payload regression test
+    required before (draftkings, PLAYER_SOG_ALTERNATE) can sit in VERIFIED_CONTRACTS. Loads a
+    sanitized, real, archived DraftKings player_shots_on_goal_alternate payload
+    (tests/fixtures/draftkings_player_sog_alternate_real_payload.json, FLA@CAR,
+    2026-09-29T12:14:34Z) -- not a synthetic guess -- and drives it through the REAL
+    pipeline (market_parser.parse_event_odds_response -> group_alternate_ladder ->
+    provider_adapter._parse_player_sog_alternate_quote), exactly as a live caller would.
+
+    Named PLAYER_SOG_ALTERNATE, not bare PLAYER_SOG -- see VERIFIED_CONTRACTS's own comment
+    and test_other_prop_families_remain_unverified above: bare PLAYER_SOG stays
+    CONTRACT_NOT_VERIFIED because the standard player_shots_on_goal shape was never observed."""
+
+    @staticmethod
+    def _load_fixture():
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_player_sog_alternate_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def _quotes_for(self, payload, player_name="Brady Tkachuk"):
+        quotes = sog_market_parser.parse_event_odds_response(
+            payload, standard_market_keys=(sog_market_parser.STANDARD_MARKET_KEY,))
+        ladder = sog_market_parser.group_alternate_ladder(quotes)
+        key = next(k for k in ladder if k[2] == player_name)
+        return ladder[key]
+
+    def test_parses_the_real_payload_correctly_at_the_3plus_threshold(self):
+        payload = self._load_fixture()
+        by_point = self._quotes_for(payload, "Brady Tkachuk")
+        quote = by_point[3.5]  # sportsbook "Over 3.5" == model "4+"
+        result = pa.parse_the_odds_api_market(
+            quote, sportsbook="draftkings", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id=payload["id"], player_id="P_TKACHUK_BRADY")
+        self.assertEqual(result["status"], "PARSED")
+        market = result["market"]
+        self.assertEqual(market.event_id, "9de33ce1013f2a3375dbded2c9fbc7d6")
+        self.assertEqual(market.sportsbook, "draftkings")
+        self.assertEqual(market.canonical_market_id, "PLAYER_SOG_ALTERNATE")
+        self.assertEqual(market.threshold, 4)  # Over 3.5 == 4+, never confused with 3+
+        self.assertEqual(market.side, "OVER")
+        self.assertEqual(market.american_price, 195)
+        self.assertIsNone(market.opposing_side_price)  # one-sided: DK never posts an Under here
+        self.assertEqual(market.player_id, "P_TKACHUK_BRADY")
+        self.assertEqual(market.captured_at_utc, "2026-09-29T12:14:34Z")
+        self.assertEqual(market.provenance, "THE_ODDS_API")
+
+    def test_over_2_5_maps_to_3plus_not_2plus(self):
+        payload = self._load_fixture()
+        by_point = self._quotes_for(payload, "Brady Tkachuk")
+        result = pa.parse_the_odds_api_market(
+            by_point[2.5], sportsbook="draftkings", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id=payload["id"], player_id="P_TKACHUK_BRADY")
+        self.assertEqual(result["market"].threshold, 3)
+
+    def test_malformed_shape_fails_closed(self):
+        bad_quote = {"market_key": sog_market_parser.ALTERNATE_MARKET_KEY,
+                     "shape": "milestone", "side": "OVER_MILESTONE", "point": None,
+                     "price_american": 100, "market_last_update_utc": "2026-09-29T12:14:34Z",
+                     "bookmaker_last_update_utc": "2026-09-29T12:14:34Z"}
+        result = pa.parse_the_odds_api_market(
+            bad_quote, sportsbook="draftkings", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id="evt", player_id="P1")
+        self.assertEqual(result["status"], pa.MALFORMED_QUOTE_SHAPE)
+
+    def test_non_half_point_line_fails_closed(self):
+        bad_quote = {"market_key": sog_market_parser.ALTERNATE_MARKET_KEY,
+                     "shape": "over_under", "side": "OVER", "point": 3,
+                     "price_american": 100, "market_last_update_utc": "2026-09-29T12:14:34Z",
+                     "bookmaker_last_update_utc": "2026-09-29T12:14:34Z"}
+        result = pa.parse_the_odds_api_market(
+            bad_quote, sportsbook="draftkings", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id="evt", player_id="P1")
+        self.assertEqual(result["status"], pa.MALFORMED_QUOTE_SHAPE)
+
+    def test_standard_market_key_quote_fails_closed_even_with_over_under_shape(self):
+        # The exact production-risk case this block found: a quote from the NEVER-OBSERVED
+        # standard player_shots_on_goal key is otherwise byte-for-byte indistinguishable from
+        # a real alternate-ladder quote (same shape="over_under", same side values) -- only
+        # market_key tells them apart, and this must fail closed rather than silently
+        # certifying the standard shape too.
+        bad_quote = {"market_key": sog_market_parser.STANDARD_MARKET_KEY,
+                     "shape": "over_under", "side": "OVER", "point": 3.5,
+                     "price_american": 100, "market_last_update_utc": "2026-09-29T12:14:34Z",
+                     "bookmaker_last_update_utc": "2026-09-29T12:14:34Z"}
+        result = pa.parse_the_odds_api_market(
+            bad_quote, sportsbook="draftkings", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id="evt", player_id="P1")
+        self.assertEqual(result["status"], pa.MALFORMED_QUOTE_SHAPE)
+
+    def test_unverified_sportsbook_returns_contract_not_verified(self):
+        payload = self._load_fixture()
+        by_point = self._quotes_for(payload, "Brady Tkachuk")
+        result = pa.parse_the_odds_api_market(
+            by_point[3.5], sportsbook="fanduel", canonical_market_id="PLAYER_SOG_ALTERNATE",
+            event_id=payload["id"], player_id="P1")
+        self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
+
+
+class TestAlternateTeamTotalContractParity(unittest.TestCase):
+    """SOG Contract Certification block (2026-09-29): the real-payload regression test
+    required before (draftkings, ALTERNATE_TEAM_TOTAL) can sit in VERIFIED_CONTRACTS.
+    Loads a sanitized, real, archived DraftKings alternate_team_totals payload
+    (tests/fixtures/draftkings_alternate_team_totals_real_payload.json, PIT@WSH,
+    2026-09-25T12:14:30Z, both teams, 24 outcomes) and drives it through the REAL
+    pipeline (team_totals_parser.parse_event_odds_response ->
+    group_alternate_team_total_ladder -> provider_adapter._parse_alternate_team_total_pair).
+    Contract-verified here does NOT mean model-ready -- the team-total model itself
+    remains research-only (flat league-mean Poisson REJECTED, see
+    research/run_alternate_totals_model.py)."""
+
+    @staticmethod
+    def _load_fixture():
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_alternate_team_totals_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def _ladder(self, payload):
+        quotes = ttp.parse_event_odds_response(payload)
+        return ttp.group_alternate_team_total_ladder(quotes)
+
+    def test_parses_the_real_two_sided_payload_correctly(self):
+        payload = self._load_fixture()
+        ladder = self._ladder(payload)
+        key = next(k for k in ladder if k[2] == "Pittsburgh Penguins" and k[3] == 2.5)
+        pair = ladder[key]
+        result = pa.parse_the_odds_api_market(
+            pair, sportsbook="draftkings", canonical_market_id="ALTERNATE_TEAM_TOTAL",
+            event_id=payload["id"], team_id="T_PIT")
+        self.assertEqual(result["status"], "PARSED")
+        market = result["market"]
+        self.assertEqual(market.event_id, "8112572f236320d4d4c99b6eb0989b94")
+        self.assertEqual(market.canonical_market_id, "ALTERNATE_TEAM_TOTAL")
+        self.assertEqual(market.threshold, 3)  # Over 2.5 == 3+ goals
+        self.assertEqual(market.side, "OVER")
+        self.assertEqual(market.american_price, -140)
+        self.assertEqual(market.opposing_side_price, 100)  # real two-sided Under
+        self.assertEqual(market.team_id, "T_PIT")
+        self.assertEqual(market.captured_at_utc, "2026-09-25T12:14:30Z")
+
+    def test_neither_side_present_fails_closed(self):
+        result = pa.parse_the_odds_api_market(
+            {"over": None, "under": None}, sportsbook="draftkings",
+            canonical_market_id="ALTERNATE_TEAM_TOTAL", event_id="evt", team_id="T1")
+        self.assertEqual(result["status"], pa.MALFORMED_QUOTE_SHAPE)
+
+    def test_unverified_sportsbook_returns_contract_not_verified(self):
+        payload = self._load_fixture()
+        ladder = self._ladder(payload)
+        key = next(k for k in ladder if k[2] == "Pittsburgh Penguins" and k[3] == 2.5)
+        result = pa.parse_the_odds_api_market(
+            ladder[key], sportsbook="fanduel", canonical_market_id="ALTERNATE_TEAM_TOTAL",
+            event_id=payload["id"], team_id="T_PIT")
+        self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
 
 
 class Test07MarketDecisionEligibilityChecklist(unittest.TestCase):
