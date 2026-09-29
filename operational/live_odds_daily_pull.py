@@ -577,8 +577,15 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         if pd.already_swept(sweep, event["id"], now):
             summary["events_skipped_already_swept"] = summary.get("events_skipped_already_swept", 0) + 1
             continue
-        if prop_mode == pd.DISCOVERY and not pd.may_spend(now).get("allow"):
-            summary["reason"] = "DISCOVERY budget reached"
+        # Production Sweep Safety Cap block (2026-09-29): this check now runs in
+        # EVERY mode, not just DISCOVERY -- previously, once >=1 contract was
+        # VERIFIED, this line was skipped entirely and NO quota check of any
+        # kind (not even the global odds_quota hard reserve) applied to this
+        # loop. may_spend() itself now also applies a real
+        # VERIFIED_PRODUCTION_DAILY_BUDGET, not just DISCOVERY's.
+        spend_check = pd.may_spend(now)
+        if not spend_check.get("allow"):
+            summary["reason"] = f"{spend_check.get('reason')} reached"
             break
         r_odds = client.get_event_odds(event["id"], markets=FIRST_SWEEP_MARKETS)
         summary["events_queried"] += 1
@@ -590,8 +597,13 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         cost = int(r_odds.requests_last or 0)
         summary["credits_spent_this_run"] += cost
         summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        # Recorded in every mode now (previously DISCOVERY-only) -- the shared,
+        # durable prop_discovery state file is what makes the new
+        # VERIFIED_PRODUCTION_DAILY_BUDGET check above real: both prop-sweep-first
+        # and prop-sweep-second read/write the SAME file, so the daily cap is
+        # naturally shared across both jobs and survives a restart of either.
+        pd.record_spend(cost, now)
         if prop_mode == pd.DISCOVERY:
-            pd.record_spend(cost, now)
             if pd.desired_markets_in({**(r_odds.data or {}), "id": event["id"]}):
                 summary["reason"] = "CANDIDATE_OBSERVED: sweep stopped; certification required before expansion"
                 summary["candidate_observed"] = True

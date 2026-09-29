@@ -402,9 +402,18 @@ class TestPropDiscovery(DiscoveryCase):
         self.assertEqual(pd.desired_markets_in(empty), [])                # a key with no outcomes is not "posted"
 
     def test_the_daily_budget_is_a_hard_cap(self):
+        # Production Sweep Safety Cap block (2026-09-29): may_spend() picks its
+        # daily budget from the REAL, global provider_adapter.VERIFIED_CONTRACTS
+        # state (not from this test's own simulated `states` dict passed to
+        # run_discovery) -- isolate this specific DISCOVERY-budget scenario from
+        # the real, now-certified PLAYER_SOG_ALTERNATE contract so it still
+        # exercises DISCOVERY_DAILY_BUDGET (6), not the real
+        # VERIFIED_PRODUCTION_DAILY_BUDGET (40).
+        from research.generic_prop_pricing import provider_adapter as pa
         c = FakeClient(self.events)
         pd.record_spend(pd.DISCOVERY_DAILY_BUDGET, self.NOW, self.state)
-        r = self.run_discovery(c)
+        with mock.patch.object(pa, "VERIFIED_CONTRACTS", frozenset({("draftkings", "MONEYLINE")})):
+            r = self.run_discovery(c)
         self.assertEqual(c.odds_calls, [])
         self.assertIn("DISCOVERY_DAILY_BUDGET", r["reason"])
         self.assertEqual(c.event_calls, 0)
@@ -473,16 +482,31 @@ class TestMarketStateTransitions(unittest.TestCase):
         self.cand.write_text("\n".join(json.dumps(r) for r in recs) + "\n")
 
     def test_pending_to_candidate_to_verified_and_only_a_registry_entry_verifies(self):
-        self.assertEqual(pd.market_states(self.cand)["player_shots_on_goal"], pd.PENDING)
-        self.write({"market_key": "player_shots_on_goal", "event_id": "a" * 32})
-        states = pd.market_states(self.cand)
-        self.assertEqual(states["player_shots_on_goal"], pd.CANDIDATE)
-        self.assertEqual(states["player_total_saves"], pd.PENDING)
-        self.assertEqual(pd.mode(states), pd.DISCOVERY)                          # candidate never leaves discovery
+        # Isolated from the REAL, global provider_adapter.VERIFIED_CONTRACTS
+        # (which legitimately includes PLAYER_SOG_ALTERNATE as of the Real-Slate
+        # Parlay Certification block) -- this test's own point is that a mere
+        # CANDIDATE observation never itself causes verification, which is
+        # orthogonal to whether some other real contract happens to be verified.
+        from research.generic_prop_pricing import provider_adapter as pa
+        with mock.patch.object(pa, "VERIFIED_CONTRACTS", frozenset({("draftkings", "MONEYLINE")})):
+            self.assertEqual(pd.market_states(self.cand)["player_shots_on_goal"], pd.PENDING)
+            self.write({"market_key": "player_shots_on_goal", "event_id": "a" * 32})
+            states = pd.market_states(self.cand)
+            self.assertEqual(states["player_shots_on_goal"], pd.CANDIDATE)
+            self.assertEqual(states["player_total_saves"], pd.PENDING)
+            self.assertEqual(pd.mode(states), pd.DISCOVERY)                      # candidate never leaves discovery
         verified = pd.market_states(self.cand, verified_fn=lambda book, cid: cid == "PLAYER_SOG")
         self.assertEqual(verified["player_shots_on_goal"], pd.VERIFIED)
-        self.assertEqual(verified["player_shots_on_goal_alternate"], pd.VERIFIED)  # same contract
+        # Production Sweep Safety Cap block (2026-09-29): player_shots_on_goal_alternate
+        # now maps to its OWN contract id (PLAYER_SOG_ALTERNATE), not bare
+        # "PLAYER_SOG" -- verifying the standard key must never also verify the
+        # alternate one, since they are different, independently-certified shapes.
+        self.assertEqual(verified["player_shots_on_goal_alternate"], pd.PENDING)
         self.assertEqual(verified["player_total_saves"], pd.PENDING)
+
+        alt_verified = pd.market_states(self.cand, verified_fn=lambda book, cid: cid == "PLAYER_SOG_ALTERNATE")
+        self.assertEqual(alt_verified["player_shots_on_goal_alternate"], pd.VERIFIED)
+        self.assertEqual(alt_verified["player_shots_on_goal"], pd.CANDIDATE)  # unaffected, different contract
 
     def test_no_code_path_in_discovery_writes_a_verified_contract(self):
         from research.generic_prop_pricing import provider_adapter as pa
