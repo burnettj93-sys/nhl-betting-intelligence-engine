@@ -1,0 +1,51 @@
+{
+  "id": "9de33ce1013f2a3375dbded2c9fbc7d6",
+  "sport_key": "icehockey_nhl",
+  "sport_title": "NHL",
+  "commence_time": "2026-09-29T21:10:47Z",
+  "home_team": "Carolina Hurricanes",
+  "away_team": "Florida Panthers",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "markets": [
+        {
+          "key": "player_shots_on_goal_alternate",
+          "last_update": "2026-09-29T12:14:34Z",
+          "outcomes": [
+            {"description": "Brady Tkachuk", "name": "Over", "point": 0.5, "price": -1600},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 1.5, "price": -310},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 2.5, "price": -115},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 3.5, "price": 195},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 4.5, "price": 425},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 5.5, "price": 900},
+            {"description": "Brady Tkachuk", "name": "Over", "point": 6.5, "price": 2000},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 0.5, "price": -1100},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 1.5, "price": -240},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 2.5, "price": 115},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 3.5, "price": 280},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 4.5, "price": 650},
+            {"description": "Andrei Svechnikov", "name": "Over", "point": 5.5, "price": 1500},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 0.5, "price": -900},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 1.5, "price": -200},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 2.5, "price": 135},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 3.5, "price": 320},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 4.5, "price": 700},
+            {"description": "Matthew Tkachuk", "name": "Over", "point": 5.5, "price": 1500},
+            {"description": "Sam Bennett", "name": "Over", "point": 0.5, "price": -800},
+            {"description": "Sam Bennett", "name": "Over", "point": 1.5, "price": -185},
+            {"description": "Sam Bennett", "name": "Over", "point": 2.5, "price": 155},
+            {"description": "Sam Bennett", "name": "Over", "point": 3.5, "price": 380},
+            {"description": "Sam Bennett", "name": "Over", "point": 4.5, "price": 900},
+            {"description": "Aleksander Barkov", "name": "Over", "point": 0.5, "price": -500},
+            {"description": "Aleksander Barkov", "name": "Over", "point": 1.5, "price": -115},
+            {"description": "Aleksander Barkov", "name": "Over", "point": 2.5, "price": 250},
+            {"description": "Aleksander Barkov", "name": "Over", "point": 3.5, "price": 650},
+            {"description": "Aleksander Barkov", "name": "Over", "point": 4.5, "price": 1800}
+          ]
+        }
+      ]
+    }
+  ]
+}

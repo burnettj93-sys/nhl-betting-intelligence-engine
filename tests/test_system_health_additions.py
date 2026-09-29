@@ -43,11 +43,14 @@ class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
     Live DK / Paper Bankroll completion sprint (2026-08-31): MONEYLINE
     was actually, really verified this sprint, so the honest count is
     now 1, not 0 -- the class name is kept (renaming would obscure the
-    history in a diff) but the assertion reflects the current real fact."""
+    history in a diff) but the assertion reflects the current real fact.
+
+    SOG Contract Certification block (2026-09-29): two more real, archived payloads
+    certified (PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- honest count is now 3."""
 
     def test_reports_the_real_verified_contract_count(self):
         item = sh.contract_status_health()
-        self.assertIn("VERIFIED LIVE CONTRACTS: 1", item["message"])
+        self.assertIn("VERIFIED LIVE CONTRACTS: 3", item["message"])
         self.assertEqual(item["status"], "OK")
 
     def test_never_imports_demo_data(self):

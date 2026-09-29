@@ -55,9 +55,13 @@ class Test04ContractStatus(unittest.TestCase):
         # tests/test_provider_adapter_boundary.py), so the real function
         # now correctly reports WATCH ("drift monitoring not yet
         # implemented"), not NORMAL.
+        #
+        # SOG Contract Certification block (2026-09-29): verified_contracts is now 3
+        # (MONEYLINE, PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- real, archived
+        # DraftKings payloads for both new entries, see provider_adapter.VERIFIED_CONTRACTS.
         result = ese.check_contract_status()
         self.assertEqual(result["status"], ese.WATCH)
-        self.assertEqual(result["verified_contracts"], 1)
+        self.assertEqual(result["verified_contracts"], 3)
 
 
 class Test05InputDrift(unittest.TestCase):
