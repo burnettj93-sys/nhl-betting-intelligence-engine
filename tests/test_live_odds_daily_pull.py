@@ -484,25 +484,33 @@ class Test09TargetedPropSweep(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------
-# 9. Real Recommendation Pipeline automation trigger (Part 22, 2026-09-24)
+# 9. Real Recommendation Pipeline automation trigger (Part 22, 2026-09-24;
+# routed through the due-gate as of the Production Hardening block, 2026-09-29)
 # ---------------------------------------------------------------------
 class Test09RealRecommendationTrigger(unittest.TestCase):
     """--mode=moneyline is the chosen automation trigger for the real
     recommendation orchestrator (Part 22) -- reusing this already-
     scheduled job rather than adding a new one. Only fires after a real,
     successful pull (`ran: True`); never on an API error or a no-op
-    (zero future events)."""
+    (zero future events). Since the Production Hardening block (2026-09-29,
+    Part A2), --mode=moneyline is itself routed through
+    operational.moneyline_freshness.run_if_due() (default) /
+    run_forced() (--force) rather than calling run_moneyline_snapshot()
+    directly -- these tests mock at that boundary, which is the real
+    contract the CLI now has."""
 
-    def _run_main(self, label=None):
+    def _run_main(self, label=None, force=False):
         argv = ["live_odds_daily_pull.py", "--mode", "moneyline"]
         if label:
             argv += ["--label", label]
+        if force:
+            argv += ["--force"]
         with mock.patch("sys.argv", argv), \
              mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True):
             lop._main()
 
     def test_successful_snapshot_triggers_the_bridge_and_orchestrator(self):
-        with mock.patch.object(lop, "run_moneyline_snapshot", return_value={"ran": True}), \
+        with mock.patch("operational.moneyline_freshness.run_if_due", return_value={"ran": True}), \
              mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots",
                          return_value={"status": "SUCCESS"}) as mock_bridge, \
              mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations",
@@ -512,8 +520,20 @@ class Test09RealRecommendationTrigger(unittest.TestCase):
         mock_orch.assert_called_once()
 
     def test_api_error_never_triggers_the_orchestrator(self):
-        with mock.patch.object(lop, "run_moneyline_snapshot",
-                                return_value={"ran": False, "api_error": "boom"}), \
+        with mock.patch("operational.moneyline_freshness.run_if_due",
+                         return_value={"ran": False, "api_error": "boom"}), \
+             mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots") as mock_bridge, \
+             mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations") \
+                 as mock_orch:
+            self._run_main()
+        mock_bridge.assert_not_called()
+        mock_orch.assert_not_called()
+
+    def test_not_yet_due_never_triggers_the_orchestrator(self):
+        """New under the hardened contract: a firing that is simply not due yet (fresh quote already on
+        hand) must never fire the bridge/orchestrator -- there is nothing new to propagate."""
+        with mock.patch("operational.moneyline_freshness.run_if_due",
+                         return_value={"action": "NONE", "ran": False, "reason": "WITHIN_TARGET"}), \
              mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots") as mock_bridge, \
              mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations") \
                  as mock_orch:
@@ -522,8 +542,8 @@ class Test09RealRecommendationTrigger(unittest.TestCase):
         mock_orch.assert_not_called()
 
     def test_zero_future_events_no_op_never_triggers_the_orchestrator(self):
-        with mock.patch.object(lop, "run_moneyline_snapshot",
-                                return_value={"ran": True, "events_seen": 0}), \
+        with mock.patch("operational.moneyline_freshness.run_if_due",
+                         return_value={"ran": True, "events_seen": 0}), \
              mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots",
                          return_value={"status": "SKIPPED"}) as mock_bridge, \
              mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations",
@@ -536,6 +556,24 @@ class Test09RealRecommendationTrigger(unittest.TestCase):
         # through; asserting that here would just duplicate that test.
         mock_bridge.assert_called_once()
         mock_orch.assert_called_once()
+
+    def test_force_flag_routes_through_run_forced_not_run_if_due(self):
+        with mock.patch("operational.moneyline_freshness.run_forced", return_value={"ran": True}) as mock_forced, \
+             mock.patch("operational.moneyline_freshness.run_if_due") as mock_if_due, \
+             mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots",
+                         return_value={"status": "SUCCESS"}), \
+             mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations",
+                         return_value={"status": "SUCCESS"}):
+            self._run_main(force=True)
+        mock_forced.assert_called_once()
+        mock_if_due.assert_not_called()
+
+    def test_default_no_flag_routes_through_run_if_due_not_run_forced(self):
+        with mock.patch("operational.moneyline_freshness.run_if_due", return_value={"ran": False}) as mock_if_due, \
+             mock.patch("operational.moneyline_freshness.run_forced") as mock_forced:
+            self._run_main()
+        mock_if_due.assert_called_once()
+        mock_forced.assert_not_called()
 
     def test_props_mode_never_triggers_the_moneyline_orchestrator(self):
         with mock.patch.object(lop, "run_daily_pull", return_value={"ran": True}), \

@@ -548,7 +548,11 @@ class TestOptInAndScheduling(unittest.TestCase):
 
     def test_the_odds_job_still_prints_its_own_result_when_publishing_blows_up(self):
         from operational import live_odds_daily_pull as lop
-        with mock.patch.object(lop, "run_moneyline_snapshot", return_value={"ran": True, "credits": 1}), \
+        # Production Hardening block (2026-09-29): --mode=moneyline is now routed through
+        # operational.moneyline_freshness.run_if_due() rather than calling run_moneyline_snapshot()
+        # directly -- mock at that boundary, the CLI's real contract now.
+        with mock.patch("operational.moneyline_freshness.run_if_due",
+                        return_value={"ran": True, "credits": 1}), \
              mock.patch("operational.real_odds_bridge.sync_moneyline_odds_to_snapshots", return_value={"ok": 1}), \
              mock.patch("operational.real_recommendation_orchestrator.run_real_moneyline_recommendations",
                         return_value={"ok": 2}), \
