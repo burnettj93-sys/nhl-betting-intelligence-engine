@@ -34,7 +34,22 @@ from operational import state_paths as _sp
 STATE_PATH = _sp.path("prop_discovery_state.json")
 
 DISCOVERY_MARKETS = ("player_shots_on_goal", "player_shots_on_goal_alternate", "player_total_saves")
-MARKET_TO_CONTRACT = {"player_shots_on_goal": "PLAYER_SOG", "player_shots_on_goal_alternate": "PLAYER_SOG",
+# Real-Slate Parlay Certification block (2026-09-29) / Production Sweep Safety
+# Cap block (2026-09-29): player_shots_on_goal and player_shots_on_goal_alternate
+# are DIFFERENT real payload shapes (standard two-sided Over/Under at one line
+# vs. an Over-only ladder across several lines) with DIFFERENT, independently-
+# verified provider_adapter.VERIFIED_CONTRACTS entries -- see that module's own
+# VERIFIED_CONTRACTS comment on the production risk of conflating them. This
+# mapping previously pointed BOTH raw keys at the bare "PLAYER_SOG" string,
+# which would have reported the standard (never-observed) shape as VERIFIED
+# the instant PLAYER_SOG_ALTERNATE was certified. Safe to restore the correct,
+# shape-specific mapping now that a real VERIFIED_PRODUCTION_DAILY_BUDGET
+# (below) protects operational/live_odds_daily_pull.py's sweep loop -- the
+# gap that made this fix unsafe to ship on its own two blocks ago. The
+# standard key deliberately still maps to bare "PLAYER_SOG" (unverified) --
+# never map it to the certified alternate contract.
+MARKET_TO_CONTRACT = {"player_shots_on_goal": "PLAYER_SOG",
+                      "player_shots_on_goal_alternate": "PLAYER_SOG_ALTERNATE",
                       "player_total_saves": "GOALIE_SAVES"}
 SPORTSBOOK = "draftkings"
 
@@ -42,6 +57,23 @@ DISCOVERY, VERIFIED_PRODUCTION = "DISCOVERY", "VERIFIED_PRODUCTION"
 PENDING, CANDIDATE, VERIFIED = "PENDING_LIVE_CONTRACT", "CANDIDATE_OBSERVED", "VERIFIED"
 
 DISCOVERY_DAILY_BUDGET = 6        # hard cap on prop credits per UTC day while contracts are unverified
+# Production Sweep Safety Cap block (2026-09-29): the sweep loop
+# (operational/live_odds_daily_pull.py's run_targeted_prop_sweep(), used by the
+# already-scheduled prop-sweep-first/prop-sweep-second launchd jobs) previously
+# only called may_spend() when mode() == DISCOVERY -- once a contract is
+# VERIFIED, NO quota check of any kind ran in that loop, not even the global
+# odds_quota hard reserve (Part: "In VERIFIED_PRODUCTION the account guard
+# alone applies" was true in this function's OWN logic, but the sweep loop
+# never actually called this function at all in that mode, so not even that
+# applied). Real, audited worst case for prop-sweep-first/second alone on a
+# real 8-event slate: 8 events x 2 stages (first+second, each deduplicated to
+# at most once per event per day by already_swept()) x up to 2 credits (both
+# FIRST_SWEEP_MARKETS keys actually posting, which standard player_shots_on_goal
+# is now confirmed to do) = 32 credits/day theoretical ceiling. This budget is
+# sized with real margin above that audited ceiling (40) while staying far
+# below "uncapped" and small relative to the account's real 500-credit/month
+# pool -- a real, evidence-derived number, not a guess.
+VERIFIED_PRODUCTION_DAILY_BUDGET = 40
 DISCOVERY_SAMPLE_EVENTS = 2
 DISCOVERY_HORIZON_H = 36          # books post props close to game day: only look at games starting soon
 STATE_KEEP_DAYS = 10
@@ -138,11 +170,19 @@ def record_spend(credits: int, now: dt.datetime | None = None, path: Path | None
 
 def may_spend(now: dt.datetime | None = None, *, path: Path | None = None, planned: int = 1,
               remaining: int | None = None) -> dict:
-    """Discovery budget + account reserve. In VERIFIED_PRODUCTION the account guard alone applies."""
+    """A real per-day budget applies in BOTH modes now (Production Sweep Safety
+    Cap block, 2026-09-29) -- DISCOVERY_DAILY_BUDGET while unverified,
+    VERIFIED_PRODUCTION_DAILY_BUDGET once >=1 contract is VERIFIED -- plus the
+    global odds_quota hard reserve / quota-unknown-fails-closed check in every
+    case. Callers in both modes must call this before every real spend; see
+    operational/live_odds_daily_pull.py's sweep loop, which previously only
+    called this in DISCOVERY mode."""
     from operational import odds_quota
     now = now or dt.datetime.now(dt.timezone.utc)
-    if mode() == DISCOVERY and spent_today(now, path) + planned > DISCOVERY_DAILY_BUDGET:
-        return {"allow": False, "reason": "DISCOVERY_DAILY_BUDGET", "budget": DISCOVERY_DAILY_BUDGET}
+    current_mode = mode()
+    daily_budget = DISCOVERY_DAILY_BUDGET if current_mode == DISCOVERY else VERIFIED_PRODUCTION_DAILY_BUDGET
+    if spent_today(now, path) + planned > daily_budget:
+        return {"allow": False, "reason": f"{current_mode}_DAILY_BUDGET", "budget": daily_budget}
     remaining = odds_quota.latest_remaining() if remaining is None else remaining
     return odds_quota.evaluate_spend(remaining, odds_quota.credits_spent_today(now) if remaining is not None else 0,
                                      odds_quota.days_left_in_cycle(now.date()), planned)
