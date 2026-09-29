@@ -682,7 +682,20 @@ def _main() -> None:
         if keep_awake_result and keep_awake_result.get("action") not in ("NONE", None):
             result["keep_awake"] = keep_awake_result
         _moneyline_downstream(result)
+        # Game-Day Moneyline Freshness block (2026-09-29): an ORDINARY (UI-facing) refresh, fully
+        # independent of and never blocking the T-35 pull above -- see operational/moneyline_freshness.py.
+        # Piggybacks on this already-free, already-every-2-minutes firing rather than adding a new job.
+        from operational import moneyline_freshness
+        ordinary_refresh = moneyline_freshness.run_if_due()
+        if ordinary_refresh.get("action") == "RAN":
+            _moneyline_downstream(ordinary_refresh)
+            result["ordinary_refresh"] = ordinary_refresh
     elif args.mode == "moneyline":
+        # Deliberately UNCHANGED (Game-Day Moneyline Freshness block, 2026-09-29): this fixed 4x/day
+        # calendar slot keeps its pre-existing unconditional behavior -- converting it to the new
+        # due-gate would touch this exact, already-tested automation-trigger contract (Part 22) for no
+        # real benefit, since the new --mode=moneyline-pregame due-check below already closes the
+        # freshness gaps on its own, every 2 minutes, every game day.
         result = run_moneyline_snapshot(args.label)
         # Real Recommendation Pipeline block (2026-09-24), Part 22: the
         # chosen automation trigger is "a fresh real moneyline snapshot
@@ -723,7 +736,11 @@ def _main() -> None:
     # compact Cloud snapshot IF the owner enabled it (NHL_ENGINE_CLOUD_PUBLISH=ON).
     # Downstream, opt-in, bounded, never raises, never changes this job's result
     # beyond attaching its own status (operational/cloud_publish_hook.py).
-    if cloud_publish_warranted(args.mode, result):
+    # Game-Day Moneyline Freshness block (2026-09-29): a moneyline-pregame firing where the T-35 pull
+    # was IDLE but the independent ordinary_refresh above actually ran must still publish -- new prices
+    # landed either way. cloud_publish_warranted() itself is untouched (still reads only `result`, so
+    # every other mode's existing behavior is unchanged).
+    if cloud_publish_warranted(args.mode, result) or (result.get("ordinary_refresh") or {}).get("ran"):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after(f"live_odds_daily_pull:{args.mode}")
 

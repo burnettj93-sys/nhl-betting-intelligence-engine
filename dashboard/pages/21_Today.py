@@ -74,10 +74,35 @@ if not _odds_last and runtime_mode.is_community_cloud():
     _odds_last = ((cloud_snapshot.freshness().get("components") or {}).get("odds"))
 oc1.metric("Odds last updated", (_odds_last or "—")[:16])
 oc2.metric("Credits remaining", _odds_status.get("credits_remaining") if _odds_status.get("credits_remaining") is not None else "—")
-oc3.metric("Next refresh", "scheduler-driven")
+_next_market_refresh_text, _next_t35_text = "scheduler-driven", None
+if not runtime_mode.is_community_cloud():
+    # Game-Day Moneyline Freshness block (2026-09-29), Part 12: "Next refresh" used to be a static,
+    # uninformative "scheduler-driven" string that blurred two different concepts -- the ordinary
+    # UI-freshness refresh and the T-35 decision-policy capture. Best-effort only: never let this
+    # break Today (System Health above it already covers real failure states).
+    try:
+        from operational import cloud_snapshot_schema as _schema
+        from operational import moneyline_freshness as _mf
+        from operational import moneyline_pregame as _mp
+        from zoneinfo import ZoneInfo as _ZoneInfo
+        _edt = _ZoneInfo("America/New_York")
+        _now_utc = dt.datetime.now(dt.timezone.utc)
+        _mf_status = _mf.status(_now_utc)
+        _next_ord = _schema.parse_utc(_mf_status["next_ordinary_refresh_utc"])
+        _next_market_refresh_text = (_next_ord.astimezone(_edt).strftime("%-I:%M %p %Z") if _next_ord
+                                      else "none scheduled today")
+        _upcoming_clusters = [c for c in _mp.plan_clusters(_mp.scheduled_starts(_now_utc)) if c.target_pull >= _now_utc]
+        if _upcoming_clusters:
+            _next_t35_text = _upcoming_clusters[0].target_pull.astimezone(_edt).strftime("%-I:%M %p %Z")
+    except Exception:  # noqa: BLE001 -- this metric is informational only
+        _next_market_refresh_text, _next_t35_text = "scheduler-driven", None
+oc3.metric("Next market refresh", _next_market_refresh_text)
 oc4.metric("Verified DK contracts", len(VERIFIED_CONTRACTS))
 oc5.metric("Player prop quotes", _odds_status.get("player_prop_quotes", "—"))
 oc6.metric("Tracked events", _odds_status.get("tracked_events", "—"))
+if _next_t35_text:
+    st.caption(f"Next execution capture (T-35, decision-policy pull — separate from the ordinary "
+               f"market refresh above): {_next_t35_text}")
 
 with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
     if runtime_mode.is_community_cloud():
