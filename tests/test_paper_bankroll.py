@@ -468,6 +468,68 @@ class TestGameEdgeParlayPaperBet(TestPaperBankroll):
         self.assertEqual(r2["status"], "DUPLICATE")
 
 
+class TestRealMarketComboPaperBet(TestPaperBankroll):
+    """Production Hardening + Parlay Build block (2026-09-29):
+    create_real_market_combo_paper_bet() -- the REAL_MARKET_PAPER,
+    cross-game combo track for research/real_market_parlay/engine.py."""
+
+    def _qualified_result(self):
+        from research.real_market_parlay import engine as rmp
+        legs = [rmp.ParlayLeg(
+            game_id=f"G{i}", event_id=f"evt-{i}", market_family="PLAYER_SOG_ALTERNATE",
+            participant_id=f"P{i}", participant_name=f"Player {i}", side="OVER", threshold=3,
+            american_price=-150, conservative_probability=0.90, sportsbook="draftkings",
+            captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
+            model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+            event_not_started=True) for i in range(3)]
+        return rmp.build_real_market_parlay(legs)
+
+    def test_qualified_result_creates_a_bet_in_the_real_market_track(self):
+        result = pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        self.assertEqual(result["status"], "INSERTED")
+        summary = pb.bankroll_summary(self.conn, "REAL_MARKET_PAPER")
+        self.assertEqual(summary["bets"], 1)
+        self.assertEqual(summary["pending"], 1)
+
+    def test_non_qualifying_result_is_refused(self):
+        with self.assertRaises(pb.InvalidPaperBetError):
+            pb.create_real_market_combo_paper_bet(
+                self.conn, {"status": "NO_QUALIFYING_PARLAY", "reason": "x"})
+
+    def test_is_combo_flag_set_and_stake_is_the_standard_ten_dollars(self):
+        pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        rows = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
+        self.assertEqual(rows[0]["is_combo"], 1)
+        self.assertEqual(rows[0]["stake"], pb.PAPER_BET_STAKE)
+
+    def test_entry_odds_is_the_estimated_combo_price_never_a_fabricated_dk_price(self):
+        result = self._qualified_result()
+        pb.create_real_market_combo_paper_bet(self.conn, result)
+        rows = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
+        self.assertEqual(rows[0]["entry_odds"], result["combo"].estimated_combo_price)
+
+    def test_never_mixed_with_demo_or_game_parlay_tracks(self):
+        self._bet(track="DEMO_PAPER")
+        pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        self.assertEqual(len(pb.query_paper_bets(self.conn, track="DEMO_PAPER")), 1)
+        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 1)
+        self.assertEqual(len(pb.query_paper_bets(self.conn, track="GAME_PARLAY_PAPER")), 0)
+
+    def test_idempotent_on_the_same_qualifying_result(self):
+        r1 = pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        r2 = pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        self.assertEqual(r1["status"], "INSERTED")
+        self.assertEqual(r2["status"], "DUPLICATE")
+
+    def test_legs_json_records_every_real_leg(self):
+        pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
+        rows = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
+        import json as _json
+        legs = _json.loads(rows[0]["legs_json"])
+        self.assertEqual(len(legs), 3)
+        self.assertEqual({l["market_family"] for l in legs}, {"PLAYER_SOG_ALTERNATE"})
+
+
 class TestSchemaV1ToV2Migration(unittest.TestCase):
     """A real pre-sprint database (schema v1, `track` CHECK constraint
     without GAME_PARLAY_PAPER) must upgrade in place, keeping every
