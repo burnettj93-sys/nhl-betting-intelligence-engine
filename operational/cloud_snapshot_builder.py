@@ -193,6 +193,24 @@ def _data_status() -> dict:
     return {"readiness_cache": cache, "ingestion_health": ingestion_health.load_health()}
 
 
+def build_real_today_section() -> dict:
+    """Real Product Bridge block (2026-09-29): the ONE real state the
+    published Cloud snapshot's "real_today" section carries. Delegates to
+    operational/real_today_bridge.py::open_real_today_state() -- the SAME
+    function dashboard/pages/21_Today.py's own LOCAL-mode branch calls
+    directly (never through this module: dashboard/*.py files must never
+    reference "cloud_snapshot_builder" at all, see
+    tests/test_cloud_live_data.py::test_cloud_pages_never_import_the_publisher_or_builder)
+    -- so LOCAL mode and the published Cloud snapshot are never two
+    separately-derived sources of truth."""
+    from operational import real_today_bridge
+    return real_today_bridge.open_real_today_state()
+
+
+def _real_today() -> dict:
+    return build_real_today_section()
+
+
 def _health() -> dict:
     from operational import system_health as sh
     items = []
@@ -230,6 +248,7 @@ def _health() -> dict:
 _SECTION_BUILDERS = {
     "live_moneyline_rows": _live_rows,
     "real_recommendations": _real_recommendations,
+    "real_today": _real_today,
     "performance": _performance,
     "morning_review": _morning_review,
     "model_learning": _model_learning,

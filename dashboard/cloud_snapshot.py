@@ -212,6 +212,10 @@ def real_recommendations() -> dict:
     return _optional("real_recommendations")
 
 
+def real_today() -> dict:
+    return _optional("real_today")
+
+
 def snapshot_meta() -> dict:
     """Small provenance dict for banners; never raises."""
     from operational import cloud_snapshot_schema as schema
