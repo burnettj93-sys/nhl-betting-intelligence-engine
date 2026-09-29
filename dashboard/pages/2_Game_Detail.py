@@ -346,6 +346,16 @@ with col1:
         found = da.game_by_id(records, default_game_id)
         if found is not None and found["game_date"] in dates:
             default_date_idx = dates.index(found["game_date"])
+        elif not str(default_game_id).startswith("demo-"):
+            # Real Morning Production Pull sprint (2026-09-29): a real, current game_id (e.g. from
+            # today's live schedule) is never in this frozen historical corpus -- this used to silently
+            # fall back to the corpus's most recent date with no indication anything was substituted.
+            # Say so explicitly instead of guessing which historical game the viewer actually wanted.
+            st.warning(
+                f"The requested game (id {default_game_id}) is not part of this frozen historical "
+                f"research corpus — it is likely one of today's real, current games. Showing historical "
+                f"browsing instead; for today's real games, see the Today page."
+            )
     selected_date = st.selectbox("Date", dates, index=default_date_idx)
 with col2:
     day_games = da.games_on_date(records, selected_date)

@@ -203,8 +203,14 @@ if _recs is not None:
         if _pf["limiting_leg"]:
             st.caption("Parlay freshness = its stalest leg. " + comp.market_freshness_text(_pf["limiting_leg"]))
 
-# ---- 1. Today's Slate ---------------------------------------------------
-st.markdown("## 1 · Today's Slate")
+# ---- 1. Demo Slate (SIMULATED) -------------------------------------------
+# Complete Market Validation / Live UI Certification sprint (2026-09-29): this heading used to read
+# "Today's Slate", which — appearing directly below the REAL Live Model Edges / Recorded Recommendations
+# sections above — read as a continuation of real content rather than the start of the SIMULATED demo
+# showcase that powers Top Conviction / Combos / Best Player Props below. Renamed; no data, matching, or
+# downstream section changed (Top Conviction/Combos still key off dd.build_demo_games()'s same game set).
+st.markdown("## 1 · Demo Slate — SIMULATED (showcases Top Conviction / Combos below, not today's real games)")
+st.caption("For today's REAL NHL games and current DraftKings prices, see Live Model Edges above.")
 opportunities = eb.all_opportunities()
 best_by_game: dict[str, dict] = {}
 for o in opportunities:
@@ -223,7 +229,8 @@ for i, g in enumerate(dd.build_demo_games()):
     with game_cols[i % 2]:
         with st.container(border=True):
             st.markdown(f"**{g.away} @ {g.home}**")
-            st.caption(f"{g.start_time} (simulated) · Model: {g.model_ready} · Starters: {g.starter_ready}")
+            st.caption(f"{g.start_time} · SIMULATED — DEMO ONLY (not today's real schedule) · "
+                       f"Model: {g.model_ready} · Starters: {g.starter_ready}")
             if strongest:
                 _, o = strongest
                 st.caption(f"Strongest: {o['player']} {o['market']} {o['threshold']} — "

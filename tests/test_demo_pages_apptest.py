@@ -107,6 +107,52 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
         markdown_text = " ".join(m.value for m in at.markdown)
         self.assertIn("Live Model Edges", markdown_text)
 
+    def test_demo_slate_section_is_labeled_simulated_not_todays_slate(self):
+        """Real Morning Production Pull sprint (2026-09-29): the section powering Top Conviction/Combos
+        used to be headed 'Today's Slate', which -- sitting directly under the REAL Live Model Edges /
+        Recorded Recommendations sections -- read as a continuation of real content. It must now say
+        SIMULATED/DEMO explicitly, and the old bare heading must be gone."""
+        at = AppTest.from_file(_page("21_Today.py"), default_timeout=60)
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        markdown_text = " ".join(m.value for m in at.markdown)
+        self.assertNotIn("1 · Today's Slate", markdown_text)
+        self.assertIn("Demo Slate", markdown_text)
+        self.assertIn("SIMULATED", markdown_text)
+        caption_text = " ".join(c.value for c in at.caption)
+        self.assertIn("SIMULATED — DEMO ONLY (not today's real schedule)", caption_text)
+
+    def test_game_slate_explicitly_labels_itself_historical_not_today(self):
+        """Real Morning Production Pull sprint (2026-09-29): the 'Games' sidebar entry (1_Game_Slate.py)
+        browses only the frozen historical corpus and used to silently default to the corpus's last date
+        (2026-04-16) with no pointer to where today's real games live -- a user could reasonably mistake
+        that for today's schedule. It must now say so explicitly and point to Today. The underlying
+        historical browsing functionality itself must remain fully intact (not removed)."""
+        at = AppTest.from_file(_page("1_Game_Slate.py"), default_timeout=60)
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        info_text = " ".join(i.value for i in at.info)
+        self.assertIn("frozen historical research corpus", info_text)
+        self.assertIn("Today", info_text)
+        caption_text = " ".join(c.value for c in at.caption)
+        self.assertIn("is not part of this historical corpus", caption_text)
+        # Historical browsing itself must still work -- games for the selected historical date still render.
+        markdown_text = " ".join(m.value for m in at.markdown)
+        self.assertIn("game(s) on", markdown_text)
+
+    def test_game_detail_never_silently_substitutes_a_real_game_id(self):
+        """Real Morning Production Pull sprint (2026-09-29): requesting Game Detail for a real, current
+        game_id (never in the frozen historical corpus) used to silently fall back to the corpus's most
+        recent historical date with zero indication -- exactly the 'silently routes to an April historical
+        game' failure mode the sprint's block warned against. It must now say so explicitly."""
+        at = AppTest.from_file(_page("2_Game_Detail.py"), default_timeout=60)
+        at.session_state["selected_game_id"] = 2026020002  # a real 2026-27 game_id, not in the corpus
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        warning_text = " ".join(w.value for w in at.warning)
+        self.assertIn("not part of this frozen historical research corpus", warning_text)
+        self.assertIn("today's real games", warning_text)
+
 
 if __name__ == "__main__":
     unittest.main()
