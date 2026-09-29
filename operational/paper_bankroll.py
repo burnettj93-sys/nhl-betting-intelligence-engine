@@ -381,6 +381,52 @@ def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: d
         prediction_checkpoint="FIRST_ACTIONABLE")
 
 
+def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict) -> dict:
+    """Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
+    block, 2026-09-29): REAL_MARKET_PAPER track, is_combo=True -- distinct
+    from create_demo_combo_paper_bet (DEMO_PAPER, simulated prices) and
+    create_game_edge_parlay_paper_bet (GAME_PARLAY_PAPER, single-game).
+    This is the first CROSS-GAME real-priced combo; it reuses the
+    REAL_MARKET_PAPER track rather than inventing a fourth one because the
+    schema's track/price_source split only encodes pricing provenance
+    (real DraftKings vs simulated demo), never single-game-vs-cross-game
+    scope, and every leg here is required (research/real_market_parlay/
+    engine.py::leg_is_eligible) to be a real, contract-verified, real-
+    market-priced quote. A non-"QUALIFIED" result is refused, mirroring
+    create_game_edge_parlay_paper_bet's own hard rule -- never paper-bet a
+    non-qualifier.
+
+    entry_odds is the combo's estimated_combo_price (the product of each
+    leg's OWN real, verified American price) -- never a fabricated combined
+    DraftKings price (research/real_market_parlay/engine.py's own
+    ParlayResult.offered_parlay_price stays None always); this mirrors
+    create_game_edge_parlay_paper_bet's identical, already-established
+    choice for its own single-game combos."""
+    if parlay_result.get("status") != "QUALIFIED":
+        raise InvalidPaperBetError(
+            "refusing to paper-bet a non-qualifying Real-Market Parlay result "
+            f"(status={parlay_result.get('status')!r}) -- never paper-bet a non-qualifier")
+
+    combo = parlay_result["combo"]
+    legs = combo.legs
+    market_id = "REAL_MARKET_PARLAY:" + "+".join(
+        sorted(f"{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
+    legs_snapshot = json.dumps([
+        {"participant_id": l.participant_id, "participant_name": l.participant_name,
+         "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
+         "american_price": l.american_price, "conservative_probability": l.conservative_probability,
+         "game_id": l.game_id, "event_id": l.event_id, "sportsbook": l.sportsbook,
+         "captured_at_utc": l.captured_at_utc}
+        for l in legs
+    ])
+    return record_paper_bet(
+        conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
+        market_id=market_id, entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False,
+        legs_json=legs_snapshot, model_probability=combo.joint_probability,
+        conservative_probability=combo.joint_probability, edge=combo.combo_edge,
+        prediction_checkpoint="FIRST_ACTIONABLE")
+
+
 def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status: str, *,
                       closing_odds: float | None = None, closing_captured_at_utc: str | None = None,
                       clv: float | None = None, notes: str | None = None) -> dict:
