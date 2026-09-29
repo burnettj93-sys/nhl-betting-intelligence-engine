@@ -840,11 +840,21 @@ def upsert_player_stats_from_boxscore(conn, box: dict, observed_at_utc: str) -> 
                     p, "sog",
                     context=f"for player {player_id} in game {game_id} "
                             f"(real NHL field is 'sog', not 'shots')")
+                # Hits/Blocked-Shots Settlement Enablement block (2026-09-29): `hits` and
+                # `blockedShots` are real per-skater fields the boxscore already sends (confirmed
+                # against tests/test_boxscore_contract.py's frozen real-shape fixture) -- optional
+                # (.get, default None) rather than _require()'d, since a provider omitting them is
+                # a real possibility this module hasn't observed yet and should degrade to NULL, not
+                # hard-fail the entire skater/game the way a genuinely required field (sog) does.
                 _append_player_stat_revision(
                     conn, game_id, str(player_id), team_id,
                     _toi_to_minutes(p.get("toi", "0:00")), p.get("goals", 0),
-                    p.get("assists", 0), sog, 1, observed_at_utc,
+                    p.get("assists", 0), sog, p.get("hits"), p.get("blockedShots"), 1, observed_at_utc,
                 )
+        # Team-game SOG: the SAME already-fetched boxscore's box[side]["sog"] -- no new endpoint.
+        team_sog = box[side].get("sog")
+        if team_sog is not None:
+            _append_team_stat_revision(conn, game_id, team_id, team_sog, observed_at_utc)
         for g in stats.get("goalies", []):
             goalie_id = _require(
                 g, "playerId", context=f"in playerByGameStats.{side}.goalies for game {game_id}")
@@ -856,24 +866,40 @@ def upsert_player_stats_from_boxscore(conn, box: dict, observed_at_utc: str) -> 
 
 
 def _append_player_stat_revision(conn, game_id, player_id, team_id, toi_minutes, goals,
-                                  assists, shots, played, observed_at_utc) -> None:
+                                  assists, shots, hits, blocked_shots, played, observed_at_utc) -> None:
     latest = conn.execute(
-        """SELECT toi_minutes, goals, assists, shots, played, revision_number
+        """SELECT toi_minutes, goals, assists, shots, hits, blocked_shots, played, revision_number
            FROM player_game_stats WHERE game_id=? AND player_id=?
            ORDER BY revision_number DESC LIMIT 1""",
         (game_id, player_id),
     ).fetchone()
-    new_state = (toi_minutes, goals, assists, shots, played)
-    if latest is not None and tuple(latest[:5]) == new_state:
+    new_state = (toi_minutes, goals, assists, shots, hits, blocked_shots, played)
+    if latest is not None and tuple(latest[:7]) == new_state:
         return   # unchanged -- idempotent no-op
     next_revision = (latest["revision_number"] + 1) if latest is not None else 1
     conn.execute(
         """INSERT INTO player_game_stats
-           (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played,
-            revision_number, effective_at_utc, observed_at_utc, source)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played,
+           (game_id, player_id, team_id, toi_minutes, goals, assists, shots, hits, blocked_shots,
+            played, revision_number, effective_at_utc, observed_at_utc, source)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (game_id, player_id, team_id, toi_minutes, goals, assists, shots, hits, blocked_shots, played,
          next_revision, observed_at_utc, observed_at_utc, "nhl_api"),
+    )
+
+
+def _append_team_stat_revision(conn, game_id, team_id, sog, observed_at_utc) -> None:
+    latest = conn.execute(
+        """SELECT sog, revision_number FROM team_game_stats WHERE game_id=? AND team_id=?
+           ORDER BY revision_number DESC LIMIT 1""",
+        (game_id, team_id),
+    ).fetchone()
+    if latest is not None and latest["sog"] == sog:
+        return   # unchanged -- idempotent no-op
+    next_revision = (latest["revision_number"] + 1) if latest is not None else 1
+    conn.execute(
+        """INSERT INTO team_game_stats (game_id, team_id, sog, revision_number,
+           effective_at_utc, observed_at_utc, source) VALUES (?,?,?,?,?,?,?)""",
+        (game_id, team_id, sog, next_revision, observed_at_utc, observed_at_utc, "nhl_api"),
     )
 
 

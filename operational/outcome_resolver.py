@@ -39,10 +39,24 @@ PLAYER_DID_NOT_DRESS = "PLAYER_DID_NOT_DRESS"
 GOALIE_DID_NOT_PLAY = "GOALIE_DID_NOT_PLAY"
 TEAM_SOG_NOT_INGESTED = "TEAM_SOG_NOT_INGESTED"
 BLOCKS_NOT_INGESTED = "BLOCKS_NOT_INGESTED"
+TEAM_DID_NOT_PLAY = "TEAM_DID_NOT_PLAY"
+# Hits/Blocked-Shots Settlement Enablement block (2026-09-29): the boxscore's `hits` field is now
+# ingested (ingest/nhl_api.py, player_game_stats.hits), but -- unlike Team SOG, whose boxscore field
+# was already reconciled at 99.15% against the model's own training source before being trusted here
+# -- NO reconciliation between the boxscore's `hits` and MoneyPuck's `I_F_hits` (what the validated
+# Hits model actually trains on) has been done. Blocks already found a real, growing definitional
+# drift (0%->9.23%) between its own boxscore field and its MoneyPuck training field; Hits could easily
+# have the same problem and nobody has checked. This status exists so a caller can see the value
+# without a caller mistaking it for a reconciled, trustworthy settlement -- it is NOT in
+# FAIL_CLOSED_STATUSES' "nothing resolved" sense (a real number IS available) but it is also NOT
+# RESOLVED (Part 25's "no data source is trusted for settlement without either being the model's own
+# training source, or an explicitly characterized/bounded concordance" -- neither is true here yet).
+HITS_UNVERIFIED_VS_MODEL_SOURCE = "HITS_UNVERIFIED_VS_MODEL_SOURCE"
 
 FAIL_CLOSED_STATUSES = frozenset({
     GAME_NOT_FINAL, UNSUPPORTED_SETTLEMENT_MARKET, PLAYER_DID_NOT_DRESS,
     GOALIE_DID_NOT_PLAY, TEAM_SOG_NOT_INGESTED, BLOCKS_NOT_INGESTED,
+    TEAM_DID_NOT_PLAY, HITS_UNVERIFIED_VS_MODEL_SOURCE,
 })
 
 
@@ -124,6 +138,14 @@ def resolve_player_stat_threshold(conn: sqlite3.Connection, *, market_family: st
         actual = row["assists"]
     elif market_family in ("POINTS", "PLAYER_POINTS"):
         actual = row["goals"] + row["assists"]
+    elif market_family in ("HITS", "PLAYER_HITS"):
+        # See HITS_UNVERIFIED_VS_MODEL_SOURCE's module-level note: a real value is available
+        # (ingest/nhl_api.py has captured it since this block), but it is NOT trusted for settlement
+        # until reconciled against MoneyPuck's I_F_hits, the validated model's actual training source.
+        if row["hits"] is None:
+            return _result(HITS_UNVERIFIED_VS_MODEL_SOURCE, official_game_status=game_state)
+        return _result(HITS_UNVERIFIED_VS_MODEL_SOURCE, actual_value=row["hits"],
+                        official_game_status=game_state)
     else:
         return _result(UNSUPPORTED_SETTLEMENT_MARKET, official_game_status=game_state)
 
@@ -173,40 +195,48 @@ def resolve_moneyline(conn: sqlite3.Connection, *, game_id, side_team_id: str) -
                     resolution_source="OFFICIAL_NHL_GAME_RESULT", official_game_status=game_state)
 
 
+def _latest_team_stat(conn: sqlite3.Connection, game_id, team_id: str) -> sqlite3.Row | None:
+    return conn.execute(
+        """SELECT * FROM team_game_stats WHERE game_id=? AND team_id=?
+           ORDER BY revision_number DESC LIMIT 1""", (game_id, str(team_id))).fetchone()
+
+
 def resolve_team_sog(conn: sqlite3.Connection, *, game_id, team_id: str, threshold: int,
                       side: str = "OVER") -> dict:
-    """FAILS CLOSED (Part 18/39): nhl.db's `games` table -- frozen
-    production boundary, not touched this sprint -- has no team-SOG
-    column at all; nothing currently ingests it. This is a genuine
-    software gap, not a methodology concern (unlike Blocks below):
-    TEAM_SOG_VALIDATION_REPORT.md already established the official
-    boxscore's team-level `sog` field agrees with the model's own
-    canonical PBP-derived training source 99.15% of the time (every
-    mismatch exactly +/-1, a known bounded class) -- so wiring this
-    would be safe, it is just not wired. Never approximates from a
-    field this function cannot see."""
-    return _result(TEAM_SOG_NOT_INGESTED)
+    """Hits/Blocked-Shots Settlement Enablement block (2026-09-29): now wired for real. This was
+    always documented as safe to wire (a genuine software gap, not a methodology concern) --
+    TEAM_SOG_VALIDATION_REPORT.md already established the official boxscore's team-level `sog` field
+    agrees with the model's own canonical PBP-derived training source 99.15% of the time (every
+    mismatch exactly +/-1, a known bounded class). Reads the SAME already-fetched boxscore's
+    box[side]["sog"], now stored in team_game_stats (ingest/nhl_api.py). Still fails closed, never
+    approximates, if the game isn't final or the team's row was never ingested."""
+    is_final, game_state = _is_final(conn, game_id)
+    if not is_final:
+        return _result(GAME_NOT_FINAL, official_game_status=game_state)
+    row = _latest_team_stat(conn, game_id, team_id)
+    if row is None or row["sog"] is None:
+        return _result(TEAM_SOG_NOT_INGESTED, official_game_status=game_state)
+    actual = row["sog"]
+    return _result(RESOLVED, actual_value=actual, outcome_hit=_side_hit(actual, threshold, side),
+                    resolution_source="OFFICIAL_NHL_BOXSCORE", official_game_status=game_state)
 
 
 def resolve_blocks(conn: sqlite3.Connection, *, game_id, player_id: str, threshold: int,
                     side: str = "OVER") -> dict:
-    """FAILS CLOSED (Part 13/18): nhl.db's `player_game_stats` has no
-    blocks column (frozen production boundary, not touched this sprint).
-    Unlike Team SOG, this is ALSO a genuine methodology concern even if
-    the column existed: the validated BLOCKED_SHOTS model's canonical
-    training corpus is MoneyPuck-derived (research/player_blocks/
-    player_game_blocks.jsonl), not the NHL boxscore's own `blockedShots`
-    field -- and this project's own audit already found the OTHER known
-    blocked-shot definition (PBP `blockingPlayerId`) drifts from the
-    official boxscore by a REAL, GROWING margin (0% in 2022-23 to 9.23%
-    by 2025-26), unlike Team SOG's tiny, stable, already-characterized
-    +/-1 pattern. There is no established concordance evidence between
-    the boxscore's blockedShots field and the model's actual MoneyPuck
-    training definition, so using it here would risk exactly the
-    methodology-mismatch the sprint's own instructions warned against.
-    Real per-game MoneyPuck data is not currently ingested live either
-    (confirmed in NHL_ENGINE_STATE_OF_THE_UNION_2026_08_30.md Part 4) --
-    so this fails closed rather than substituting an unverified source."""
+    """STILL FAILS CLOSED (Part 13/18) -- deliberately unchanged by the Hits/Blocked-Shots Settlement
+    Enablement block (2026-09-29). player_game_stats.blocked_shots now EXISTS and is ingested (from the
+    boxscore's `blockedShots` field), so the "no column" half of the original gap is closed -- but the
+    real reason this fails closed was never the missing column, it was a genuine METHODOLOGY concern
+    that a column addition does not fix: the validated BLOCKED_SHOTS model's canonical training corpus
+    is MoneyPuck-derived (research/player_blocks/player_game_blocks.jsonl's `shotsBlockedByPlayer`),
+    not the boxscore's `blockedShots` field, and this project's own audit already found the OTHER known
+    blocked-shot definition (PBP `blockingPlayerId`) drifts from the official boxscore by a REAL,
+    GROWING margin (0% in 2022-23 to 9.23% by 2025-26), unlike Team SOG's tiny, stable, already-
+    characterized +/-1 pattern. No reconciliation between the NOW-INGESTED boxscore field and the
+    model's actual MoneyPuck training field has been done -- using it here without that study would
+    risk exactly the methodology-mismatch this project's own prior sprint warned against. The new
+    column exists so that reconciliation study can be RUN (going forward, on real games); it is not
+    read here until that study exists and shows the drift is acceptable."""
     return _result(BLOCKS_NOT_INGESTED)
 
 
@@ -216,7 +246,7 @@ def resolve_blocks(conn: sqlite3.Connection, *, game_id, player_id: str, thresho
 # "PLAYER_SOG" market_id field both route the same way.
 _PLAYER_STAT_PREFIXES = {
     "PLAYER_SOG": "SOG", "PLAYER_GOALS": "GOALS", "PLAYER_ASSISTS": "ASSISTS",
-    "PLAYER_POINTS": "POINTS",
+    "PLAYER_POINTS": "POINTS", "PLAYER_HITS": "HITS",
 }
 
 
@@ -240,7 +270,13 @@ def resolve_prediction(conn: sqlite3.Connection, prediction: dict) -> dict:
         return resolve_goalie_saves(conn, game_id=game_id, goalie_player_id=prediction.get("player_id"),
                                      threshold=threshold, side=side)
     if market_id.startswith("TEAM_SOG"):
-        return resolve_team_sog(conn, game_id=game_id, team_id=prediction.get("team_id"),
+        # Hits/Blocked-Shots Settlement Enablement block (2026-09-29): this dispatch previously read
+        # prediction["team_id"], a column that has never existed in the prospective ledger schema
+        # (confirmed: operational/prospective_schema.sql's real column is "team") -- harmless ONLY
+        # while resolve_team_sog failed closed before ever using the argument (see the MONEYLINE
+        # dispatch's identical prior bug/fix above, 2026-09-24). Now that Team SOG is genuinely wired,
+        # this would have silently resolved every real prediction to TEAM_SOG_NOT_INGESTED forever.
+        return resolve_team_sog(conn, game_id=game_id, team_id=prediction.get("team"),
                                  threshold=threshold, side=side)
     if market_id.startswith("PLAYER_BLOCKS"):
         return resolve_blocks(conn, game_id=game_id, player_id=prediction.get("player_id"),

@@ -209,6 +209,15 @@ CREATE TABLE IF NOT EXISTS goalie_status_events (
 -- nothing is ever UPDATEd in place. features.point_in_time.
 -- player_game_stats_as_of(game_id, learn_time_utc) returns, per player,
 -- only the latest revision that had been observed by learn_time_utc.
+-- Hits/Blocked-Shots Settlement Enablement block (2026-09-29): `hits` and
+-- `blocked_shots` are additive, nullable columns (a fresh CREATE TABLE picks
+-- them up directly here; an EXISTING runtime DB gets them via db.py's
+-- idempotent _ensure_columns() migration, never a destructive rebuild).
+-- Both are real fields the NHL Web API's gamecenter/{id}/boxscore sends per
+-- skater today (tests/test_boxscore_contract.py's frozen real-shape fixture
+-- already modeled `hits`/`blockedShots` before this block; only the
+-- ingestion/storage/settlement side was ever missing). NULL (not 0) for any
+-- row ingested before this column existed -- never backfilled or guessed.
 CREATE TABLE IF NOT EXISTS player_game_stats (
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
     game_id           INTEGER,
@@ -218,6 +227,8 @@ CREATE TABLE IF NOT EXISTS player_game_stats (
     goals             INTEGER,
     assists           INTEGER,
     shots             INTEGER,
+    hits              INTEGER,
+    blocked_shots     INTEGER,
     played            INTEGER DEFAULT 1,
     revision_number   INTEGER DEFAULT 1,
     effective_at_utc  TEXT,
@@ -227,6 +238,24 @@ CREATE TABLE IF NOT EXISTS player_game_stats (
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_player_game_stat_revision
     ON player_game_stats (game_id, player_id, revision_number);
+
+-- Team-game SOG: the SAME already-fetched boxscore response carries a
+-- team-level `sog` field per side (box[side]["sog"]) -- no new endpoint or
+-- fetch, just a new place to store a field this project already receives.
+-- Same revision-versioning rationale/pattern as player_game_stats.
+CREATE TABLE IF NOT EXISTS team_game_stats (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id           INTEGER,
+    team_id           TEXT,
+    sog               INTEGER,
+    revision_number   INTEGER DEFAULT 1,
+    effective_at_utc  TEXT,
+    observed_at_utc   TEXT,
+    source            TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_team_game_stat_revision
+    ON team_game_stats (game_id, team_id, revision_number);
 
 -- v2.1: same revision-versioning rationale as player_game_stats above.
 CREATE TABLE IF NOT EXISTS goalie_game_stats (

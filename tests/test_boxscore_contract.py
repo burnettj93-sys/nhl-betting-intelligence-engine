@@ -280,5 +280,79 @@ class TestBoxscoreIdempotency(unittest.TestCase):
         self.assertEqual([r["revision_number"] for r in rows], [1, 2])
 
 
+# --------------------------------------------------------------------------------------------
+# Hits/Blocked-Shots Settlement Enablement block (2026-09-29): the boxscore's `hits`/
+# `blockedShots` per-skater fields and `sog` per-team field are now captured -- same already-
+# fetched response, no new endpoint.
+# --------------------------------------------------------------------------------------------
+class TestHitsBlocksTeamSogIngestion(unittest.TestCase):
+    def setUp(self):
+        self.conn, self.path = make_test_db()
+        self.conn.execute("INSERT OR IGNORE INTO teams (team_id) VALUES ('TOR')")
+        self.conn.execute("INSERT OR IGNORE INTO teams (team_id) VALUES ('BOS')")
+        self.conn.commit()
+
+    def tearDown(self):
+        self.conn.close()
+        self.path.unlink(missing_ok=True)
+
+    def test_hits_and_blocked_shots_stored_per_skater(self):
+        box = _real_shape_boxscore()
+        box["playerByGameStats"]["homeTeam"]["forwards"][0]["hits"] = 3
+        box["playerByGameStats"]["homeTeam"]["forwards"][0]["blockedShots"] = 2
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:00:00")
+        self.conn.commit()
+        row = self.conn.execute(
+            "SELECT hits, blocked_shots FROM player_game_stats WHERE game_id=? AND player_id=?",
+            (box["id"], "8478402")).fetchone()
+        self.assertEqual((row["hits"], row["blocked_shots"]), (3, 2))
+
+    def test_missing_hits_field_stores_null_never_zero(self):
+        """A provider omitting hits/blockedShots (real possibility, unlike the required `sog`) must
+        degrade to NULL, never a fabricated 0 that would look like a real observed zero-hit game."""
+        box = _real_shape_boxscore()
+        del box["playerByGameStats"]["homeTeam"]["forwards"][0]["hits"]
+        del box["playerByGameStats"]["homeTeam"]["forwards"][0]["blockedShots"]
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:00:00")
+        self.conn.commit()
+        row = self.conn.execute(
+            "SELECT hits, blocked_shots FROM player_game_stats WHERE game_id=? AND player_id=?",
+            (box["id"], "8478402")).fetchone()
+        self.assertIsNone(row["hits"])
+        self.assertIsNone(row["blocked_shots"])
+
+    def test_team_sog_stored_from_the_same_boxscore(self):
+        box = _real_shape_boxscore(home_sog=32, away_sog=28)
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:00:00")
+        self.conn.commit()
+        home = self.conn.execute(
+            "SELECT sog FROM team_game_stats WHERE game_id=? AND team_id='TOR'", (box["id"],)).fetchone()
+        away = self.conn.execute(
+            "SELECT sog FROM team_game_stats WHERE game_id=? AND team_id='BOS'", (box["id"],)).fetchone()
+        self.assertEqual((home["sog"], away["sog"]), (32, 28))
+
+    def test_team_sog_correction_appends_a_new_revision_not_a_duplicate(self):
+        box = _real_shape_boxscore(home_sog=32, away_sog=28)
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:00:00")
+        box["homeTeam"]["sog"] = 33   # corrected post-game
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T06:00:00")
+        self.conn.commit()
+        rows = self.conn.execute(
+            "SELECT sog, revision_number FROM team_game_stats WHERE game_id=? AND team_id='TOR' "
+            "ORDER BY revision_number", (box["id"],)).fetchall()
+        self.assertEqual([r["sog"] for r in rows], [32, 33])
+        self.assertEqual([r["revision_number"] for r in rows], [1, 2])
+
+    def test_reingesting_identical_boxscore_does_not_duplicate_team_sog_rows(self):
+        box = _real_shape_boxscore()
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:00:00")
+        upsert_player_stats_from_boxscore(self.conn, box, observed_at_utc="2025-10-01T00:05:00")
+        self.conn.commit()
+        n = self.conn.execute(
+            "SELECT COUNT(*) c FROM team_game_stats WHERE game_id=? AND team_id='TOR'",
+            (box["id"],)).fetchone()["c"]
+        self.assertEqual(n, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
