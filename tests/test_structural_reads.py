@@ -148,6 +148,20 @@ JUSTIFIED_EXCEPTIONS = {
     # printout for an operator, never a prediction, decision, or
     # point-in-time reconstruction.
     ("opening_day_readiness.py", "odds_snapshots"),
+    # Real-Slate Parlay Certification block (2026-09-29):
+    # research/real_market_parlay/real_slate_adapter.py::moneyline_candidate_legs()
+    # is the identical pattern already justified above for
+    # operational/real_recommendation_orchestrator.py -- it re-reads ONE
+    # already-point-in-time-safe row BY ITS OWN ROW ID (report.odds_snapshot_id_selection,
+    # the exact id pricing/engine.py::evaluate_moneyline_for_game() already
+    # returned via features/point_in_time.py::latest_draftkings_two_sided())
+    # purely to carry that row's own captured_at_utc onto the resulting
+    # ParlayLeg for audit/record-keeping. It never independently searches
+    # odds_snapshots for "what price existed at this time" and never feeds
+    # a new pricing/decision computation with it -- the actual pricing
+    # decision was already made entirely through point_in_time.py inside
+    # evaluate_moneyline_for_game() itself.
+    ("research/real_market_parlay/real_slate_adapter.py", "odds_snapshots"),
 }
 
 # a SELECT keyword must appear within this many characters before the
