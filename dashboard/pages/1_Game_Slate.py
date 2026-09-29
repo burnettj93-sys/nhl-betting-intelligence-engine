@@ -4,6 +4,7 @@ that date. No fake odds, no fake BET/PASS recommendation — see
 components.render_odds_not_connected()."""
 from __future__ import annotations
 
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -26,6 +27,12 @@ def _load_predictions() -> list[dict]:
 st.title("Game Slate")
 comp.render_model_status_header()
 comp.render_data_mode_badge()
+st.info(
+    "🗄️ This page browses the **frozen historical research corpus** only (real completed regular-season "
+    "games) — it never shows today's live schedule. Looking for **today's actual games** and current "
+    "DraftKings prices? Go to the **Today** page instead.",
+    icon="🗄️",
+)
 
 try:
     records = _load_predictions()
@@ -39,9 +46,15 @@ if not dates:
     st.stop()
 
 default_idx = len(dates) - 1
+today_iso = dt.date.today().isoformat()
 col1, col2 = st.columns([2, 1])
 with col1:
-    selected_date = st.selectbox("Select a real NHL game date", dates, index=default_idx)
+    selected_date = st.selectbox("Select a real (historical) NHL game date", dates, index=default_idx)
+    if selected_date not in (today_iso,):
+        st.caption(
+            f"Today's real date ({today_iso}) is not part of this historical corpus — the corpus's most "
+            f"recent date, {dates[-1]}, is shown by default. This is never today's actual schedule."
+        )
 with col2:
     seasons = da.available_seasons(records)
     st.caption(f"Corpus covers {len(records)} real regular-season games across seasons: "
