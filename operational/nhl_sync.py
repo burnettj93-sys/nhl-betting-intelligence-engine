@@ -131,6 +131,13 @@ def run_nhl_sync(conn=None, today: dt.date | None = None, session=None,
         if owns_conn:
             conn.close()
     ingestion_health.record_run("nhl_sync_full", summary)
+    if summary["games_finalized"] > 0:
+        # Job Sequencing Fix (Production Gap Closure sprint, 2026-09-30): this
+        # run just finalized game(s) -- retrigger settlement the SAME run
+        # instead of waiting for the once-daily 07:15 clock slot (see
+        # operational/settlement_trigger_hook.py).
+        from operational import settlement_trigger_hook
+        settlement_trigger_hook.trigger_after("nhl_sync_full")
     return summary
 
 
@@ -213,6 +220,9 @@ def run_midday_refresh(conn=None, today: dt.date | None = None, session=None) ->
         if owns_conn:
             conn.close()
     ingestion_health.record_run("nhl_midday_schedule_refresh", summary)
+    if summary["games_finalized"] > 0:
+        from operational import settlement_trigger_hook
+        settlement_trigger_hook.trigger_after("nhl_midday_schedule_refresh")
     return summary
 
 
@@ -269,6 +279,9 @@ def run_targeted_pregame_refresh(conn=None, today: dt.date | None = None, sessio
         if owns_conn:
             conn.close()
     ingestion_health.record_run("nhl_pregame_targeted_refresh", summary)
+    if summary["games_finalized"] > 0:
+        from operational import settlement_trigger_hook
+        settlement_trigger_hook.trigger_after("nhl_pregame_targeted_refresh")
     return summary
 
 

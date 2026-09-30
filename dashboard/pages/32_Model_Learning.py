@@ -66,7 +66,7 @@ if result.get("incomplete"):
         "requires a separate, explicit, human-authorized change.")
     st.stop()
 
-st.markdown("#### Trend (Part 57)")
+st.markdown("#### Trend")
 cols = st.columns(4)
 for col, window in zip(cols, ("LAST_1_DAY", "LAST_7_DAYS", "LAST_30_DAYS", "SEASON_TO_DATE")):
     window_scores = result["scores_by_window"].get(window, {})

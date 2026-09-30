@@ -38,7 +38,7 @@ except cloud_snapshot.SnapshotUnavailable as _exc:
 
 TRACK_LABEL = {"REAL_MARKET_PAPER": "Real-Market Paper (real DraftKings prices)",
                "DEMO_PAPER": "Demo Paper (simulated prices)",
-               "GAME_PARLAY_PAPER": "Game Edge Parlay Paper (Part 49)"}
+               "GAME_PARLAY_PAPER": "Game Edge Parlay Paper (single-game)"}
 
 tab_real, tab_demo, tab_parlay = st.tabs(
     [TRACK_LABEL["REAL_MARKET_PAPER"], TRACK_LABEL["DEMO_PAPER"], TRACK_LABEL["GAME_PARLAY_PAPER"]])
@@ -63,14 +63,33 @@ for tab, track in ((tab_real, "REAL_MARKET_PAPER"), (tab_demo, "DEMO_PAPER"), (t
 
         h5, h6, h7, h8 = st.columns(4)
         h5.metric("Hit Rate", fmt.format_probability(summary["hit_rate"]) if summary["hit_rate"] is not None else "—")
-        h6.metric("Total Staked", f"${summary['total_staked']:,.2f}")
+        h6.metric("Settled Turnover", f"${summary['total_staked']:,.2f}",
+                   help="Stake on bets that have actually resolved (WIN/LOSS/VOID) -- what ROI is computed "
+                        "against. See Placed Stakes / Pending Exposure below for money currently in flight.")
         h7.metric("Max Drawdown", f"${summary['max_drawdown']:,.2f}")
         h8.metric("Streak", f"{summary['current_streak_length']} {summary['current_streak_type'] or '—'}")
 
-        if bets and summary["bets"] > 0 and (summary["wins"] + summary["losses"] + summary["voids"]) == 0:
-            st.caption("Every paper bet recorded so far is still PENDING -- no real 2026-27 game has "
-                       "been played yet, so nothing has settled. This is the expected pre-season state, "
-                       "not an error.")
+        # Production Gap Closure sprint (2026-09-30): "Total Staked" used to
+        # be the ONLY staking figure shown, and it silently read $0.00 while
+        # real $10 bets sat PENDING (it only ever summed settled turnover,
+        # above). These three numbers are the honest, non-overlapping
+        # picture: how much has actually been placed, how much of that is
+        # still awaiting an outcome, and how much bankroll is left to stake.
+        p1, p2, p3 = st.columns(3)
+        p1.metric("Placed Stakes (all bets)", f"${summary['placed_stakes_total']:,.2f}")
+        p2.metric("Pending Exposure", f"${summary['pending_exposure']:,.2f}")
+        p3.metric("Available Balance", f"${summary['available_balance']:,.2f}",
+                   help="Current bankroll minus pending exposure -- what's free to stake next.")
+
+        if summary["bets"] > 0 and (summary["wins"] + summary["losses"] + summary["voids"]) == 0:
+            if track == "DEMO_PAPER":
+                st.caption("Demo Paper is a static, simulated illustration built from a fixed demo slate -- "
+                           "its bets have no real game date and are never settled by design. This is not "
+                           "pending real activity; it's a fixed example of what the bankroll math looks like.")
+            else:
+                st.caption(f"{summary['pending']} paper bet(s) are recorded and still PENDING -- no game in "
+                           "this track has gone FINAL and been settled yet. This is a normal, honest state, "
+                           "not an error.")
         elif summary["bets"] == 0:
             comp.render_empty_state(
                 "NO_QUALIFYING_OPPORTUNITIES",

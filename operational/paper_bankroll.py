@@ -444,8 +444,17 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     from operational import eastern_time as et
     _as_of = dt.datetime.fromisoformat(created_at_utc) if created_at_utc else None
     _stake_date = et.eastern_today(_as_of)
+    # Production Gap Closure sprint (2026-09-30): game_id is now part of the
+    # key (previously only participant_id:market_family:threshold) -- a real
+    # audit found the old key had no event/game identity at all, so two
+    # legs on the same participant/market/threshold from two DIFFERENT
+    # games on the same real day (a corrupted/duplicate game row, or a
+    # neutral-site doubleheader) would silently collide and be treated as
+    # the same bet. game_id is real production data on every leg already
+    # (research/real_market_parlay/engine.py::ParlayLeg.game_id) -- this
+    # costs nothing and closes the gap outright rather than merely noting it.
     market_id = f"REAL_MARKET_PARLAY:{_stake_date}:" + "+".join(
-        sorted(f"{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
+        sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
     legs_snapshot = json.dumps([
         {"participant_id": l.participant_id, "participant_name": l.participant_name,
          "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
@@ -461,6 +470,39 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
         conservative_probability=combo.joint_probability, edge=combo.combo_edge,
         prediction_checkpoint="FIRST_ACTIONABLE", event_start_utc=event_start_utc,
         created_at_utc=created_at_utc)
+
+
+def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:
+    """Production Gap Closure sprint (2026-09-30): the real, PERSISTED
+    picture of what today's real-market parlay trader has already
+    committed to the bankroll -- so a second run() later the same ET day
+    (whether the scheduled run firing twice, a manual rerun, or the
+    trigger hook retriggering settlement's cousin job) can see what a
+    FIRST run already staked instead of only ever checking its own
+    in-memory candidate pool. Without this, the audited defect reproduces
+    exactly: run 1 stakes 3 tickets, run 2 (unaware of run 1) builds its
+    own fresh 3 from possibly-changed odds and stakes those too -- 6 for
+    one day against an advertised cap of 5, some of them reusing legs run
+    1 already committed.
+
+    `stake_date` must be the same 'YYYY-MM-DD' Eastern date
+    create_real_market_combo_paper_bet() stamps into its own market_id
+    (operational.eastern_time.eastern_today()) -- this reads that exact
+    prefix rather than re-deriving "today" a second, parallel way from
+    created_at_utc.
+
+    Returns {"count": int, "used_game_ids": set[str],
+             "used_leg_keys": set[(game_id, participant_id, market_family, threshold)]}."""
+    rows = conn.execute(
+        "SELECT legs_json FROM paper_bets WHERE track = 'REAL_MARKET_PAPER' AND is_combo = 1 "
+        "AND market_id LIKE ?", (f"REAL_MARKET_PARLAY:{stake_date}:%",)).fetchall()
+    used_game_ids: set[str] = set()
+    used_leg_keys: set[tuple] = set()
+    for row in rows:
+        for leg in json.loads(row["legs_json"] or "[]"):
+            used_game_ids.add(leg["game_id"])
+            used_leg_keys.add((leg["game_id"], leg["participant_id"], leg["market_family"], leg["threshold"]))
+    return {"count": len(rows), "used_game_ids": used_game_ids, "used_leg_keys": used_leg_keys}
 
 
 def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status: str, *,
@@ -538,6 +580,20 @@ def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
     rows = query_paper_bets(conn, track=track)
     settled = [r for r in rows if r["result_status"] in ("WIN", "LOSS", "VOID")]
     settled_ordered = sorted(settled, key=lambda r: r["settled_at_utc"] or "")
+    pending_rows = [r for r in rows if r["result_status"] in ("PENDING", "UNRESOLVED")]
+
+    # Production Gap Closure sprint (2026-09-30): "Total Staked" (below)
+    # only ever counted SETTLED turnover -- correct for ROI (a pending
+    # bet's eventual profit/loss is unknown, so it can't yet contribute to
+    # a realized return), but a viewer reading "Total Staked" naturally
+    # expects "how much have I placed," which silently read $0.00 while a
+    # real $10 bet sat PENDING. placed_stakes_total is that literal figure;
+    # pending_exposure is the part of it not yet resolved; available_balance
+    # is what's left of current_bankroll once pending exposure is set aside
+    # -- three distinct, honestly-labeled numbers instead of one overloaded
+    # one.
+    placed_stakes_total = sum(r["stake"] for r in rows)
+    pending_exposure = sum(r["stake"] for r in pending_rows)
 
     total_staked = sum(r["stake"] for r in settled)
     net_profit = sum(r["profit_loss"] or 0.0 for r in settled)
@@ -598,6 +654,8 @@ def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
         "track": track, "starting_bankroll": PAPER_STARTING_BANKROLL, "current_bankroll": current_bankroll,
         "peak_bankroll": peak, "lowest_bankroll": min(h["bankroll"] for h in history),
         "total_staked": total_staked, "total_return": total_return, "net_profit": net_profit, "roi": roi,
+        "placed_stakes_total": placed_stakes_total, "pending_exposure": pending_exposure,
+        "available_balance": current_bankroll - pending_exposure,
         "bets": len(rows), "wins": wins, "losses": losses, "voids": voids, "pending": pending,
         "hit_rate": hit_rate, "current_drawdown": peak - current_bankroll, "max_drawdown": max_drawdown,
         "max_drawdown_pct": max_drawdown_pct,

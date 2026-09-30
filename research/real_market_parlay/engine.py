@@ -136,6 +136,32 @@ def legs_share_a_game(legs: list[ParlayLeg]) -> bool:
     return len(set(game_ids)) != len(game_ids)
 
 
+def _economic_identity(leg: ParlayLeg) -> tuple:
+    """What makes two ParlayLeg objects the SAME real bet, independent of
+    Python object identity. Production Gap Closure sprint (2026-09-30):
+    two archive captures of the same underlying DraftKings quote (taken
+    minutes apart) previously produced two distinct ParlayLeg objects that
+    this engine's old id()-based dedup treated as genuinely different legs
+    -- they could then land in two different "independent" tickets in the
+    same run, staking the same real bet twice."""
+    return (leg.game_id, leg.participant_id, leg.market_family, leg.threshold, leg.side)
+
+
+def dedupe_legs_by_economic_identity(legs: list[ParlayLeg]) -> list[ParlayLeg]:
+    """Collapses legs that represent the SAME real bet down to one --
+    keeping the one with the LATEST captured_at_utc (the freshest real
+    quote actually priced this leg last), falling back to the first-seen
+    leg when neither/both timestamps are missing or tied, so the choice is
+    deterministic rather than dict-ordering-dependent."""
+    best: dict[tuple, ParlayLeg] = {}
+    for leg in legs:
+        key = _economic_identity(leg)
+        current = best.get(key)
+        if current is None or (leg.captured_at_utc or "") > (current.captured_at_utc or ""):
+            best[key] = leg
+    return list(best.values())
+
+
 def joint_probability(legs: list[ParlayLeg]) -> float:
     """Cross-game legs are independent by construction (see module
     docstring) -- the joint probability is the plain product of each
@@ -207,7 +233,7 @@ def build_real_market_parlay(candidate_legs: list[ParlayLeg]) -> dict:
     information worth showing rather than a bare "not enough legs" message.
     It is explicitly NOT a monitored bet: callers must never create a paper
     bet from it or count it in the monitored 3/4-leg performance cohort."""
-    eligible = [l for l in candidate_legs if leg_is_eligible(l)]
+    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
     if len(eligible) < MIN_LEGS:
         return {"status": "NO_QUALIFYING_PARLAY",
                 "reason": f"only {len(eligible)} PARLAY_ELIGIBLE leg(s) on the allowlist "
@@ -247,6 +273,19 @@ def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: 
     re-slice the same underlying bets would inflate the apparent hit rate
     and are not what a real bettor would call two separate parlays.
 
+    Production Gap Closure sprint (2026-09-30): "no identical legs reused"
+    is NOT the same claim as "these tickets are statistically independent
+    of each other." Two tickets with no leg in common could still each
+    hold a leg from the SAME game (e.g. one ticket takes Team X's
+    moneyline, another takes a prop on Team X's opponent) -- a real,
+    correlated exposure this engine's own cross-game-only design
+    explicitly refuses to allow WITHIN a single ticket. To make that same
+    guarantee hold ACROSS today's several tickets too (so "N independent
+    parlays" is actually true, not just "N parlays with no duplicate
+    legs"), every game used by a chosen combo is removed from the pool
+    entirely, not just that combo's own leg objects -- no two of today's
+    tickets can ever share a game.
+
     Never pads or forces a count: 0, 1, 2, ... up to max_parlays real
     independent qualifiers is returned exactly as the pool supports, never
     more, never manufactured to hit a target number.
@@ -255,7 +294,7 @@ def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: 
       {"status": "QUALIFIED", "parlays": [{"recommended_legs": 3|4, "combo": ParlayResult}, ...]}
       {"status": "NO_QUALIFYING_PARLAY", "reason": str, "informational_2leg": ParlayResult|None}
     """
-    eligible = [l for l in candidate_legs if leg_is_eligible(l)]
+    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
     remaining = list(eligible)
     parlays: list[dict] = []
     while len(parlays) < max_parlays and len(remaining) >= MIN_LEGS:
@@ -268,8 +307,8 @@ def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: 
         else:
             chosen, recommended_legs = best_3, 3
         parlays.append({"recommended_legs": recommended_legs, "combo": chosen})
-        used = {id(l) for l in chosen.legs}
-        remaining = [l for l in remaining if id(l) not in used]
+        used_games = {l.game_id for l in chosen.legs}
+        remaining = [l for l in remaining if l.game_id not in used_games]
 
     if not parlays:
         if len(eligible) < MIN_LEGS:

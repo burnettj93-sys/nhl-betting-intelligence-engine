@@ -76,6 +76,28 @@ class TestRealStarterStatus(unittest.TestCase):
         state = rgv.build_real_goalies_state(conn, now=now)
         self.assertEqual(state["goalies"][0]["starter_status"], rgv.STARTER_UNCONFIRMED)
 
+    def test_a_backup_goalie_on_the_same_team_is_not_labeled_confirmed(self):
+        """Production Gap Closure sprint (2026-09-30): starter_status used to be
+        derived at TEAM level -- every goalie on a team with a confirmed starter
+        got the literal text "CONFIRMED" stamped on their own row, not just the
+        one real, specifically-named starter."""
+        conn = _fresh_db(goalie_status_row="CONFIRMED")  # confirms G1 as TOR's starter
+        conn.execute("INSERT INTO players (player_id, full_name, position) VALUES (?, ?, ?)",
+                     ("G2", "Backup Goalie", "G"))
+        conn.execute("INSERT INTO team_membership_events (player_id, team_id, effective_at_utc, "
+                     "observed_at_utc, event_type, source) VALUES (?,?,?,?,?,?)",
+                     ("G2", "TOR", "2026-07-01T00:00:00", "2026-07-01T00:00:00", "SIGNING", "test"))
+        conn.commit()
+        now = dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc)
+        state = rgv.build_real_goalies_state(conn, now=now)
+        by_id = {g["player_id"]: g for g in state["goalies"]}
+
+        self.assertEqual(by_id["G1"]["starter_status"], rgv.STARTER_CONFIRMED)
+        self.assertTrue(by_id["G1"]["is_confirmed_starter"])
+        self.assertEqual(by_id["G2"]["starter_status"], rgv.STARTER_UNCONFIRMED,
+                          "the backup must show UNCONFIRMED for himself, not the team's CONFIRMED starter")
+        self.assertFalse(by_id["G2"]["is_confirmed_starter"])
+
 
 class TestMarketStateIsHonestlyUnavailable(unittest.TestCase):
     def test_goalie_saves_market_is_reported_unavailable_never_a_demo_line(self):

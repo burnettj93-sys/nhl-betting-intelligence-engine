@@ -101,6 +101,18 @@ def dependency_ready(component: str, *, max_age_hours: float, cache_path: Path |
     return True, f"{component} last succeeded {age:.1f}h ago"
 
 
+def latest_success_utc(components: list[str], *, cache_path: Path | None = None) -> str | None:
+    """The most recent last_success_utc across several components -- used
+    to answer "has any ingestion job that could change game outcomes
+    produced a newer generation of data than I last consumed?" without
+    each caller re-reading/parsing the cache file itself. None if none of
+    `components` has ever recorded a success."""
+    health = load_health(cache_path=cache_path)
+    stamps = [health[c]["last_success_utc"] for c in components
+              if c in health and health[c].get("last_success_utc")]
+    return max(stamps) if stamps else None
+
+
 def component_age_hours(component_row: dict, *, now: dt.datetime | None = None) -> float | None:
     """Hours since last_success_utc -- None if this component has never
     once succeeded (an honest UNKNOWN age, never a fabricated 0)."""

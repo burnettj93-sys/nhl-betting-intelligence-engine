@@ -147,11 +147,25 @@ with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
             comp.render_missing_data_page(exc)
 
     st.markdown("**Prospective Recording**")
-    if pl.DB_PATH.exists():
-        _conn = pl.open_for_dashboard(pl.DB_PATH)
-        _op = pl.operational_summary(_conn)
+    # Production Gap Closure sprint (2026-09-30): this used to check
+    # pl.DB_PATH.exists() unconditionally -- the Cloud container never has
+    # that local ledger file, so this always fell into "No prospective
+    # observations recorded yet" in Cloud mode regardless of what the
+    # PUBLISHED snapshot's own ledger section actually contains. Reads the
+    # published section (dashboard/cloud_snapshot.py::ledger_section())
+    # in Cloud mode, the real local ledger otherwise -- same pattern every
+    # other real section on this page already follows.
+    if runtime_mode.is_community_cloud():
+        try:
+            _op = cloud_snapshot.ledger_section().get("operational")
+        except cloud_snapshot.SnapshotUnavailable:
+            _op = None
+    else:
+        _op = pl.operational_summary(pl.open_for_dashboard(pl.DB_PATH)) if pl.DB_PATH.exists() else None
+
+    if _op is not None:
         p1, p2, p3 = st.columns(3)
-        p1.metric("Model observations today", _op["recorded_today"])
+        p1.metric("Model observations recorded today (UTC)", _op["recorded_today"])
         p2.metric("Pending settlement", _op["pending_settlement"])
         p3.metric("Last recorded", (_op["last_recorded_at_utc"] or "—")[:19])
     else:
@@ -340,7 +354,16 @@ if _recs is not None:
                + f"  SNAPSHOT FRESHNESS: {comp.live_data_state().replace('_', ' ')}. Each row's own MARKET FRESHNESS "
                f"is shown below; the recorded action is never altered by staleness.")
     if _recs["moneyline"]:
-        st.dataframe([{"Game": f"{r.get('opponent')} @ {r.get('team')}" if r.get("side") == r.get("team") else r.get("team"),
+        # Production Gap Closure sprint (2026-09-30): this used to render
+        # "{opponent} @ {home}" using SELECTION-relative team/opponent
+        # fields (the model's own pick vs. its opponent), never real
+        # home/away -- since side always equals team, every row rendered
+        # as if the model's selection were the home team, reversing the
+        # matchup for every real away-team pick. The prospective ledger's
+        # predictions table has no home/away column at all (only
+        # team/opponent), so "vs" is used -- an honest, unordered label
+        # that never asserts a home/away fact this data doesn't carry.
+        st.dataframe([{"Game": f"{r.get('team')} vs {r.get('opponent')}",
                        "Side": r.get("side"), "Status": r.get("prospective_status"),
                        "Model P": fmt.format_probability(r["conservative_probability"])
                        if r.get("conservative_probability") is not None else "—",
@@ -359,8 +382,8 @@ if _recs is not None:
                        "Decision": o.get("decision") if comp.market_freshness(o)["state"] == "CURRENT" else "STALE",
                        "Market freshness": comp.market_freshness(o)["state"],
                        "Price captured": (comp.market_freshness(o)["market_captured_at"] or "")[:16],
-                       "Model P": fmt.format_probability(o["coherent_probability"])
-                       if o.get("coherent_probability") is not None else "—"} for o in _recs["props"][-30:]],
+                       "Model P (conservative)": fmt.format_probability(o["conservative_probability"])
+                       if o.get("conservative_probability") is not None else "—"} for o in _recs["props"][-30:]],
                      width="stretch")
     for _p in _recs.get("game_edge_parlays", []):
         _legs = " + ".join(f"{l.get('player')} {l.get('market')} {l.get('threshold')}" for l in _p["combo"]["legs"])

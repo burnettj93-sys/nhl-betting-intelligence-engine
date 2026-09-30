@@ -232,6 +232,10 @@ def real_goalies() -> dict:
     return _optional("real_goalies")
 
 
+def real_game_details() -> dict:
+    return _optional("real_game_details") or {}
+
+
 def snapshot_meta() -> dict:
     """Small provenance dict for banners; never raises."""
     from operational import cloud_snapshot_schema as schema

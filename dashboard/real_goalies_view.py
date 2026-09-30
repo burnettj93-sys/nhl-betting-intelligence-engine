@@ -64,11 +64,21 @@ def build_real_goalies_state(conn, *, now: dt.datetime | None = None) -> dict:
     for g in real_current_goalies(conn):
         opponent = real_current_opponent(conn, g["team"], now) if g["team"] else None
         starter = _real_starter_status(conn, opponent["game_id"], g["team"], now) if opponent else None
+        # Production Gap Closure sprint (2026-09-30): _real_starter_status()
+        # answers "who is TOR's confirmed starter tonight" (one answer per
+        # TEAM/game) -- it used to be stamped verbatim as `starter_status`
+        # onto EVERY goalie on that team, so a real backup goalie's own row
+        # displayed the literal text "CONFIRMED" (only the badge color used
+        # the correctly-scoped is_confirmed_starter check). starter_status
+        # is now derived FROM is_confirmed_starter, so only the one, real,
+        # specifically-named starter is ever labeled CONFIRMED for himself.
+        is_confirmed_starter = bool(starter and starter["player_id"] == g["player_id"]
+                                     and starter["label"] == STARTER_CONFIRMED)
         rows.append({
             **g, "today_opponent": opponent,
-            "starter_status": starter["label"] if starter else None,
-            "is_confirmed_starter": bool(starter and starter["player_id"] == g["player_id"]
-                                        and starter["label"] == STARTER_CONFIRMED),
+            "starter_status": (STARTER_CONFIRMED if is_confirmed_starter else STARTER_UNCONFIRMED)
+                               if starter else None,
+            "is_confirmed_starter": is_confirmed_starter,
             "market_state": MARKET_UNAVAILABLE,
         })
     return {"generated_at_utc": now.isoformat(), "provenance": "REAL NHL", "goalies": rows}

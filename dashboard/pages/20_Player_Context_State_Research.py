@@ -38,7 +38,7 @@ if results is None or registry is None:
                "`python3 -m research.player_context_state.registry` first.")
     st.stop()
 
-st.markdown("### Signal status by prop (Part 44 registry, mechanically derived from bootstrap CIs)")
+st.markdown("### Signal status by prop (mechanically derived from bootstrap CIs)")
 props = sorted({e["prop"] for e in registry if e["prop"] != "ALL"})
 prop_choice = st.selectbox("Prop", props)
 prop_entries = [e for e in registry if e["prop"] == prop_choice]
@@ -60,9 +60,9 @@ for season in results["config"]["eval_seasons"]:
     cols[1].metric("NORMAL n", b["by_state"]["NORMAL"]["n"])
     cols[2].metric("HOT n", b["by_state"]["HOT"]["n"])
     st.json(b["cold_vs_normal_bootstrap"])
-    st.caption("Regression-to-mean check (Part 24 — reported even when it contradicts the UNDER hypothesis):")
+    st.caption("Regression-to-mean check (reported even when it contradicts the UNDER hypothesis):")
     st.json(b["regression_to_mean_check"])
-    st.caption("Role-change confounding split (Part 26):")
+    st.caption("Role-change confounding split:")
     st.json(b["role_change_confounding"])
 
 st.divider()

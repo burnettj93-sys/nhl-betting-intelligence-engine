@@ -243,6 +243,11 @@ def _real_goalies() -> dict:
     return real_today_bridge.open_real_goalies_state()
 
 
+def _real_game_details() -> dict:
+    from operational import real_today_bridge
+    return real_today_bridge.open_real_game_details_for_today()
+
+
 def _health() -> dict:
     from operational import system_health as sh
     items = []
@@ -285,6 +290,7 @@ _SECTION_BUILDERS = {
     "real_team_intelligence": _real_team_intelligence,
     "real_all_players": _real_all_players,
     "real_goalies": _real_goalies,
+    "real_game_details": _real_game_details,
     "performance": _performance,
     "morning_review": _morning_review,
     "model_learning": _model_learning,

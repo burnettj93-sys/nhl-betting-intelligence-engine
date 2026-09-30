@@ -15,14 +15,22 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 
+from dashboard import cloud_snapshot
 from dashboard import components as comp
 from dashboard import data_access as da
 from dashboard import model_view as mv
+from operational import runtime_mode
 
 
 @st.cache_data(show_spinner="Loading real NHL corpus and computing baseline predictions...", max_entries=8, ttl=3600)
 def _load_predictions() -> list[dict]:
     return da.compute_baseline_predictions()
+
+
+@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+def _cached_local_real_game_detail_state(game_id: str) -> dict:
+    from operational import real_today_bridge
+    return real_today_bridge.open_real_game_detail_state(game_id)
 
 
 def _moneypuck_conn():
@@ -330,6 +338,77 @@ if _selected_game_id and str(_selected_game_id).startswith("demo-"):
     comp.render_provenance_panel()
     st.stop()
 
+# Production Gap Closure sprint (2026-09-30): a real, CURRENT game_id (from
+# Today's real slate) is never in the frozen historical corpus the block
+# below searches -- it used to silently fall back to that corpus's own
+# last available date (2026-04-16), rendering an unrelated April game with
+# only a small warning. Every non-demo game_id is now looked up FIRST
+# against nhl.db's own real, current `games` table (never the historical
+# corpus); a real game_id always resolves to itself here. Only a game_id
+# genuinely absent from the real schedule (e.g. an old historical id) ever
+# falls through to the historical browsing section below.
+if _selected_game_id:
+    try:
+        if runtime_mode.is_community_cloud():
+            _real_detail = cloud_snapshot.real_game_details().get(str(_selected_game_id))
+            if _real_detail is None:
+                _real_detail = {"status": "NOT_FOUND", "game_id": str(_selected_game_id)}
+        else:
+            _real_detail = _cached_local_real_game_detail_state(str(_selected_game_id))
+    except cloud_snapshot.SnapshotUnavailable as _exc:
+        _real_detail = None
+        st.caption(f"Real game detail is not available in this snapshot ({_exc}).")
+
+    if _real_detail is not None and _real_detail["status"] == "FOUND":
+        comp.render_global_search(key_prefix="gamedetail_real")
+        st.markdown(
+            f"""
+            <div style="border:1px solid #1f4d2e; border-radius:6px; padding:8px 12px;
+                        background:#0f2417; color:#7fd99a; font-size:0.85rem; margin-bottom:12px;">
+              <b>LIVE — REAL GAME.</b> This is the exact real game requested — real nhl.db schedule
+              data, never a substituted or historical game. Frozen historical research browsing is
+              available separately below for games outside today's real schedule.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        st.subheader(f"{_real_detail['away_team']} @ {_real_detail['home_team']}")
+        st.caption(f"{_real_detail['game_date_et']} (ET) · State: {_real_detail['game_state']}"
+                   + (f" · Result: {_real_detail['home_team']} {_real_detail['home_score']} – "
+                      f"{_real_detail['away_team']} {_real_detail['away_score']}"
+                      if _real_detail["game_state"] == "FINAL" else ""))
+
+        st.markdown("### Real moneyline model state")
+        from dashboard import formatting as fmt
+        _ml = _real_detail["moneyline"]
+        if _ml["status"] == "AVAILABLE":
+            for _r in _ml["reports"]:
+                cc1, cc2, cc3 = st.columns(3)
+                cc1.metric(f"{_r['selection']}", _r["action"])
+                cc2.metric("Model conservative P", fmt.format_probability(_r["model_conservative_probability"])
+                           if _r["model_conservative_probability"] is not None else "—")
+                cc3.metric("DraftKings price", fmt.format_american_odds(_r.get("current_draftkings_price")))
+                if _r.get("action_reason"):
+                    st.caption(_r["action_reason"])
+        elif _ml["status"] == "GAME_NOT_SCHEDULED":
+            st.caption(f"MODEL UNAVAILABLE — {_ml['reason']}")
+        elif _ml["status"] == "EVENT_ALREADY_STARTED":
+            st.caption("MODEL UNAVAILABLE — this game has already started; a pre-game moneyline "
+                       "evaluation is no longer produced.")
+        else:
+            st.caption(f"MODEL UNAVAILABLE — {_ml.get('reason', 'no real model state could be produced')}")
+
+        comp.render_provenance_panel()
+        with st.expander("Frozen historical research corpus (a different data source — not this game)"):
+            st.caption("This section browses research/real_nhl_results/normalized_regular_season_games.jsonl, "
+                       "a frozen historical corpus that stops in April 2026 — it never contains today's real "
+                       "games and is shown here only for separate historical research, never as this game's own detail.")
+        st.stop()
+    # else: NOT_FOUND in nhl.db's real schedule -- fall through to the
+    # historical-corpus browsing below, which has its own honest,
+    # non-substituting messaging for this case.
+
 try:
     records = _load_predictions()
 except da.DataAvailabilityError as exc:
@@ -348,13 +427,15 @@ with col1:
             default_date_idx = dates.index(found["game_date"])
         elif not str(default_game_id).startswith("demo-"):
             # Real Morning Production Pull sprint (2026-09-29): a real, current game_id (e.g. from
-            # today's live schedule) is never in this frozen historical corpus -- this used to silently
-            # fall back to the corpus's most recent date with no indication anything was substituted.
-            # Say so explicitly instead of guessing which historical game the viewer actually wanted.
+            # today's live schedule) is now caught and rendered by the real-game-detail branch ABOVE
+            # this block (Production Gap Closure sprint, 2026-09-30) before real_slate code is ever
+            # reached here -- a game_id that still lands in this branch is genuinely absent from
+            # BOTH nhl.db's real schedule and this frozen historical corpus. Say so explicitly instead
+            # of guessing which historical game the viewer actually wanted.
             st.warning(
-                f"The requested game (id {default_game_id}) is not part of this frozen historical "
-                f"research corpus — it is likely one of today's real, current games. Showing historical "
-                f"browsing instead; for today's real games, see the Today page."
+                f"Game id {default_game_id} is not part of this frozen historical research corpus "
+                f"either. Showing historical browsing instead, starting from its most recent date — "
+                f"not a substitution for the game you requested."
             )
     selected_date = st.selectbox("Date", dates, index=default_date_idx)
 with col2:

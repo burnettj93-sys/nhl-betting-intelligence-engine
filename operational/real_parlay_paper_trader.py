@@ -39,11 +39,13 @@ Run: python3 -m operational.real_parlay_paper_trader
 from __future__ import annotations
 
 import datetime as dt
+import fcntl
 
 import db
 from operational import eastern_time as et
 from operational import paper_bankroll as pb
 from operational import paper_bet_settlement_driver as settlement
+from operational import state_paths as _sp
 from operational.real_prop_orchestrator import _recent_archive_payloads
 from research.live_sog_pricing import market_parser
 from research.real_market_parlay import engine as rmp
@@ -51,12 +53,35 @@ from research.real_market_parlay import real_slate_adapter as adapter
 
 MAX_PARLAYS_PER_DAY = 5
 
+LOCK_PATH = _sp.path("real_parlay_paper_trader.lock", area="operational")
 
-def _build_todays_real_parlays(nhl_conn, now: dt.datetime) -> dict:
+
+def _build_todays_real_parlays(nhl_conn, bankroll_conn, now: dt.datetime) -> dict:
+    """Production Gap Closure sprint (2026-09-30): the daily cap and leg/
+    game exclusivity must hold against what's ALREADY PERSISTED, not just
+    what this one call happens to build in memory -- otherwise a second
+    run() later the same ET day (the exact audited reproduction) can stake
+    past MAX_PARLAYS_PER_DAY and reuse legs/games a prior run already
+    committed. today's_usage reads the real bankroll DB for exactly that."""
+    today_et = et.eastern_today(now)
+    usage = pb.todays_real_parlay_usage(bankroll_conn, today_et)
+    remaining_budget = max(0, MAX_PARLAYS_PER_DAY - usage["count"])
+    if remaining_budget == 0:
+        return {"status": "NO_QUALIFYING_PARLAY",
+                "reason": f"daily cap of {MAX_PARLAYS_PER_DAY} parlay(s) already reached for {today_et}"}
+
     moneyline_legs, _ = adapter.moneyline_candidate_legs(nhl_conn, now=now)
     sog_payloads = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
     sog_legs, _ = adapter.sog_alternate_candidate_legs(nhl_conn, sog_payloads, now=now)
-    return rmp.build_top_real_market_parlays(moneyline_legs + sog_legs, max_parlays=MAX_PARLAYS_PER_DAY)
+    all_legs = moneyline_legs + sog_legs
+
+    # Cross-RUN exclusivity (the engine's own dedup/game-exclusivity in
+    # research/real_market_parlay/engine.py only sees legs WITHIN this one
+    # call): never offer a leg whose game or exact economic identity a
+    # prior run today already committed to a persisted ticket.
+    candidates = [l for l in all_legs if l.game_id not in usage["used_game_ids"]
+                  and (l.game_id, l.participant_id, l.market_family, l.threshold) not in usage["used_leg_keys"]]
+    return rmp.build_top_real_market_parlays(candidates, max_parlays=remaining_budget)
 
 
 def _earliest_scheduled_start(nhl_conn, game_ids: set[str]) -> str | None:
@@ -73,8 +98,23 @@ def run(now: dt.datetime | None = None) -> dict:
     today_et = et.eastern_today(now)
     nhl_conn = db.get_conn()
     bankroll_conn = pb.init_db()
+    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    lock_file = open(LOCK_PATH, "w")
     try:
-        parlays_result = _build_todays_real_parlays(nhl_conn, now)
+        # Production Gap Closure sprint (2026-09-30): read-usage -> build ->
+        # stake is a single bounded critical section. Without this lock, two
+        # concurrent runs could both read "0 staked today" before either
+        # writes anything, and each independently stake up to
+        # MAX_PARLAYS_PER_DAY -- the exact TOCTOU version of the audited
+        # 3+3=6 defect, just from concurrency instead of two sequential runs.
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return {"stake_result": {"eastern_date": today_et, "status": "SKIPPED",
+                                      "reason": "ANOTHER_TRADER_RUN_IN_PROGRESS"},
+                    "settlement_summary": None}
+
+        parlays_result = _build_todays_real_parlays(nhl_conn, bankroll_conn, now)
         stake_results = []
         if parlays_result["status"] == "QUALIFIED":
             for entry in parlays_result["parlays"]:
@@ -93,15 +133,49 @@ def run(now: dt.datetime | None = None) -> dict:
             "newly_staked": sum(1 for r in stake_results if r["status"] == "INSERTED"),
             "already_staked": sum(1 for r in stake_results if r["status"] == "DUPLICATE"),
             "results": stake_results,
+            # Precise independence claim (Production Gap Closure sprint,
+            # 2026-09-30): "no identical legs reused" is not the same fact
+            # as "these tickets are independent." Every ticket's own legs
+            # are cross-game by construction, AND research/real_market_parlay/
+            # engine.py::build_top_real_market_parlays() now also excludes
+            # any game already used by an earlier ticket THE SAME DAY (both
+            # within this run and against prior runs' persisted tickets via
+            # todays_real_parlay_usage above) -- so today's tickets, plural,
+            # never share a game with each other either.
+            "independence_note": "Each ticket's legs are drawn from different games (cross-game only). "
+                                  "No game is shared across two of today's tickets, so today's tickets "
+                                  "are mutually independent, not merely free of duplicate legs.",
         }
         if parlays_result["status"] != "QUALIFIED":
             stake_summary["status"] = "NO_QUALIFYING_PARLAY"
             stake_summary["reason"] = parlays_result.get("reason")
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
     finally:
+        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        lock_file.close()
         nhl_conn.close()
         bankroll_conn.close()
-    return {"stake_result": stake_summary, "settlement_summary": settlement_summary}
+
+    result = {"stake_result": stake_summary, "settlement_summary": settlement_summary}
+    # Production Gap Closure sprint (2026-09-30): this job runs every 15
+    # minutes via launchd (deploy/launchd/com.nhlengine.real-parlay-paper-
+    # trader.plist) but, unlike every other scheduled job in this project,
+    # never recorded its own health or published changed state downstream
+    # -- a cloud viewer had to wait on an UNRELATED job (odds pull,
+    # settlement, postmortem) to happen to publish before a real parlay
+    # stake or settlement outcome this job just produced became visible.
+    # Mirrors settle_daily_observations.py's own established
+    # record_run()-then-publish_after() pattern exactly; reaching this
+    # line at all means the run completed without raising, so it is
+    # always a real SUCCESS to record.
+    from operational import ingestion_health
+    ingestion_health.record_run("real_parlay_paper_trader", {**stake_summary, "status": "SUCCESS"})
+    newly_staked = stake_summary.get("newly_staked", 0)
+    settled_count = (settlement_summary or {}).get("settled", 0)
+    if newly_staked > 0 or settled_count > 0:
+        from operational import cloud_publish_hook
+        result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
+    return result
 
 
 if __name__ == "__main__":

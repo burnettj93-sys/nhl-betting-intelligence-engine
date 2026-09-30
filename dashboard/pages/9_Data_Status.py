@@ -86,6 +86,10 @@ for label, status, detail in rows:
     c1.markdown(f"**{label}**")
     c2.markdown(badge(status), unsafe_allow_html=True)
     c3.caption(detail)
+st.caption("Odds (The Odds API) above reflects the sync-job readiness cache (24h staleness threshold) — "
+           "a DIFFERENT cache and threshold from Today's own per-price \"MARKET FRESHNESS\" banner "
+           "(a tighter, puck-drop-relative window). Both are honest, real freshness checks; they answer "
+           "different questions and can legitimately disagree.")
 
 st.divider()
 st.markdown("### Last NHL sync detail")

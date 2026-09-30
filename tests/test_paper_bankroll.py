@@ -529,6 +529,69 @@ class TestRealMarketComboPaperBet(TestPaperBankroll):
         self.assertEqual(len(legs), 3)
         self.assertEqual({l["market_family"] for l in legs}, {"PLAYER_SOG_ALTERNATE"})
 
+    def test_market_id_includes_game_id_so_two_different_games_never_collide(self):
+        """Production Gap Closure sprint (2026-09-30): the audited
+        idempotency key had no event/game identity at all -- only
+        participant_id:market_family:threshold. Two combos sharing the
+        same participant/market/threshold triple but from DIFFERENT games
+        must be treated as genuinely different bets, not silently
+        collapsed into one."""
+        from research.real_market_parlay import engine as rmp
+
+        def _combo(game_prefix):
+            legs = [rmp.ParlayLeg(
+                game_id=f"{game_prefix}{i}", event_id=f"evt-{i}", market_family="PLAYER_SOG_ALTERNATE",
+                participant_id="SAME_PLAYER", participant_name="Same Player", side="OVER", threshold=3,
+                american_price=-150, conservative_probability=0.90, sportsbook="draftkings",
+                captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
+                model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                event_not_started=True) for i in range(3)]
+            return rmp.build_real_market_parlay(legs)
+
+        r1 = pb.create_real_market_combo_paper_bet(self.conn, _combo("A"))
+        r2 = pb.create_real_market_combo_paper_bet(self.conn, _combo("B"))
+        self.assertEqual(r1["status"], "INSERTED")
+        self.assertEqual(r2["status"], "INSERTED", "different games must never collide into one bet")
+        rows = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
+        self.assertEqual(len(rows), 2)
+        self.assertNotEqual(rows[0]["market_id"], rows[1]["market_id"])
+
+
+class TestTodaysRealParlayUsage(TestPaperBankroll):
+    """Production Gap Closure sprint (2026-09-30): the read this project's
+    daily cap/exclusivity fix relies on to see what's ALREADY PERSISTED
+    for today, not just what one in-memory run happens to build."""
+
+    def _qualified_result(self, game_ids):
+        from research.real_market_parlay import engine as rmp
+        legs = [rmp.ParlayLeg(
+            game_id=gid, event_id=f"evt-{gid}", market_family="PLAYER_SOG_ALTERNATE",
+            participant_id=f"P{gid}", participant_name=f"Player {gid}", side="OVER", threshold=3,
+            american_price=-150, conservative_probability=0.90, sportsbook="draftkings",
+            captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
+            model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+            event_not_started=True) for gid in game_ids]
+        return rmp.build_real_market_parlay(legs)
+
+    def test_empty_before_anything_is_staked(self):
+        usage = pb.todays_real_parlay_usage(self.conn, "2026-09-29")
+        self.assertEqual(usage, {"count": 0, "used_game_ids": set(), "used_leg_keys": set()})
+
+    def test_reports_real_persisted_usage_after_staking(self):
+        pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result(["G1", "G2", "G3"]),
+                                               created_at_utc="2026-09-29T18:00:00+00:00")
+        usage = pb.todays_real_parlay_usage(self.conn, "2026-09-29")
+        self.assertEqual(usage["count"], 1)
+        self.assertEqual(usage["used_game_ids"], {"G1", "G2", "G3"})
+        self.assertIn(("G1", "PG1", "PLAYER_SOG_ALTERNATE", 3), usage["used_leg_keys"])
+
+    def test_a_different_days_stakes_are_not_counted(self):
+        pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result(["G1", "G2", "G3"]),
+                                               created_at_utc="2026-09-29T18:00:00+00:00")
+        usage = pb.todays_real_parlay_usage(self.conn, "2026-10-01")
+        self.assertEqual(usage["count"], 0)
+        self.assertEqual(usage["used_game_ids"], set())
+
 
 class TestSchemaV1ToV2Migration(unittest.TestCase):
     """A real pre-sprint database (schema v1, `track` CHECK constraint

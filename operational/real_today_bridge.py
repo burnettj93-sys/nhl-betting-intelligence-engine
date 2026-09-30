@@ -131,3 +131,34 @@ def open_real_goalies_state(**kwargs) -> dict:
         return rgv.build_real_goalies_state(conn, **kwargs)
     finally:
         conn.close()
+
+
+def open_real_game_detail_state(game_id, **kwargs) -> dict:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/2_Game_Detail.py's real (non-demo, non-historical) path."""
+    from dashboard import real_game_detail_view as rgdv
+    import db
+    conn = db.get_conn()
+    try:
+        return rgdv.build_real_game_detail_state(conn, game_id, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_real_game_details_for_today(**kwargs) -> dict:
+    """Cloud mode has no live nhl_conn to look up an arbitrary game_id on
+    demand -- this precomputes EVERY one of today's real games' detail
+    state (bounded by today's real game count, exactly like every other
+    per-day real section) so the published snapshot can serve Game Detail
+    for any of today's games, keyed by game_id."""
+    from dashboard import real_game_detail_view as rgdv
+    from dashboard import real_today_view as rtv
+    import datetime as dt
+    import db
+    conn = db.get_conn()
+    try:
+        now = dt.datetime.now(dt.timezone.utc)
+        games = rtv._today_real_games(conn, now)
+        return {g["game_id"]: rgdv.build_real_game_detail_state(conn, g["game_id"], now=now) for g in games}
+    finally:
+        conn.close()

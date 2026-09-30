@@ -144,14 +144,36 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
         """Real Morning Production Pull sprint (2026-09-29): requesting Game Detail for a real, current
         game_id (never in the frozen historical corpus) used to silently fall back to the corpus's most
         recent historical date with zero indication -- exactly the 'silently routes to an April historical
-        game' failure mode the sprint's block warned against. It must now say so explicitly."""
+        game' failure mode the sprint's block warned against.
+
+        Production Gap Closure sprint (2026-09-30): Game Detail now looks a non-demo game_id up against
+        nhl.db's own real, current `games` table FIRST (dashboard/real_game_detail_view.py) -- this id
+        (2026020002) is a REAL game genuinely present in this Mac's production nhl.db (TOR @ MTL, FINAL),
+        so it now resolves to ITSELF directly, never reaching -- let alone silently substituting from --
+        the historical corpus at all. See test_real_game_detail_view.py for focused unit coverage of that
+        lookup, and test_a_genuinely_unknown_game_id_falls_back_to_labeled_historical_browsing below for
+        the "absent from both real sources" case this test used to (incorrectly) exercise."""
         at = AppTest.from_file(_page("2_Game_Detail.py"), default_timeout=60)
-        at.session_state["selected_game_id"] = 2026020002  # a real 2026-27 game_id, not in the corpus
+        at.session_state["selected_game_id"] = "2026020002"  # a real game in this Mac's own nhl.db
+        at.run()
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(len(at.warning), 0, "a real, found game_id must never show a substitution warning")
+        all_text = " ".join(m.value for m in at.markdown) + " " + " ".join(s.value for s in at.subheader)
+        self.assertIn("LIVE — REAL GAME", all_text)
+        self.assertIn("TOR", all_text)
+        self.assertIn("MTL", all_text)
+
+    def test_a_genuinely_unknown_game_id_falls_back_to_labeled_historical_browsing(self):
+        """A game_id absent from BOTH nhl.db's real schedule AND the frozen historical corpus must still
+        fall back to historical browsing with an honest, non-substituting explanation -- never a bare
+        crash, and never presented as if it answered the request."""
+        at = AppTest.from_file(_page("2_Game_Detail.py"), default_timeout=60)
+        at.session_state["selected_game_id"] = "nonexistent-game-id-999999"
         at.run()
         self.assertEqual(len(at.exception), 0)
         warning_text = " ".join(w.value for w in at.warning)
         self.assertIn("not part of this frozen historical research corpus", warning_text)
-        self.assertIn("today's real games", warning_text)
+        self.assertIn("not a substitution for the game you requested", warning_text)
 
 
 if __name__ == "__main__":

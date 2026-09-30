@@ -50,7 +50,7 @@ for col, name in zip(cols, ("SOG3_GOAL", "SOG3_ASSIST", "SOG3_POINT", "ASSIST_PO
     col.caption(f"winner: {cr['winner_candidate']}")
 
 st.divider()
-st.markdown("### Logical implication map (Part 47)")
+st.markdown("### Logical implication map")
 from research.joint_scoring_dependence.logical_implication_registry import IMPLICATION_GRAPH
 st.json(IMPLICATION_GRAPH)
 

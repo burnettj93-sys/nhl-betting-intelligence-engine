@@ -398,7 +398,8 @@ def _price_and_record_sog_pair(nhl_conn, pl_conn, bankroll_conn, event_payload, 
                 "player_name_raw": any_q["player_name_raw"], "recorded": False}
 
     player_id = pmap["player_id"]
-    prediction_date = event_payload["commence_time"][:10]
+    from operational import eastern_time as _et
+    prediction_date = _et.eastern_date_of(event_payload["commence_time"])
     candidates = player_index.get(player_mapping.normalize_name(any_q["player_name_raw"]), [])
     recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == player_id), home_abbrev)
     team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
@@ -502,7 +503,8 @@ def _price_and_record_sog_alternate_quote(nhl_conn, pl_conn, bankroll_conn, even
                 "player_name_raw": quote["player_name_raw"], "recorded": False}
 
     player_id = pmap["player_id"]
-    prediction_date = event_payload["commence_time"][:10]
+    from operational import eastern_time as _et
+    prediction_date = _et.eastern_date_of(event_payload["commence_time"])
     candidates = player_index.get(player_mapping.normalize_name(quote["player_name_raw"]), [])
     recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == player_id), home_abbrev)
     team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
@@ -746,7 +748,8 @@ def _price_and_record_saves_pair(pl_conn, bankroll_conn, event_payload, pair, sc
                 "player_name_raw": any_q["player_name_raw"], "recorded": False}
 
     goalie_id = gmap["player_id"]
-    prediction_date = event_payload["commence_time"][:10]
+    from operational import eastern_time as _et
+    prediction_date = _et.eastern_date_of(event_payload["commence_time"])
     candidates = goalie_index.get(player_mapping.normalize_name(any_q["player_name_raw"]), [])
     recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == goalie_id), home_abbrev)
     team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev

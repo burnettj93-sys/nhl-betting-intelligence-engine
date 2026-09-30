@@ -43,11 +43,11 @@ st.markdown(
     """
     <div style="border:1px solid #1f4d2e; border-radius:6px; padding:8px 12px;
                 background:#0f2417; color:#7fd99a; font-size:0.85rem; margin-bottom:12px;">
-      <b>LIVE — REAL NHL PLAYERS.</b> Every player below is a real, current NHL entity with a
-      real current team. Market state (right column) is the same real eligible leg data Player
-      Props shows, or an honest MARKET UNAVAILABLE. A Demo / Model Showcase illustrating the
-      decision machinery (simulated matchups/prices) is available in its own collapsed section
-      further down.
+      <b>LIVE — REAL NHL PLAYERS.</b> Every player below is a real, current NHL entity. Current
+      team is shown when real roster membership is known — otherwise "—", never guessed. Market
+      state (right column) is the same real eligible leg data Player Props shows, or an honest
+      MARKET UNAVAILABLE. A Demo / Model Showcase illustrating the decision machinery (simulated
+      matchups/prices) is available in its own collapsed section further down.
     </div>
     """,
     unsafe_allow_html=True,
