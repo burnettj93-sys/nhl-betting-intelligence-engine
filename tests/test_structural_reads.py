@@ -81,6 +81,15 @@ JUSTIFIED_EXCEPTIONS = {
     ("demo_setup.py", "roster_status_events"),
     ("demo_setup.py", "odds_snapshots"),
     ("validate.py", "team_membership_events"),
+    # Platform Recovery block (2026-09-29): Team Intelligence's real
+    # default view answers "who is on this team RIGHT NOW, for display" --
+    # a live/current-state question, never "what team was this player on
+    # AS OF some past prediction_time_utc" (the one thing this table must
+    # never be used to reconstruct outside point_in_time.py). It always
+    # reads the single latest real row per player, unconditionally, with
+    # no historical/as-of parameter -- structurally incapable of being
+    # used for point-in-time reconstruction.
+    ("dashboard/real_team_intelligence_view.py", "team_membership_events"),
     ("validate.py", "roster_status_events"),
     ("validate.py", "goalie_status_events"),
     ("validate.py", "lineup_snapshots"),

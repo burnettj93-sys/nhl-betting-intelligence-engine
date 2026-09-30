@@ -211,6 +211,28 @@ def _real_today() -> dict:
     return build_real_today_section()
 
 
+def build_real_player_props_section() -> dict:
+    """Same rationale as build_real_today_section() -- delegates to
+    operational/real_today_bridge.py::open_real_player_props_state()."""
+    from operational import real_today_bridge
+    return real_today_bridge.open_real_player_props_state()
+
+
+def _real_player_props() -> dict:
+    return build_real_player_props_section()
+
+
+def build_real_team_intelligence_section() -> dict:
+    """Same rationale as build_real_today_section() -- delegates to
+    operational/real_today_bridge.py::open_all_teams_state()."""
+    from operational import real_today_bridge
+    return real_today_bridge.open_all_teams_state()
+
+
+def _real_team_intelligence() -> dict:
+    return build_real_team_intelligence_section()
+
+
 def _health() -> dict:
     from operational import system_health as sh
     items = []
@@ -249,6 +271,8 @@ _SECTION_BUILDERS = {
     "live_moneyline_rows": _live_rows,
     "real_recommendations": _real_recommendations,
     "real_today": _real_today,
+    "real_player_props": _real_player_props,
+    "real_team_intelligence": _real_team_intelligence,
     "performance": _performance,
     "morning_review": _morning_review,
     "model_learning": _model_learning,
