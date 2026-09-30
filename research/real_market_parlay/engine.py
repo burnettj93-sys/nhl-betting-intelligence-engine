@@ -228,3 +228,56 @@ def build_real_market_parlay(candidate_legs: list[ParlayLeg]) -> dict:
     if best_4 is not None and _passes_quality_gates(best_4):
         return {"status": "QUALIFIED", "recommended_legs": 4, "combo": best_4, "alternative_3leg": best_3}
     return {"status": "QUALIFIED", "recommended_legs": 3, "combo": best_3, "alternative_3leg": None}
+
+
+def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: int = 5) -> dict:
+    """Owner Escalation block (2026-09-30): build_real_market_parlay() above
+    only ever returns the SINGLE best combo for the day -- correct as far
+    as it goes, but not what was actually being asked for repeatedly:
+    "the best 4-5 parlays," several independent tickets, not one ticket
+    using up to 4-5 legs. This is that: every independent qualifying
+    parlay the day's real eligible legs actually support, up to
+    max_parlays, each built from the SAME real gates as build_real_market_parlay()
+    (>= 70% joint probability, positive combo edge, cross-game-only) --
+    never a looser bar just to manufacture more tickets.
+
+    Legs are removed from the pool after each parlay is selected (greedy,
+    by joint probability), so no leg is ever double-counted across two
+    tracked tickets on the same day -- two "different" parlays that just
+    re-slice the same underlying bets would inflate the apparent hit rate
+    and are not what a real bettor would call two separate parlays.
+
+    Never pads or forces a count: 0, 1, 2, ... up to max_parlays real
+    independent qualifiers is returned exactly as the pool supports, never
+    more, never manufactured to hit a target number.
+
+    Returns:
+      {"status": "QUALIFIED", "parlays": [{"recommended_legs": 3|4, "combo": ParlayResult}, ...]}
+      {"status": "NO_QUALIFYING_PARLAY", "reason": str, "informational_2leg": ParlayResult|None}
+    """
+    eligible = [l for l in candidate_legs if leg_is_eligible(l)]
+    remaining = list(eligible)
+    parlays: list[dict] = []
+    while len(parlays) < max_parlays and len(remaining) >= MIN_LEGS:
+        best_3 = _best_combo_of_size(remaining, 3)
+        if best_3 is None:
+            break
+        best_4 = _best_combo_of_size(remaining, MAX_LEGS) if len(remaining) >= MAX_LEGS else None
+        if best_4 is not None and _passes_quality_gates(best_4):
+            chosen, recommended_legs = best_4, 4
+        else:
+            chosen, recommended_legs = best_3, 3
+        parlays.append({"recommended_legs": recommended_legs, "combo": chosen})
+        used = {id(l) for l in chosen.legs}
+        remaining = [l for l in remaining if id(l) not in used]
+
+    if not parlays:
+        if len(eligible) < MIN_LEGS:
+            reason = (f"only {len(eligible)} PARLAY_ELIGIBLE leg(s) on the allowlist "
+                      f"({sorted(ALLOWED_MARKET_FAMILIES)}) -- need at least {MIN_LEGS} for a monitored parlay")
+        else:
+            reason = ("no 3-leg, single-game-max combination cleared both the "
+                      f">= {MIN_JOINT_PROBABILITY:.0%} joint-probability floor and a positive combo edge")
+        return {"status": "NO_QUALIFYING_PARLAY", "reason": reason,
+                "informational_2leg": _best_combo_of_size(eligible, 2) if len(eligible) >= 2 else None}
+    return {"status": "QUALIFIED", "parlays": parlays}

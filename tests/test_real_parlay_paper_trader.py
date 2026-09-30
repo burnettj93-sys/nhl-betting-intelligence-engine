@@ -1,10 +1,13 @@
 """
-Platform Recovery block (2026-09-29): proves the missing link is actually
-closed -- a real, qualifying cross-game parlay is staked as a real $10
-paper bet against the real paper_bankroll schema, staking is idempotent
-per Eastern calendar day, and settlement (previously "manual invocation
-only") now runs and correctly resolves a real WIN, feeding bankroll_summary
-exactly as Paper Performance and the daily postmortem already read it.
+Platform Recovery block (2026-09-29), extended to several independent
+parlays (Owner Escalation block, 2026-09-30): proves EVERY independent
+qualifying parlay the day's real eligible legs support is staked as its
+own real $10 paper bet -- not just the single best one -- staking is
+idempotent per Eastern day AND per exact leg combination (a real day never
+gets silently blocked from staking a fresh set of parlays just because one
+already went in), and settlement (previously "manual invocation only") now
+runs and correctly resolves a real WIN, feeding bankroll_summary exactly as
+Paper Performance and the daily postmortem already read it.
 """
 from __future__ import annotations
 
@@ -52,6 +55,17 @@ def _fresh_nhl_db_with_games(games: list[dict]) -> Path:
     return Path(tmp.name)
 
 
+def _run_with(nhl_path, bankroll_path, legs, now):
+    with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
+         mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_path))), \
+         mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
+                    return_value=(legs, [])), \
+         mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
+                    return_value=([], [])), \
+         mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
+        return trader.run(now=now)
+
+
 class TestQualifyingParlayIsStaked(unittest.TestCase):
     def test_a_qualifying_parlay_stakes_a_real_ten_dollar_bet(self):
         nhl_path = _fresh_nhl_db_with_games([
@@ -64,17 +78,12 @@ class TestQualifyingParlayIsStaked(unittest.TestCase):
         bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         bankroll_tmp.close()
 
-        with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
-             mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_tmp.name))), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
-                        return_value=(legs, [])), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
-                        return_value=([], [])), \
-             mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
-            result = trader.run(now=dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+        result = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
 
-        self.assertEqual(result["stake_result"]["status"], "INSERTED")
-        self.assertEqual(result["stake_result"]["recommended_legs"], 3)
+        self.assertEqual(result["stake_result"]["qualifying_parlays_found"], 1)
+        self.assertEqual(result["stake_result"]["newly_staked"], 1)
+        self.assertEqual(result["stake_result"]["results"][0]["status"], "INSERTED")
+        self.assertEqual(result["stake_result"]["results"][0]["recommended_legs"], 3)
 
         bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
         rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
@@ -93,19 +102,13 @@ class TestQualifyingParlayIsStaked(unittest.TestCase):
         bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         bankroll_tmp.close()
 
-        with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
-             mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_tmp.name))), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
-                        return_value=(legs, [])), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
-                        return_value=([], [])), \
-             mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
-            first = trader.run(now=dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
-            # 8:30 PM EDT later the same Eastern day -- UTC has already rolled to Sept 30.
-            second = trader.run(now=dt.datetime(2026, 9, 30, 0, 30, tzinfo=dt.timezone.utc))
+        first = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+        # 8:30 PM EDT later the same Eastern day -- UTC has already rolled to Sept 30.
+        second = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 30, 0, 30, tzinfo=dt.timezone.utc))
 
-        self.assertEqual(first["stake_result"]["status"], "INSERTED")
-        self.assertEqual(second["stake_result"]["status"], "ALREADY_STAKED_TODAY")
+        self.assertEqual(first["stake_result"]["newly_staked"], 1)
+        self.assertEqual(second["stake_result"]["newly_staked"], 0)
+        self.assertEqual(second["stake_result"]["already_staked"], 1)
 
         bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
         rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
@@ -116,18 +119,78 @@ class TestQualifyingParlayIsStaked(unittest.TestCase):
         bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         bankroll_tmp.close()
 
-        with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
-             mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_tmp.name))), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
-                        return_value=([], [])), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
-                        return_value=([], [])), \
-             mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
-            result = trader.run()
+        result = _run_with(nhl_path, bankroll_tmp.name, [], dt.datetime.now(dt.timezone.utc))
 
         self.assertEqual(result["stake_result"]["status"], "NO_QUALIFYING_PARLAY")
+        self.assertEqual(result["stake_result"]["qualifying_parlays_found"], 0)
         bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
         self.assertEqual(pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER"), [])
+
+
+class TestSeveralIndependentParlaysAreAllStaked(unittest.TestCase):
+    """Owner Escalation block (2026-09-30): the actual ask -- several
+    parlay tickets a day, each its own $10 stake, not one ticket."""
+
+    def test_every_independent_qualifying_parlay_gets_its_own_ten_dollar_stake(self):
+        games = [{"game_id": i, "date": "2026-09-29", "start": f"2026-09-29T2{i % 4}:00:00",
+                  "home": f"H{i}", "away": f"A{i}"} for i in range(1, 10)]
+        nhl_path = _fresh_nhl_db_with_games(games)
+        # Unique participant_id per leg -- real MONEYLINE legs on different
+        # real games always have different teams; a shared identity would
+        # only happen with unrealistic test data (the same team can't play
+        # two real games the same real day).
+        legs = [_leg(str(i), participant_id=f"T{i}", conservative_probability=0.90) for i in range(1, 10)]
+        bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        bankroll_tmp.close()
+
+        result = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+
+        self.assertEqual(result["stake_result"]["qualifying_parlays_found"], 3)
+        self.assertEqual(result["stake_result"]["newly_staked"], 3)
+
+        bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
+        rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+        self.assertEqual(len(rows), 3, "each independent qualifying parlay must be its own real $10 bet")
+        self.assertTrue(all(r["stake"] == 10.00 for r in rows))
+        # Three genuinely different tickets, not the same combo three times.
+        self.assertEqual(len({r["market_id"] for r in rows}), 3)
+
+    def test_never_stakes_more_than_the_real_pool_supports(self):
+        # Only 4 real legs -- enough for exactly one 3-leg parlay, never
+        # padded up toward the 5-parlay cap.
+        games = [{"game_id": i, "date": "2026-09-29", "start": "2026-09-29T23:00:00",
+                  "home": f"H{i}", "away": f"A{i}"} for i in range(1, 5)]
+        nhl_path = _fresh_nhl_db_with_games(games)
+        legs = [_leg(str(i), conservative_probability=0.90) for i in range(1, 5)]
+        bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        bankroll_tmp.close()
+
+        result = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+
+        self.assertEqual(result["stake_result"]["qualifying_parlays_found"], 1)
+
+    def test_a_new_eastern_day_can_stake_fresh_parlays_even_if_yesterdays_are_identical(self):
+        # The date-scoped idempotency key must never permanently block a
+        # combo that happens to look best again on a genuinely later day.
+        nhl_path = _fresh_nhl_db_with_games([
+            {"game_id": 1, "date": "2026-09-29", "start": "2026-09-29T23:00:00", "home": "TOR", "away": "MTL"},
+            {"game_id": 2, "date": "2026-09-29", "start": "2026-09-29T23:30:00", "home": "BOS", "away": "NYR"},
+            {"game_id": 3, "date": "2026-09-29", "start": "2026-09-30T00:00:00", "home": "EDM", "away": "VAN"},
+        ])
+        legs = [_leg("1", conservative_probability=0.90), _leg("2", conservative_probability=0.90),
+                _leg("3", conservative_probability=0.90)]
+        bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        bankroll_tmp.close()
+
+        day1 = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+        day2 = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 10, 1, 18, 0, tzinfo=dt.timezone.utc))
+
+        self.assertEqual(day1["stake_result"]["newly_staked"], 1)
+        self.assertEqual(day2["stake_result"]["newly_staked"], 1, "a genuinely new day must not be blocked")
+
+        bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
+        rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+        self.assertEqual(len(rows), 2)
 
 
 class TestFullLifecycleThroughSettlement(unittest.TestCase):
@@ -147,16 +210,9 @@ class TestFullLifecycleThroughSettlement(unittest.TestCase):
         bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         bankroll_tmp.close()
 
-        with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
-             mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_tmp.name))), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
-                        return_value=(legs, [])), \
-             mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
-                        return_value=([], [])), \
-             mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
-            result = trader.run(now=dt.datetime(2026, 9, 30, 3, 0, tzinfo=dt.timezone.utc))
+        result = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 30, 3, 0, tzinfo=dt.timezone.utc))
 
-        self.assertEqual(result["stake_result"]["status"], "INSERTED")
+        self.assertEqual(result["stake_result"]["newly_staked"], 1)
         self.assertEqual(result["settlement_summary"]["settled"], 1)
         self.assertEqual(result["settlement_summary"]["results"][0]["status"], "WIN")
 
