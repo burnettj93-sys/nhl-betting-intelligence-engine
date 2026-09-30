@@ -309,17 +309,36 @@ def odds_archive_freshness_health() -> dict:
 
 
 def contract_status_health() -> dict:
-    """Part 50: VERIFIED LIVE CONTRACTS is reported directly from
+    """Part 50, corrected in the Platform Recovery block (2026-09-29):
+    VERIFIED LIVE CONTRACTS is reported directly from
     research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS
     -- never inferred from demo-mode market availability, which this
-    function does not even import. Currently 0, honestly, and stays 0
-    until Part 41's real workflow adds a real entry."""
+    function does not even import.
+
+    Also reports ORPHANED contracts: a market family can be certified
+    (VERIFIED_CONTRACTS) without ever being wired into the real product
+    pipeline (research/real_market_parlay/engine.py::ALLOWED_MARKET_FAMILIES
+    -- the real Today slate's own allowlist). Certified-but-orphaned was
+    previously invisible: this health check's own status expression was a
+    tautology (OK regardless of the real count either way), silently
+    hiding exactly this gap.
+    A real example already exists: ALTERNATE_TEAM_TOTAL has its own real
+    parser (research/generic_prop_pricing/team_totals_parser.py) and is
+    certified, but is not in ALLOWED_MARKET_FAMILIES and feeds no real
+    Today section -- WAITING, not ERROR (certification is real and
+    correct; it simply hasn't been wired into a consuming pipeline yet,
+    same honest distinction this module already uses for MoneyPuck)."""
     from research.generic_prop_pricing.provider_adapter import VERIFIED_CONTRACTS
+    from research.real_market_parlay.engine import ALLOWED_MARKET_FAMILIES
     n = len(VERIFIED_CONTRACTS)
-    status = "OK" if n == 0 else "OK"  # zero is the expected, healthy preseason state, not an error
-    return _health_item(status, "Sportsbook Contract Status", None,
-                         f"VERIFIED LIVE CONTRACTS: {n}", "research/generic_prop_pricing/provider_adapter.py",
-                         technical_detail=json.dumps(sorted(VERIFIED_CONTRACTS)))
+    orphaned = sorted({family for _, family in VERIFIED_CONTRACTS} - ALLOWED_MARKET_FAMILIES)
+    status = "WAITING" if orphaned else "OK"
+    message = f"VERIFIED LIVE CONTRACTS: {n}"
+    if orphaned:
+        message += f" ({len(orphaned)} certified but not yet wired into a real product pipeline: {orphaned})"
+    return _health_item(status, "Sportsbook Contract Status", None, message,
+                         "research/generic_prop_pricing/provider_adapter.py",
+                         technical_detail=json.dumps({"verified": sorted(VERIFIED_CONTRACTS), "orphaned": orphaned}))
 
 
 def settlement_backlog_health() -> dict:

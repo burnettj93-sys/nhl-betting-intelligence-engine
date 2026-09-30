@@ -381,7 +381,8 @@ def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: d
         prediction_checkpoint="FIRST_ACTIONABLE")
 
 
-def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict) -> dict:
+def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict, *,
+                                        event_start_utc: str | None = None) -> dict:
     """Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
     block, 2026-09-29): REAL_MARKET_PAPER track, is_combo=True -- distinct
     from create_demo_combo_paper_bet (DEMO_PAPER, simulated prices) and
@@ -401,7 +402,22 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     DraftKings price (research/real_market_parlay/engine.py's own
     ParlayResult.offered_parlay_price stays None always); this mirrors
     create_game_edge_parlay_paper_bet's identical, already-established
-    choice for its own single-game combos."""
+    choice for its own single-game combos.
+
+    Platform Recovery block (2026-09-29): `event_start_utc` should be the
+    EARLIEST scheduled start among the combo's own games -- a ParlayLeg
+    carries only its own game_id, never nhl.db's scheduled_start_utc, so
+    this bankroll-only module (which deliberately never takes an nhl.db
+    connection) cannot derive it itself; the caller (which does hold an
+    nhl.db connection) must supply it. Without it,
+    find_unresolved_past_event_bets()'s own `event_start_utc IS NOT NULL
+    AND event_start_utc < ?` filter never matches this row, and the bet
+    sits PENDING forever, invisible to settlement. The earliest leg's
+    start (not the latest) is used so the combo becomes a settlement
+    CANDIDATE as soon as any leg's game could plausibly be final --
+    resolve_combo_bet() itself still correctly reports
+    PENDING_STILL_WAITING until every leg's own game has actually gone
+    FINAL."""
     if parlay_result.get("status") != "QUALIFIED":
         raise InvalidPaperBetError(
             "refusing to paper-bet a non-qualifying Real-Market Parlay result "
@@ -424,7 +440,7 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
         market_id=market_id, entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False,
         legs_json=legs_snapshot, model_probability=combo.joint_probability,
         conservative_probability=combo.joint_probability, edge=combo.combo_edge,
-        prediction_checkpoint="FIRST_ACTIONABLE")
+        prediction_checkpoint="FIRST_ACTIONABLE", event_start_utc=event_start_utc)
 
 
 def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status: str, *,

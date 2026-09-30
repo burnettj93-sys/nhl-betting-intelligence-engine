@@ -46,7 +46,8 @@ if not dates:
     st.stop()
 
 default_idx = len(dates) - 1
-today_iso = dt.date.today().isoformat()
+from operational import eastern_time as _et
+today_iso = _et.eastern_today()
 col1, col2 = st.columns([2, 1])
 with col1:
     selected_date = st.selectbox("Select a real (historical) NHL game date", dates, index=default_idx)
