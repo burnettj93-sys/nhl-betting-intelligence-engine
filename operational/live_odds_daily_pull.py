@@ -495,9 +495,28 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
 # SOG+Saves only (Part 9's primary priority) for events now inside the
 # ~3-4h pre-puck-drop window; second sweep re-pulls only events the
 # first sweep already found a live quote for, ~45-75 minutes out.
+#
+# Platform Recovery block (2026-09-29): was "player_shots_on_goal,
+# player_total_saves" -- the STANDARD (never-real, per
+# provider_adapter.VERIFIED_CONTRACTS's own evidence: "DraftKings has
+# never posted an Under here") SOG shape, not the certified ALTERNATE
+# ladder. Confirmed against the real archive: the only real
+# player_shots_on_goal_alternate capture all day came from the once-daily
+# --mode=props job (08:15 ET) -- by evening puck drop it was 615 minutes
+# old against a real 10-minute staleness policy at that time-to-puck-drop
+# (61x over), so it could never pass real_slate_adapter's freshness gate.
+# These frequent (15/30-min) sweeps were the one thing that could have
+# kept it fresh all day and never requested it. Swapped the always-empty
+# standard key for the real, working alternate one -- same 2-market cost
+# structure, so the Production Sweep Safety Cap block's own audited
+# worst case (32 credits/day; see operational/prop_discovery.py's
+# VERIFIED_PRODUCTION_DAILY_BUDGET comment) is unchanged, just no longer
+# spent on a market that has never once returned a real quote.
+# player_total_saves stays for ongoing GOALIE_SAVES candidate discovery
+# (DISCOVERY_MARKETS) -- unrelated to, and unaffected by, this swap.
 # ---------------------------------------------------------------------
 
-FIRST_SWEEP_MARKETS = "player_shots_on_goal,player_total_saves"
+FIRST_SWEEP_MARKETS = "player_shots_on_goal_alternate,player_total_saves"
 FIRST_SWEEP_WINDOW_HOURS = (3.0, 4.5)
 SECOND_SWEEP_WINDOW_HOURS = (0.75, 1.25)
 SWEEP_CACHE_PATH = REPO_ROOT / "operational" / "targeted_prop_sweep_cache.json"

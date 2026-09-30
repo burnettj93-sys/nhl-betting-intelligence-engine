@@ -216,6 +216,14 @@ def real_today() -> dict:
     return _optional("real_today")
 
 
+def real_player_props() -> dict:
+    return _optional("real_player_props")
+
+
+def real_team_intelligence() -> dict:
+    return _optional("real_team_intelligence")
+
+
 def snapshot_meta() -> dict:
     """Small provenance dict for banners; never raises."""
     from operational import cloud_snapshot_schema as schema

@@ -35,6 +35,39 @@ def _unverified():
     return mock.patch.object(pa, "VERIFIED_CONTRACTS", frozenset({("draftkings", "MONEYLINE")}))
 
 
+class TestSweepRequestsTheRealWorkingSogShape(unittest.TestCase):
+    """Platform Recovery block (2026-09-29): FIRST_SWEEP_MARKETS previously
+    requested the standard SOG shape, which provider_adapter.VERIFIED_CONTRACTS'
+    own evidence says DraftKings has never posted a real quote for -- meaning
+    prop-sweep-first/second (every 15-30 min, all day) were spending real
+    credits on a market that could never produce a real leg, while the one
+    market that actually works (the certified alternate ladder) was only ever
+    requested once daily by the unrelated --mode=props job. Confirmed against
+    the real archive: the freshest real alternate-SOG quote was 615 minutes
+    old against a real 10-minute policy at that time-to-puck-drop (61x over)."""
+
+    def test_the_sweep_requests_the_certified_alternate_shape_not_the_dead_standard_one(self):
+        from operational import live_odds_daily_pull as lop
+        keys = set(lop.FIRST_SWEEP_MARKETS.split(","))
+        self.assertIn("player_shots_on_goal_alternate", keys)
+        self.assertNotIn("player_shots_on_goal", keys)
+
+    def test_saves_candidate_discovery_is_unaffected_by_the_swap(self):
+        from operational import live_odds_daily_pull as lop
+        self.assertIn("player_total_saves", lop.FIRST_SWEEP_MARKETS.split(","))
+
+    def test_the_swap_keeps_the_audited_two_key_cost_structure(self):
+        # The Production Sweep Safety Cap block's own 32-credit/day worst-case
+        # audit assumed exactly 2 markets per event -- this must still hold
+        # regardless of which two keys they are.
+        from operational import live_odds_daily_pull as lop
+        self.assertEqual(len(lop.FIRST_SWEEP_MARKETS.split(",")), 2)
+
+    def test_health_invariants_still_pass_after_the_swap(self):
+        for check in pd.health_invariants():
+            self.assertTrue(check["ok"], check["check"])
+
+
 class TestShapeSpecificMapping(unittest.TestCase):
     def test_alternate_sog_maps_to_its_own_certified_contract(self):
         self.assertEqual(pd.MARKET_TO_CONTRACT["player_shots_on_goal_alternate"], "PLAYER_SOG_ALTERNATE")

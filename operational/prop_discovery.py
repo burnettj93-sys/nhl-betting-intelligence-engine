@@ -68,8 +68,12 @@ DISCOVERY_DAILY_BUDGET = 6        # hard cap on prop credits per UTC day while c
 # applied). Real, audited worst case for prop-sweep-first/second alone on a
 # real 8-event slate: 8 events x 2 stages (first+second, each deduplicated to
 # at most once per event per day by already_swept()) x up to 2 credits (both
-# FIRST_SWEEP_MARKETS keys actually posting, which standard player_shots_on_goal
-# is now confirmed to do) = 32 credits/day theoretical ceiling. This budget is
+# FIRST_SWEEP_MARKETS keys posting) = 32 credits/day theoretical ceiling.
+# (Platform Recovery block, 2026-09-29: FIRST_SWEEP_MARKETS was swapped from
+# the standard, never-real player_shots_on_goal to the certified
+# player_shots_on_goal_alternate -- this arithmetic is unaffected, since it
+# was always "2 keys per event" regardless of which two keys.)
+# This budget is
 # sized with real margin above that audited ceiling (40) while staying far
 # below "uncapped" and small relative to the account's real 500-credit/month
 # pool -- a real, evidence-derived number, not a guess.

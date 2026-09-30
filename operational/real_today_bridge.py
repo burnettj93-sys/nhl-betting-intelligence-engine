@@ -31,3 +31,53 @@ def open_real_today_state(**kwargs) -> dict:
         return rtv.build_real_today_state(conn, **kwargs)
     finally:
         conn.close()
+
+
+def open_real_player_props_state(**kwargs) -> dict:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/26_Player_Props.py's real default view."""
+    from dashboard import real_player_props_view as rppv
+    import db
+    conn = db.get_conn()
+    try:
+        return rppv.build_real_player_props_state(conn, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_real_team_intelligence_state(team_id: str, **kwargs) -> dict:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/31_Team_Intelligence.py's real default view."""
+    from dashboard import real_team_intelligence_view as rtiv
+    import db
+    conn = db.get_conn()
+    try:
+        return rtiv.build_real_team_intelligence_state(conn, team_id, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_all_teams_state(**kwargs) -> dict:
+    """Publishing-only entry point: every real team's state in one dict,
+    for the Cloud snapshot's own real_team_intelligence section (Cloud
+    mode can never open nhl.db directly to answer a live per-team
+    selection)."""
+    from dashboard import real_team_intelligence_view as rtiv
+    import db
+    conn = db.get_conn()
+    try:
+        return rtiv.build_all_teams_state(conn, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_real_team_list() -> list[str]:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/31_Team_Intelligence.py's team selector."""
+    from dashboard import real_team_intelligence_view as rtiv
+    import db
+    conn = db.get_conn()
+    try:
+        return rtiv.real_team_list(conn)
+    finally:
+        conn.close()
