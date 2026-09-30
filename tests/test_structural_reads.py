@@ -90,6 +90,12 @@ JUSTIFIED_EXCEPTIONS = {
     # no historical/as-of parameter -- structurally incapable of being
     # used for point-in-time reconstruction.
     ("dashboard/real_team_intelligence_view.py", "team_membership_events"),
+    # Same rationale as real_team_intelligence_view.py above: both always
+    # answer "who is on this team / what is this player's team RIGHT NOW,"
+    # never a historical as-of question, and take no as-of parameter that
+    # could make them capable of point-in-time reconstruction.
+    ("dashboard/real_player_view.py", "team_membership_events"),
+    ("dashboard/real_goalies_view.py", "team_membership_events"),
     ("validate.py", "roster_status_events"),
     ("validate.py", "goalie_status_events"),
     ("validate.py", "lineup_snapshots"),

@@ -87,7 +87,8 @@ def run(now: dt.datetime | None = None) -> dict:
                 game_ids = {l.game_id for l in parlay_result["combo"].legs}
                 event_start_utc = _earliest_scheduled_start(nhl_conn, game_ids)
                 bet = pb.create_real_market_combo_paper_bet(bankroll_conn, parlay_result,
-                                                             event_start_utc=event_start_utc)
+                                                             event_start_utc=event_start_utc,
+                                                             created_at_utc=now.isoformat())
                 stake_result = {"status": bet["status"], "paper_bet_id": bet.get("paper_bet_id"),
                                  "eastern_date": today_et, "recommended_legs": parlay_result["recommended_legs"]}
             else:

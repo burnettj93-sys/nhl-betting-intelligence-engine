@@ -81,3 +81,53 @@ def open_real_team_list() -> list[str]:
         return rtiv.real_team_list(conn)
     finally:
         conn.close()
+
+
+def open_real_player_search(query: str = "", **kwargs) -> list[dict]:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/30_Players.py's real default search."""
+    from dashboard import real_player_view as rpv
+    import db
+    conn = db.get_conn()
+    try:
+        return rpv.search_real_players(conn, query, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_all_players_list() -> list[dict]:
+    """Publishing-only entry point: every real player's identity (id,
+    name, position, current team) in one cheap list, for the Cloud
+    snapshot's own real_all_players section."""
+    from dashboard import real_player_view as rpv
+    import db
+    conn = db.get_conn()
+    try:
+        players = rpv.search_real_players(conn, "", limit=100000)
+        return [{**p, "team": rpv.real_player_current_team(conn, p["player_id"])} for p in players]
+    finally:
+        conn.close()
+
+
+def open_real_player_state(player_id: str, **kwargs) -> dict:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/25_Player_Intelligence.py's real default view."""
+    from dashboard import real_player_view as rpv
+    import db
+    conn = db.get_conn()
+    try:
+        return rpv.build_real_player_state(conn, player_id, **kwargs)
+    finally:
+        conn.close()
+
+
+def open_real_goalies_state(**kwargs) -> dict:
+    """Same rationale as open_real_today_state(), for
+    dashboard/pages/27_Goalies.py's real default view."""
+    from dashboard import real_goalies_view as rgv
+    import db
+    conn = db.get_conn()
+    try:
+        return rgv.build_real_goalies_state(conn, **kwargs)
+    finally:
+        conn.close()

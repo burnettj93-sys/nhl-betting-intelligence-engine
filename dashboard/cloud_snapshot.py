@@ -224,6 +224,14 @@ def real_team_intelligence() -> dict:
     return _optional("real_team_intelligence")
 
 
+def real_all_players() -> list[dict]:
+    return _optional("real_all_players")
+
+
+def real_goalies() -> dict:
+    return _optional("real_goalies")
+
+
 def snapshot_meta() -> dict:
     """Small provenance dict for banners; never raises."""
     from operational import cloud_snapshot_schema as schema

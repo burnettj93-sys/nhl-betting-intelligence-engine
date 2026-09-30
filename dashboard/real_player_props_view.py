@@ -58,7 +58,7 @@ def _real_prop_row(conn, leg) -> dict:
     fair_odds = odds_math.prob_to_american(leg.conservative_probability)
     team, opponent = _team_and_opponent(conn, leg.game_id, leg.participant_id)
     return {
-        "player": leg.participant_name, "team": team, "opponent": opponent,
+        "player_id": leg.participant_id, "player": leg.participant_name, "team": team, "opponent": opponent,
         "market": leg.market_family, "threshold": leg.threshold, "side": leg.side,
         "dk_price": leg.american_price, "conservative_probability": round(leg.conservative_probability, 4),
         "fair_odds": round(fair_odds, 1), "implied_probability": round(implied_probability, 4),
