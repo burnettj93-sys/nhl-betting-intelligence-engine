@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.real-parlay-paper-trader</string>
+
+    <!-- Platform Recovery block (2026-09-29): the missing link between "a real,
+         qualifying cross-game parlay exists" and "a real $10 paper bet is
+         actually staked, tracked, and later settled" -- see
+         operational/real_parlay_paper_trader.py's own module docstring.
+         Makes ZERO new sportsbook API calls (reads only already-synced nhl.db
+         and already-retained archive files, exactly like the prop-sweep jobs'
+         own already-captured data) -- safe to run every 15 minutes alongside
+         prop-sweep-second. Staking is idempotent per Eastern calendar day;
+         settlement runs every invocation across every paper_bets track. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.real_parlay_paper_trader</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
+
+    <key>StartInterval</key>
+    <integer>900</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/real_parlay_paper_trader.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/real_parlay_paper_trader.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

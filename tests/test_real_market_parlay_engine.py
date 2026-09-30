@@ -146,6 +146,51 @@ class TestLegCountNeverForced(unittest.TestCase):
         self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
 
 
+class TestInformational2LegFallback(unittest.TestCase):
+    """Platform Recovery block (2026-09-29): when the monitored 3/4-leg
+    cohort doesn't qualify but a real, quality-gated 2-leg combo exists,
+    it is surfaced as real information -- never as a monitored bet."""
+
+    def test_two_strong_eligible_legs_surface_an_informational_2leg_combo(self):
+        legs = [_leg(game_id="G1", conservative_probability=0.90),
+                _leg(game_id="G2", conservative_probability=0.90)]
+        result = rmp.build_real_market_parlay(legs)
+        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
+        self.assertIsNotNone(result["informational_2leg"])
+        self.assertEqual(len(result["informational_2leg"].legs), 2)
+
+    def test_zero_or_one_eligible_legs_has_no_informational_2leg(self):
+        self.assertIsNone(rmp.build_real_market_parlay([])["informational_2leg"])
+        self.assertIsNone(rmp.build_real_market_parlay([_leg(game_id="G1")])["informational_2leg"])
+
+    def test_weak_2leg_below_the_joint_probability_floor_has_no_informational_2leg(self):
+        legs = [_leg(game_id="G1", conservative_probability=0.5),
+                _leg(game_id="G2", conservative_probability=0.5)]
+        result = rmp.build_real_market_parlay(legs)
+        self.assertIsNone(result["informational_2leg"])
+
+    def test_informational_2leg_key_is_absent_once_a_monitored_parlay_qualifies(self):
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(3)]
+        result = rmp.build_real_market_parlay(legs)
+        self.assertEqual(result["status"], "QUALIFIED")
+        self.assertNotIn("informational_2leg", result)
+
+    def test_informational_2leg_still_respects_the_same_game_exclusion(self):
+        legs = [_leg(game_id="G1", conservative_probability=0.90),
+                _leg(game_id="G1", conservative_probability=0.90, participant_id="P2")]
+        result = rmp.build_real_market_parlay(legs)
+        self.assertIsNone(result["informational_2leg"])
+
+    def test_informational_2leg_surfaces_when_three_eligible_legs_exist_but_no_3leg_qualifies(self):
+        legs = [_leg(game_id="G1", conservative_probability=0.95),
+                _leg(game_id="G2", conservative_probability=0.95),
+                _leg(game_id="G3", conservative_probability=0.3)]
+        result = rmp.build_real_market_parlay(legs)
+        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
+        self.assertIsNotNone(result["informational_2leg"])
+        self.assertEqual({l.game_id for l in result["informational_2leg"].legs}, {"G1", "G2"})
+
+
 class TestOfferedParlayPriceNeverFabricated(unittest.TestCase):
     def test_offered_parlay_price_is_always_none(self):
         legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(3)]

@@ -22,12 +22,16 @@ NO_QUALIFYING_REAL_PARLAY = "NO_QUALIFYING_REAL_PARLAY"
 
 
 def _today_real_games(conn, now: dt.datetime) -> list[dict]:
-    """Today's (UTC calendar date) real NHL games -- the canonical real
-    slate, never a simulated one. `strongest_leg` is filled in by
-    build_real_today_state() once real eligible legs are known, so a game
-    card can show its own single best real opportunity without a second
-    query."""
-    today = now.date().isoformat()
+    """Today's (America/Toronto calendar date -- the real NHL hockey day,
+    matching games.game_date's own NHL-API-sourced semantics) real NHL
+    games -- the canonical real slate, never a simulated one. A raw UTC
+    date is never used here: it would roll over to "tomorrow" at 8 PM
+    Eastern, hours before tonight's real games have even started.
+    `strongest_leg` is filled in by build_real_today_state() once real
+    eligible legs are known, so a game card can show its own single best
+    real opportunity without a second query."""
+    from operational import eastern_time as et
+    today = et.eastern_today(now)
     rows = conn.execute(
         "SELECT game_id, home_team, away_team, game_state, scheduled_start_utc FROM games "
         "WHERE game_date = ? ORDER BY scheduled_start_utc", (today,)).fetchall()
@@ -42,6 +46,18 @@ def _leg_summary(leg) -> dict:
             "conservative_probability": round(leg.conservative_probability, 4),
             "game_id": leg.game_id, "sportsbook": leg.sportsbook, "captured_at_utc": leg.captured_at_utc,
             "data_label": "REAL MARKET DATA"}
+
+
+def _combo_summary(combo, recommended_legs: int) -> dict:
+    return {
+        "recommended_legs": recommended_legs,
+        "legs": [_leg_summary(l) for l in combo.legs],
+        "joint_probability": round(combo.joint_probability, 4),
+        "fair_combo_price": round(combo.fair_combo_price, 1),
+        "estimated_combo_price": round(combo.estimated_combo_price, 1),
+        "offered_parlay_price": combo.offered_parlay_price,
+        "data_label": "REAL MARKET DATA",
+    }
 
 
 def real_top_conviction(eligible_legs: list, *, max_n: int = 5) -> list[dict]:
@@ -98,16 +114,14 @@ def build_real_today_state(nhl_conn, *, now: dt.datetime | None = None,
     parlay_result = rmp.build_real_market_parlay(all_legs)
     parlay_view = {"status": parlay_result["status"], "reason": parlay_result.get("reason")}
     if parlay_result["status"] == "QUALIFIED":
-        combo = parlay_result["combo"]
-        parlay_view["combo"] = {
-            "recommended_legs": parlay_result["recommended_legs"],
-            "legs": [_leg_summary(l) for l in combo.legs],
-            "joint_probability": round(combo.joint_probability, 4),
-            "fair_combo_price": round(combo.fair_combo_price, 1),
-            "estimated_combo_price": round(combo.estimated_combo_price, 1),
-            "offered_parlay_price": combo.offered_parlay_price,
-            "data_label": "REAL MARKET DATA",
-        }
+        parlay_view["combo"] = _combo_summary(parlay_result["combo"], parlay_result["recommended_legs"])
+    elif parlay_result.get("informational_2leg") is not None:
+        # Platform Recovery block (2026-09-29): a real, quality-gated 2-leg
+        # combo exists even though the monitored 3/4-leg cohort doesn't
+        # qualify -- shown as real information, never as a monitored bet
+        # (the Today page must label this INFORMATIONAL ONLY and the paper
+        # bet lifecycle must never stake against it).
+        parlay_view["informational_2leg"] = _combo_summary(parlay_result["informational_2leg"], 2)
 
     from collections import Counter
     exclusion_reasons = Counter(e["reason"].split("(")[0].split(":")[0].strip() for e in all_excluded)

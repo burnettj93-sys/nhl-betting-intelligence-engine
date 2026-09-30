@@ -195,21 +195,31 @@ def _best_combo_of_size(legs: list[ParlayLeg], size: int) -> ParlayResult | None
 def build_real_market_parlay(candidate_legs: list[ParlayLeg]) -> dict:
     """The main entry point. Returns either:
       {"status": "QUALIFIED", "recommended_legs": 3|4, "combo": ParlayResult, "alternative_3leg": ParlayResult|None}
-      {"status": "NO_QUALIFYING_PARLAY", "reason": str}
-    Never manufactures a result: 0 qualifying parlays on a given slate is
-    a real, expected, correct PASS outcome, never forced up to meet a
-    bet count."""
+      {"status": "NO_QUALIFYING_PARLAY", "reason": str, "informational_2leg": ParlayResult|None}
+    Never manufactures a result for the MONITORED 3/4-leg cohort: 0
+    qualifying parlays on a given slate is a real, expected, correct PASS
+    outcome, never forced up to meet a bet count.
+
+    Platform Recovery block (2026-09-29): when the monitored cohort doesn't
+    qualify but a real, quality-gated (same >= 70% joint-probability floor,
+    same positive-edge requirement, same cross-game-only rule) 2-leg
+    combination exists, it is surfaced as `informational_2leg` -- real
+    information worth showing rather than a bare "not enough legs" message.
+    It is explicitly NOT a monitored bet: callers must never create a paper
+    bet from it or count it in the monitored 3/4-leg performance cohort."""
     eligible = [l for l in candidate_legs if leg_is_eligible(l)]
     if len(eligible) < MIN_LEGS:
         return {"status": "NO_QUALIFYING_PARLAY",
                 "reason": f"only {len(eligible)} PARLAY_ELIGIBLE leg(s) on the allowlist "
-                          f"({sorted(ALLOWED_MARKET_FAMILIES)}) -- need at least {MIN_LEGS}"}
+                          f"({sorted(ALLOWED_MARKET_FAMILIES)}) -- need at least {MIN_LEGS} for a monitored parlay",
+                "informational_2leg": _best_combo_of_size(eligible, 2) if len(eligible) >= 2 else None}
 
     best_3 = _best_combo_of_size(eligible, 3)
     if best_3 is None:
         return {"status": "NO_QUALIFYING_PARLAY",
                 "reason": "no 3-leg, single-game-max combination cleared both the "
-                          f">= {MIN_JOINT_PROBABILITY:.0%} joint-probability floor and a positive combo edge"}
+                          f">= {MIN_JOINT_PROBABILITY:.0%} joint-probability floor and a positive combo edge",
+                "informational_2leg": _best_combo_of_size(eligible, 2)}
 
     best_4 = _best_combo_of_size(eligible, MAX_LEGS) if len(eligible) >= MAX_LEGS else None
     # The 4th leg is added only if it doesn't drag the combo below the real

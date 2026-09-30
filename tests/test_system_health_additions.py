@@ -46,12 +46,33 @@ class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
     history in a diff) but the assertion reflects the current real fact.
 
     SOG Contract Certification block (2026-09-29): two more real, archived payloads
-    certified (PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- honest count is now 3."""
+    certified (PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- honest count is now 3.
+
+    Platform Recovery block (2026-09-29): the status expression used to be
+    `"OK" if n == 0 else "OK"` -- a tautology, always OK regardless of n,
+    which silently hid that ALTERNATE_TEAM_TOTAL is certified but never
+    wired into ALLOWED_MARKET_FAMILIES (the real Today slate's own
+    allowlist) -- feeds no real product pipeline. The corrected check
+    reports WAITING (not ERROR: certification itself is real and correct)
+    whenever a genuinely orphaned contract exists, which is the honest,
+    current, real state -- not a demo/simulated one."""
 
     def test_reports_the_real_verified_contract_count(self):
         item = sh.contract_status_health()
         self.assertIn("VERIFIED LIVE CONTRACTS: 3", item["message"])
-        self.assertEqual(item["status"], "OK")
+
+    def test_a_certified_but_unwired_contract_is_reported_waiting_not_silently_ok(self):
+        item = sh.contract_status_health()
+        # ALTERNATE_TEAM_TOTAL is genuinely certified but not in
+        # research.real_market_parlay.engine.ALLOWED_MARKET_FAMILIES today --
+        # this must be visible, never hidden behind an unconditional OK.
+        self.assertEqual(item["status"], "WAITING")
+        self.assertIn("ALTERNATE_TEAM_TOTAL", item["message"])
+
+    def test_status_expression_is_not_a_tautology(self):
+        import inspect
+        src = inspect.getsource(sh.contract_status_health)
+        self.assertNotIn('"OK" if n == 0 else "OK"', src)
 
     def test_never_imports_demo_data(self):
         import inspect

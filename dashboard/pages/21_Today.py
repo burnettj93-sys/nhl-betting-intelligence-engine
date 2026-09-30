@@ -37,6 +37,24 @@ from research.generic_prop_pricing.provider_adapter import VERIFIED_CONTRACTS
 from operational.live_readiness import live_readiness
 from operational import prospective_ledger as pl
 
+
+@st.cache_data(show_spinner="Building today's real slate (real moneyline + real SOG legs)...",
+               ttl=300, max_entries=4)
+def _cached_local_real_today_state():
+    # Platform Recovery block (2026-09-29): a real, unloaded run of
+    # build_real_today_state() takes ~14s (every scheduled game's real
+    # T-35 moneyline evaluation + every real archived SOG payload's real
+    # model projection) -- without caching, every single Today page
+    # render/rerun redid this from scratch, which is both a slow real
+    # user experience and (confirmed against the full test suite) can
+    # exceed a 60s AppTest render budget under load. A 5-minute TTL keeps
+    # this responsive while staying close to the real odds refresh
+    # cadence (moneyline-pregame/prop-sweep-second run every 2-15 min) --
+    # never stale enough to show a meaningfully outdated real opportunity.
+    from operational import real_today_bridge
+    return real_today_bridge.open_real_today_state()
+
+
 st.title("Today")
 comp.render_model_status_header()
 comp.render_global_search(key_prefix="today")
@@ -116,7 +134,8 @@ with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
         try:
             predictions = da.compute_baseline_predictions()
             dates = da.available_dates(predictions)
-            today_str = dt.date.today().isoformat()
+            from operational import eastern_time as _et
+            today_str = _et.eastern_today()
             todays_games = da.games_on_date(predictions, today_str) if today_str in dates else []
             if not todays_games:
                 comp.render_empty_state("NO_GAMES", f"No real NHL games found in the corpus for {today_str}.")
@@ -171,8 +190,9 @@ try:
         # lifecycle instead, and is the SAME function the published Cloud
         # snapshot's own "real_today" section calls, so LOCAL mode and
         # Cloud mode are never two separately-derived sources of truth.
-        from operational import real_today_bridge
-        _real_today = real_today_bridge.open_real_today_state()
+        # Cached (see _cached_local_real_today_state) -- this real
+        # computation is too slow (~14s) to redo on every page rerun.
+        _real_today = _cached_local_real_today_state()
 except cloud_snapshot.SnapshotUnavailable as _exc:
     _real_today = None
     st.caption(f"Real Today data is not available in this snapshot ({_exc}).")
@@ -232,12 +252,7 @@ if _real_today is not None:
     st.caption("Cross-game only (V1 forbids same-game combinations — no correlation model exists for "
                "that yet): 3-4 real eligible legs, conservative joint probability ≥70%, positive combo "
                "edge. A real combined DraftKings price does not exist for this and is never fabricated.")
-    _parlay = _real_today["parlay"]
-    if _parlay["status"] != "QUALIFIED":
-        comp.render_empty_state("NO_QUALIFYING_REAL_PARLAY", _parlay.get("reason") or
-                                 "No qualifying real-market parlay right now.")
-    else:
-        _combo = _parlay["combo"]
+    def _render_real_combo(_combo):
         _legs_desc = " + ".join(f"{l['participant_name']} {l['market_family']} {l['threshold'] or ''}"
                                 for l in _combo["legs"])
         st.markdown(f"**{_combo['recommended_legs']}-leg:** {_legs_desc}")
@@ -247,6 +262,25 @@ if _real_today is not None:
         rpc3.metric("Est. combo price", fmt.format_american_odds(_combo["estimated_combo_price"]))
         st.caption(f"Offered parlay price: {_combo['offered_parlay_price'] or 'NULL — not genuinely observed'}. "
                    f"{_combo['data_label']}.")
+
+    _parlay = _real_today["parlay"]
+    if _parlay["status"] == "QUALIFIED":
+        _render_real_combo(_parlay["combo"])
+        st.caption("A real $10 paper bet is staked once per day against this exact qualifying parlay "
+                   "(operational.real_parlay_paper_trader) — see Paper Performance for tracked results.")
+    elif _parlay.get("informational_2leg") is not None:
+        # Platform Recovery block (2026-09-29): fewer than 3 real eligible legs
+        # qualified for the MONITORED 3/4-leg cohort, but a real, quality-gated
+        # 2-leg combo exists -- shown as real information, never staked as a
+        # monitored paper bet (see operational/paper_parlay_tracker.py).
+        st.caption("⚠ INFORMATIONAL ONLY — below the 3-leg monitored-parlay minimum. "
+                   "Not tracked in Paper Performance.")
+        _render_real_combo(_parlay["informational_2leg"])
+        comp.render_empty_state("NO_QUALIFYING_REAL_PARLAY", _parlay.get("reason") or
+                                 "No qualifying monitored real-market parlay right now.")
+    else:
+        comp.render_empty_state("NO_QUALIFYING_REAL_PARLAY", _parlay.get("reason") or
+                                 "No qualifying real-market parlay right now.")
 
     if _real_today["excluded_count"]:
         with st.expander(f"Why {_real_today['excluded_count']} real candidate(s) were excluded"):
