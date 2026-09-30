@@ -304,8 +304,20 @@ def run_real_sog_recommendations(nhl_conn=None, pl_conn=None, bankroll_conn=None
         alpha = results["negbinom_alpha_fitted"] if results["negbinom_alpha_fitted"] > 0.01 else None
         model_version = results.get("model_version", "player_sog_v1")
 
-        payloads = payloads if payloads is not None else _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY)
-        payloads = payloads[:max_events]
+        if payloads is not None:
+            all_payloads = payloads
+        else:
+            # Real-Slate Parlay Certification / P0 blocks (2026-09-29): the
+            # standard and alternate SOG shapes are archived under DIFFERENT
+            # meta.market_filter values (confirmed by tracing the real
+            # archive) -- both are sourced here now, not just the standard
+            # key, or the certified PLAYER_SOG_ALTERNATE contract would never
+            # see a single real payload despite being genuinely verified.
+            standard_payloads = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY)
+            alternate_payloads = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY)
+            seen_ids = {p.get("id") for p in standard_payloads}
+            all_payloads = standard_payloads + [p for p in alternate_payloads if p.get("id") not in seen_ids]
+        payloads = all_payloads[:max_events]
         summary["payloads_scanned"] = len(payloads)
         summary["contract_watch"] = flag_prop_contract_candidate_if_observed(
             market_parser.STANDARD_MARKET_KEY, payloads)
@@ -324,6 +336,20 @@ def run_real_sog_recommendations(nhl_conn=None, pl_conn=None, bankroll_conn=None
                     result = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "recorded": False}
                 summary["results"].append(result)
                 _tally(summary, result)
+
+            alt_ladder = market_parser.group_alternate_ladder(quotes)
+            for _key, by_point in alt_ladder.items():
+                for point, quote in by_point.items():
+                    summary["quotes_seen"] += 1
+                    try:
+                        result = _price_and_record_sog_alternate_quote(
+                            nhl_conn, pl_conn, bankroll_conn, event_payload, point, quote, schedule,
+                            player_index, sog_rows, sog_index, team_schedules, opponent_allowed,
+                            league_avg_sog_allowed, weights, alpha, model_version)
+                    except Exception as exc:  # noqa: BLE001 -- one bad quote must never abort the batch
+                        result = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "recorded": False}
+                    summary["results"].append(result)
+                    _tally(summary, result)
     except Exception as exc:  # noqa: BLE001 -- report, never crash the caller
         summary["status"] = "ERROR"
         summary["error"] = f"{exc.__class__.__name__}: {exc}"
@@ -434,6 +460,119 @@ def _price_and_record_sog_pair(nhl_conn, pl_conn, bankroll_conn, event_payload, 
         "confidence": view["confidence"], "model_version": model_version,
         "sportsbook": "DraftKings", "market_key": q["market_key"], "line": q.get("point"),
         "odds_american": q["price_american"], "market_no_vig_probability": priced.get("market_no_vig_probability"),
+        "odds_captured_at_utc": observed_at_utc,
+        "prospective_status": priced["action"],
+    }
+    outcome = _record_and_maybe_paper_bet(pl_conn, bankroll_conn, prediction=prediction, priced=priced,
+                                          checkpoint=checkpoint)
+    outcome["recorded"] = outcome["status"] in ("INSERTED", "DUPLICATE")
+    return outcome
+
+
+SOG_ALTERNATE_CANONICAL_ID = "PLAYER_SOG_ALTERNATE"
+
+
+def _price_and_record_sog_alternate_quote(nhl_conn, pl_conn, bankroll_conn, event_payload, point, quote,
+                                          schedule, player_index, sog_rows, sog_index, team_schedules,
+                                          opponent_allowed, league_avg_sog_allowed, weights, alpha,
+                                          model_version) -> dict:
+    """The real PLAYER_SOG_ALTERNATE path (Real-Slate Parlay Certification +
+    P0 blocks, 2026-09-29): the certified alternate-ladder shape is
+    ONE-SIDED (Over-only, one quote per point) -- this mirrors
+    _price_and_record_sog_pair() above exactly (same identity/model/pricing
+    stack) but for a single quote rather than a standard two-sided pair,
+    and checks the contract under its own real, certified id
+    (PLAYER_SOG_ALTERNATE), never the bare, still-unverified "PLAYER_SOG"
+    family. A one-sided market always prices with action="NOT_AVAILABLE"
+    (evaluator.py's Part 42 "never fake the opposite side" rule) -- this
+    function still records the real observation (never skipped just
+    because no two-sided no-vig edge could be computed), it simply never
+    creates a paper bet for it (see _record_and_maybe_paper_bet's own
+    action=="BET" gate)."""
+    home_abbrev = event_mapping.normalize_team_name(event_payload.get("home_team", ""))
+    away_abbrev = event_mapping.normalize_team_name(event_payload.get("away_team", ""))
+    mapping = event_mapping.map_event_to_game(event_payload, schedule)
+    if mapping["status"] != "MATCHED":
+        return {"status": mapping["status"], "reason": mapping["reason"],
+                "player_name_raw": quote["player_name_raw"], "recorded": False}
+
+    pmap = player_mapping.map_player(quote["player_name_raw"], home_abbrev, away_abbrev, player_index)
+    if pmap["status"] != "MATCHED":
+        return {"status": pmap["status"], "reason": pmap["reason"],
+                "player_name_raw": quote["player_name_raw"], "recorded": False}
+
+    player_id = pmap["player_id"]
+    prediction_date = event_payload["commence_time"][:10]
+    candidates = player_index.get(player_mapping.normalize_name(quote["player_name_raw"]), [])
+    recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == player_id), home_abbrev)
+    team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
+    opponent = away_abbrev if team == home_abbrev else home_abbrev
+    year, month = int(prediction_date[:4]), int(prediction_date[5:7])
+    season_start_year = year if month >= 7 else year - 1
+    season = season_start_year * 10000 + (season_start_year + 1)
+
+    from research.generic_prop_pricing.line_mapping import NonHalfPointLineError, line_to_threshold
+    try:
+        threshold = line_to_threshold(point)
+    except NonHalfPointLineError as exc:
+        return {"status": "MALFORMED_LINE", "reason": str(exc), "player_id": player_id, "recorded": False}
+
+    from research.player_sog.live_projection import project_player_sog
+    view = project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,
+                               league_avg_sog_allowed, weights, alpha, player_id, team, opponent,
+                               prediction_date, season)
+    if view["status"] != "PROJECTED_ACTIVE":
+        return {"status": view["status"], "player_id": player_id, "recorded": False}
+
+    market, contract_verified = quote_to_normalized_market(
+        quote, market_family=SOG_ALTERNATE_CANONICAL_ID, canonical_market_id=f"{SOG_ALTERNATE_CANONICAL_ID}_{threshold}PLUS",
+        threshold=threshold, side="OVER", opposing_price=None, player_id=player_id)
+
+    priced = ge.evaluate_prop(
+        market_family=SOG_MARKET_ID, model_validated_thresholds=SOG_VALIDATED_THRESHOLDS,
+        threshold=threshold, side="OVER", probs=view["probs"], conservative_probs=view["conservative_probs"],
+        confidence=view["confidence"], lineup_status="PROJECTED/UNCONFIRMED", market=market,
+        provider_contract_verified=contract_verified)
+
+    if priced["status"] != ge.PRICED:
+        return {"status": priced["status"], "reason": priced.get("reason"), "player_id": player_id,
+                "recorded": False}
+
+    checkpoint = _checkpoint_for(pl_conn, game_id=str(mapping["game_id"]), player_id=player_id,
+                                  market_id=f"{SOG_MARKET_ID}_{threshold}PLUS", threshold=f"{threshold}+",
+                                  side="OVER")
+    event_start_utc = normalize_utc_timestamp(event_payload["commence_time"])
+    # The real alternate-ladder payload shape (unlike every standard-market
+    # fixture seen so far) does not always carry a bookmaker-LEVEL last_update
+    # -- confirmed directly against the real archived payload this contract
+    # was certified from (tests/fixtures/draftkings_player_sog_alternate_real_
+    # payload.json: bookmaker.last_update is absent, only the MARKET's own
+    # last_update is real and present). Prefer the market-level timestamp,
+    # never silently fall through to event_start_utc itself (which would
+    # equal created_at_utc and trip the Section 10 pre-game guard below).
+    observed_at_utc = (normalize_utc_timestamp(quote.get("market_last_update_utc"))
+                       or normalize_utc_timestamp(quote.get("bookmaker_last_update_utc"))
+                       or event_start_utc)
+    prediction = {
+        "record_type": "MODEL_OBSERVATION", "model_id": "PLAYER_SOG",
+        "event_start_utc": event_start_utc,
+        "created_at_utc": observed_at_utc,
+        "prediction_cutoff_utc": observed_at_utc,
+        "game_id": str(mapping["game_id"]), "game_date": prediction_date,
+        "player_id": player_id, "player_name_snapshot": quote["player_name_raw"],
+        "team": team, "opponent": opponent,
+        # market_id/market_family stay the SAME real settlement dispatch keys
+        # _price_and_record_sog_pair() already uses -- settlement cares about
+        # the underlying stat (shots on goal), never which raw market shape
+        # (standard vs. alternate) priced it. Contract verification (above)
+        # is the only place the shape-specific id matters.
+        "market_id": f"{SOG_MARKET_ID}_{threshold}PLUS", "market_family": "SOG",
+        "threshold": f"{threshold}+", "side": "OVER",
+        "raw_probability": priced["model_probability"], "context_adjusted_probability": priced["model_probability"],
+        "coherent_probability": priced["model_probability"], "conservative_probability": priced["conservative_probability"],
+        "confidence": view["confidence"], "model_version": model_version,
+        "sportsbook": "DraftKings", "market_key": quote["market_key"], "line": point,
+        "odds_american": quote["price_american"], "market_no_vig_probability": priced.get("market_no_vig_probability"),
         "odds_captured_at_utc": observed_at_utc,
         "prospective_status": priced["action"],
     }

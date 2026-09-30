@@ -991,9 +991,17 @@ class TestTodayPageStaleRendering(unittest.TestCase):
         self.assertIn("SNAPSHOT FRESHNESS: CURRENT", text)
 
     def test_recorded_recommendations_carry_their_own_real_market_label_apart_from_the_demo(self):
+        # Real Product Bridge block (2026-09-29): the page's global banner
+        # changed from "SIMULATED MARKET (DEMO ONLY)" to a real-data-first
+        # "LIVE — REAL NHL SCHEDULE" banner (the Demo/Model Showcase now
+        # lives in its own collapsed section) -- this test's real point,
+        # that Recorded Recommendations carries its own REAL MARKET label
+        # distinct from the demo content elsewhere, still holds; the demo
+        # section's own caption now says "SIMULATED slate" instead.
         text = self._today("CURRENT")
         self.assertIn("Recorded Recommendations", text)
-        self.assertIn("SIMULATED MARKET (DEMO ONLY)", text)
+        self.assertIn("REAL MARKET", text)
+        self.assertIn("SIMULATED", text)
 
 
 class TestOwnerDailyCheck(unittest.TestCase):
