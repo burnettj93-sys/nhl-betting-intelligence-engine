@@ -719,7 +719,15 @@ def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str) -
     immutable stored data."""
     s = bankroll_summary(conn, track)
     if s["bets"] == 0:
-        return f"No {track} paper bets have been recorded yet -- WAITING FOR SETTLED REAL RECOMMENDATIONS."
+        # Production Gap Closure sprint (2026-09-30): this used to say
+        # "WAITING FOR SETTLED REAL RECOMMENDATIONS" for EVERY track with
+        # zero bets, including DEMO_PAPER and GAME_PARLAY_PAPER -- whose
+        # own bets, when they exist, are simulated/single-game demo
+        # entries, never real recommendations. Track-specific wording so
+        # the demo tracks never imply they're waiting on real activity.
+        if track == "REAL_MARKET_PAPER":
+            return f"No {track} paper bets have been recorded yet -- WAITING FOR SETTLED REAL RECOMMENDATIONS."
+        return f"No {track} paper bets have been recorded yet."
     return (f"${s['current_bankroll']:.2f} (started at ${s['starting_bankroll']:.2f}, "
             f"{s['wins']}-{s['losses']}-{s['voids']} on {s['bets']} bets, "
             f"{s['pending']} still pending, net {'profit' if s['net_profit'] >= 0 else 'loss'} of "
