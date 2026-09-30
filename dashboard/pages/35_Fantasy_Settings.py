@@ -108,7 +108,7 @@ else:
         st.rerun()
 
     st.divider()
-    st.markdown("### Connection Diagnostic (Phase 9 — YAHOO_CONNECTION_CERTIFIED)")
+    st.markdown("### Connection Diagnostic")
     st.caption("Fetches your identity, NHL fantasy game, leagues, league settings, and team "
                "LIVE from Yahoo -- transiently, for display only. Nothing below is ever saved.")
     if st.button("Run connection diagnostic"):
@@ -135,9 +135,9 @@ st.markdown("### Fantasy System Health")
 health_rows = [
     ("YAHOO_AUTH", "CONNECTED" if _token is not None else "OWNER_AUTH_REQUIRED"),
     ("YAHOO_CONNECTION_DIAGNOSTIC", "Run it above to check" if _token is not None else "REQUIRES_CONNECTION"),
-    ("YAHOO_ROSTER", "NOT_IMPLEMENTED_THIS_SPRINT (Phase 10, pending)"),
-    ("YAHOO_MATCHUP", "NOT_IMPLEMENTED_THIS_SPRINT (Phase 10, pending)"),
-    ("YAHOO_AVAILABLE_PLAYERS", "NOT_IMPLEMENTED_THIS_SPRINT (Phase 10, pending)"),
+    ("YAHOO_ROSTER", "NOT_IMPLEMENTED_YET"),
+    ("YAHOO_MATCHUP", "NOT_IMPLEMENTED_YET"),
+    ("YAHOO_AVAILABLE_PLAYERS", "NOT_IMPLEMENTED_YET"),
     ("FANTASY_PROJECTIONS", "DEMO_MODE_ONLY"),
     ("FANTASY_RECOMMENDATIONS", "DEMO_MODE_ONLY"),
 ]

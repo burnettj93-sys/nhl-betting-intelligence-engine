@@ -25,3 +25,19 @@ def eastern_today(now: dt.datetime | None = None) -> str:
     they're already in) -- defaults to the real current UTC time."""
     now = now or dt.datetime.now(dt.timezone.utc)
     return now.astimezone(EASTERN).date().isoformat()
+
+
+def eastern_date_of(iso_utc: str) -> str:
+    """The Eastern-time calendar date a specific UTC instant falls on --
+    e.g. a real odds provider's `commence_time`. Production Gap Closure
+    sprint (2026-09-30): several SOG call sites derived a "prediction
+    date" via `commence_time[:10]`, a naive slice of the raw UTC string --
+    exactly the bug this module's own docstring warns about. A 10 PM ET
+    game is already `...T02:00:00Z` the NEXT UTC calendar day, so that
+    slice silently fed the model, and any date-keyed lookup, the wrong
+    real hockey day for every late game. Always convert through here
+    instead of slicing a UTC string directly."""
+    parsed = dt.datetime.fromisoformat(iso_utc.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return eastern_today(parsed)

@@ -107,8 +107,16 @@ class TestQualifyingParlayIsStaked(unittest.TestCase):
         second = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 30, 0, 30, tzinfo=dt.timezone.utc))
 
         self.assertEqual(first["stake_result"]["newly_staked"], 1)
+        # Production Gap Closure sprint (2026-09-30): the second run's candidate
+        # legs are now filtered against what run 1 already persisted BEFORE the
+        # engine ever runs (todays_real_parlay_usage) -- the same 3 games are
+        # already used today, so nothing eligible remains to even attempt a
+        # (now-impossible) duplicate stake. qualifying_parlays_found is 0
+        # rather than "found 1, but it was a DUPLICATE," which is the more
+        # correct fact: run 2 never rebuilds a ticket it has no legs left for.
         self.assertEqual(second["stake_result"]["newly_staked"], 0)
-        self.assertEqual(second["stake_result"]["already_staked"], 1)
+        self.assertEqual(second["stake_result"]["qualifying_parlays_found"], 0)
+        self.assertEqual(second["stake_result"]["status"], "NO_QUALIFYING_PARLAY")
 
         bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
         rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
@@ -222,6 +230,64 @@ class TestFullLifecycleThroughSettlement(unittest.TestCase):
         self.assertEqual(summary["losses"], 0)
         self.assertGreater(summary["net_profit"], 0.0)
         self.assertEqual(summary["hit_rate"], 1.0)
+
+
+class TestCrossRunDailyCapAndExclusivity(unittest.TestCase):
+    """Production Gap Closure sprint (2026-09-30): the exact audited
+    reproduction -- 3 tickets on one run, then 3 more later the same ET
+    day, must never exceed MAX_PARLAYS_PER_DAY=5 total, and a later run
+    must never reuse a game or leg an earlier run already staked."""
+
+    def test_a_second_run_the_same_day_is_capped_by_what_the_first_run_already_staked(self):
+        # 9 real games/legs -- enough for 3 fresh tickets on their own, but
+        # run 1 has already staked 3 tickets (9 legs) today, leaving a
+        # budget of only 2 more (MAX_PARLAYS_PER_DAY=5 - 3 already staked).
+        first_games = [{"game_id": i, "date": "2026-09-29", "start": f"2026-09-29T2{i % 4}:00:00",
+                        "home": f"H{i}", "away": f"A{i}"} for i in range(1, 10)]
+        second_games = [{"game_id": i, "date": "2026-09-29", "start": f"2026-09-29T2{i % 4}:00:00",
+                         "home": f"H{i}", "away": f"A{i}"} for i in range(10, 19)]
+        nhl_path = _fresh_nhl_db_with_games(first_games + second_games)
+        first_legs = [_leg(str(i), participant_id=f"T{i}", conservative_probability=0.90) for i in range(1, 10)]
+        second_legs = [_leg(str(i), participant_id=f"T{i}", conservative_probability=0.90) for i in range(10, 19)]
+        bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        bankroll_tmp.close()
+
+        first = _run_with(nhl_path, bankroll_tmp.name, first_legs,
+                           dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual(first["stake_result"]["newly_staked"], 3)
+
+        # Second run later the SAME ET day: a fresh, fully independent pool
+        # of 9 NEW legs (different games) could support 3 more tickets on
+        # its own -- but only 2 remain in today's budget (5 - 3).
+        second = _run_with(nhl_path, bankroll_tmp.name, second_legs,
+                            dt.datetime(2026, 9, 29, 22, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual(second["stake_result"]["newly_staked"], 2,
+                          "must be capped at the REMAINING daily budget, not the pool's own full capacity")
+
+        bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
+        rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+        self.assertEqual(len(rows), 5, "3 (run 1) + 2 (run 2, capped) = exactly MAX_PARLAYS_PER_DAY, never 6")
+
+    def test_a_second_run_never_reuses_a_game_the_first_run_already_staked(self):
+        games = [{"game_id": i, "date": "2026-09-29", "start": "2026-09-29T23:00:00",
+                  "home": f"H{i}", "away": f"A{i}"} for i in range(1, 4)]
+        nhl_path = _fresh_nhl_db_with_games(games)
+        legs = [_leg(str(i), conservative_probability=0.90) for i in range(1, 4)]
+        bankroll_tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        bankroll_tmp.close()
+
+        first = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 18, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual(first["stake_result"]["newly_staked"], 1)
+
+        # Same 3 games offered again (as a fresh, independently-priced pool
+        # would look if odds were re-quoted) -- must not be restaked.
+        second = _run_with(nhl_path, bankroll_tmp.name, legs, dt.datetime(2026, 9, 29, 22, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual(second["stake_result"]["newly_staked"], 0)
+        self.assertEqual(second["stake_result"]["qualifying_parlays_found"], 0)
+
+        bankroll_conn = pb.init_db(Path(bankroll_tmp.name))
+        rows = pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+        self.assertEqual(len(rows), 1)
 
 
 if __name__ == "__main__":

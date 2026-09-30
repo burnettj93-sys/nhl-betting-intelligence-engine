@@ -150,7 +150,8 @@ def _price_pair(pair, event, mapping, home_abbrev, away_abbrev, player_index, so
                 "provider_event_id": event["id"], "market": any_q["market_key"], "layer": "player_mapping"}
 
     player_id = pmap["player_id"]
-    prediction_date = event["commence_time"][:10]
+    from operational import eastern_time as et
+    prediction_date = et.eastern_date_of(event["commence_time"])
     # figure out which side (home/away) this player's team actually is,
     # using the mapping index's own most-recent-team record
     candidates = player_index.get(player_mapping.normalize_name(any_q["player_name_raw"]), [])

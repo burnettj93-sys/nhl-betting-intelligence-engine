@@ -128,6 +128,31 @@ class TestMoneylineAdapter(unittest.TestCase):
         self.assertEqual(legs, [])
         self.assertEqual(excluded[0]["reason"], "CONTRACT_NOT_VERIFIED")
 
+    def test_a_scheduled_game_several_days_out_is_not_todays_candidate(self):
+        """Production Gap Closure sprint (2026-09-30): this adapter
+        previously scanned EVERY scheduled game in nhl.db regardless of
+        date, while the visible Today slate and the SOG leg pool are both
+        scoped to today's real Eastern hockey day. A future-dated
+        SCHEDULED game (still far from puck drop, so it would never hit
+        the EVENT_ALREADY_STARTED exclusion) must not appear at all."""
+        conn = _fresh_db_with_game(game_id=1, start_utc="2026-10-05T23:00:00")  # 6 real days after NOW
+        report = BetReport(game_label="MTL @ TOR", market="MONEYLINE", selection="TOR", action="BET",
+                            model_conservative_probability=0.62, current_draftkings_price=-150)
+        with mock.patch("run_slate.build_prediction_for_game", return_value=_pred(start_utc="2026-10-05T23:00:00")), \
+             mock.patch("pricing.engine.evaluate_moneyline_for_game", return_value=[report]):
+            legs, excluded = adapter.moneyline_candidate_legs(conn, now=NOW)
+        self.assertEqual(legs, [], "a game several days out is not part of TODAY's real slate")
+        self.assertEqual(excluded, [], "excluded from the SQL query itself, never reached far enough to log a reason")
+
+    def test_todays_scheduled_game_is_still_a_candidate(self):
+        conn = _fresh_db_with_game(game_id=1, start_utc="2026-09-29T23:00:00")  # same ET date as NOW
+        report = BetReport(game_label="MTL @ TOR", market="MONEYLINE", selection="TOR", action="BET",
+                            model_conservative_probability=0.62, current_draftkings_price=-150)
+        with mock.patch("run_slate.build_prediction_for_game", return_value=_pred()), \
+             mock.patch("pricing.engine.evaluate_moneyline_for_game", return_value=[report]):
+            legs, excluded = adapter.moneyline_candidate_legs(conn, now=NOW)
+        self.assertEqual(len(legs), 1)
+
 
 class TestSogAlternateAdapter(unittest.TestCase):
     """Uses the REAL, certified fixture payload (the same one
@@ -183,6 +208,38 @@ class TestSogAlternateAdapter(unittest.TestCase):
         self.assertEqual(leg.american_price, 195)  # Brady Tkachuk Over 3.5 == 4+, real archived price
         self.assertEqual(leg.conservative_probability, 0.55)
         self.assertTrue(leg.provider_contract_verified)
+
+    def test_late_game_prediction_date_uses_et_not_a_naive_utc_slice(self):
+        """Production Gap Closure sprint (2026-09-30): commence_time[:10]
+        used to feed project_player_sog() directly -- for a 10 PM ET game
+        (already the next UTC calendar day), that fed the model the WRONG
+        real hockey day. This fixture's real commence_time is
+        2026-09-29T21:10:47Z = 2026-09-29 17:10 ET (EDT, UTC-4) -- same ET
+        and UTC date, so it does not itself expose the bug, but the actual
+        argument passed to the model must be the correctly ET-derived date
+        either way, not an accidentally-correct coincidence of this fixture."""
+        payload = self._load_payload()
+        conn = self._schedule_conn()
+        fresh_now = dt.datetime(2026, 9, 29, 12, 20, 0, tzinfo=dt.timezone.utc)
+        captured_dates = []
+
+        def _capture_projection(*args, **kwargs):
+            # project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,
+            #   league_avg_sog_allowed, weights, alpha, player_id, team, opponent,
+            #   prediction_date, season)
+            captured_dates.append(args[10])
+            return self._active_projection()
+
+        with mock.patch("research.live_sog_pricing.player_mapping.map_player",
+                         return_value=self._matched_player_mapping()), \
+             mock.patch("research.real_market_parlay.real_slate_adapter._sog_model_inputs",
+                         return_value=([], object(), {}, {}, 1.0, [], None)), \
+             mock.patch("research.player_sog.live_projection.project_player_sog",
+                         side_effect=_capture_projection):
+            adapter.sog_alternate_candidate_legs(conn, [payload], now=fresh_now)
+        self.assertTrue(captured_dates)
+        from operational import eastern_time as et
+        self.assertEqual(captured_dates[0], et.eastern_date_of(payload["commence_time"]))
 
     def test_stale_price_is_excluded_never_treated_as_current(self):
         # The real fixture's own captured timestamp is 2026-09-29T12:14:34Z --

@@ -317,5 +317,59 @@ class TestRealCertifiedPayloadCompatibility(unittest.TestCase):
         self.assertEqual(leg.american_price, 195)
 
 
+class TestEconomicIdentityDedup(unittest.TestCase):
+    """Production Gap Closure sprint (2026-09-30): two archive captures of
+    the SAME real quote (different Python objects, same real bet) must
+    collapse to one leg before combo-building -- otherwise they can land
+    in two different "independent" tickets, staking the same bet twice."""
+
+    def test_two_objects_same_economic_identity_collapse_to_one(self):
+        older = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:00:00Z")
+        newer = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:30:00Z")
+        deduped = rmp.dedupe_legs_by_economic_identity([older, newer])
+        self.assertEqual(len(deduped), 1)
+        self.assertIs(deduped[0], newer, "the LATEST captured_at_utc quote must be kept")
+
+    def test_different_game_or_threshold_are_not_deduped(self):
+        legs = [_leg("G1", participant_id="P1", threshold=3), _leg("G2", participant_id="P1", threshold=3),
+                _leg("G1", participant_id="P1", threshold=4)]
+        deduped = rmp.dedupe_legs_by_economic_identity(legs)
+        self.assertEqual(len(deduped), 3)
+
+    def test_duplicate_quote_objects_cannot_be_split_across_two_tickets(self):
+        older = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:00:00Z",
+                     conservative_probability=0.90)
+        newer = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:30:00Z",
+                     conservative_probability=0.90)
+        other_legs = [_leg(f"G{i}", participant_id=f"P{i}", conservative_probability=0.90) for i in range(2, 6)]
+        result = rmp.build_top_real_market_parlays([older, newer] + other_legs, max_parlays=5)
+        self.assertEqual(result["status"], "QUALIFIED")
+        seen_g1 = sum(1 for p in result["parlays"] for l in p["combo"].legs if l.game_id == "G1")
+        self.assertEqual(seen_g1, 1, "the same real G1 quote must never appear in two different tickets")
+
+
+class TestCrossTicketGameExclusivity(unittest.TestCase):
+    """"No identical legs reused" is not the same claim as "independent
+    tickets" -- two tickets with zero overlapping legs could still each
+    hold a leg from the SAME game (a real correlated exposure). Every
+    game used by one ticket must be unavailable to every other ticket
+    built in the same call."""
+
+    def test_no_two_tickets_share_a_game_even_with_different_legs_available(self):
+        # G1 has two DIFFERENT real legs (a moneyline leg and a SOG leg) --
+        # without cross-ticket game exclusivity, each could seed a separate
+        # ticket even though both belong to the same real game.
+        g1_moneyline = _moneyline_leg("G1", conservative_probability=0.90)
+        g1_sog = _leg("G1", participant_id="P1", threshold=3, conservative_probability=0.90)
+        other_legs = [_leg(f"G{i}", participant_id=f"P{i}", conservative_probability=0.90) for i in range(2, 8)]
+
+        result = rmp.build_top_real_market_parlays([g1_moneyline, g1_sog] + other_legs, max_parlays=5)
+        self.assertEqual(result["status"], "QUALIFIED")
+        game_ids_per_ticket = [{l.game_id for l in p["combo"].legs} for p in result["parlays"]]
+        all_games_used = [gid for ticket_games in game_ids_per_ticket for gid in ticket_games]
+        self.assertEqual(len(all_games_used), len(set(all_games_used)),
+                          "no game may appear in more than one of today's tickets")
+
+
 if __name__ == "__main__":
     unittest.main()

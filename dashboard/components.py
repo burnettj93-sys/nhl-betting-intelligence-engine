@@ -273,6 +273,12 @@ def render_confidence_badge(label: str, low_confidence_negative_skill: bool = Fa
 
 
 STATUS_BANNER_STYLES = {
+    # Production Gap Closure sprint (2026-09-30): research/model_registry.py
+    # can set operational_status="PRODUCTION_READY" on a real entry, but
+    # this dict never had that key -- Model Health's own lookup fell back
+    # to RESEARCH's grey/blue style while its headline TEXT still printed
+    # "PRODUCTION READY" verbatim, a real self-contradiction in one banner.
+    "PRODUCTION_READY": ("#0e4429", "#4ade80", "PRODUCTION READY"),
     "VALIDATED": ("#123a24", "#3ecf8e", "VALIDATED"),
     "PARTIAL": ("#4a3a12", "#e8c46a", "PARTIAL"),
     "RESEARCH": ("#16283f", "#7fb3e8", "RESEARCH"),

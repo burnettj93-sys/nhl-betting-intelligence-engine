@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 import db
+from operational import ingestion_health
 from operational import prospective_ledger as pl
 from operational import settle_daily_observations as sdo
 
@@ -221,6 +222,119 @@ class Test06BatchErrorResilience(unittest.TestCase):
         # "not-a-number" still parses via int("not-a-number".rstrip("+")) failing ->
         # UNSUPPORTED_SETTLEMENT_MARKET (fails closed, not a batch-aborting exception).
         self.assertEqual(bad["result_status"], "UNRESOLVED")
+
+
+class Test07BacklogStatusVisibility(unittest.TestCase):
+    """Production Gap Closure sprint (2026-09-30): backlog_status() must
+    distinguish "game not final yet" (normal) from "game IS final but
+    settlement hasn't consumed it yet" (the real job-sequencing gap) and
+    report WHY each final-but-unsettled row can't cleanly resolve."""
+
+    def test_distinguishes_awaiting_final_from_final_awaiting_settlement(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        _insert_game(official, 1, game_state="LIVE")
+        _insert_game(official, 2, game_state="FINAL")
+        _insert_player_stat(official, 2, "P1", shots=5)
+        _record_model_observation(ledger, "pred-live", player_id="P1", game_id=1)
+        _record_model_observation(ledger, "pred-final", player_id="P1", game_id=2)
+
+        status = sdo.backlog_status(ledger, official)
+        self.assertEqual(status["pending_total"], 2)
+        self.assertEqual(status["awaiting_game_final"], 1)
+        self.assertEqual(status["final_awaiting_settlement"], 1)
+        self.assertEqual(status["final_awaiting_settlement_reasons"], {"RESOLVED": 1})
+
+    def test_backlog_clears_after_settlement_runs(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        _insert_game(official, 1, game_state="FINAL")
+        _insert_player_stat(official, 1, "P1", shots=5)
+        _record_model_observation(ledger, "pred-1", player_id="P1", game_id=1)
+
+        self.assertEqual(sdo.backlog_status(ledger, official)["final_awaiting_settlement"], 1)
+        sdo.run_settlement_batch(ledger, official)
+        self.assertEqual(sdo.backlog_status(ledger, official)["final_awaiting_settlement"], 0)
+
+    def test_unsupported_market_reason_surfaces_in_backlog(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        _insert_game(official, 1, game_state="FINAL")
+        pl.record_model_observation(
+            ledger, prediction_id="pred-blocks", event_start_utc=PAST_EVENT, created_at_utc=PAST_CUTOFF,
+            prediction_cutoff_utc=PAST_CUTOFF, game_id=1, game_date="2026-10-15", player_id="P1",
+            team="EDM", opponent="CHI", market_id="PLAYER_BLOCKS", threshold="2+", raw_probability=0.5)
+        status = sdo.backlog_status(ledger, official)
+        self.assertEqual(status["final_awaiting_settlement_reasons"], {"BLOCKS_NOT_INGESTED": 1})
+
+
+class Test08GenerationAwareRerun(unittest.TestCase):
+    """The actual job-sequencing fix: settlement can be retriggered
+    same-day by a fresh ingestion generation, not just the 07:15 clock
+    slot, and is a cheap no-op when nothing new has landed."""
+
+    def setUp(self):
+        tmp_dir = Path(tempfile.mkdtemp())
+        self.health_path = tmp_dir / "ingestion_health.json"
+        self.watermark_path = tmp_dir / "watermark.json"
+        self._orig_cache_path = ingestion_health.DEFAULT_CACHE_PATH
+        self._orig_watermark_path = sdo._watermark_path
+        ingestion_health.DEFAULT_CACHE_PATH = self.health_path
+        sdo._watermark_path = lambda: self.watermark_path
+
+    def tearDown(self):
+        ingestion_health.DEFAULT_CACHE_PATH = self._orig_cache_path
+        sdo._watermark_path = self._orig_watermark_path
+
+    def test_first_ever_run_always_proceeds(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        ingestion_health.record_run("nhl_sync_full", {"status": "SUCCESS"})
+        result = sdo.run_if_new_generation(ledger, official)
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertIsNotNone(sdo._last_processed_generation_utc())
+
+    def test_rerun_with_no_new_generation_is_skipped(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        ingestion_health.record_run("nhl_sync_full", {"status": "SUCCESS"})
+        first = sdo.run_if_new_generation(ledger, official)
+        self.assertEqual(first["status"], "SUCCESS")
+
+        second = sdo.run_if_new_generation(ledger, official)
+        self.assertEqual(second["status"], "SKIPPED")
+        self.assertEqual(second["reason"], "NO_NEW_GENERATION")
+
+    def test_new_generation_after_a_same_day_midday_refresh_triggers_a_real_rerun(self):
+        """The exact audited scenario: settlement ran once, then a LATER
+        same-day refresh finalizes a new game -- the next trigger must
+        actually resettle it, not skip."""
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        ingestion_health.record_run("nhl_sync_full", {"status": "SUCCESS"})
+        first = sdo.run_if_new_generation(ledger, official)
+        self.assertEqual(first["status"], "SUCCESS")
+
+        _insert_game(official, 1, game_state="FINAL")
+        _insert_player_stat(official, 1, "P1", shots=5)
+        _record_model_observation(ledger, "pred-1", player_id="P1", game_id=1)
+        # A same-day midday refresh just finalized this game -- its OWN
+        # success is a newer generation than what settlement last consumed.
+        ingestion_health.record_run("nhl_midday_schedule_refresh", {"status": "SUCCESS"})
+
+        second = sdo.run_if_new_generation(ledger, official)
+        self.assertEqual(second["status"], "SUCCESS")
+        self.assertEqual(second["settled_win"], 1)
+        row = pl.get_observation(ledger, "pred-1")
+        self.assertEqual(row["result_status"], "WIN")
+
+    def test_force_bypasses_the_generation_check(self):
+        ledger = pl.init_db(db_path=":memory:")
+        official = _fresh_official_db()
+        ingestion_health.record_run("nhl_sync_full", {"status": "SUCCESS"})
+        sdo.run_if_new_generation(ledger, official)
+        forced = sdo.run_if_new_generation(ledger, official, force=True)
+        self.assertEqual(forced["status"], "SUCCESS")
 
 
 if __name__ == "__main__":

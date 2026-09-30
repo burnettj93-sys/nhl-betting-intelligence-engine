@@ -237,6 +237,22 @@ JUSTIFIED_EXCEPTIONS = [
             "calls -- it never touches a model, a feature, or a prediction."
         ),
     },
+    {
+        "file": "operational/paper_bankroll.py",
+        "kind": "sorted_by_game_id",
+        "marker": 'sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}"',
+        "reason": (
+            "False-positive trigger: this sorts a small list of already-selected "
+            "ParlayLeg objects (`legs`, the QUALIFIED combo's own legs, at most 4) into a "
+            "deterministic string key for create_real_market_combo_paper_bet()'s idempotency "
+            "key/market_id -- so the SAME combo always produces the SAME key regardless of "
+            "dict/list ordering, and two DIFFERENT games never collide (Production Gap "
+            "Closure sprint, 2026-09-30's fix for the idempotency key's missing game/event "
+            "identity). This is bankroll bookkeeping after a bet has already been decided; it "
+            "never touches a model fit, a feature, or a training/eval split, and game_id here "
+            "gates nothing about what any model is allowed to learn."
+        ),
+    },
 ]
 
 

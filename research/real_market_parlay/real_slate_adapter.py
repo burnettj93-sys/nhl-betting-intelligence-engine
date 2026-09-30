@@ -70,6 +70,7 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
     behavior is completely untouched by this exercise."""
     from run_slate import build_prediction_for_game
     from pricing import engine as pricing_engine
+    from operational import eastern_time as et
 
     now = now or dt.datetime.now(dt.timezone.utc)
     legs: list[ParlayLeg] = []
@@ -77,9 +78,18 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
 
     contract_verified = pa.is_contract_verified("draftkings", "MONEYLINE")
 
+    # Production Gap Closure sprint (2026-09-30): this previously scanned
+    # EVERY scheduled game in the database regardless of date, while the
+    # visible Today slate (dashboard/real_today_view.py) and this same
+    # trader's own SOG leg pool are both scoped to today's real Eastern
+    # hockey day. A real MONEYLINE leg from a game several days out could
+    # get staked into "today's" parlay even though no human viewing Today
+    # would ever call it part of today's slate -- restricted to the SAME
+    # ET calendar date every other real "today" surface in this project uses.
+    today_et = et.eastern_today(now)
     scheduled_games = conn.execute(
-        "SELECT game_id, scheduled_start_utc FROM games WHERE game_state = 'SCHEDULED' "
-        "ORDER BY game_date, game_id").fetchall()
+        "SELECT game_id, scheduled_start_utc FROM games WHERE game_state = 'SCHEDULED' AND game_date = ? "
+        "ORDER BY game_date, game_id", (today_et,)).fetchall()
 
     for row in scheduled_games:
         game_id, scheduled_start_utc = row["game_id"], row["scheduled_start_utc"]
@@ -177,6 +187,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
     mapping -> real contract certification -> real model projection ->
     real freshness policy, in that order; any failure at any stage is
     reported and EXCLUDED, never guessed past."""
+    from operational import eastern_time as et
     from operational.real_prop_orchestrator import _real_nhl_schedule
     from research.live_sog_pricing import event_mapping, market_parser, player_mapping
     from research.player_sog.live_projection import project_player_sog
@@ -224,7 +235,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                                 home_abbrev)
             team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
             opponent = away_abbrev if team == home_abbrev else home_abbrev
-            prediction_date = payload["commence_time"][:10]
+            prediction_date = et.eastern_date_of(payload["commence_time"])
             year, month = int(prediction_date[:4]), int(prediction_date[5:7])
             season_start_year = year if month >= 7 else year - 1
             season = season_start_year * 10000 + (season_start_year + 1)

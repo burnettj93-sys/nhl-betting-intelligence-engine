@@ -58,7 +58,7 @@ if not _connected:
     if st.button("Connect Yahoo Fantasy"):
         st.switch_page("pages/35_Fantasy_Settings.py")
 else:
-    st.caption("Connected — real roster/matchup sync is NOT_IMPLEMENTED_THIS_SPRINT yet; "
+    st.caption("Connected — real roster/matchup sync is not implemented yet; "
                "showing Fantasy Demo Mode below regardless of connection status.")
 
 st.divider()
