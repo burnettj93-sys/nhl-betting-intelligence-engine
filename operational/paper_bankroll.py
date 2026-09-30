@@ -382,7 +382,8 @@ def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: d
 
 
 def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict, *,
-                                        event_start_utc: str | None = None) -> dict:
+                                        event_start_utc: str | None = None,
+                                        created_at_utc: str | None = None) -> dict:
     """Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
     block, 2026-09-29): REAL_MARKET_PAPER track, is_combo=True -- distinct
     from create_demo_combo_paper_bet (DEMO_PAPER, simulated prices) and
@@ -417,7 +418,15 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     CANDIDATE as soon as any leg's game could plausibly be final --
     resolve_combo_bet() itself still correctly reports
     PENDING_STILL_WAITING until every leg's own game has actually gone
-    FINAL."""
+    FINAL.
+
+    `created_at_utc` defaults to the real current wall-clock time
+    (record_paper_bet()'s own default) -- correct for real production use,
+    where the caller never passes a fictional `now`. A caller that DOES
+    pass its own reference time (e.g. operational/real_parlay_paper_trader.py's
+    own day-level idempotency check, or a test) should also pass that same
+    time here, or its own "already staked today" comparison against this
+    row's stored created_at_utc will never line up."""
     if parlay_result.get("status") != "QUALIFIED":
         raise InvalidPaperBetError(
             "refusing to paper-bet a non-qualifying Real-Market Parlay result "
@@ -440,7 +449,8 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
         market_id=market_id, entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False,
         legs_json=legs_snapshot, model_probability=combo.joint_probability,
         conservative_probability=combo.joint_probability, edge=combo.combo_edge,
-        prediction_checkpoint="FIRST_ACTIONABLE", event_start_utc=event_start_utc)
+        prediction_checkpoint="FIRST_ACTIONABLE", event_start_utc=event_start_utc,
+        created_at_utc=created_at_utc)
 
 
 def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status: str, *,
