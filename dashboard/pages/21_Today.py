@@ -213,8 +213,8 @@ except cloud_snapshot.SnapshotUnavailable as _exc:
 
 if _real_today is not None:
     st.markdown("## 1 · Today's Real Slate")
-    st.caption(f"{_real_today['provenance']} — today's actual NHL games. Generated "
-               f"{_real_today['generated_at_utc'][:16]}.")
+    st.caption(f"{_real_today['provenance']} — today's actual NHL games (ET slate selection). Generated "
+               f"{_real_today['generated_at_utc'][:16]} UTC.")
     _real_games = _real_today["games"]
     if not _real_games:
         comp.render_empty_state("NO_GAMES", "No real NHL games found for today.")

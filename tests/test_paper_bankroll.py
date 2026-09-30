@@ -334,6 +334,15 @@ class TestTheoreticalBankrollQuestion(TestPaperBankroll):
         answer = pb.answer_theoretical_bankroll_question(self.conn, "REAL_MARKET_PAPER")
         self.assertIn("WAITING", answer)
 
+    def test_demo_and_game_parlay_tracks_never_claim_to_wait_on_real_recommendations(self):
+        """Production Gap Closure sprint (2026-09-30): the zero-bets answer used to say
+        "WAITING FOR SETTLED REAL RECOMMENDATIONS" for EVERY track, including DEMO_PAPER
+        and GAME_PARLAY_PAPER -- whose own bets, when they exist, are simulated/single-game
+        demo entries, never real recommendations."""
+        for track in ("DEMO_PAPER", "GAME_PARLAY_PAPER"):
+            answer = pb.answer_theoretical_bankroll_question(self.conn, track)
+            self.assertNotIn("REAL RECOMMENDATIONS", answer, f"{track} must never claim to wait on real recommendations")
+
     def test_answers_with_real_numbers_once_bets_exist(self):
         r = self._bet(entry_odds=200)
         pb.settle_paper_bet(self.conn, r["paper_bet_id"], "WIN")
