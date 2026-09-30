@@ -434,7 +434,17 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
 
     combo = parlay_result["combo"]
     legs = combo.legs
-    market_id = "REAL_MARKET_PARLAY:" + "+".join(
+    # Owner Escalation block (2026-09-30): date-scoped so the SAME exact leg
+    # combination is blocked from being staked twice on the SAME real day
+    # (the actual duplicate-bet risk), but is never permanently blocked if
+    # the identical players/thresholds genuinely line up again on a later
+    # real day -- a plain, date-free key would silently treat "the same
+    # legs happened to look best again three weeks later" as a duplicate
+    # of the first bet forever, which is wrong.
+    from operational import eastern_time as et
+    _as_of = dt.datetime.fromisoformat(created_at_utc) if created_at_utc else None
+    _stake_date = et.eastern_today(_as_of)
+    market_id = f"REAL_MARKET_PARLAY:{_stake_date}:" + "+".join(
         sorted(f"{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
     legs_snapshot = json.dumps([
         {"participant_id": l.participant_id, "participant_name": l.participant_name,

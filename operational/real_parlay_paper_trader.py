@@ -1,38 +1,38 @@
 """
-Real Parlay Paper Trader (Platform Recovery block, 2026-09-29). The
+Real Parlay Paper Trader (Platform Recovery block, 2026-09-29; extended to
+several independent parlays, Owner Escalation block, 2026-09-30). The
 missing link between "a real, qualifying cross-game parlay exists" and "a
 real $10 paper bet is actually staked, tracked, and later settled."
 
-Before this block, operational/paper_bankroll.py::create_real_market_combo_paper_bet()
-and operational/paper_bet_settlement_driver.py::settle_due_bets() both
-existed, real and already tested, but neither was ever called against the
-real operational/paper_bankroll.db by any scheduled job -- the only caller
-of the former was research/real_market_parlay/manual_real_slate_exercise.py,
-an explicit certification-only exercise that writes to an isolated temp-file
-database by design and must never touch production. A real, correct
-paper-betting engine that nothing in production ever calls produces exactly
-zero real rows in Paper Performance -- this module is the fix.
+Before the first version of this block, operational/paper_bankroll.py::
+create_real_market_combo_paper_bet() and operational/paper_bet_settlement_driver.py::
+settle_due_bets() both existed, real and already tested, but neither was
+ever called against the real operational/paper_bankroll.db by any scheduled
+job. That first version then only ever staked the SINGLE best parlay of the
+day -- correct as a first step, but not what was actually being asked for:
+several independent parlay tickets a day, each getting its own $10 stake,
+not one ticket using up to 4 legs. This version stakes EVERY independent
+qualifying parlay the day's real eligible legs support
+(research/real_market_parlay/engine.py::build_top_real_market_parlays(),
+capped at MAX_PARLAYS_PER_DAY), never just the first one found and never
+more than the real pool genuinely supports.
 
 Sourcing legs: the SAME real_slate_adapter.py + research.real_market_parlay.engine
 calls dashboard/real_today_view.py::build_real_today_state() itself makes
 (never re-derived, never a second eligibility system) -- what the Today page
-shows a viewer and what this module stakes a real $10 paper bet against are
-always the same real, qualifying parlay.
+shows a viewer and what this module stakes real $10 paper bets against are
+always the same real, qualifying parlays.
 
-Idempotent per Eastern calendar day (operational/eastern_time.py, matching
-the real NHL hockey-day semantics every other real-data section on Today
-already uses): if a REAL_MARKET_PAPER combo bet already exists for today's
-Eastern date, staking is skipped this run -- restart-safe and duplicate-safe,
-matching every other daily job in this project's established pattern.
-record_paper_bet()'s own idempotency_key additionally guarantees the exact
-same qualifying leg set is never staked twice even across a day boundary.
+Idempotent per Eastern calendar day AND per exact leg combination
+(operational/paper_bankroll.py::create_real_market_combo_paper_bet()'s own
+date-scoped idempotency key) -- re-running this same day never double-stakes
+any of the day's parlays, restart-safe, but a genuinely new day is never
+blocked just because the same players/thresholds happened to look best
+again.
 
-Settlement runs every invocation regardless of whether a new bet was staked
-this run, across every track (operational/paper_bet_settlement_driver.py's
-own generic, already-correct WIN/LOSS/VOID/UNRESOLVED logic) -- so DEMO_PAPER
-and GAME_PARLAY_PAPER bets that were ALSO never settled by any scheduled job
-get the same fix as a direct consequence of finally wiring this driver in,
-not a separate, invented settlement rule.
+Settlement runs every invocation regardless of how many new bets were
+staked this run, across every track (operational/paper_bet_settlement_driver.py's
+own generic, already-correct WIN/LOSS/VOID/UNRESOLVED logic).
 
 Run: python3 -m operational.real_parlay_paper_trader
 """
@@ -49,19 +49,14 @@ from research.live_sog_pricing import market_parser
 from research.real_market_parlay import engine as rmp
 from research.real_market_parlay import real_slate_adapter as adapter
 
-
-def _already_staked_today(bankroll_conn, today_et: str) -> bool:
-    for row in pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True):
-        if et.eastern_today(dt.datetime.fromisoformat(row["created_at_utc"].replace("Z", "+00:00"))) == today_et:
-            return True
-    return False
+MAX_PARLAYS_PER_DAY = 5
 
 
-def _build_todays_real_parlay(nhl_conn, now: dt.datetime) -> dict:
+def _build_todays_real_parlays(nhl_conn, now: dt.datetime) -> dict:
     moneyline_legs, _ = adapter.moneyline_candidate_legs(nhl_conn, now=now)
     sog_payloads = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
     sog_legs, _ = adapter.sog_alternate_candidate_legs(nhl_conn, sog_payloads, now=now)
-    return rmp.build_real_market_parlay(moneyline_legs + sog_legs)
+    return rmp.build_top_real_market_parlays(moneyline_legs + sog_legs, max_parlays=MAX_PARLAYS_PER_DAY)
 
 
 def _earliest_scheduled_start(nhl_conn, game_ids: set[str]) -> str | None:
@@ -79,26 +74,34 @@ def run(now: dt.datetime | None = None) -> dict:
     nhl_conn = db.get_conn()
     bankroll_conn = pb.init_db()
     try:
-        if _already_staked_today(bankroll_conn, today_et):
-            stake_result = {"status": "ALREADY_STAKED_TODAY", "eastern_date": today_et}
-        else:
-            parlay_result = _build_todays_real_parlay(nhl_conn, now)
-            if parlay_result["status"] == "QUALIFIED":
-                game_ids = {l.game_id for l in parlay_result["combo"].legs}
+        parlays_result = _build_todays_real_parlays(nhl_conn, now)
+        stake_results = []
+        if parlays_result["status"] == "QUALIFIED":
+            for entry in parlays_result["parlays"]:
+                single = {"status": "QUALIFIED", "recommended_legs": entry["recommended_legs"],
+                          "combo": entry["combo"]}
+                game_ids = {l.game_id for l in entry["combo"].legs}
                 event_start_utc = _earliest_scheduled_start(nhl_conn, game_ids)
-                bet = pb.create_real_market_combo_paper_bet(bankroll_conn, parlay_result,
+                bet = pb.create_real_market_combo_paper_bet(bankroll_conn, single,
                                                              event_start_utc=event_start_utc,
                                                              created_at_utc=now.isoformat())
-                stake_result = {"status": bet["status"], "paper_bet_id": bet.get("paper_bet_id"),
-                                 "eastern_date": today_et, "recommended_legs": parlay_result["recommended_legs"]}
-            else:
-                stake_result = {"status": "NO_QUALIFYING_PARLAY", "eastern_date": today_et,
-                                 "reason": parlay_result.get("reason")}
+                stake_results.append({"status": bet["status"], "paper_bet_id": bet.get("paper_bet_id"),
+                                       "recommended_legs": entry["recommended_legs"]})
+        stake_summary = {
+            "eastern_date": today_et,
+            "qualifying_parlays_found": len(parlays_result.get("parlays", [])),
+            "newly_staked": sum(1 for r in stake_results if r["status"] == "INSERTED"),
+            "already_staked": sum(1 for r in stake_results if r["status"] == "DUPLICATE"),
+            "results": stake_results,
+        }
+        if parlays_result["status"] != "QUALIFIED":
+            stake_summary["status"] = "NO_QUALIFYING_PARLAY"
+            stake_summary["reason"] = parlays_result.get("reason")
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
     finally:
         nhl_conn.close()
         bankroll_conn.close()
-    return {"stake_result": stake_result, "settlement_summary": settlement_summary}
+    return {"stake_result": stake_summary, "settlement_summary": settlement_summary}
 
 
 if __name__ == "__main__":

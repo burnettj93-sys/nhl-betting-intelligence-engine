@@ -226,6 +226,59 @@ class TestFourLegSelection(unittest.TestCase):
         self.assertIsNone(result["alternative_3leg"])
 
 
+class TestTopRealMarketParlaysBuildsSeveralIndependentTickets(unittest.TestCase):
+    """Owner Escalation block (2026-09-30): build_top_real_market_parlays()
+    is the "several independent parlay tickets" entry point -- distinct
+    from build_real_market_parlay()'s single-best-combo behavior."""
+
+    def test_multiple_independent_parlays_are_built_when_the_pool_supports_them(self):
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(9)]
+        result = rmp.build_top_real_market_parlays(legs)
+        self.assertEqual(result["status"], "QUALIFIED")
+        self.assertEqual(len(result["parlays"]), 3)
+
+    def test_no_leg_is_reused_across_two_parlays(self):
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(9)]
+        result = rmp.build_top_real_market_parlays(legs)
+        seen_ids = set()
+        for p in result["parlays"]:
+            for l in p["combo"].legs:
+                self.assertNotIn(id(l), seen_ids, "the same leg object was used in two parlays")
+                seen_ids.add(id(l))
+
+    def test_respects_the_max_parlays_cap(self):
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(15)]
+        result = rmp.build_top_real_market_parlays(legs, max_parlays=2)
+        self.assertEqual(len(result["parlays"]), 2)
+
+    def test_never_forces_more_parlays_than_the_real_pool_supports(self):
+        # Only enough real legs for exactly one 3-leg parlay, even though
+        # max_parlays defaults to 5 -- never padded, never manufactured.
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(4)]
+        result = rmp.build_top_real_market_parlays(legs)
+        self.assertEqual(result["status"], "QUALIFIED")
+        self.assertEqual(len(result["parlays"]), 1)
+
+    def test_zero_eligible_legs_is_a_valid_pass_never_forced(self):
+        result = rmp.build_top_real_market_parlays([])
+        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
+        self.assertNotIn("parlays", result)
+
+    def test_informational_2leg_is_offered_when_nothing_qualifies(self):
+        legs = [_leg(game_id="G1", conservative_probability=0.90),
+                _leg(game_id="G2", conservative_probability=0.90)]
+        result = rmp.build_top_real_market_parlays(legs)
+        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
+        self.assertIsNotNone(result["informational_2leg"])
+
+    def test_each_parlay_still_passes_the_same_real_quality_gates(self):
+        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(6)]
+        result = rmp.build_top_real_market_parlays(legs)
+        for p in result["parlays"]:
+            self.assertGreaterEqual(p["combo"].joint_probability, rmp.MIN_JOINT_PROBABILITY)
+            self.assertGreater(p["combo"].combo_edge, 0.0)
+
+
 class TestRealCertifiedPayloadCompatibility(unittest.TestCase):
     """Proves a ParlayLeg built from the REAL, certified
     provider_adapter.PLAYER_SOG_ALTERNATE output (the same fixture

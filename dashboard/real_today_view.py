@@ -111,10 +111,18 @@ def build_real_today_state(nhl_conn, *, now: dt.datetime | None = None,
             game["strongest_leg"] = _leg_summary(best)
 
     top_conviction = real_top_conviction(all_legs)
-    parlay_result = rmp.build_real_market_parlay(all_legs)
+    # Owner Escalation block (2026-09-30): shows EVERY independent
+    # qualifying parlay the day's real legs support (up to
+    # real_parlay_paper_trader.MAX_PARLAYS_PER_DAY), the exact same set
+    # operational/real_parlay_paper_trader.py stakes $10 on each -- never
+    # just the single best one. Never a second, contradictory source of
+    # truth from what actually gets staked.
+    from operational.real_parlay_paper_trader import MAX_PARLAYS_PER_DAY
+    parlay_result = rmp.build_top_real_market_parlays(all_legs, max_parlays=MAX_PARLAYS_PER_DAY)
     parlay_view = {"status": parlay_result["status"], "reason": parlay_result.get("reason")}
     if parlay_result["status"] == "QUALIFIED":
-        parlay_view["combo"] = _combo_summary(parlay_result["combo"], parlay_result["recommended_legs"])
+        parlay_view["parlays"] = [_combo_summary(p["combo"], p["recommended_legs"])
+                                  for p in parlay_result["parlays"]]
     elif parlay_result.get("informational_2leg") is not None:
         # Platform Recovery block (2026-09-29): a real, quality-gated 2-leg
         # combo exists even though the monitored 3/4-leg cohort doesn't

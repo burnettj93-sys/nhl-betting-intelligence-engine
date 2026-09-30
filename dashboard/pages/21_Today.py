@@ -250,8 +250,10 @@ if _real_today is not None:
     st.divider()
     st.markdown("## 3 · Daily Real-Market Parlays")
     st.caption("Cross-game only (V1 forbids same-game combinations — no correlation model exists for "
-               "that yet): 3-4 real eligible legs, conservative joint probability ≥70%, positive combo "
-               "edge. A real combined DraftKings price does not exist for this and is never fabricated.")
+               "that yet): every independent 3-4 leg real combination today's eligible legs support "
+               "(conservative joint probability ≥70%, positive combo edge, no leg reused across two "
+               "tickets), up to 5 a day. A real combined DraftKings price does not exist for this and "
+               "is never fabricated.")
     def _render_real_combo(_combo):
         _legs_desc = " + ".join(f"{l['participant_name']} {l['market_family']} {l['threshold'] or ''}"
                                 for l in _combo["legs"])
@@ -265,9 +267,14 @@ if _real_today is not None:
 
     _parlay = _real_today["parlay"]
     if _parlay["status"] == "QUALIFIED":
-        _render_real_combo(_parlay["combo"])
-        st.caption("A real $10 paper bet is staked once per day against this exact qualifying parlay "
-                   "(operational.real_parlay_paper_trader) — see Paper Performance for tracked results.")
+        _parlays = _parlay["parlays"]
+        st.caption(f"{len(_parlays)} independent qualifying parlay(s) today — a real $10 paper bet is "
+                   f"staked on each (operational.real_parlay_paper_trader) — see Paper Performance for "
+                   f"tracked results.")
+        for i, _combo in enumerate(_parlays):
+            with st.container(border=True):
+                st.markdown(f"**Parlay {i + 1} of {len(_parlays)}**")
+                _render_real_combo(_combo)
     elif _parlay.get("informational_2leg") is not None:
         # Platform Recovery block (2026-09-29): fewer than 3 real eligible legs
         # qualified for the MONITORED 3/4-leg cohort, but a real, quality-gated
