@@ -48,6 +48,12 @@ class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
     SOG Contract Certification block (2026-09-29): two more real, archived payloads
     certified (PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- honest count is now 3.
 
+    Standard SOG/Saves Certification block (2026-10-01): two more real, archived
+    payloads certified (bare PLAYER_SOG, GOALIE_SAVES) -- honest count is now 5.
+    Both were also added to ALLOWED_MARKET_FAMILIES (research/real_market_parlay/
+    engine.py), so they do NOT join the orphaned list below -- ALTERNATE_TEAM_TOTAL
+    remains the one orphaned contract, a separate, pre-existing, still-open gap.
+
     Platform Recovery block (2026-09-29): the status expression used to be
     `"OK" if n == 0 else "OK"` -- a tautology, always OK regardless of n,
     which silently hid that ALTERNATE_TEAM_TOTAL is certified but never
@@ -59,7 +65,7 @@ class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
 
     def test_reports_the_real_verified_contract_count(self):
         item = sh.contract_status_health()
-        self.assertIn("VERIFIED LIVE CONTRACTS: 3", item["message"])
+        self.assertIn("VERIFIED LIVE CONTRACTS: 5", item["message"])
 
     def test_a_certified_but_unwired_contract_is_reported_waiting_not_silently_ok(self):
         item = sh.contract_status_health()

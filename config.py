@@ -105,10 +105,25 @@ MIN_GAMES_FOR_FULL_PLAYER_WEIGHT = 10  # below this, shrink toward 0 impact
 SAVE_PCT_TO_ELO = 2500.0        # 1.0% above league-average save% ≈ this many Elo pts
 GOALIE_SHRINKAGE_STARTS = 15    # shrinkage denominator; more starts = less regression
 UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING = 1.4  # multiplies CI width if goalie unconfirmed
-# Spec item 4: by default the engine will NOT bet on an EXPECTED (not yet
-# CONFIRMED) starter — it returns WAIT. Set True only as a deliberate,
-# explicit policy choice (and expect wider uncertainty applied either way).
-ALLOW_BETTING_ON_EXPECTED_STARTER = False
+# Goalie-confirmation gating policy (Production Gap Closure sprint,
+# 2026-10-01 -- superseding spec item 4's ALLOW_BETTING_ON_EXPECTED_STARTER
+# flag below). No real confirmation source has ever existed in production
+# (see ingest/nhl_api.py::record_goalie_status's docstring: "No public NHL
+# API for this either"), so goalie_status_events is always empty for real
+# games and features.point_in_time.goalie_status() always falls back to
+# UNKNOWN. The OLD policy (REQUIRE_GOALIE_CONFIRMATION=True) treated that
+# universal UNKNOWN as a hard WAIT block on every real game -- but
+# models/goalie_model.py::GoalieRatingModel.rating_adjustment_elo() already
+# prices in "we don't know the starter" via UNCONFIRMED_GOALIE_UNCERTAINTY_
+# WIDENING applied to the model's own conservative_prob/ci_high BEFORE
+# pricing/engine.py ever sees it. Stacking a second, binary block on top of
+# an already-appropriately-widened probability wasn't protecting against
+# risk -- it was blocking action on a team that's simply better regardless
+# of who starts in net. Default is now False: proceed using the model's
+# own widened probability and let MIN_CONSERVATIVE_EDGE/MIN_EV do the real
+# gating (a genuinely bad unconfirmed-goalie matchup fails those on its own
+# via a wider CI). Set True to restore the old strict CONFIRMED-only gate.
+REQUIRE_GOALIE_CONFIRMATION = False
 
 # --- Uncertainty / conservative probability (models/combined_model.py) ---
 # IMPORTANT (v2.1 rename + disclaimer, spec item 13): this is a HEURISTIC

@@ -555,6 +555,29 @@ def find_unresolved_past_event_bets(conn: sqlite3.Connection, track: str | None 
     return [dict(r) for r in rows]
 
 
+def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None = None,
+                                    is_combo: bool | None = None) -> list[dict]:
+    """Bet Re-Validation block (2026-10-01): the complement of
+    find_unresolved_past_event_bets() above -- PENDING bets whose event has
+    NOT started yet, i.e. still cancellable before any real money (paper or
+    otherwise) would be at stake on a game already underway. Used by
+    operational/bet_revalidation.py to re-check an already-staked bet
+    against the CURRENT real state (schedule, roster, goalie, identity)
+    before its game starts -- never to re-settle or re-price a bet whose
+    event has already begun."""
+    now_iso = _utcnow_iso()
+    clauses = ["result_status = 'PENDING'", "event_start_utc IS NOT NULL", "event_start_utc >= ?"]
+    params: list = [now_iso]
+    if track is not None:
+        clauses.append("track = ?")
+        params.append(track)
+    if is_combo is not None:
+        clauses.append("is_combo = ?")
+        params.append(1 if is_combo else 0)
+    rows = conn.execute(f"SELECT * FROM paper_bets WHERE {' AND '.join(clauses)}", params).fetchall()
+    return [dict(r) for r in rows]
+
+
 def query_paper_bets(conn: sqlite3.Connection, track: str | None = None, is_combo: bool | None = None,
                       result_status: str | None = None) -> list[dict]:
     clauses, params = [], []

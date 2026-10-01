@@ -34,20 +34,28 @@ from research.generic_prop_pricing.evaluator import CONTRACT_NOT_VERIFIED
 
 
 class Test01NoContractsVerifiedYet(unittest.TestCase):
-    def test_verified_contracts_is_exactly_moneyline_and_nothing_else(self):
+    def test_verified_contracts_is_exactly_these_five_real_observed_payloads(self):
         self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({
             ("draftkings", "MONEYLINE"),
             ("draftkings", "PLAYER_SOG_ALTERNATE"),
             ("draftkings", "ALTERNATE_TEAM_TOTAL"),
-        }), "SOG Contract Certification block (2026-09-29): MONEYLINE, PLAYER_SOG_ALTERNATE, and "
-            "ALTERNATE_TEAM_TOTAL are the three real, live-observed DraftKings payload contracts "
-            "as of this block -- every other market family must stay unverified until its own "
-            "real payload is observed")
+            ("draftkings", "PLAYER_SOG"),
+            ("draftkings", "GOALIE_SAVES"),
+        }), "Standard SOG/Saves Certification block (2026-10-01): MONEYLINE, PLAYER_SOG_ALTERNATE, "
+            "ALTERNATE_TEAM_TOTAL, PLAYER_SOG, and GOALIE_SAVES are the five real, live-observed "
+            "DraftKings payload contracts as of this block -- every other market family must stay "
+            "unverified until its own real payload is observed")
 
-    def test_sog_is_not_verified_despite_being_the_reference_implementation(self):
+    def test_sog_with_threshold_suffix_is_not_verified_despite_the_bare_family_being_verified(self):
+        # provider_adapter.is_contract_verified() does exact tuple matching on
+        # canonical_market_id -- the bare "PLAYER_SOG" family (now verified) is a
+        # DIFFERENT string from a threshold-suffixed id like "PLAYER_SOG_3PLUS"
+        # (never verified, and never meant to be -- the suffix form is purely
+        # descriptive on NormalizedPropMarket, not a lookup key provider_adapter
+        # ever checks against).
         self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG_3PLUS"))
 
-    def test_no_market_family_is_verified(self):
+    def test_other_prop_market_families_remain_unverified(self):
         for market_id in ("PLAYER_SOG_3PLUS", "PLAYER_GOALS_1PLUS", "PLAYER_ASSISTS_1PLUS",
                            "PLAYER_POINTS_1PLUS", "GOALIE_SAVES_25PLUS"):
             self.assertFalse(pa.is_contract_verified("draftkings", market_id))

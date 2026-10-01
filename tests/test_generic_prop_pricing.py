@@ -17,6 +17,7 @@ from research.generic_prop_pricing import provider_adapter as pa
 from research.generic_prop_pricing import team_totals_parser as ttp
 from research.generic_prop_pricing.normalized_market import NormalizedPropMarket
 from research.live_sog_pricing import market_parser as sog_market_parser
+from research.live_sog_pricing import normalized_market_adapter as nma
 from research.live_sog_pricing import pricing as sog_pricing
 
 
@@ -203,22 +204,26 @@ class TestMoneylineContractParity(unittest.TestCase):
         with open(path) as f:
             return json.load(f)
 
-    def test_verified_contracts_is_exactly_these_three_real_observed_payloads(self):
+    def test_verified_contracts_is_exactly_these_five_real_observed_payloads(self):
         """SOG Contract Certification block (2026-09-29): two more real, archived payloads
         certified (PLAYER_SOG_ALTERNATE via player_shots_on_goal_alternate, ALTERNATE_TEAM_TOTAL
         via alternate_team_totals) -- see TestPlayerSogAlternateContractParity /
-        TestAlternateTeamTotalContractParity below. Still exactly these three, never a
-        fourth without its own real payload.
+        TestAlternateTeamTotalContractParity below.
 
-        Named PLAYER_SOG_ALTERNATE, never bare "PLAYER_SOG": only the alternate ladder shape
-        was ever actually observed -- the standard player_shots_on_goal Over/Under shape
-        remains genuinely unverified (see test_other_prop_families_remain_unverified) and a
-        bare family entry here would have silently verified it too via every caller keyed on
-        that bare string (operational/real_prop_orchestrator.py, operational/prop_discovery.py)."""
+        Standard SOG/Saves Certification block (2026-10-01): two more real, archived
+        payloads certified (bare PLAYER_SOG via the standard, two-sided
+        player_shots_on_goal shape; GOALIE_SAVES via player_total_saves) -- see
+        TestPlayerSogStandardContractParity / TestGoalieSavesStandardContractParity
+        below. This bare PLAYER_SOG entry is legitimate, not the overgeneralization
+        test_other_prop_families_remain_unverified's docstring once warned against:
+        that warning was correct when written (no standard-shape payload had been
+        observed yet); one has since been captured and directly inspected."""
         self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({
             ("draftkings", "MONEYLINE"),
             ("draftkings", "PLAYER_SOG_ALTERNATE"),
             ("draftkings", "ALTERNATE_TEAM_TOTAL"),
+            ("draftkings", "PLAYER_SOG"),
+            ("draftkings", "GOALIE_SAVES"),
         }))
 
     def test_parses_the_real_payload_correctly(self):
@@ -266,18 +271,15 @@ class TestMoneylineContractParity(unittest.TestCase):
         # that were never actually parsed against a real payload. ALTERNATE_TEAM_TOTAL
         # was removed from this list by the SOG Contract Certification block (2026-09-29)
         # -- it now has its own real, archived payload and regression test (see
-        # TestAlternateTeamTotalContractParity below). Everything else here still has
-        # zero observed payload evidence and must stay unverified.
+        # TestAlternateTeamTotalContractParity below).
         #
-        # PLAYER_SOG (bare) is explicitly INCLUDED here, not removed: only the
-        # player_shots_on_goal_alternate ladder shape was ever observed and certified
-        # (as PLAYER_SOG_ALTERNATE, a distinct, more specific id -- see
-        # TestPlayerSogAlternateContractParity). The standard player_shots_on_goal
-        # Over/Under shape has never been observed against a real payload and must stay
-        # CONTRACT_NOT_VERIFIED -- this is exactly what operational/real_prop_orchestrator.py
-        # and operational/prop_discovery.py check via this bare string.
-        for market_id in ("PLAYER_SOG", "PLAYER_GOALS", "PLAYER_ASSISTS",
-                           "PLAYER_POINTS", "GOALIE_SAVES", "SPREADS", "TOTALS"):
+        # PLAYER_SOG (bare) and GOALIE_SAVES were ALSO removed from this list by the
+        # Standard SOG/Saves Certification block (2026-10-01): both now have their own
+        # real, archived standard (two-sided) payloads and regression tests (see
+        # TestPlayerSogStandardContractParity / TestGoalieSavesStandardContractParity
+        # below). Everything else here still has zero observed payload evidence and
+        # must stay unverified.
+        for market_id in ("PLAYER_GOALS", "PLAYER_ASSISTS", "PLAYER_POINTS", "SPREADS", "TOTALS"):
             self.assertFalse(pa.is_contract_verified("draftkings", market_id),
                               f"{market_id} must remain CONTRACT_NOT_VERIFIED")
 
@@ -437,6 +439,157 @@ class TestAlternateTeamTotalContractParity(unittest.TestCase):
             ladder[key], sportsbook="fanduel", canonical_market_id="ALTERNATE_TEAM_TOTAL",
             event_id=payload["id"], team_id="T_PIT")
         self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
+
+
+class TestPlayerSogStandardContractParity(unittest.TestCase):
+    """Standard SOG/Saves Certification block (2026-10-01): the real-payload regression
+    test required before (draftkings, PLAYER_SOG) can sit in VERIFIED_CONTRACTS. Loads a
+    sanitized, real, archived DraftKings player_shots_on_goal payload
+    (tests/fixtures/draftkings_player_shots_on_goal_real_payload.json, TOR@MTL,
+    2026-09-29T18:54:00Z, 15 real players, 30 two-sided Over/Under outcomes) -- not a
+    synthetic guess -- and drives it through the REAL pipeline
+    (market_parser.parse_event_odds_response -> group_standard_two_sided ->
+    normalized_market_adapter.quote_to_normalized_market), exactly as
+    operational/real_prop_orchestrator.py::_price_and_record_sog_pair() and
+    research/real_market_parlay/real_slate_adapter.py::sog_standard_candidate_legs()
+    both actually do. Deliberately NOT provider_adapter.parse_the_odds_api_market() --
+    that narrower, shape-dispatch function has no case for PLAYER_SOG/GOALIE_SAVES
+    and is never the real route for this family (see provider_adapter.
+    VERIFIED_CONTRACTS's own comment)."""
+
+    @staticmethod
+    def _load_fixture():
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_player_shots_on_goal_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def _pair_for(self, payload, player_name="Auston Matthews"):
+        quotes = sog_market_parser.parse_event_odds_response(
+            payload, standard_market_keys=(sog_market_parser.STANDARD_MARKET_KEY,))
+        pairs = sog_market_parser.group_standard_two_sided(quotes)
+        key = next(k for k in pairs if k[2] == player_name)
+        return pairs[key]
+
+    def test_parses_the_real_two_sided_payload_correctly(self):
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Auston Matthews")
+        over_q, under_q = pair["over"], pair["under"]
+        self.assertIsNotNone(over_q)
+        self.assertIsNotNone(under_q)
+        threshold = sog_pricing.threshold_from_point(over_q["point"])
+        self.assertEqual(threshold, 4)  # real line is Over 3.5 == 4+
+        market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="PLAYER_SOG", canonical_market_id="PLAYER_SOG_4PLUS",
+            threshold=threshold, side="OVER", opposing_price=under_q["price_american"],
+            player_id="P_MATTHEWS_AUSTON", sportsbook="draftkings")
+        self.assertTrue(verified)
+        self.assertEqual(market.event_id, "485b295347cb22f002e014cb87813ed7")
+        self.assertEqual(market.sportsbook, "draftkings")
+        self.assertEqual(market.canonical_market_id, "PLAYER_SOG_4PLUS")
+        self.assertEqual(market.threshold, 4)
+        self.assertEqual(market.side, "OVER")
+        self.assertEqual(market.american_price, -105)
+        self.assertEqual(market.opposing_side_price, -125)  # real two-sided Under
+        self.assertTrue(market.has_two_sided_market())
+        self.assertEqual(market.player_id, "P_MATTHEWS_AUSTON")
+        self.assertEqual(market.market_last_update_utc, "2026-09-29T18:53:48Z")
+        self.assertEqual(market.provenance, "THE_ODDS_API")
+
+    def test_unverified_sportsbook_is_not_verified(self):
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Auston Matthews")
+        over_q, under_q = pair["over"], pair["under"]
+        threshold = sog_pricing.threshold_from_point(over_q["point"])
+        _market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="PLAYER_SOG", canonical_market_id="PLAYER_SOG_4PLUS",
+            threshold=threshold, side="OVER", opposing_price=under_q["price_american"],
+            player_id="P_MATTHEWS_AUSTON", sportsbook="fanduel")
+        self.assertFalse(verified)
+
+    def test_bare_player_sog_family_is_now_verified_for_draftkings(self):
+        self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+
+
+class TestGoalieSavesStandardContractParity(unittest.TestCase):
+    """Standard SOG/Saves Certification block (2026-10-01): the real-payload regression
+    test required before (draftkings, GOALIE_SAVES) can sit in VERIFIED_CONTRACTS. Loads a
+    sanitized, real, archived DraftKings player_total_saves payload
+    (tests/fixtures/draftkings_player_total_saves_real_payload.json, TOR@MTL, the SAME
+    real event/capture as the SOG fixture above, 2 real goalies -- Sergei Bobrovsky,
+    Jakub Dobes -- 4 two-sided outcomes). Driven through the identical real pipeline
+    operational/real_prop_orchestrator.py::_price_and_record_saves_pair() and
+    research/real_market_parlay/real_slate_adapter.py::goalie_saves_candidate_legs()
+    both actually use."""
+
+    @staticmethod
+    def _load_fixture():
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_player_total_saves_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def _pair_for(self, payload, player_name="Jakub Dobes"):
+        quotes = sog_market_parser.parse_event_odds_response(
+            payload, standard_market_keys=(sog_market_parser.SAVES_MARKET_KEY,))
+        pairs = sog_market_parser.group_standard_two_sided(quotes, market_key=sog_market_parser.SAVES_MARKET_KEY)
+        key = next(k for k in pairs if k[2] == player_name)
+        return pairs[key]
+
+    def test_parses_the_real_two_sided_payload_correctly(self):
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Jakub Dobes")
+        over_q, under_q = pair["over"], pair["under"]
+        self.assertIsNotNone(over_q)
+        self.assertIsNotNone(under_q)
+        threshold = sog_pricing.threshold_from_point(over_q["point"])
+        self.assertEqual(threshold, 25)  # real line is Over 24.5 == 25+
+        market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="GOALIE_SAVES", canonical_market_id="GOALIE_SAVES_25PLUS",
+            threshold=threshold, side="OVER", opposing_price=under_q["price_american"],
+            goalie_id="P_DOBES_JAKUB", sportsbook="draftkings")
+        self.assertTrue(verified)
+        self.assertEqual(market.event_id, "485b295347cb22f002e014cb87813ed7")
+        self.assertEqual(market.canonical_market_id, "GOALIE_SAVES_25PLUS")
+        self.assertEqual(market.threshold, 25)
+        self.assertEqual(market.side, "OVER")
+        self.assertEqual(market.american_price, -115)
+        self.assertEqual(market.opposing_side_price, -120)  # real two-sided Under
+        self.assertTrue(market.has_two_sided_market())
+        self.assertEqual(market.goalie_id, "P_DOBES_JAKUB")
+        self.assertEqual(market.market_last_update_utc, "2026-09-29T18:53:48Z")
+
+    def test_bobrovsky_line_is_a_real_non_validated_threshold(self):
+        """Confirms the test fixture's OTHER real goalie (Bobrovsky, Over 26.5)
+        parses correctly even though 27+ falls outside GOALIE_SAVES's validated
+        threshold set (20, 25) -- parsing (this contract) and model-threshold
+        validation (evaluate_prop's own separate gate) are different concerns,
+        never conflated here."""
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Sergei Bobrovsky")
+        over_q, under_q = pair["over"], pair["under"]
+        threshold = sog_pricing.threshold_from_point(over_q["point"])
+        self.assertEqual(threshold, 27)
+        market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="GOALIE_SAVES", canonical_market_id="GOALIE_SAVES_27PLUS",
+            threshold=threshold, side="OVER", opposing_price=under_q["price_american"],
+            goalie_id="P_BOBROVSKY_SERGEI", sportsbook="draftkings")
+        self.assertTrue(verified)
+        self.assertEqual(market.american_price, 100)
+
+    def test_unverified_sportsbook_is_not_verified(self):
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Jakub Dobes")
+        over_q, under_q = pair["over"], pair["under"]
+        threshold = sog_pricing.threshold_from_point(over_q["point"])
+        _market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="GOALIE_SAVES", canonical_market_id="GOALIE_SAVES_25PLUS",
+            threshold=threshold, side="OVER", opposing_price=under_q["price_american"],
+            goalie_id="P_DOBES_JAKUB", sportsbook="fanduel")
+        self.assertFalse(verified)
+
+    def test_bare_goalie_saves_family_is_now_verified_for_draftkings(self):
+        self.assertTrue(pa.is_contract_verified("draftkings", "GOALIE_SAVES"))
 
 
 class Test07MarketDecisionEligibilityChecklist(unittest.TestCase):

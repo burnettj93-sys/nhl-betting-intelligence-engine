@@ -83,24 +83,27 @@ class SOGOrchestratorTestBase(unittest.TestCase):
             payloads=[payload if payload is not None else self.payload])
 
 
-class TestSOGContractNotVerifiedFailsClosed(SOGOrchestratorTestBase):
-    """Part 4/33: the real, current contract state -- DraftKings has
-    never posted player_shots_on_goal -- must produce CONTRACT_NOT_VERIFIED
-    and record NOTHING, even against a perfectly well-formed, correctly
-    identity-matched, model-eligible quote."""
+class TestSOGContractNowVerifiedProducesRealRecordings(SOGOrchestratorTestBase):
+    """Standard SOG/Saves Certification block (2026-10-01), superseding the
+    former TestSOGContractNotVerifiedFailsClosed: DraftKings' standard,
+    two-sided player_shots_on_goal shape has SINCE been observed against a
+    real archived payload and certified (provider_adapter.VERIFIED_CONTRACTS)
+    -- a well-formed, correctly identity-matched, model-eligible quote now
+    genuinely proceeds past the contract gate and is RECORDED (never a
+    CONTRACT_NOT_VERIFIED fail-closed result), proving the certification
+    actually unlocked the orchestrator's real recording path."""
 
-    def test_real_contract_state_is_unverified_and_nothing_is_recorded(self):
+    def test_real_contract_state_is_verified_and_a_real_observation_is_recorded(self):
         from research.generic_prop_pricing import provider_adapter as pa
-        self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+        self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
 
         summary = self._run()
         self.assertEqual(summary["status"], "SUCCESS")
         self.assertEqual(summary["quotes_seen"], 1)
-        self.assertEqual(summary["contract_not_verified"], 1)
-        self.assertEqual(summary["recommendations_recorded"], 0)
-        self.assertEqual(summary["paper_bets_created"], 0)
+        self.assertEqual(summary["contract_not_verified"], 0)
+        self.assertEqual(summary["recommendations_recorded"], 1)
         total = self.pl_conn.execute("SELECT COUNT(*) c FROM predictions").fetchone()["c"]
-        self.assertEqual(total, 0)
+        self.assertEqual(total, 1)
 
 
 class TestSOGIdentityMatching(SOGOrchestratorTestBase):
@@ -145,12 +148,14 @@ class TestSOGThresholdMapping(SOGOrchestratorTestBase):
         self.assertEqual(result["status"], ge.NOT_MODEL_VALIDATED)
         self.assertEqual(summary["not_model_validated"], 1)
 
-    def test_validated_threshold_4plus_proceeds_to_contract_gate(self):
+    def test_validated_threshold_4plus_proceeds_past_the_now_verified_contract_gate(self):
         summary = self._run(self._payload_at_point(3.5))
         result = summary["results"][0]
-        # proceeds far enough to hit the (currently unverified) contract
-        # gate -- never rejected for the threshold itself.
-        self.assertEqual(result["status"], ge.CONTRACT_NOT_VERIFIED)
+        # Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG is now
+        # verified, so a validated threshold proceeds all the way to a real,
+        # recorded observation -- never rejected for the threshold itself, and
+        # no longer stopping at CONTRACT_NOT_VERIFIED either.
+        self.assertTrue(result["recorded"])
 
 
 class TestSOGEligiblePathWithContractVerifiedForTesting(SOGOrchestratorTestBase):
@@ -275,13 +280,22 @@ class SavesOrchestratorTestBase(unittest.TestCase):
             payloads=[payload if payload is not None else self.payload])
 
 
-class TestSavesContractNotVerifiedFailsClosed(SavesOrchestratorTestBase):
-    def test_real_contract_state_is_unverified_and_nothing_is_recorded(self):
+class TestSavesContractNowVerifiedProducesRealRecordings(SavesOrchestratorTestBase):
+    """Standard SOG/Saves Certification block (2026-10-01), superseding the
+    former TestSavesContractNotVerifiedFailsClosed: see the identical SOG
+    rewrite above for the rationale -- player_total_saves is now verified
+    too, from the same real archived event/capture."""
+
+    def test_real_contract_state_is_verified_and_a_real_observation_is_recorded(self):
         from research.generic_prop_pricing import provider_adapter as pa
-        self.assertFalse(pa.is_contract_verified("draftkings", "GOALIE_SAVES"))
+        self.assertTrue(pa.is_contract_verified("draftkings", "GOALIE_SAVES"))
         summary = self._run()
-        self.assertEqual(summary["contract_not_verified"], 1)
-        self.assertEqual(summary["recommendations_recorded"], 0)
+        self.assertEqual(summary["contract_not_verified"], 0)
+        self.assertEqual(summary["recommendations_recorded"], 1)
+        # paper_bets_created stays 0: the default fixture's PASS action never
+        # reaches a BET, same as PLAYER_SOG's own default-fixture result --
+        # TestSavesStarterCertaintyGate below separately proves the real
+        # starter-certainty gate for the case where edge WOULD otherwise BET.
         self.assertEqual(summary["paper_bets_created"], 0)
 
 
@@ -304,13 +318,21 @@ class TestSavesThresholdMapping(SavesOrchestratorTestBase):
         summary = self._run(self._payload_at_point(39.5))
         self.assertEqual(summary["results"][0]["status"], ge.NOT_MODEL_VALIDATED)
 
-    def test_19point5_is_20plus_and_proceeds_to_contract_gate(self):
+    def test_19point5_is_20plus_and_proceeds_past_the_now_verified_contract_gate(self):
+        # Standard SOG/Saves Certification block (2026-10-01): GOALIE_SAVES is now
+        # verified. At this fixture's real edge, the would-be BET/WATCH action is
+        # WAIT'd by the real starter-certainty gate (no confirmed-starter source
+        # exists -- see docs/STARTING_GOALIE_SOURCE_AUDIT.md) -- it still reaches
+        # a real, recorded observation, never CONTRACT_NOT_VERIFIED.
         summary = self._run(self._payload_at_point(19.5))
-        self.assertEqual(summary["results"][0]["status"], ge.CONTRACT_NOT_VERIFIED)
+        result = summary["results"][0]
+        self.assertTrue(result["recorded"])
+        self.assertEqual(result["action"], "WAIT")
 
-    def test_24point5_is_25plus_and_proceeds_to_contract_gate(self):
+    def test_24point5_is_25plus_and_proceeds_past_the_now_verified_contract_gate(self):
         summary = self._run(self._payload_at_point(24.5))
-        self.assertEqual(summary["results"][0]["status"], ge.CONTRACT_NOT_VERIFIED)
+        result = summary["results"][0]
+        self.assertTrue(result["recorded"])
 
 
 class TestSavesStarterCertaintyGate(SavesOrchestratorTestBase):
@@ -379,6 +401,12 @@ class TestPropContractCandidateWatch(unittest.TestCase):
         self.log_path.unlink(missing_ok=True)
 
     def test_a_real_non_empty_payload_is_flagged_as_a_candidate_never_verified(self):
+        # Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG is now
+        # genuinely verified (see provider_adapter.VERIFIED_CONTRACTS), but this
+        # flagging mechanism never checks verification state at all -- it's an
+        # append-only "when did this market key first return real outcomes" log,
+        # not a certification gate -- so the flagging behavior itself is
+        # unaffected; only the stale "still unverified" assertion needed removing.
         payload = _load_fixture("draftkings_player_shots_on_goal_shaped.json")
         result = rpo.flag_prop_contract_candidate_if_observed("player_shots_on_goal", [payload])
         self.assertEqual(result["count"], 1)
@@ -386,7 +414,7 @@ class TestPropContractCandidateWatch(unittest.TestCase):
         self.assertEqual(record["status"], "CONTRACT_CANDIDATE")
         self.assertFalse(record["auto_verified"])
         from research.generic_prop_pricing import provider_adapter as pa
-        self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+        self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
 
     def test_an_empty_outcomes_market_is_never_flagged(self):
         payload = copy.deepcopy(_load_fixture("draftkings_player_shots_on_goal_shaped.json"))

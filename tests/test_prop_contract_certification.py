@@ -50,8 +50,15 @@ class TestCertifySOGPayload(unittest.TestCase):
         payload = _load_fixture("draftkings_player_shots_on_goal_shaped.json")
         result = pcc.certify_sog_payload(payload, schedule=_tor_bos_schedule())
         self.assertFalse(result["verified_contracts_updated"])
+        # Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG is now
+        # genuinely verified -- a HUMAN manually added the real entry to
+        # VERIFIED_CONTRACTS after this exact certification workflow passed
+        # against a real archived payload, precisely the "remains a manual
+        # human step" design this module's docstring describes. This test's
+        # real point -- certify_sog_payload() ITSELF never does that write --
+        # is the first assertion above, unchanged and still true.
         from research.generic_prop_pricing import provider_adapter as pa
-        self.assertFalse(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+        self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
 
     def test_writes_a_sanitized_fixture_only_when_all_checks_pass(self):
         payload = _load_fixture("draftkings_player_shots_on_goal_shaped.json")
@@ -93,8 +100,10 @@ class TestCertifySavesPayload(unittest.TestCase):
         payload = _load_fixture("draftkings_player_total_saves_shaped.json")
         result = pcc.certify_saves_payload(payload, schedule=_tor_bos_schedule())
         self.assertFalse(result["verified_contracts_updated"])
+        # See TestCertifySOGPayload's identical test above for the rationale --
+        # GOALIE_SAVES was manually certified the same way.
         from research.generic_prop_pricing import provider_adapter as pa
-        self.assertFalse(pa.is_contract_verified("draftkings", "GOALIE_SAVES"))
+        self.assertTrue(pa.is_contract_verified("draftkings", "GOALIE_SAVES"))
 
     def test_unknown_goalie_name_fails_identity_check(self):
         import copy

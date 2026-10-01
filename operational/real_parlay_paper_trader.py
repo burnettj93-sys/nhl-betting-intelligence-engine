@@ -42,6 +42,7 @@ import datetime as dt
 import fcntl
 
 import db
+from operational import bet_revalidation
 from operational import eastern_time as et
 from operational import paper_bankroll as pb
 from operational import paper_bet_settlement_driver as settlement
@@ -71,9 +72,23 @@ def _build_todays_real_parlays(nhl_conn, bankroll_conn, now: dt.datetime) -> dic
                 "reason": f"daily cap of {MAX_PARLAYS_PER_DAY} parlay(s) already reached for {today_et}"}
 
     moneyline_legs, _ = adapter.moneyline_candidate_legs(nhl_conn, now=now)
-    sog_payloads = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
-    sog_legs, _ = adapter.sog_alternate_candidate_legs(nhl_conn, sog_payloads, now=now)
-    all_legs = moneyline_legs + sog_legs
+    sog_alt_payloads = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
+    sog_alt_legs, _ = adapter.sog_alternate_candidate_legs(nhl_conn, sog_alt_payloads, now=now)
+    # Standard SOG/Saves Certification block (2026-10-01): the real,
+    # certified standard (two-sided) PLAYER_SOG shape is now also a real
+    # leg source -- unlike the one-sided alternate ladder above, it can
+    # clear a genuine two-sided no-vig edge (see real_slate_adapter.py::
+    # sog_standard_candidate_legs()'s own docstring). GOALIE_SAVES is
+    # wired in too for architectural completeness, but structurally
+    # produces zero real legs today: every real Saves quote is excluded
+    # upstream (STARTER_NOT_CONFIRMED) by the real, deliberately-preserved
+    # starter-certainty gate -- see goalie_saves_candidate_legs()'s own
+    # docstring for why that is correct, not a bug to route around.
+    sog_std_payloads = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY, max_age_hours=24.0, now=now)
+    sog_std_legs, _ = adapter.sog_standard_candidate_legs(nhl_conn, sog_std_payloads, now=now)
+    saves_payloads = _recent_archive_payloads(market_parser.SAVES_MARKET_KEY, max_age_hours=24.0, now=now)
+    saves_legs, _ = adapter.goalie_saves_candidate_legs(nhl_conn, saves_payloads, now=now)
+    all_legs = moneyline_legs + sog_alt_legs + sog_std_legs + saves_legs
 
     # Cross-RUN exclusivity (the engine's own dedup/game-exclusivity in
     # research/real_market_parlay/engine.py only sees legs WITHIN this one
@@ -113,6 +128,15 @@ def run(now: dt.datetime | None = None) -> dict:
             return {"stake_result": {"eastern_date": today_et, "status": "SKIPPED",
                                       "reason": "ANOTHER_TRADER_RUN_IN_PROGRESS"},
                     "settlement_summary": None}
+
+        # Bet Re-Validation block (2026-10-01): "I want bets to be
+        # reevaluated at every pull" -- re-check every already-staked,
+        # not-yet-started real-market bet against the CURRENT real state
+        # (schedule/injury/goalie/trade/suspension) BEFORE building today's
+        # new parlays, so a genuinely invalidated bet is voided rather than
+        # left to settle on stale information.
+        revalidation_summary = bet_revalidation.revalidate_pending_real_market_bets(
+            bankroll_conn, nhl_conn, now)
 
         parlays_result = _build_todays_real_parlays(nhl_conn, bankroll_conn, now)
         stake_results = []
@@ -156,7 +180,8 @@ def run(now: dt.datetime | None = None) -> dict:
         nhl_conn.close()
         bankroll_conn.close()
 
-    result = {"stake_result": stake_summary, "settlement_summary": settlement_summary}
+    result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
+              "revalidation_summary": revalidation_summary}
     # Production Gap Closure sprint (2026-09-30): this job runs every 15
     # minutes via launchd (deploy/launchd/com.nhlengine.real-parlay-paper-
     # trader.plist) but, unlike every other scheduled job in this project,

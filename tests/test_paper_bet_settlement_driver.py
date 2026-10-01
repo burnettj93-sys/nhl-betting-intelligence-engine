@@ -46,6 +46,16 @@ def _insert_player_stat(conn, game_id, player_id, team_id, shots=0):
     conn.commit()
 
 
+def _insert_goalie_stat(conn, game_id, player_id, team_id, saves=0, started=True):
+    conn.execute(
+        "INSERT INTO goalie_game_stats (game_id, player_id, team_id, started, shots_against, "
+        "saves, goals_against, revision_number, effective_at_utc, observed_at_utc, source) "
+        "VALUES (?,?,?,?,?,?,?,1,?,?,?)",
+        (game_id, player_id, team_id, 1 if started else 0, saves + 2, saves, 2,
+         "2026-10-15T23:30:00Z", "2026-10-15T23:30:00Z", "test"))
+    conn.commit()
+
+
 def _fresh_bankroll_conn():
     tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tmp.close()
@@ -154,6 +164,39 @@ class TestComboSettlement(unittest.TestCase):
         conn = _fresh_nhl_conn()
         result = driver.resolve_combo_bet(conn, {"legs_json": "[]"})
         self.assertEqual(result["status"], resolver.UNSUPPORTED_SETTLEMENT_MARKET)
+
+    def test_standard_player_sog_leg_settles_real_win_not_unsupported(self):
+        """Standard SOG/Saves Certification block (2026-10-01): real bug caught
+        while wiring real_slate_adapter.py::sog_standard_candidate_legs() into
+        the paper trader -- _leg_settlement_market_id() had no case for the
+        bare "PLAYER_SOG" market_family (only "PLAYER_SOG_ALTERNATE"), so a
+        combo containing a real standard-SOG leg would settle
+        UNSUPPORTED_SETTLEMENT_MARKET -> UNRESOLVED forever, never WIN/LOSS."""
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_player_stat(conn, 1, "P1", "TOR", shots=5)
+        bet = {"legs_json": json.dumps([self._leg(1, market_family="PLAYER_SOG", participant_id="P1")])}
+        result = driver.resolve_combo_bet(conn, bet)
+        self.assertEqual(result["status"], "WIN")
+
+    def test_goalie_saves_leg_settles_real_win_not_unsupported(self):
+        """Same real bug, for GOALIE_SAVES -- see test above."""
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_goalie_stat(conn, 1, "G1", "TOR", saves=27)
+        bet = {"legs_json": json.dumps(
+            [self._leg(1, market_family="GOALIE_SAVES", threshold=25, participant_id="G1")])}
+        result = driver.resolve_combo_bet(conn, bet)
+        self.assertEqual(result["status"], "WIN")
+
+    def test_goalie_saves_leg_settles_real_loss(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_goalie_stat(conn, 1, "G1", "TOR", saves=18)
+        bet = {"legs_json": json.dumps(
+            [self._leg(1, market_family="GOALIE_SAVES", threshold=25, participant_id="G1")])}
+        result = driver.resolve_combo_bet(conn, bet)
+        self.assertEqual(result["status"], "LOSS")
 
 
 class TestSettleDueBetsDriver(unittest.TestCase):

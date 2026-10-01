@@ -59,9 +59,12 @@ class Test04ContractStatus(unittest.TestCase):
         # SOG Contract Certification block (2026-09-29): verified_contracts is now 3
         # (MONEYLINE, PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL) -- real, archived
         # DraftKings payloads for both new entries, see provider_adapter.VERIFIED_CONTRACTS.
+        #
+        # Standard SOG/Saves Certification block (2026-10-01): two more real, archived
+        # payloads certified (bare PLAYER_SOG, GOALIE_SAVES) -- verified_contracts is now 5.
         result = ese.check_contract_status()
         self.assertEqual(result["status"], ese.WATCH)
-        self.assertEqual(result["verified_contracts"], 3)
+        self.assertEqual(result["verified_contracts"], 5)
 
 
 class Test05InputDrift(unittest.TestCase):

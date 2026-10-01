@@ -5,12 +5,20 @@ quotes. Built against the OFFICIALLY DOCUMENTED player-prop outcome
 shape (`outcomes[].name` = "Over"/"Under", `.description` = player
 name, `.price` = American odds, `.point` = the line -- the same shape
 The Odds API documents across every player-prop market in every sport
-it covers) -- NOT against a genuine captured non-empty NHL payload,
-because none was available this slice (Phase A's real smoke test found
-zero DraftKings markets currently posted -- see
+it covers) -- at the time this module was first written, no genuine
+captured non-empty NHL payload was available (Phase A's real smoke test
+found zero DraftKings markets currently posted -- see
 PLAYER_SOG_LIVE_PRICING_REPORT.md Section A/G/H). This is stated
 explicitly rather than silently assumed, per the "do not assume
 alternate-market semantics" instruction for this slice.
+
+UPDATE (Standard SOG/Saves Certification block, 2026-10-01): a real,
+non-empty DraftKings player_shots_on_goal (standard, two-sided) payload
+HAS since been captured and directly inspected -- see
+research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS's
+own (draftkings, PLAYER_SOG) / (draftkings, GOALIE_SAVES) entries and
+their real archived evidence. The schema assumption documented above was
+confirmed correct against that real payload.
 
 The alternate-market parser is deliberately SCHEMA-TOLERANT: it inspects
 each outcome's actual `name` field rather than hardcoding one hypothesis,

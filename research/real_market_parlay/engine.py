@@ -76,7 +76,30 @@ from itertools import combinations
 from pricing import odds_math
 from research.generic_prop_pricing.line_mapping import SOG_ACTIONABLE_THRESHOLDS
 
-ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE"})
+# Mirrors operational/real_prop_orchestrator.py::SAVES_VALIDATED_THRESHOLDS --
+# the GOALIE_SAVES model's own validated threshold set
+# (GOALIE_SAVES_VALIDATION_REPORT.md). Not imported directly to avoid a
+# research -> operational layering inversion (operational already depends on
+# research, never the reverse); duplicated here as a small, static, already-
+# published model-validation constant, not business logic expected to drift.
+SAVES_VALIDATED_THRESHOLDS = frozenset({20, 25})
+
+# Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG and
+# GOALIE_SAVES added. PLAYER_SOG's real, certified standard-market shape is
+# two-sided (unlike PLAYER_SOG_ALTERNATE's one-sided ladder), so it CAN clear
+# a genuine two-sided no-vig edge and reach a real solo BET action from
+# research/generic_prop_pricing/evaluator.py::evaluate_prop() -- see
+# research/real_market_parlay/real_slate_adapter.py::sog_standard_candidate_legs().
+# GOALIE_SAVES is added for architectural completeness and future-readiness,
+# but structurally produces ZERO real legs today: every real Saves quote
+# routes through operational/real_prop_orchestrator.py::
+# _apply_starter_certainty_gate(), which forces WAIT on any would-be BET/WATCH
+# unless a real external starter-confirmation source exists -- and none does
+# (docs/STARTING_GOALIE_SOURCE_AUDIT.md). This is a genuine, deliberate,
+# preserved gate (betting a specific named goalie's saves line when the wrong
+# goalie plays is a void/mispriced bet, not merely "less certain" the way a
+# team-level moneyline probability is) -- never weakened to manufacture legs.
+ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES"})
 
 MIN_LEGS = 3
 MAX_LEGS = 4
@@ -96,11 +119,14 @@ class ParlayLeg:
     the caller has to trust blindly."""
     game_id: str                   # internal nhl.db game_id -- NEVER the provider's event_id
     event_id: str | None
-    market_family: str             # "MONEYLINE" | "PLAYER_SOG_ALTERNATE"
-    participant_id: str            # team abbrev (MONEYLINE) or player_id (SOG)
+    market_family: str             # "MONEYLINE" | "PLAYER_SOG_ALTERNATE" | "PLAYER_SOG" | "GOALIE_SAVES"
+    participant_id: str            # team abbrev (MONEYLINE) or player_id/goalie_id (SOG/Saves)
     participant_name: str
-    side: str                      # "HOME"/"AWAY" (MONEYLINE) or "OVER" (SOG -- the only side DK posts)
-    threshold: int | None          # None for MONEYLINE; 2-5 for a real, validated SOG leg
+    side: str                      # "HOME"/"AWAY" (MONEYLINE); "OVER" (PLAYER_SOG_ALTERNATE -- the
+                                    # only side DK posts); "OVER"/"UNDER" (PLAYER_SOG/GOALIE_SAVES --
+                                    # real two-sided standard markets, though the real production path
+                                    # only ever prices the Over side -- see sog_standard_candidate_legs())
+    threshold: int | None          # None for MONEYLINE; 2-5 for SOG; 20/25 for Saves
     american_price: float
     conservative_probability: float
     sportsbook: str
@@ -123,7 +149,9 @@ def leg_is_eligible(leg: ParlayLeg) -> bool:
     project already requires before calling into shared pricing code."""
     if leg.market_family not in ALLOWED_MARKET_FAMILIES:
         return False
-    if leg.market_family == "PLAYER_SOG_ALTERNATE" and leg.threshold not in SOG_ACTIONABLE_THRESHOLDS:
+    if leg.market_family in ("PLAYER_SOG_ALTERNATE", "PLAYER_SOG") and leg.threshold not in SOG_ACTIONABLE_THRESHOLDS:
+        return False
+    if leg.market_family == "GOALIE_SAVES" and leg.threshold not in SAVES_VALIDATED_THRESHOLDS:
         return False
     if not (0.0 < leg.conservative_probability < 1.0):
         return False

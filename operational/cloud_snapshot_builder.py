@@ -79,6 +79,12 @@ def _bankroll_conn() -> sqlite3.Connection:
     return conn if conn is not None else pb.init_db(Path(":memory:"))
 
 
+def _nhl_conn() -> sqlite3.Connection:
+    import db
+    conn = _ro(db.DB_PATH)
+    return conn if conn is not None else db.init_db(Path(":memory:"))
+
+
 def _git_head() -> str:
     try:
         out = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=REPO_ROOT, capture_output=True,
@@ -156,10 +162,12 @@ def _performance() -> dict:
 def _morning_review() -> dict:
     from operational import daily_postmortem as dpm
     conn = _bankroll_conn()
+    nhl_conn = _nhl_conn()
     try:
-        return dpm.run_daily_postmortem(conn)
+        return dpm.run_daily_postmortem(conn, nhl_conn=nhl_conn)
     finally:
         conn.close()
+        nhl_conn.close()
 
 
 def _model_learning() -> dict:

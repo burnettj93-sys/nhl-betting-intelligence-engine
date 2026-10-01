@@ -41,11 +41,17 @@ def _moneyline_leg(game_id="G1", conservative_probability=0.90, american_price=-
 
 
 class TestAllowlist(unittest.TestCase):
-    def test_moneyline_and_sog_alternate_are_allowed(self):
-        self.assertEqual(rmp.ALLOWED_MARKET_FAMILIES, frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE"}))
+    def test_allowed_families(self):
+        """Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG and
+        GOALIE_SAVES added alongside the original MONEYLINE + PLAYER_SOG_ALTERNATE
+        pair -- see engine.py's own ALLOWED_MARKET_FAMILIES comment for why
+        GOALIE_SAVES structurally produces zero real legs today regardless of
+        being allowlisted here (the real starter-certainty gate upstream)."""
+        self.assertEqual(rmp.ALLOWED_MARKET_FAMILIES,
+                          frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES"}))
 
     def test_an_unlisted_market_family_is_never_eligible(self):
-        for family in ("GOALIE_SAVES", "PLAYER_POINTS", "PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
+        for family in ("PLAYER_POINTS", "PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
                        "PLAYER_HITS", "PLAYER_BLOCKS"):
             leg = _leg(market_family=family)
             self.assertFalse(rmp.leg_is_eligible(leg), f"{family} must never be parlay-eligible in V1")
@@ -56,6 +62,14 @@ class TestAllowlist(unittest.TestCase):
                               f"SOG threshold {bad_threshold} must not be parlay-eligible")
         for good_threshold in (2, 3, 4, 5):
             self.assertTrue(rmp.leg_is_eligible(_leg(threshold=good_threshold)))
+            self.assertTrue(rmp.leg_is_eligible(_leg(market_family="PLAYER_SOG", threshold=good_threshold)))
+
+    def test_saves_threshold_must_be_in_its_own_validated_set(self):
+        for bad_threshold in (3, 15, 30, 40):
+            self.assertFalse(rmp.leg_is_eligible(_leg(market_family="GOALIE_SAVES", threshold=bad_threshold)),
+                              f"Saves threshold {bad_threshold} must not be parlay-eligible")
+        for good_threshold in (20, 25):
+            self.assertTrue(rmp.leg_is_eligible(_leg(market_family="GOALIE_SAVES", threshold=good_threshold)))
 
     def test_moneyline_has_no_threshold_requirement(self):
         self.assertTrue(rmp.leg_is_eligible(_moneyline_leg()))

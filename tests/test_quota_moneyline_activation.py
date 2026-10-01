@@ -520,8 +520,16 @@ class TestMarketStateTransitions(unittest.TestCase):
         self.assertEqual(set(pa.VERIFIED_CONTRACTS), before)
 
     def test_fixture_candidates_in_the_real_log_never_count(self):
+        # Standard SOG/Saves Certification block (2026-10-01): player_shots_on_goal
+        # is now genuinely VERIFIED (provider_adapter.VERIFIED_CONTRACTS), via the
+        # default (real) verified_fn this call uses -- so the real, correct state
+        # is VERIFIED now, not PENDING. This test's actual point survives
+        # unchanged: the fixture-sourced log entry never gets treated as a real
+        # CANDIDATE observation (it would otherwise bump PENDING -> CANDIDATE,
+        # not -> VERIFIED) -- VERIFIED here comes entirely from the real
+        # certification, never from this fixture polluting the log.
         self.write({"market_key": "player_shots_on_goal", "event_id": "fixture-sog-evt-1"})   # found polluting the real log
-        self.assertEqual(pd.market_states(self.cand)["player_shots_on_goal"], pd.PENDING)
+        self.assertEqual(pd.market_states(self.cand)["player_shots_on_goal"], pd.VERIFIED)
 
 
 class TestSweepsAreOncePerEventPerDay(unittest.TestCase):
