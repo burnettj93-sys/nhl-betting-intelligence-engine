@@ -40,7 +40,7 @@ def _fresh_nhl_conn():
     return db.init_db(Path(tmp.name), wipe=True)
 
 
-def _seed_tor_bos_game(conn, game_id=9001, game_date="2026-10-15"):
+def _seed_tor_bos_game(conn, game_id=9001, game_date="2026-04-17"):
     conn.execute("INSERT OR IGNORE INTO teams (team_id) VALUES ('TOR'), ('BOS')")
     conn.execute(
         "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
@@ -189,8 +189,8 @@ class TestSOGEligiblePathWithContractVerifiedForTesting(SOGOrchestratorTestBase)
     def test_a_later_real_price_change_creates_a_market_refresh_row(self):
         self._run_with_contract_verified()
         later_payload = copy.deepcopy(self.payload)
-        later_payload["bookmakers"][0]["last_update"] = "2026-10-15T18:30:00Z"
-        later_payload["bookmakers"][0]["markets"][0]["last_update"] = "2026-10-15T18:30:00Z"
+        later_payload["bookmakers"][0]["last_update"] = "2026-04-17T18:30:00Z"
+        later_payload["bookmakers"][0]["markets"][0]["last_update"] = "2026-04-17T18:30:00Z"
         self._run_with_contract_verified(later_payload)
         rows = self.pl_conn.execute(
             "SELECT prediction_checkpoint FROM predictions WHERE market_id='PLAYER_SOG_4PLUS' "

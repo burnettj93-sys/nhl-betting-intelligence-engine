@@ -15,11 +15,73 @@ from real, PIT-safe historical data as of `prediction_game_date` -- never
 a claim about a live future lineup. Returns "PROJECTED_ACTIVE",
 "PROJECTED_INACTIVE", or "INSUFFICIENT_HISTORY" -- never "CONFIRMED
 ACTIVE" (no code path here reads target-game appearance).
+
+Production Gap Closure sprint (2026-10-01): this function is shared by
+TWO genuinely different callers with opposite needs around corpus
+staleness -- dashboard/demo_data.py deliberately, permanently evaluates
+against its own disclosed SIMULATED_DATE constant using this SAME frozen
+corpus (the whole point of a frozen research corpus is a stable,
+reproducible demo, regardless of real wall-clock time), while the REAL
+production callers (operational/real_prop_orchestrator.py,
+research/real_market_parlay/real_slate_adapter.py) need the OPPOSITE:
+they must never trust this corpus for a real date it doesn't actually
+cover. A staleness check was briefly added INSIDE this function and had
+to be pulled back out specifically because it broke the demo path (see
+corpus_covers_date() below) -- it belongs only at the real call sites,
+never here.
 """
 from __future__ import annotations
 
+import datetime as dt
+
 from research.player_sog import features as pf
 from research.player_sog import count_models as cm
+
+# Production Gap Closure sprint (2026-10-01): a real-production bug hunt found
+# the team-schedule corpus (team_schedules, built from the frozen
+# research/real_nhl_results corpus) and the player SOG corpus paired with it
+# are both one-time, point-in-time snapshots -- NEVER automatically refreshed
+# for a new NHL season. Confirmed live: both corpora currently max out at
+# 2026-04-16 (end of the 2025-26 season). A REAL caller (never demo_data.py,
+# which deliberately uses this same frozen corpus on purpose -- see module
+# docstring) must call corpus_covers_date() BEFORE project_player_sog() and
+# treat False as an honest CORPUS_STALE exclusion -- without it, a real,
+# currently-active player (e.g. Auston Matthews) whose corpus-era history
+# happens not to overlap the corpus's own stale "most recent team games"
+# window gets silently misclassified PROJECTED_INACTIVE by
+# project_player_sog() below, indistinguishable from a genuinely
+# inactive/traded player.
+MAX_TEAM_SCHEDULE_GAP_DAYS = 45
+
+
+def corpus_covers_date(team_schedules: dict, team: str, prediction_game_date: str,
+                        max_gap_days: int = MAX_TEAM_SCHEDULE_GAP_DAYS) -> dict:
+    """REAL callers only (see module docstring) -- never called by
+    dashboard/demo_data.py. True/reason: whether `team_schedules[team]`'s
+    own most recent real game is close enough to `prediction_game_date`
+    for project_player_sog()'s "recent team games" eligibility check to
+    mean anything. A gap this large between the corpus's own most recent
+    real team game and the target date can never occur WITHIN a real NHL
+    season (teams play every 2-4 days, even across an All-Star break) --
+    it only occurs between seasons, so it safely distinguishes "stale
+    corpus" from "team genuinely between games." No schedule entry at all
+    for `team` is a DIFFERENT, pre-existing concern (project_player_sog's
+    own already-correct history-length/no-context fallback) -- this never
+    claims staleness about a gap it was never given data to measure."""
+    team_sched_prior = [g for g in team_schedules.get(team, []) if g["game_date"] < prediction_game_date]
+    if not team_sched_prior:
+        return {"covers": True, "reason": None}
+    most_recent_team_game = max(g["game_date"] for g in team_sched_prior)
+    gap_days = (dt.date.fromisoformat(prediction_game_date) -
+                dt.date.fromisoformat(most_recent_team_game)).days
+    if gap_days > max_gap_days:
+        return {"covers": False,
+                "reason": f"the team-schedule corpus's most recent real game for {team} "
+                          f"({most_recent_team_game}) is {gap_days} days before {prediction_game_date} -- "
+                          f"too large a gap to occur within a real NHL season, so this corpus has no "
+                          f"meaningful recent-appearance context for the target date (never conflated with "
+                          f"a genuinely inactive/traded player)."}
+    return {"covers": True, "reason": None}
 
 
 def project_player_sog(rows: list[dict], index: pf.PlayerHistoryIndex, team_schedules: dict,

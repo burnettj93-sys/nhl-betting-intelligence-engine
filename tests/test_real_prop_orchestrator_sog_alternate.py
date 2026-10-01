@@ -113,37 +113,29 @@ class TestRealSogAlternateReachesTheLedger(unittest.TestCase):
         self.bankroll_conn.close()
         self.bankroll_path.unlink(missing_ok=True)
 
-    def test_real_alternate_payload_produces_real_recorded_observations(self):
+    def test_real_alternate_payload_is_honestly_corpus_stale_against_todays_frozen_corpus(self):
+        """Production Gap Closure sprint (2026-10-01): this fixture's commence_time
+        (2026-09-29) is real, but research/player_sog's corpus is frozen at
+        2026-04-16 -- before the corpus-staleness guard, this silently produced
+        FALSE recordings (the exact class of bug the Matthews/Auston real-production
+        investigation found: a frozen corpus coincidentally overlapping a player's
+        OWN stale appearance history, misread as "currently active"). The honest,
+        correct behavior today is CORPUS_STALE, not a fabricated recommendation --
+        see test_real_slate_adapter.py's mocked-model tests for proof the REST of
+        this pipeline (identity -> pricing -> ledger -> settlement) works correctly
+        once a genuinely current corpus exists."""
         summary = rpo.run_real_sog_recommendations(
             nhl_conn=self.nhl_conn, pl_conn=self.pl_conn, bankroll_conn=self.bankroll_conn,
             payloads=[self.payload])
         self.assertEqual(summary["status"], "SUCCESS")
         self.assertGreater(summary["quotes_seen"], 0)
-        self.assertGreater(summary["recommendations_recorded"], 0,
-                            f"expected real recordings; full summary: {summary}")
-
+        self.assertEqual(summary["recommendations_recorded"], 0)
+        statuses = {r["status"] for r in summary["results"]}
+        self.assertTrue(statuses <= {"CORPUS_STALE", "AMBIGUOUS", "UNMATCHED"}, statuses)
+        self.assertIn("CORPUS_STALE", statuses)
         rows = self.pl_conn.execute(
-            "SELECT * FROM predictions WHERE market_id LIKE 'PLAYER_SOG_%' ORDER BY threshold"
-        ).fetchall()
-        self.assertGreater(len(rows), 0)
-        for row in rows:
-            self.assertEqual(row["market_family"], "SOG")
-            self.assertIn(row["threshold"], ("2+", "3+", "4+", "5+"))
-            self.assertEqual(row["sportsbook"], "DraftKings")
-            self.assertIsNotNone(row["conservative_probability"])
-
-    def test_a_real_recorded_row_resolves_settlement_via_the_real_sog_family(self):
-        rpo.run_real_sog_recommendations(
-            nhl_conn=self.nhl_conn, pl_conn=self.pl_conn, bankroll_conn=self.bankroll_conn,
-            payloads=[self.payload])
-        row = self.pl_conn.execute(
-            "SELECT * FROM predictions WHERE market_id LIKE 'PLAYER_SOG_%' LIMIT 1").fetchone()
-        self.assertIsNotNone(row)
-        from operational import outcome_resolver as resolver
-        # Real settlement dispatch is keyed on market_id's own "PLAYER_SOG" prefix,
-        # never the shape-specific contract id -- proves the recorded row is
-        # genuinely settleable through the existing, real resolver.
-        self.assertTrue(row["market_id"].startswith("PLAYER_SOG"))
+            "SELECT * FROM predictions WHERE market_id LIKE 'PLAYER_SOG_%'").fetchall()
+        self.assertEqual(len(rows), 0)
 
     def test_rerun_against_the_same_real_payload_is_idempotent(self):
         first = rpo.run_real_sog_recommendations(
@@ -158,13 +150,17 @@ class TestRealSogAlternateReachesTheLedger(unittest.TestCase):
         self.assertEqual(second["recommendations_recorded"], first["recommendations_recorded"])  # DUPLICATE, not a second insert
 
     def test_alternate_only_one_plus_and_six_plus_never_recorded(self):
-        summary = rpo.run_real_sog_recommendations(
+        """1+/6+ rejection itself is independently proven against a mocked
+        (non-stale) model in test_real_slate_adapter.py::test_1plus_threshold_is_excluded
+        -- this test only re-confirms the invariant that matters here: no 1+/6+ row is
+        EVER recorded, regardless of which earlier gate (corpus staleness today,
+        threshold validation once the corpus is current) is what actually stops it."""
+        rpo.run_real_sog_recommendations(
             nhl_conn=self.nhl_conn, pl_conn=self.pl_conn, bankroll_conn=self.bankroll_conn,
             payloads=[self.payload])
         rows = self.pl_conn.execute("SELECT threshold FROM predictions WHERE market_id LIKE 'PLAYER_SOG_%'").fetchall()
         self.assertNotIn("1+", {r["threshold"] for r in rows})
         self.assertNotIn("6+", {r["threshold"] for r in rows})
-        self.assertGreater(summary["not_model_validated"], 0)  # the real 1+/6+ quotes were seen and correctly rejected
 
 
 if __name__ == "__main__":

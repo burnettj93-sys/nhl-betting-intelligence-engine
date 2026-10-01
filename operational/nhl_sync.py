@@ -48,6 +48,57 @@ def default_sync_window(today: dt.date | None = None) -> tuple[dt.date, dt.date]
     return today - dt.timedelta(days=1), today + dt.timedelta(days=SCHEDULE_FORWARD_DAYS)
 
 
+ORPHAN_BACKFILL_GRACE_HOURS = 6.0  # a game within this many hours of its own
+# scheduled start might still genuinely be in progress or awaiting the
+# official API to post FINAL -- only re-check games safely past that.
+MAX_ORPHAN_DATES_PER_RUN = 10  # bounds one run's duration/API usage during a
+# large one-time catch-up; any remaining orphaned dates are picked up by the
+# next daily run rather than all at once.
+
+
+def find_orphaned_unfinalized_game_dates(conn, now: dt.datetime | None = None,
+                                          grace_hours: float = ORPHAN_BACKFILL_GRACE_HOURS) -> list[str]:
+    """Production Gap Closure sprint (2026-10-01): default_sync_window()'s
+    rolling [-1, +SCHEDULE_FORWARD_DAYS] window means a game whose result
+    never arrived within that single backward day (an API hiccup, a
+    double-OT boxscore delay, this Mac asleep that day) is NEVER queried
+    again -- confirmed live: 42 real games stuck at game_state='SCHEDULED'
+    with scheduled_start_utc in the past (some over a month old),
+    games_finalized=0 on every sync log entry for 7 straight days. This
+    finds every such orphan's DISTINCT game_date so backfill_orphaned_games()
+    can re-ingest exactly those dates regardless of how far outside the
+    rolling window they've fallen."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    cutoff = (now - dt.timedelta(hours=grace_hours)).strftime("%Y-%m-%dT%H:%M:%S")
+    rows = conn.execute(
+        "SELECT DISTINCT game_date FROM games WHERE game_state = 'SCHEDULED' "
+        "AND scheduled_start_utc IS NOT NULL AND scheduled_start_utc < ? ORDER BY game_date",
+        (cutoff,)).fetchall()
+    return [r["game_date"] for r in rows]
+
+
+def backfill_orphaned_games(conn, session=None, now: dt.datetime | None = None) -> dict:
+    """Re-ingests each orphaned date found by find_orphaned_unfinalized_game_dates()
+    via the SAME ingest_range() every other sync uses (never a second,
+    parallel ingestion path) -- one call per distinct date, since a
+    single-day ingest_range() re-fetches that date's real current
+    schedule/result/boxscore state and correctly upserts it (idempotent
+    either way). Never raises past the caller -- same discipline as
+    run_nhl_sync()."""
+    dates = find_orphaned_unfinalized_game_dates(conn, now=now)
+    summary = {"status": "SUCCESS", "orphaned_dates_found": len(dates),
+               "dates_checked": dates[:MAX_ORPHAN_DATES_PER_RUN], "games_finalized": 0, "error": None}
+    try:
+        for date_str in summary["dates_checked"]:
+            d = dt.date.fromisoformat(date_str)
+            result = nhl_api.ingest_range(conn, d, d, session=session)
+            summary["games_finalized"] += result["games_finalized"]
+    except Exception as exc:  # noqa: BLE001 -- a backfill pass must never crash its caller
+        summary["status"] = "FAILED"
+        summary["error"] = f"{exc.__class__.__name__}: {exc}"
+    return summary
+
+
 def run_nhl_sync(conn=None, today: dt.date | None = None, session=None,
                   sync_current_rosters: bool = True) -> dict:
     """Runs ingest_range() over default_sync_window() against the REAL
@@ -93,6 +144,17 @@ def run_nhl_sync(conn=None, today: dt.date | None = None, session=None,
         summary["games_seen"] = result["games_seen"]
         summary["games_finalized"] = result["games_finalized"]
 
+        # Production Gap Closure sprint (2026-10-01): catch up any game that
+        # fell outside the rolling window above before it was ever finalized
+        # (see find_orphaned_unfinalized_game_dates()'s own docstring for the
+        # real 42-game backlog this closes). Never blocks/fails the main
+        # sync -- a backfill problem is reported in its own component, same
+        # pattern as roster sync below.
+        orphan_result = backfill_orphaned_games(conn, session=session)
+        summary["orphan_backfill"] = orphan_result
+        summary["games_finalized"] += orphan_result["games_finalized"]
+        summary["components"]["orphan_backfill"] = orphan_result["status"]
+
         if sync_current_rosters:
             teams = [r["home_team"] for r in conn.execute(
                 "SELECT DISTINCT home_team FROM games WHERE game_date BETWEEN ? AND ?",
@@ -112,15 +174,16 @@ def run_nhl_sync(conn=None, today: dt.date | None = None, session=None,
                 summary["roster_status"] = "SUCCESS"  # nothing to sync is not a failure
                 summary["components"]["roster"] = "SUCCESS"
 
-        # Schedule/boxscore itself never raised -- the ONLY thing that can
-        # demote the overall status below SUCCESS at this point is roster
-        # having degraded, which is non-critical by design (Section F of
-        # the Production Readiness Audit: settlement reads game results,
-        # never roster).
-        if summary["components"]["roster"] == "PARTIAL_SUCCESS":
+        # Schedule/boxscore itself never raised -- the ONLY things that can
+        # demote the overall status below SUCCESS at this point are roster
+        # or orphan-backfill degrading, both non-critical by design (Section F
+        # of the Production Readiness Audit: settlement reads game results,
+        # never roster; and an orphan-backfill failure leaves prior accepted
+        # data untouched -- the main window's own ingest already succeeded).
+        if summary["components"]["roster"] in ("PARTIAL_SUCCESS", "FAILED"):
             summary["status"] = "PARTIAL_SUCCESS"
-        elif summary["components"]["roster"] == "FAILED":
-            summary["status"] = "PARTIAL_SUCCESS"  # still non-critical -- schedule/box data stands
+        if summary["components"]["orphan_backfill"] == "FAILED":
+            summary["status"] = "PARTIAL_SUCCESS"
     except Exception as exc:  # noqa: BLE001 — deliberately broad: a sync failure must
         # never crash the caller; it must be reported and leave prior data untouched
         # (Part 9: "If validation fails: retain previous accepted state").
