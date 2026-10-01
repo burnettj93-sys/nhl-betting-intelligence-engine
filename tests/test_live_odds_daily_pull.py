@@ -440,8 +440,10 @@ class Test09TargetedPropSweep(unittest.TestCase):
             json_data={"id": "near", "home_team": "H", "away_team": "A", "bookmakers": []},
             headers={"x-requests-remaining": "498", "x-requests-last": "2"})
         cache_path = Path(tempfile.mkdtemp()) / "sweep_cache.json"
+        first_result_cache_path = Path(tempfile.mkdtemp()) / "first_result_cache.json"
 
         with mock.patch("operational.live_odds_daily_pull.SWEEP_CACHE_PATH", cache_path), \
+             mock.patch("operational.live_odds_daily_pull.FIRST_SWEEP_RESULT_CACHE_PATH", first_result_cache_path), \
              mock.patch("operational.live_odds_daily_pull._now_utc", return_value=now), \
              mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
              mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
@@ -467,7 +469,7 @@ class Test09TargetedPropSweep(unittest.TestCase):
         sweep_cache = Path(tempfile.mkdtemp()) / "sweep_cache.json"
         sweep_cache.write_text(json.dumps({"rows": [{"event_id": "had-quote"}]}))
 
-        with mock.patch("operational.live_odds_daily_pull.SWEEP_CACHE_PATH", sweep_cache), \
+        with mock.patch("operational.live_odds_daily_pull.FIRST_SWEEP_RESULT_CACHE_PATH", sweep_cache), \
              mock.patch("operational.live_odds_daily_pull._now_utc", return_value=now), \
              mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
              mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
@@ -481,6 +483,51 @@ class Test09TargetedPropSweep(unittest.TestCase):
         self.assertEqual(result["events_in_window"], 2)
         queried_event_id = mock_get.call_args_list[1].args[0].rsplit("/", 2)[1]
         self.assertEqual(queried_event_id, "had-quote")
+
+    def test_second_sweep_never_clobbers_the_first_sweep_result_cache_it_depends_on(self):
+        """Real bug fix (2026-10-01): FIRST_SWEEP_RESULT_CACHE_PATH and
+        SWEEP_CACHE_PATH used to be the SAME file -- the second sweep (firing
+        every 15 min, twice as often as the first sweep's 30 min) would
+        overwrite the first sweep's own real quote-presence data with its own
+        result at the end of every run. A SECOND run of the second sweep,
+        immediately after the first, must still correctly re-pull the event
+        the real first sweep found a quote for -- proving the second sweep's
+        own write never destroyed the data the next second sweep needs."""
+        now = dt.datetime(2026, 9, 29, 14, 30, tzinfo=dt.timezone.utc)
+        had_quote = {"id": "had-quote", "commence_time": "2026-09-29T15:15:00Z",
+                     "home_team": "H", "away_team": "A"}
+        first_result_cache = Path(tempfile.mkdtemp()) / "first_result_cache.json"
+        generic_cache = Path(tempfile.mkdtemp()) / "generic_cache.json"
+        first_result_cache.write_text(json.dumps({"rows": [{"event_id": "had-quote"}]}))
+
+        def _events_odds_cycle():
+            while True:
+                yield _fake_response(json_data=[had_quote],
+                                      headers={"x-requests-remaining": "499", "x-requests-last": "0"})
+                yield _fake_response(
+                    json_data={"id": "had-quote", "home_team": "H", "away_team": "A", "bookmakers": []},
+                    headers={"x-requests-remaining": "498", "x-requests-last": "1"})
+
+        with mock.patch("operational.live_odds_daily_pull.FIRST_SWEEP_RESULT_CACHE_PATH", first_result_cache), \
+             mock.patch("operational.live_odds_daily_pull.SWEEP_CACHE_PATH", generic_cache), \
+             mock.patch("operational.live_odds_daily_pull._now_utc", return_value=now), \
+             mock.patch("research.live_sog_pricing.archive.ARCHIVE_DIR", Path(tempfile.mkdtemp())), \
+             mock.patch.object(lop.client, "get_the_odds_api_key", return_value="fake"), \
+             mock.patch("operational.prop_discovery.already_swept", return_value=False), \
+             mock.patch("requests.get", side_effect=_events_odds_cycle()):
+            first_run = lop.run_targeted_prop_sweep("second")
+            second_run = lop.run_targeted_prop_sweep("second")
+
+        self.assertEqual(first_run["events_queried"], 1)
+        # The real bug: this second run would have found events_queried == 0,
+        # because the first run's own write (to the shared, pre-fix cache
+        # path) replaced the real first-sweep data with the second sweep's
+        # own (here, non-empty, but in production often empty) result.
+        self.assertEqual(second_run["events_queried"], 1)
+        # The dedicated first-sweep cache itself must still hold the REAL
+        # first-sweep data, never overwritten by either second-sweep run.
+        self.assertEqual(json.loads(first_result_cache.read_text())["rows"],
+                          [{"event_id": "had-quote"}])
 
 
 # ---------------------------------------------------------------------

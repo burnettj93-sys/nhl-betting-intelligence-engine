@@ -1,14 +1,16 @@
 """Page 21 — Today: the real-data-first landing page (Real Product Bridge
 block, 2026-09-29, superseding the earlier Same-Day Demo Experience
-sprint's demo-first hierarchy). Order: System Health -> Live Model Edges
-(real MONEYLINE) -> Recorded Recommendations (real, paper-tracked) ->
-Today's Real Slate -> Top Conviction (real eligible legs) -> Daily
-Real-Market Parlays (real, cross-game) -> Model Health links. Every
-section is REAL OR EMPTY -- no section is ever backfilled with simulated
-content. A Demo / Model Showcase (dashboard/demo_data.py's simulated
-slate) is retained for illustrating the model/combo/parlay machinery, but
-lives behind its own explicit, collapsed, clearly-labeled expander -- it
-does not occupy the normal Today workflow."""
+sprint's demo-first hierarchy). Order: System Health -> Today's Real Slate
+-> Top Conviction (real eligible legs) -> Daily Real-Market Parlays (real,
+cross-game) -> Historical Elo research comparison (real DK prices vs. a
+frozen, always-stale research Elo snapshot -- collapsed by default, see
+2026-10-01's own note where it's built, further down) -> Recorded
+Recommendations (real, paper-tracked) -> Model Health links. Every section
+is REAL OR EMPTY -- no section is ever backfilled with simulated content.
+A Demo / Model Showcase (dashboard/demo_data.py's simulated slate) is
+retained for illustrating the model/combo/parlay machinery, but lives
+behind its own explicit, collapsed, clearly-labeled expander -- it does
+not occupy the normal Today workflow."""
 from __future__ import annotations
 
 import sys
@@ -308,35 +310,38 @@ if _real_today is not None:
             for reason, count in sorted(_real_today["excluded_by_reason"].items(), key=lambda kv: -kv[1]):
                 st.caption(f"{count} — {reason}")
 
-# ---- 0. Live Model Edges (real DraftKings, when a verified contract exists) ----
-# SNAPSHOT freshness and MARKET freshness are separate: each price is judged on its own capture time
-# (<= 3 h, or <= 90 min when its game starts within 4 h); a stale snapshot only makes it stricter.
+# ---- 0. Historical Elo research comparison (real DK prices vs. a FROZEN
+# research Elo snapshot -- never the real engine's own T-35 decision, which
+# recomputes Elo fresh from real results on every real evaluation). This
+# comparison is ALWAYS stale by construction (the snapshot is a one-time
+# research artifact, not a live rating) -- repeatedly read as "the engine
+# is broken" despite its own disclaimer, so it's collapsed by default here,
+# the same treatment the Demo/Model Showcase sections already get below.
 _live_rows = ldk.build_live_moneyline_comparisons()
 _live_priced = [(r, comp.market_freshness(r)) for r in _live_rows if r.get("status") == "PRICED"]
 if _live_priced:
-    _any_current = any(f["state"] == "CURRENT" for _, f in _live_priced)
-    st.markdown("## Live Model Edges" if _any_current else "## Model Edges — ODDS STALE (not live)")
-    _snap_state = _live_priced[0][1]["snapshot_state"]
-    st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
-               f"Odds API pull and compared against a FROZEN, one-time Elo research snapshot (last real game: "
-               f"2026-04-16) -- not the live trading engine's own Elo, which is recomputed fresh from real "
-               f"results on every real recommendation/parlay evaluation and is never this stale. This section "
-               f"is a historical-research comparison, never a reflection of the real engine's own health. "
-               f"SNAPSHOT FRESHNESS: {_snap_state.replace('_', ' ')} (separate from each price's own freshness below).")
-    for r, _f in sorted(_live_priced, key=lambda rf: -abs(rf[0].get("raw_edge") or 0.0))[:6]:
-        lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
-        lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
-        lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
-        lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
-        # A price that is not CURRENT never shows an actionable badge (the stored decision is unchanged).
-        lc4.markdown(comp.label_badge(r["decision"] if _f["state"] == "CURRENT" else "STALE", "input"),
-                     unsafe_allow_html=True)
-        if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
-            st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
-                       f"real edge, not presented as actionable. {r['decision_reason']}")
-        st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
-                   f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
-        st.caption(comp.market_freshness_text(_f))
+    with st.expander("Historical Elo research comparison (frozen snapshot, not the live engine — click to expand)"):
+        _snap_state = _live_priced[0][1]["snapshot_state"]
+        st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
+                   f"Odds API pull and compared against a FROZEN, one-time Elo research snapshot (last real game: "
+                   f"2026-04-16) -- not the live trading engine's own Elo, which is recomputed fresh from real "
+                   f"results on every real recommendation/parlay evaluation and is never this stale. This section "
+                   f"is a historical-research comparison, never a reflection of the real engine's own health. "
+                   f"SNAPSHOT FRESHNESS: {_snap_state.replace('_', ' ')} (separate from each price's own freshness below).")
+        for r, _f in sorted(_live_priced, key=lambda rf: -abs(rf[0].get("raw_edge") or 0.0))[:6]:
+            lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
+            lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
+            lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
+            lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
+            # A price that is not CURRENT never shows an actionable badge (the stored decision is unchanged).
+            lc4.markdown(comp.label_badge(r["decision"] if _f["state"] == "CURRENT" else "STALE", "input"),
+                         unsafe_allow_html=True)
+            if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
+                st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
+                           f"real edge, not presented as actionable. {r['decision_reason']}")
+            st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
+                       f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
+            st.caption(comp.market_freshness_text(_f))
 
 # ---- 0b. Recorded recommendations (real market, paper-tracked) --------------------
 st.markdown("## Recorded Recommendations")

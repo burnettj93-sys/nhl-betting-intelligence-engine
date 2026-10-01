@@ -108,6 +108,7 @@ operational/live_multimarket_board_cache.json
 # derivable from the TRACKED raw archive under data/raw/the_odds_api/live/).
 operational/moneyline_snapshot_cache.json
 operational/targeted_prop_sweep_cache.json
+operational/prop_sweep_first_result_cache.json
 
 # Preseason Master Consolidation storage audit (PRESEASON_ENGINE_READINESS_
 # REPORT.md Section AO): large, reproducible research artifacts that were

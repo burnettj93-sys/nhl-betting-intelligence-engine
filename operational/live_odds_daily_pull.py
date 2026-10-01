@@ -519,7 +519,23 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
 FIRST_SWEEP_MARKETS = "player_shots_on_goal_alternate,player_total_saves"
 FIRST_SWEEP_WINDOW_HOURS = (3.0, 4.5)
 SECOND_SWEEP_WINDOW_HOURS = (0.75, 1.25)
+# Generic "whichever sweep ran most recently" cache -- read only by
+# operational/system_health.py's human-facing "last sweep" display, never by
+# this module's own re-pull decision (see FIRST_SWEEP_RESULT_CACHE_PATH
+# below for why those must never be the same file).
 SWEEP_CACHE_PATH = REPO_ROOT / "operational" / "targeted_prop_sweep_cache.json"
+# Real bug fix (2026-10-01): the second sweep's "only re-pull an event the
+# first sweep already found a quote for" check used to read SWEEP_CACHE_PATH
+# -- the SAME file BOTH sweeps unconditionally overwrote at the end of every
+# run. Since the second sweep (every 15 min) fires twice as often as the
+# first (every 30 min), it would clobber the first sweep's real quote-
+# presence data with its own (often empty) result almost immediately, so
+# most second-sweep firings silently filtered their candidates down to zero
+# real events and re-pulled nothing -- discovered by tracing why a game
+# inside its real 45-75-min window produced events_queried=0 with no error.
+# This file is written ONLY by the first sweep and read ONLY by the second,
+# so the second sweep can never destroy the data it itself depends on.
+FIRST_SWEEP_RESULT_CACHE_PATH = REPO_ROOT / "operational" / "prop_sweep_first_result_cache.json"
 
 
 def _events_in_window(events: list[dict], now: dt.datetime, window_hours: tuple[float, float]) -> list[dict]:
@@ -579,7 +595,7 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
     summary["events_in_window"] = len(candidates)
 
     if sweep == "second":
-        first_cache = _load_json_cache(SWEEP_CACHE_PATH) or {}
+        first_cache = _load_json_cache(FIRST_SWEEP_RESULT_CACHE_PATH) or {}
         events_with_quotes = {r["event_id"] for r in first_cache.get("rows", [])}
         candidates = [e for e in candidates if e["id"] in events_with_quotes]
 
@@ -635,6 +651,8 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
 
     payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": board_rows}
     SWEEP_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    if sweep == "first":
+        FIRST_SWEEP_RESULT_CACHE_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True))
     return summary
 
 

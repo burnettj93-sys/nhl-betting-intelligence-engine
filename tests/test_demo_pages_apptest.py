@@ -89,9 +89,14 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
     def test_paper_performance(self):
         self._assert_clean(AppTest.from_file(_page("33_Paper_Performance.py"), default_timeout=90))
 
-    def test_today_shows_live_model_edges_section(self):
-        """Deterministic: the section heading depends on how old the newest real price is (<= 3 h is live), which
-        would make this test pass in the morning and fail at night. Judge every price as 30 minutes old."""
+    def test_today_shows_historical_elo_comparison_section(self):
+        """Real bug fix (2026-10-01): this section (real DK prices vs. a frozen,
+        always-stale research Elo snapshot) was previously a top-level, always-
+        expanded '## Live Model Edges' / '## Model Edges — ODDS STALE' heading --
+        read repeatedly as "the engine is broken" despite its own disclaimer, since
+        it's permanently stale by construction. Now collapsed behind the same
+        explicit expander treatment the Demo/Model Showcase sections get, with one
+        static label regardless of freshness state."""
         import datetime as dt
         from operational import cloud_snapshot_schema as schema
         real = schema.recommendation_freshness
@@ -104,8 +109,8 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
             at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
             at.run()
         self.assertEqual(len(at.exception), 0)
-        markdown_text = " ".join(m.value for m in at.markdown)
-        self.assertIn("Live Model Edges", markdown_text)
+        expander_labels = [e.label for e in at.expander]
+        self.assertTrue(any("Historical Elo research comparison" in label for label in expander_labels))
 
     def test_demo_slate_section_is_labeled_simulated_not_todays_slate(self):
         """Real Morning Production Pull sprint (2026-09-29): the section powering Top Conviction/Combos
