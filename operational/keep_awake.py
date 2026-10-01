@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 from typing import Callable
 
+from operational import live_odds_daily_pull as lodp
 from operational import moneyline_pregame as mp
 from operational import state_paths as _sp
 
@@ -48,14 +49,27 @@ GUARD_MAX_AGE_H = 36
 def windows(now: dt.datetime, starts: list, horizon_h: float = PLAN_HORIZON_H,
             listing_fn: Callable | None = None) -> list[dict]:
     """Hold windows for clusters the provider LISTS (a cluster it does not list gets no pull, so the machine need
-    not be held awake for it). Unknown listing (no archived events) is treated as listed -- the safe side."""
+    not be held awake for it). Unknown listing (no archived events) is treated as listed -- the safe side.
+
+    Production Gap Closure sprint (2026-10-01): this previously anchored BOTH ends of the hold window to
+    moneyline_pregame.py's own narrow T-40..T-30 decision math (c.window/c.anchor), which has nothing to do
+    with when the SEPARATE prop-sweep-first/-second launchd jobs (operational/live_odds_daily_pull.py) need
+    the machine awake. Confirmed by the formula itself (not a one-off): the resulting window --
+    [c.smax-70min, c.smin-10min] -- structurally never overlaps prop-sweep-first's real T-270..T-180
+    capture window at all, and ends 10+ minutes BEFORE the EARLIEST real game in the cluster even starts
+    (every later game in a multi-game cluster loses additional margin on top of that). Both ends are now
+    anchored to the cluster's own REAL puck-drop times (smin/smax) and the real sweep windows those other
+    jobs actually use, not to moneyline's own decision anchor: the hold starts early enough for
+    prop-sweep-first's furthest-out real capture need, and ends only after the LATEST real game in the
+    cluster has actually started."""
     out = []
     listing_fn = listing_fn or mp.archived_listing
+    first_sweep_lead_h = lodp.FIRST_SWEEP_WINDOW_HOURS[1]  # the earlier (larger-hours-out) edge, e.g. 4.5h
     for c in mp.plan_clusters(starts):
         if listing_fn(c) is False:
             continue
-        lo = c.window[0] - dt.timedelta(minutes=LEAD_BEFORE_WINDOW_MIN)
-        hi = c.anchor + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN)
+        lo = c.smin - dt.timedelta(hours=first_sweep_lead_h) - dt.timedelta(minutes=LEAD_BEFORE_WINDOW_MIN)
+        hi = c.smax + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN)
         if hi < now or lo > now + dt.timedelta(hours=horizon_h):
             continue
         out.append({"cluster": c.key, "games": c.games, "hold_from_utc": lo, "hold_until_utc": hi,

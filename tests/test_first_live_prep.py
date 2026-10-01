@@ -32,14 +32,20 @@ ARMED_DEPS = dict(
 
 # ------------------------------------------------------------------------------------------ keep-awake
 class TestHoldWindows(unittest.TestCase):
-    def test_window_starts_before_t40_and_ends_after_the_t30_decision_and_publish(self):
+    def test_window_starts_before_the_first_sweep_and_ends_after_the_latest_real_puck_drop(self):
+        """Production Gap Closure sprint (2026-10-01): the hold window is now anchored to the cluster's
+        own REAL puck-drop time(s) and the real prop-sweep-first window (operational/live_odds_daily_pull.py's
+        FIRST_SWEEP_WINDOW_HOURS, 3.0-4.5h pre-puck-drop) -- not to moneyline_pregame.py's own narrow
+        T-40..T-30 decision math, which structurally never overlapped prop-sweep-first's real capture
+        window at all and ended before the game itself even started. capture_window/anchor (moneyline's
+        own T-40/T-30 values) are unchanged and still reported for wake_covers()'s own, separate purpose."""
         (w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
-        self.assertEqual(w["capture_window"][0], D(20, 20))                       # T-40
-        self.assertEqual(w["hold_from_utc"], D(19, 50))                           # 30 min BEFORE the window opens
+        self.assertEqual(w["capture_window"][0], D(20, 20))                       # T-40 (unchanged)
+        self.assertEqual(w["anchor"], D(20, 30))                                  # T-30 decision (unchanged)
+        self.assertEqual(w["hold_from_utc"], D(16, 0))                            # smin(21:00) - 4.5h - 30min
         self.assertLess(w["hold_from_utc"], w["capture_window"][0])
-        self.assertEqual(w["anchor"], D(20, 30))                                  # T-30 decision
-        self.assertEqual(w["hold_until_utc"], D(20, 50))                          # 20 min after it (cloud publish)
-        self.assertGreater(w["hold_until_utc"], w["anchor"])
+        self.assertEqual(w["hold_until_utc"], D(21, 20))                          # smax(21:00) + 20min -- AFTER puck drop
+        self.assertGreater(w["hold_until_utc"], D(21, 0))                         # strictly after the real game start
 
     def test_clusters_the_provider_does_not_list_never_hold_the_machine_awake(self):
         self.assertEqual(ka.windows(D(12), [D(21)], listing_fn=lambda c: False), [])
@@ -49,9 +55,27 @@ class TestHoldWindows(unittest.TestCase):
         self.assertEqual(ka.windows(D(23), [D(21)], listing_fn=LISTED), [])
         self.assertEqual(ka.windows(D(1, day=25), [D(21)], horizon_h=24, listing_fn=LISTED), [])
 
+    def test_hold_window_covers_the_real_first_sweep_capture_window(self):
+        """Regression for the confirmed defect: the OLD window [smax-70min, smin-10min] structurally never
+        overlapped prop-sweep-first's real T-270..T-180 (4.5h..3h pre-puck-drop) capture window at all."""
+        from operational import live_odds_daily_pull as lodp
+        (w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
+        first_sweep_open = D(21) - dt.timedelta(hours=lodp.FIRST_SWEEP_WINDOW_HOURS[1])   # 16:30
+        first_sweep_close = D(21) - dt.timedelta(hours=lodp.FIRST_SWEEP_WINDOW_HOURS[0])  # 18:00
+        self.assertLessEqual(w["hold_from_utc"], first_sweep_open)
+        self.assertLessEqual(first_sweep_close, w["hold_until_utc"])
+
+    def test_multi_game_cluster_hold_extends_past_the_latest_real_puck_drop(self):
+        """Regression for the confirmed defect: a multi-game cluster's hold used to end at
+        smin-10min -- BEFORE every game had even started, with later games in the cluster losing
+        additional margin on top of that. It must now extend past the LATEST real game's own start."""
+        (w,) = ka.windows(D(12), [D(21), D(21, 3)], listing_fn=LISTED)  # two games 3 min apart -> one cluster
+        self.assertGreater(w["hold_until_utc"], D(21, 3))                # strictly after the LATER game's start
+        self.assertGreaterEqual(w["hold_until_utc"], D(21, 23))          # smax(21:03) + 20min
+
     def test_active_window_bounds(self):
         with mock.patch.object(mp, "archived_listing", return_value=True):
-            for now, expected in ((D(19, 39), False), (D(19, 40), True), (D(19, 50), True), (D(20, 30), True), (D(20, 50), True), (D(20, 51), False)):
+            for now, expected in ((D(15, 49), False), (D(15, 50), True), (D(16, 0), True), (D(20, 30), True), (D(21, 20), True), (D(21, 21), False)):
                 self.assertEqual(ka.active_window(now, [D(21)]) is not None, expected, now)
 
 
@@ -79,7 +103,7 @@ class TestEnsureHolding(unittest.TestCase):
 
     def test_inside_the_window_it_holds_until_the_window_ends_and_only_once(self):
         r = self.run_at(D(19, 52))
-        self.assertEqual((r["action"], r["holding"], self.spawned), ("STARTED", True, [int((D(20, 50) - D(19, 52)).total_seconds())]))
+        self.assertEqual((r["action"], r["holding"], self.spawned), ("STARTED", True, [int((D(21, 20) - D(19, 52)).total_seconds())]))
         again = self.run_at(D(19, 54))
         self.assertEqual((again["action"], len(self.spawned)), ("ALREADY_HOLDING", 1))
 
@@ -87,7 +111,7 @@ class TestEnsureHolding(unittest.TestCase):
         self.run_at(D(19, 52))
         self.alive = False
         self.assertEqual(self.run_at(D(20, 10))["action"], "STARTED")
-        self.assertEqual(self.spawned[-1], int((D(20, 50) - D(20, 10)).total_seconds()))
+        self.assertEqual(self.spawned[-1], int((D(21, 20) - D(20, 10)).total_seconds()))
 
     def test_standby_and_tests_never_spawn(self):
         self.assertEqual(self.run_at(D(19, 52), active_fn=lambda: False)["reason"], "STANDBY")

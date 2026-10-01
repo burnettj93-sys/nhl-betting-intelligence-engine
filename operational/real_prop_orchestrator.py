@@ -418,7 +418,10 @@ def _price_and_record_sog_pair(nhl_conn, pl_conn, bankroll_conn, event_payload, 
     season_start_year = year if month >= 7 else year - 1
     season = season_start_year * 10000 + (season_start_year + 1)
 
-    from research.player_sog.live_projection import project_player_sog
+    from research.player_sog.live_projection import corpus_covers_date, project_player_sog
+    coverage = corpus_covers_date(team_schedules, team, prediction_date)
+    if not coverage["covers"]:
+        return {"status": "CORPUS_STALE", "reason": coverage["reason"], "player_id": player_id, "recorded": False}
     view = project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,
                                league_avg_sog_allowed, weights, alpha, player_id, team, opponent,
                                prediction_date, season)
@@ -529,7 +532,10 @@ def _price_and_record_sog_alternate_quote(nhl_conn, pl_conn, bankroll_conn, even
     except NonHalfPointLineError as exc:
         return {"status": "MALFORMED_LINE", "reason": str(exc), "player_id": player_id, "recorded": False}
 
-    from research.player_sog.live_projection import project_player_sog
+    from research.player_sog.live_projection import corpus_covers_date, project_player_sog
+    coverage = corpus_covers_date(team_schedules, team, prediction_date)
+    if not coverage["covers"]:
+        return {"status": "CORPUS_STALE", "reason": coverage["reason"], "player_id": player_id, "recorded": False}
     view = project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,
                                league_avg_sog_allowed, weights, alpha, player_id, team, opponent,
                                prediction_date, season)

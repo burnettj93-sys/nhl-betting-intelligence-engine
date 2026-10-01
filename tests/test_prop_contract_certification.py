@@ -24,7 +24,7 @@ def _load_fixture(name: str) -> dict:
 
 
 def _tor_bos_schedule():
-    return [{"game_id": 9001, "home_team": "TOR", "away_team": "BOS", "game_date": "2026-10-15"}]
+    return [{"game_id": 9001, "home_team": "TOR", "away_team": "BOS", "game_date": "2026-04-17"}]
 
 
 class TestCertifySOGPayload(unittest.TestCase):

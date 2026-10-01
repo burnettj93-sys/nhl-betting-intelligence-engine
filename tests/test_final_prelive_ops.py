@@ -37,7 +37,7 @@ class TestWakePlan(unittest.TestCase):
     def test_wake_is_at_least_30_minutes_before_the_capture_window_and_inside_the_assertion_window(self):
         w = self.w()
         t = ka.wake_time(w)
-        self.assertEqual(t, D(19, 45))                                           # 15:45 EDT for the 21:00Z game
+        self.assertEqual(t, D(15, 55))                                           # hold_from_utc(16:00) - 5min
         self.assertGreaterEqual((w["capture_window"][0] - t), dt.timedelta(minutes=30))
         self.assertGreaterEqual(t, w["assert_from_utc"])                          # the guard holds it immediately after the wake
 
@@ -57,7 +57,7 @@ class TestWakePlan(unittest.TestCase):
 
     def test_next_wake_reports_the_cluster_times(self):
         n = snw.next_wake(D(12), starts_fn=lambda now: [D(21)], listing_fn=LISTED)
-        self.assertEqual(n["wake_utc"], D(19, 45))
+        self.assertEqual(n["wake_utc"], D(15, 55))
         self.assertEqual(n["window"]["capture_window"][0], D(20, 20))                     # T-40
         self.assertIn("sudo pmset schedule wake", n["command"])
 
@@ -94,7 +94,7 @@ class TestWakeCoverage(unittest.TestCase):
             self.assertIsNotNone(ka.wake_covers(self.w, self.ev(when)), when)
 
     def test_too_early_or_after_the_window_opens_does_not(self):
-        for when in (D(15, 0), D(19, 19), D(20, 21), D(23, 0)):
+        for when in (D(15, 0), D(15, 29), D(20, 21), D(23, 0)):
             self.assertIsNone(ka.wake_covers(self.w, self.ev(when)), when)
 
     def test_verify_reads_the_os_listing_not_an_exit_code(self):

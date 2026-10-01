@@ -190,7 +190,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
     from operational import eastern_time as et
     from operational.real_prop_orchestrator import _real_nhl_schedule
     from research.live_sog_pricing import event_mapping, market_parser, player_mapping
-    from research.player_sog.live_projection import project_player_sog
+    from research.player_sog.live_projection import corpus_covers_date, project_player_sog
 
     now = now or dt.datetime.now(dt.timezone.utc)
     legs: list[ParlayLeg] = []
@@ -269,6 +269,12 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                                       "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
                                                 f"allowed<={freshness['max_age_minutes']}min)"
                                                 if freshness["age_minutes"] is not None else freshness["reason"]})
+                    continue
+
+                coverage = corpus_covers_date(team_schedules, team, prediction_date)
+                if not coverage["covers"]:
+                    excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG_ALTERNATE",
+                                      "reason": "MODEL_CORPUS_STALE"})
                     continue
 
                 view = project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,

@@ -307,17 +307,24 @@ class TestSogAlternateAdapter(unittest.TestCase):
                              for e in excluded))
 
     def test_real_identity_resolves_near_the_real_capture_time(self):
-        # Evaluated near the quote's OWN real capture time (12:14:34Z) rather
-        # than a stale reference -- proves real players genuinely map to real
-        # eligible legs with real model probabilities, not just "no longer
-        # unmatched."
+        """Evaluated near the quote's OWN real capture time (12:14:34Z) rather
+        than a stale reference -- proves real event/identity mapping genuinely
+        reaches the model for real players (never "unmatched"). Production Gap
+        Closure sprint (2026-10-01): research/player_sog's corpus is frozen at
+        2026-04-16, so the real model itself now honestly reports CORPUS_STALE
+        rather than fabricating a PROJECTED_ACTIVE result from 6-month-old data
+        (the exact class of bug a real-production investigation found via
+        Auston Matthews) -- zero eligible legs is the correct, honest outcome
+        here today, not a regression. See test_sog_alternate_pipeline_e2e.py
+        for proof the model/pricing stack itself works correctly against a
+        non-stale (mocked) corpus."""
         payload = self._load_payload()
         conn = self._schedule_conn()
         fresh_now = dt.datetime(2026, 9, 29, 12, 20, 0, tzinfo=dt.timezone.utc)
         legs, excluded = adapter.sog_alternate_candidate_legs(conn, [payload], now=fresh_now)
-        self.assertGreater(len(legs), 0)
-        for leg in legs:
-            self.assertTrue(0.0 < leg.conservative_probability < 1.0)
+        self.assertEqual(legs, [])
+        reasons = {e["reason"] for e in excluded}
+        self.assertTrue(any(r.startswith("MODEL_CORPUS_STALE") for r in reasons), reasons)
         # Brady Tkachuk's real most-recent-known team (per the real corpus)
         # doesn't match this fixture's CAR/FLA game -- correctly AMBIGUOUS,
         # never guessed past.

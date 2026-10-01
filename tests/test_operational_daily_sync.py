@@ -170,6 +170,134 @@ class TestNHLSyncWindow(unittest.TestCase):
         self.assertIn("network down", result["error"])
 
 
+class _DatedFakeSession:
+    """Serves a DIFFERENT schedule response per real date -- unlike
+    _FakeSession above (which always serves the same fixed response
+    regardless of which date's URL is requested), this lets a test prove
+    that re-querying a SPECIFIC orphaned date actually reaches the real
+    NHL schedule endpoint for THAT date, not just the rolling window's
+    own dates."""
+    def __init__(self, responses_by_date: dict[str, dict]):
+        self._responses = responses_by_date
+        self.calls = []
+
+    def get(self, url, timeout=15):
+        self.calls.append(url)
+        if "/schedule/" in url:
+            date_str = url.rsplit("/schedule/", 1)[1]
+            return _FakeResponse(self._responses.get(date_str, _empty_schedule_response(date_str)))
+        if "/gamecenter/" in url:
+            return _FakeResponse({"id": 1, "homeTeam": {"abbrev": "TOR"}, "awayTeam": {"abbrev": "BOS"},
+                                   "playerByGameStats": {"homeTeam": {"forwards": [], "defense": [], "goalies": []},
+                                                          "awayTeam": {"forwards": [], "defense": [], "goalies": []}}})
+        return _FakeResponse({})
+
+
+class TestOrphanedGameBackfill(unittest.TestCase):
+    """Production Gap Closure sprint (2026-10-01): default_sync_window()'s
+    rolling [-1, +SCHEDULE_FORWARD_DAYS] window permanently orphans any
+    game whose result never arrived within that single backward day --
+    confirmed live as a real, 7-day-reproducing defect (42 real games
+    stuck SCHEDULED, games_finalized=0 on every sync log entry)."""
+
+    def test_finds_a_scheduled_game_whose_start_time_is_long_past(self):
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, source) VALUES (2026010001, '20262027', '2026-08-01', "
+            "'2026-08-01T23:00:00', 'TOR', 'BOS', '2026-08-01T00:00:00', 'SCHEDULED', 'test')")
+        conn.commit()
+        now = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+        dates = nhl_sync.find_orphaned_unfinalized_game_dates(conn, now=now)
+        self.assertEqual(dates, ["2026-08-01"])
+
+    def test_a_game_still_within_the_grace_period_is_not_yet_an_orphan(self):
+        """A game that started 2 hours ago might genuinely still be live --
+        never re-queried before ORPHAN_BACKFILL_GRACE_HOURS has passed."""
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        now = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+        recent_start = (now - dt.timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, source) VALUES (2026010002, '20262027', '2026-10-01', "
+            "?, 'TOR', 'BOS', '2026-10-01T00:00:00', 'SCHEDULED', 'test')", (recent_start,))
+        conn.commit()
+        self.assertEqual(nhl_sync.find_orphaned_unfinalized_game_dates(conn, now=now), [])
+
+    def test_already_final_games_are_never_flagged_as_orphans(self):
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, home_score, away_score, source) VALUES (2026010003, "
+            "'20262027', '2026-08-01', '2026-08-01T23:00:00', 'TOR', 'BOS', '2026-08-01T00:00:00', "
+            "'FINAL', 3, 2, 'test')")
+        conn.commit()
+        now = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(nhl_sync.find_orphaned_unfinalized_game_dates(conn, now=now), [])
+
+    def test_backfill_actually_finalizes_a_real_orphaned_game(self):
+        """End-to-end: an orphaned game outside the rolling window gets
+        correctly finalized by re-querying its own real date, not the
+        rolling window's dates."""
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, source) VALUES (2026020001, '20262027', '2026-08-01', "
+            "'2026-08-01T23:00:00', 'TOR', 'BOS', '2026-08-01T00:00:00', 'SCHEDULED', 'test')")
+        conn.commit()
+        session = _DatedFakeSession({
+            "2026-08-01": _one_game_schedule_response("2026-08-01", 2026020001, final=True),
+        })
+        now = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+        result = nhl_sync.backfill_orphaned_games(conn, session=session, now=now)
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["orphaned_dates_found"], 1)
+        self.assertEqual(result["games_finalized"], 1)
+        row = conn.execute("SELECT game_state FROM games WHERE game_id = 2026020001").fetchone()
+        self.assertEqual(row["game_state"], "FINAL")
+
+    def test_run_nhl_sync_wires_in_the_backfill_and_counts_it_toward_games_finalized(self):
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, source) VALUES (2026020002, '20262027', '2026-08-01', "
+            "'2026-08-01T23:00:00', 'TOR', 'BOS', '2026-08-01T00:00:00', 'SCHEDULED', 'test')")
+        conn.commit()
+        session = _DatedFakeSession({
+            "2026-08-01": _one_game_schedule_response("2026-08-01", 2026020002, final=True),
+            "2026-08-26": _empty_schedule_response("2026-08-26"),
+        })
+        result = nhl_sync.run_nhl_sync(conn=conn, today=dt.date(2026, 8, 27), session=session,
+                                        sync_current_rosters=False)
+        self.assertEqual(result["status"], "SUCCESS")
+        self.assertEqual(result["components"]["orphan_backfill"], "SUCCESS")
+        self.assertEqual(result["orphan_backfill"]["orphaned_dates_found"], 1)
+        self.assertEqual(result["games_finalized"], 1)
+        row = conn.execute("SELECT game_state FROM games WHERE game_id = 2026020002").fetchone()
+        self.assertEqual(row["game_state"], "FINAL")
+
+    def test_bounded_to_max_orphan_dates_per_run(self):
+        conn = _fresh_conn()
+        conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES ('TOR','TOR'), ('BOS','BOS')")
+        for i in range(nhl_sync.MAX_ORPHAN_DATES_PER_RUN + 3):
+            date_str = (dt.date(2026, 1, 1) + dt.timedelta(days=i)).isoformat()
+            conn.execute(
+                "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+                "schedule_observed_at_utc, game_state, source) VALUES (?, '20262027', ?, ?, 'TOR', 'BOS', "
+                "?, 'SCHEDULED', 'test')",
+                (2026030000 + i, date_str, f"{date_str}T23:00:00", f"{date_str}T00:00:00"))
+        conn.commit()
+        now = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+        result = nhl_sync.backfill_orphaned_games(conn, session=_DatedFakeSession({}), now=now)
+        self.assertEqual(result["orphaned_dates_found"], nhl_sync.MAX_ORPHAN_DATES_PER_RUN + 3)
+        self.assertEqual(len(result["dates_checked"]), nhl_sync.MAX_ORPHAN_DATES_PER_RUN)
+
+
 class TestNHLSyncRosterDegradationIsNonCritical(unittest.TestCase):
     """Reliability fix (2026-09-24): a roster-sync failure must degrade
     the overall run to PARTIAL_SUCCESS, never FAILED, and must never
