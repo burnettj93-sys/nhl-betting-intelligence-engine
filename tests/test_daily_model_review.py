@@ -341,13 +341,16 @@ class Test12ZeroAndLowSampleHandling(unittest.TestCase):
 
         SOG Contract Certification block (2026-09-29): verified_contracts is now 3
         (MONEYLINE, PLAYER_SOG_ALTERNATE, ALTERNATE_TEAM_TOTAL), up from MONEYLINE alone --
-        see research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS."""
+        see research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS.
+
+        Standard SOG/Saves Certification block (2026-10-01): two more real, archived
+        payloads certified (bare PLAYER_SOG, GOALIE_SAVES) -- verified_contracts is now 5."""
         conn = pl.init_db(db_path=":memory:")
         self._settle_n(conn, dmr.MIN_SAMPLE_FOR_REVIEW + 5)
         result = dmr.run_daily_review(conn, now_utc=NOW)
         self.assertEqual(result["engine_status"], "WATCH")
         self.assertNotIn("incomplete", result)
-        self.assertEqual(result["contract_status"]["verified_contracts"], 3)
+        self.assertEqual(result["contract_status"]["verified_contracts"], 5)
 
     def test_valid_promotion_candidate_case_still_works_above_minimum(self):
         """promotion_candidates()/recommendation are challenger-registry

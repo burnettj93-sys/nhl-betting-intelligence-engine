@@ -13,12 +13,24 @@ DraftKings reference-book policy (hard requirements):
   - Every report is labeled "DraftKings reference pricing", never
     "consensus" or "best market".
 
-Goalie-confirmation policy:
-  - Both starting goalies must be CONFIRMED (features/point_in_time.py) or
-    the action is WAIT, with the reason stated — UNLESS
-    config.ALLOW_BETTING_ON_EXPECTED_STARTER is explicitly set True, in
-    which case an EXPECTED (not yet CONFIRMED) starter is allowed but
-    still widens the model's uncertainty band (see models/goalie_model.py).
+Goalie-confirmation policy (revised, Production Gap Closure sprint,
+2026-10-01 — see config.REQUIRE_GOALIE_CONFIRMATION's docstring for the
+full rationale):
+  - By default (config.REQUIRE_GOALIE_CONFIRMATION = False), a
+    non-CONFIRMED starter (UNKNOWN/EXPECTED/CHANGED — UNKNOWN being the
+    universal real-game state, since no confirmation source has ever
+    existed) does NOT force WAIT. models/goalie_model.py already widens
+    the model's own conservative_prob/ci_high for a non-CONFIRMED starter
+    before this module sees it, so action is decided by the normal
+    MIN_CONSERVATIVE_EDGE/MIN_EV thresholds against that already-widened
+    probability — a team that's genuinely better regardless of who starts
+    in net can still clear them; a genuinely close matchup with an unknown
+    goalie situation will usually fail them on its own via the wider band.
+    A non-CONFIRMED status is still surfaced in BetReport.notes, never
+    silently presented as CONFIRMED.
+  - Set config.REQUIRE_GOALIE_CONFIRMATION = True to restore the old
+    strict policy: both starting goalies must be CONFIRMED or the action
+    is WAIT, with the reason stated.
 
 Threshold policy (spec item 9): a probability-point edge and a %-return EV
 are different quantities. BET requires BOTH conservative_edge >=
@@ -129,7 +141,7 @@ def _data_unavailable(game_label: str, selection: str, market: str, reason: str)
 
 def evaluate_moneyline_for_game(
     conn: sqlite3.Connection, pred, game_label: str,
-    allow_expected_starter: bool = config.ALLOW_BETTING_ON_EXPECTED_STARTER,
+    require_goalie_confirmation: bool = config.REQUIRE_GOALIE_CONFIRMATION,
     max_staleness_minutes: float | None = None,
     bankroll_fraction_cap: float = config.MAX_SINGLE_BET_BANKROLL_PCT,
 ) -> list[BetReport]:
@@ -195,15 +207,27 @@ def evaluate_moneyline_for_game(
         ev = odds_math.expected_value(conservative_prob, market_price)
         zone = _zone(conservative_edge)
 
-        goalie_ok = (goalie_status == "CONFIRMED" or
-                     (allow_expected_starter and goalie_status == "EXPECTED"))
         # both teams' goalies matter to a moneyline bet on either side
         other_status = pred.away_goalie_status if selection == home else pred.home_goalie_status
-        other_ok = (other_status == "CONFIRMED" or
-                    (allow_expected_starter and other_status == "EXPECTED"))
+        goalie_ok = goalie_status == "CONFIRMED"
+        other_ok = other_status == "CONFIRMED"
 
         notes = []
-        if not (goalie_ok and other_ok):
+        if not goalie_ok:
+            notes.append(f"{selection} starter status={goalie_status} "
+                         f"(model's own uncertainty widening already applied; not gated on confirmation)")
+        if not other_ok:
+            notes.append(f"opponent starter status={other_status} "
+                         f"(model's own uncertainty widening already applied; not gated on confirmation)")
+
+        # Production Gap Closure sprint (2026-10-01): a real confirmation
+        # source has never existed, so UNKNOWN is the universal real-game
+        # state -- see config.REQUIRE_GOALIE_CONFIRMATION's docstring for
+        # why this is no longer a hard WAIT block by default. The model's
+        # own conservative_prob/ci_high already reflect the widened
+        # uncertainty for a non-CONFIRMED starter; MIN_CONSERVATIVE_EDGE/
+        # MIN_EV are what actually gate the bet below.
+        if require_goalie_confirmation and not (goalie_ok and other_ok):
             unconfirmed = []
             if not goalie_ok:
                 unconfirmed.append(f"{selection} goalie status={goalie_status}")
@@ -212,8 +236,6 @@ def evaluate_moneyline_for_game(
             action = "WAIT"
             reason = "starting goalie not confirmed: " + "; ".join(unconfirmed)
         else:
-            if goalie_status != "CONFIRMED":
-                notes.append(f"{selection} starter status={goalie_status} (betting allowed by policy)")
             meets_edge = conservative_edge >= config.MIN_CONSERVATIVE_EDGE
             meets_ev = ev >= config.MIN_EV
             if meets_edge and meets_ev:

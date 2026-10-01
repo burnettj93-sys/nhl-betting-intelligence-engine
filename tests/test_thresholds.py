@@ -128,6 +128,15 @@ class TestThresholds(unittest.TestCase):
 
 
 class TestGoalieWaitPolicy(unittest.TestCase):
+    """Production Gap Closure sprint (2026-10-01): a non-CONFIRMED starter
+    (the universal real-game state -- no confirmation source has ever
+    existed, see config.REQUIRE_GOALIE_CONFIRMATION's docstring) no longer
+    forces WAIT by default. The model's own conservative_prob/ci_high are
+    already widened for a non-CONFIRMED starter before this module sees
+    them (models/goalie_model.py), so the normal edge/EV thresholds are
+    what decide BET/PASS; config.REQUIRE_GOALIE_CONFIRMATION=True restores
+    the old strict CONFIRMED-only gate for anyone who wants it back."""
+
     def setUp(self):
         self.conn, self.path = make_test_db()
         self.fx = Fixture(self.conn)
@@ -148,32 +157,52 @@ class TestGoalieWaitPolicy(unittest.TestCase):
             scheduled_start_utc=self.fx.scheduled_start,
         )
 
-    def test_both_unconfirmed_is_wait(self):
-        pred = self._pred("EXPECTED", "EXPECTED")
+    def test_both_unconfirmed_proceeds_to_normal_threshold_check_by_default(self):
+        pred = self._pred("UNKNOWN", "UNKNOWN")
         reports = pricing_engine.evaluate_moneyline_for_game(self.conn, pred, "TOR @ BOS")
         for r in reports:
-            self.assertEqual(r.action, "WAIT")
-            self.assertIn("goalie", r.action_reason.lower())
+            self.assertNotEqual(r.action, "WAIT")
 
-    def test_home_confirmed_away_unconfirmed_still_waits(self):
-        # a moneyline bet on EITHER side depends on BOTH goalies
-        pred = self._pred("CONFIRMED", "EXPECTED")
+    def test_unconfirmed_starters_are_noted_but_not_claimed_confirmed(self):
+        pred = self._pred("UNKNOWN", "EXPECTED")
         reports = pricing_engine.evaluate_moneyline_for_game(self.conn, pred, "TOR @ BOS")
-        for r in reports:
-            self.assertEqual(r.action, "WAIT")
+        home = next(r for r in reports if r.selection == "TOR")
+        self.assertTrue(any("status=UNKNOWN" in n for n in home.notes))
+        self.assertTrue(any("status=EXPECTED" in n for n in home.notes))
 
     def test_both_confirmed_proceeds_to_normal_threshold_check(self):
         pred = self._pred("CONFIRMED", "CONFIRMED")
         reports = pricing_engine.evaluate_moneyline_for_game(self.conn, pred, "TOR @ BOS")
         for r in reports:
             self.assertNotEqual(r.action, "WAIT")
+            self.assertEqual(r.notes, [])
 
-    def test_wait_report_still_has_full_market_numbers_populated(self):
+    def test_strict_policy_override_waits_on_unconfirmed(self):
+        pred = self._pred("EXPECTED", "EXPECTED")
+        reports = pricing_engine.evaluate_moneyline_for_game(
+            self.conn, pred, "TOR @ BOS", require_goalie_confirmation=True
+        )
+        for r in reports:
+            self.assertEqual(r.action, "WAIT")
+            self.assertIn("goalie", r.action_reason.lower())
+
+    def test_strict_policy_override_home_confirmed_away_unconfirmed_still_waits(self):
+        # a moneyline bet on EITHER side depends on BOTH goalies
+        pred = self._pred("CONFIRMED", "EXPECTED")
+        reports = pricing_engine.evaluate_moneyline_for_game(
+            self.conn, pred, "TOR @ BOS", require_goalie_confirmation=True
+        )
+        for r in reports:
+            self.assertEqual(r.action, "WAIT")
+
+    def test_strict_policy_override_wait_report_still_has_full_market_numbers_populated(self):
         # regression test for the WAIT-path crash bug: a WAIT report must
         # still carry the model's view, not None fields that would crash
         # BetReport.format()'s percentage formatting.
         pred = self._pred("EXPECTED", "CONFIRMED")
-        reports = pricing_engine.evaluate_moneyline_for_game(self.conn, pred, "TOR @ BOS")
+        reports = pricing_engine.evaluate_moneyline_for_game(
+            self.conn, pred, "TOR @ BOS", require_goalie_confirmation=True
+        )
         home = next(r for r in reports if r.selection == "TOR")
         self.assertEqual(home.action, "WAIT")
         self.assertIsNotNone(home.model_true_probability)
@@ -182,16 +211,8 @@ class TestGoalieWaitPolicy(unittest.TestCase):
         formatted = home.format()   # must not raise
         self.assertIn("WAIT", formatted)
 
-    def test_expected_starter_allowed_by_explicit_policy_override(self):
-        pred = self._pred("EXPECTED", "CONFIRMED")
-        reports = pricing_engine.evaluate_moneyline_for_game(
-            self.conn, pred, "TOR @ BOS", allow_expected_starter=True
-        )
-        for r in reports:
-            self.assertNotEqual(r.action, "WAIT")
-
-    def test_default_policy_does_not_allow_expected_starter(self):
-        self.assertFalse(config.ALLOW_BETTING_ON_EXPECTED_STARTER)
+    def test_default_policy_does_not_require_goalie_confirmation(self):
+        self.assertFalse(config.REQUIRE_GOALIE_CONFIRMATION)
 
 
 if __name__ == "__main__":

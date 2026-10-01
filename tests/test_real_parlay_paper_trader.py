@@ -56,12 +56,24 @@ def _fresh_nhl_db_with_games(games: list[dict]) -> Path:
 
 
 def _run_with(nhl_path, bankroll_path, legs, now):
+    # Standard SOG/Saves Certification block (2026-10-01): sog_standard_candidate_legs
+    # and goalie_saves_candidate_legs are mocked out too, same as sog_alternate_
+    # candidate_legs above -- this test file is about paper-trader staking/cross-run
+    # logic, not adapter internals (those get their own real-payload tests in
+    # tests/test_real_slate_adapter.py); without this, every call would reload the
+    # real SOG/Saves model corpora from disk for no test-relevant reason.
     with mock.patch.object(db, "get_conn", lambda: _REAL_GET_CONN(nhl_path)), \
          mock.patch.object(pb, "init_db", lambda: _REAL_PB_INIT_DB(Path(bankroll_path))), \
          mock.patch("research.real_market_parlay.real_slate_adapter.moneyline_candidate_legs",
                     return_value=(legs, [])), \
          mock.patch("research.real_market_parlay.real_slate_adapter.sog_alternate_candidate_legs",
                     return_value=([], [])), \
+         mock.patch("research.real_market_parlay.real_slate_adapter.sog_standard_candidate_legs",
+                    return_value=([], [])), \
+         mock.patch("research.real_market_parlay.real_slate_adapter.goalie_saves_candidate_legs",
+                    return_value=([], [])), \
+         mock.patch.object(trader.bet_revalidation, "revalidate_pending_real_market_bets",
+                    return_value={"checked": 0, "voided": 0, "results": []}), \
          mock.patch.object(trader, "_recent_archive_payloads", return_value=[]):
         return trader.run(now=now)
 

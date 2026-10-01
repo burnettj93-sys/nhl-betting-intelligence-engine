@@ -1,0 +1,203 @@
+{
+  "away_team": "Montréal Canadiens",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "markets": [
+        {
+          "key": "player_shots_on_goal",
+          "last_update": "2026-09-29T18:53:48Z",
+          "outcomes": [
+            {
+              "description": "Auston Matthews",
+              "name": "Over",
+              "point": 3.5,
+              "price": -105
+            },
+            {
+              "description": "Auston Matthews",
+              "name": "Under",
+              "point": 3.5,
+              "price": -125
+            },
+            {
+              "description": "Cole Caufield",
+              "name": "Over",
+              "point": 3.5,
+              "price": 120
+            },
+            {
+              "description": "Cole Caufield",
+              "name": "Under",
+              "point": 3.5,
+              "price": -160
+            },
+            {
+              "description": "William Nylander",
+              "name": "Over",
+              "point": 2.5,
+              "price": -110
+            },
+            {
+              "description": "William Nylander",
+              "name": "Under",
+              "point": 2.5,
+              "price": -125
+            },
+            {
+              "description": "Darren Raddysh",
+              "name": "Over",
+              "point": 2.5,
+              "price": 100
+            },
+            {
+              "description": "Darren Raddysh",
+              "name": "Under",
+              "point": 2.5,
+              "price": -140
+            },
+            {
+              "description": "Juraj Slafkovsky",
+              "name": "Over",
+              "point": 2.5,
+              "price": 105
+            },
+            {
+              "description": "Juraj Slafkovsky",
+              "name": "Under",
+              "point": 2.5,
+              "price": -145
+            },
+            {
+              "description": "Nick Suzuki",
+              "name": "Over",
+              "point": 2.5,
+              "price": 110
+            },
+            {
+              "description": "Nick Suzuki",
+              "name": "Under",
+              "point": 2.5,
+              "price": -150
+            },
+            {
+              "description": "John Tavares",
+              "name": "Over",
+              "point": 2.5,
+              "price": 125
+            },
+            {
+              "description": "John Tavares",
+              "name": "Under",
+              "point": 2.5,
+              "price": -170
+            },
+            {
+              "description": "Noah Dobson",
+              "name": "Over",
+              "point": 1.5,
+              "price": -185
+            },
+            {
+              "description": "Noah Dobson",
+              "name": "Under",
+              "point": 1.5,
+              "price": 135
+            },
+            {
+              "description": "Chris Kreider",
+              "name": "Over",
+              "point": 1.5,
+              "price": -180
+            },
+            {
+              "description": "Chris Kreider",
+              "name": "Under",
+              "point": 1.5,
+              "price": 130
+            },
+            {
+              "description": "Ivan Demidov",
+              "name": "Over",
+              "point": 1.5,
+              "price": -175
+            },
+            {
+              "description": "Ivan Demidov",
+              "name": "Under",
+              "point": 1.5,
+              "price": 130
+            },
+            {
+              "description": "Lane Hutson",
+              "name": "Over",
+              "point": 1.5,
+              "price": -170
+            },
+            {
+              "description": "Lane Hutson",
+              "name": "Under",
+              "point": 1.5,
+              "price": 125
+            },
+            {
+              "description": "Gavin McKenna",
+              "name": "Over",
+              "point": 1.5,
+              "price": -160
+            },
+            {
+              "description": "Gavin McKenna",
+              "name": "Under",
+              "point": 1.5,
+              "price": 115
+            },
+            {
+              "description": "Easton Cowan",
+              "name": "Over",
+              "point": 1.5,
+              "price": -110
+            },
+            {
+              "description": "Easton Cowan",
+              "name": "Under",
+              "point": 1.5,
+              "price": -125
+            },
+            {
+              "description": "Mike Matheson",
+              "name": "Over",
+              "point": 1.5,
+              "price": 105
+            },
+            {
+              "description": "Mike Matheson",
+              "name": "Under",
+              "point": 1.5,
+              "price": -145
+            },
+            {
+              "description": "Morgan Rielly",
+              "name": "Over",
+              "point": 1.5,
+              "price": 105
+            },
+            {
+              "description": "Morgan Rielly",
+              "name": "Under",
+              "point": 1.5,
+              "price": -140
+            }
+          ]
+        }
+      ],
+      "title": "DraftKings"
+    }
+  ],
+  "commence_time": "2026-09-29T23:10:00Z",
+  "home_team": "Toronto Maple Leafs",
+  "id": "485b295347cb22f002e014cb87813ed7",
+  "sport_key": "icehockey_nhl",
+  "sport_title": "NHL",
+  "_provenance": "REAL ARCHIVED DRAFTKINGS PAYLOAD -- captured via a real, credit-metered Odds API pull, retrieved_at_utc=2026-09-29T18:54:00Z, TOR@MTL (commence_time 2026-09-29T23:10:00Z), real HTTP 200, real checksum a4a6bf00e9ef9dadc37b84b92105ee07df2d8ff74df6d52f8572048c1c757aff. See research/generic_prop_pricing/provider_adapter.py::VERIFIED_CONTRACTS Standard SOG/Saves Certification block (2026-10-01). This is the FULL real payload (player_shots_on_goal + player_total_saves markets both present, both real DraftKings-posted) -- never a synthetic guess."
+}

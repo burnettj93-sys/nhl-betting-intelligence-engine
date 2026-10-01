@@ -69,12 +69,56 @@ MALFORMED_QUOTE_SHAPE = "MALFORMED_QUOTE_SHAPE"
 # tests/test_opening_day_readiness.py, tests/test_prop_contract_certification.py
 # all correctly still expect bare "PLAYER_SOG" to be CONTRACT_NOT_VERIFIED).
 #
+# UPDATE (Standard SOG/Saves Certification block, 2026-10-01): the warning
+# above was correct advice at the time it was written -- no real standard-
+# shape payload had been observed yet, so adding a bare PLAYER_SOG entry
+# then really would have been an unjustified overgeneralization. A real
+# standard-shape payload has SINCE been captured and directly inspected (see
+# below); the bare "PLAYER_SOG" and "GOALIE_SAVES" entries added below are
+# now a legitimate, evidenced certification of that real shape, following
+# the exact same Part 41 workflow PLAYER_SOG_ALTERNATE used -- not a repeat
+# of the violation this comment originally warned against.
+#
+# Standard SOG/Saves Certification block (2026-10-01): two more entries added,
+# both against REAL archived DraftKings payloads (never a new paid request
+# this block -- both recovered from already-retained archives, the SAME real
+# event, captured minutes after the SOG Contract Certification block above
+# first looked and found nothing):
+#   - (draftkings, PLAYER_SOG): player_shots_on_goal, real payload
+#     2026-09-29T18:54:00Z, TOR@MTL, 30 real two-sided (Over+Under) outcomes
+#     across 15 real players (Auston Matthews, Cole Caufield, William
+#     Nylander, ...) -- see
+#     tests/fixtures/draftkings_player_shots_on_goal_real_payload.json and
+#     tests/test_generic_prop_pricing.py::TestPlayerSogStandardContractParity.
+#     This is the DIFFERENT, two-sided player_shots_on_goal shape the
+#     PLAYER_SOG_ALTERNATE comment above explicitly said had "never been
+#     observed" -- that was true as of 2026-09-29T12:15Z; this real payload
+#     was captured later the SAME day. research/live_sog_pricing/
+#     market_parser.py's own header has been updated to match.
+#   - (draftkings, GOALIE_SAVES): player_total_saves, from the SAME real
+#     payload/event, 4 real two-sided outcomes across 2 real goalies (Sergei
+#     Bobrovsky, Jakub Dobes) -- see
+#     tests/fixtures/draftkings_player_total_saves_real_payload.json and
+#     tests/test_generic_prop_pricing.py::TestGoalieSavesStandardContractParity.
+#
+# Both route through research/live_sog_pricing/normalized_market_adapter.py::
+# quote_to_normalized_market() -- a generic, family-agnostic constructor
+# operational/real_prop_orchestrator.py already used for both families before
+# this certification (gated on is_contract_verified(), which this block now
+# flips to True for real) -- never the narrower, shape-dispatch-based
+# parse_the_odds_api_market() above, which only ever handles the ALTERNATE/
+# milestone-ladder shapes. Both real markets' own standard two-sided shape
+# means a genuine no-vig edge can be computed, unlike PLAYER_SOG_ALTERNATE's
+# one-sided ladder.
+#
 # Every other family remains deliberately unverified -- one observed payload
 # shape never validates an unrelated family (Part 16's instruction, unchanged).
 VERIFIED_CONTRACTS: frozenset[tuple[str, str]] = frozenset({
     ("draftkings", "MONEYLINE"),
     ("draftkings", "PLAYER_SOG_ALTERNATE"),
     ("draftkings", "ALTERNATE_TEAM_TOTAL"),
+    ("draftkings", "PLAYER_SOG"),
+    ("draftkings", "GOALIE_SAVES"),
 })
 
 

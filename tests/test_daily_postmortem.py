@@ -204,6 +204,102 @@ class TestScoreboardAndParlayHealth(unittest.TestCase):
         self.assertEqual(health["by_leg_count"][3]["wins"], 1)
 
 
+class TestRealMarketParlayHealth(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.db_path = Path(self._tmp.name) / "test.db"
+        self.conn = pb.init_db(self.db_path)
+
+    def tearDown(self):
+        self.conn.close()
+        self._tmp.cleanup()
+
+    def test_waiting_state_with_no_settled_data(self):
+        health = dpm.build_real_market_parlay_health(self.conn)
+        self.assertEqual(health["status"], "WAITING_FOR_SETTLED_DATA")
+        self.assertEqual(health["settled_parlays"], 0)
+
+    def test_computes_real_numbers_once_settled(self):
+        import json
+        pb.record_paper_bet(self.conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
+                             market_id="REAL_MARKET_PARLAY:x", entry_odds=180, is_combo=True,
+                             legs_json=json.dumps([{"market_family": "MONEYLINE"},
+                                                    {"market_family": "PLAYER_SOG"},
+                                                    {"market_family": "PLAYER_SOG"}]),
+                             conservative_probability=0.75, edge=0.05, event_id="evt-1")
+        row = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")[0]
+        pb.settle_paper_bet(self.conn, row["paper_bet_id"], "WIN")
+        health = dpm.build_real_market_parlay_health(self.conn)
+        self.assertEqual(health["status"], "OK")
+        self.assertEqual(health["settled_parlays"], 1)
+        self.assertEqual(health["actual_hit_count"], 1)
+        self.assertAlmostEqual(health["calibration_gap"], 1.0 - 0.75)
+        self.assertEqual(health["by_leg_count"][3]["wins"], 1)
+        self.assertEqual(health["by_market_family_combo"]["MONEYLINE+PLAYER_SOG"]["wins"], 1)
+
+
+class TestRealMarketParlayLossPostmortems(unittest.TestCase):
+    def setUp(self):
+        import db
+        import json
+        self._tmp = tempfile.TemporaryDirectory()
+        self.bankroll_conn = pb.init_db(Path(self._tmp.name) / "bankroll.db")
+        self.nhl_conn = db.init_db(db_path=Path(self._tmp.name) / "nhl.db", wipe=True)
+        self.json = json
+        for t in ("TOR", "MTL"):
+            self.nhl_conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES (?, ?)", (t, t))
+        self.nhl_conn.execute(
+            "INSERT INTO games (game_id, season, game_date, home_team, away_team, game_state, "
+            "home_score, away_score, final_period_type, source) VALUES (1,'20262027','2026-10-15', "
+            "'TOR','MTL','FINAL',4,2,'REG','test')")
+        self.nhl_conn.execute(
+            "INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, "
+            "shots, hits, blocked_shots, played, revision_number, effective_at_utc, observed_at_utc, source) "
+            "VALUES (1,'P1','TOR',18.0,0,0,1,NULL,NULL,1,1,'2026-10-15T23:30:00Z','2026-10-15T23:30:00Z','test')")
+        self.nhl_conn.commit()
+
+    def tearDown(self):
+        self.bankroll_conn.close()
+        self.nhl_conn.close()
+        self._tmp.cleanup()
+
+    def _leg(self, participant_id="P1", market_family="PLAYER_SOG", threshold=4, side="OVER", game_id="1"):
+        return {"game_id": game_id, "market_family": market_family, "threshold": threshold, "side": side,
+                "participant_id": participant_id, "participant_name": participant_id}
+
+    def test_a_real_loss_identifies_the_missed_leg_with_its_actual_value(self):
+        legs = [self._leg(participant_id="P1", threshold=4)]  # P1 only got 1 real shot -- a real miss
+        pb.record_paper_bet(self.bankroll_conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
+                             market_id="REAL_MARKET_PARLAY:x", entry_odds=150, is_combo=True,
+                             legs_json=self.json.dumps(legs), conservative_probability=0.75, edge=0.05,
+                             event_id="evt-1")
+        row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
+        pb.settle_paper_bet(self.bankroll_conn, row["paper_bet_id"], "LOSS")
+
+        postmortems = dpm.real_market_parlay_loss_postmortems(self.bankroll_conn, self.nhl_conn)
+        self.assertEqual(len(postmortems), 1)
+        pm = postmortems[0]
+        self.assertEqual(len(pm["missed_legs"]), 1)
+        self.assertEqual(pm["missed_legs"][0]["actual_value"], 1)
+        self.assertIn("P1", pm["why"])
+        self.assertIn("actual=1", pm["why"])
+
+    def test_a_win_row_is_never_included(self):
+        legs = [self._leg(participant_id="P1", threshold=1)]  # P1's real 1 shot clears 1+
+        pb.record_paper_bet(self.bankroll_conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
+                             market_id="REAL_MARKET_PARLAY:x", entry_odds=150, is_combo=True,
+                             legs_json=self.json.dumps(legs), conservative_probability=0.9, edge=0.05,
+                             event_id="evt-1")
+        row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
+        pb.settle_paper_bet(self.bankroll_conn, row["paper_bet_id"], "WIN")
+        postmortems = dpm.real_market_parlay_loss_postmortems(self.bankroll_conn, self.nhl_conn)
+        self.assertEqual(postmortems, [])
+
+    def test_no_losses_is_an_empty_list_not_an_error(self):
+        postmortems = dpm.real_market_parlay_loss_postmortems(self.bankroll_conn, self.nhl_conn)
+        self.assertEqual(postmortems, [])
+
+
 class TestRunDailyPostmortem(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -238,8 +334,47 @@ class TestRunDailyPostmortem(unittest.TestCase):
         report = dpm.run_daily_postmortem(self.conn)
         for key in ("what_worked", "what_didnt", "why", "normal_variance_vs_systematic",
                     "investigate", "software_bug_candidates", "challenger_ideas",
-                    "scoreboard", "parlay_health", "failure_summary"):
+                    "scoreboard", "parlay_health", "real_market_parlay_health",
+                    "real_market_parlay_postmortems", "real_market_parlay_leg_miss_patterns",
+                    "failure_summary"):
             self.assertIn(key, report)
+
+    def test_real_market_sections_say_so_honestly_when_nhl_conn_omitted(self):
+        report = dpm.run_daily_postmortem(self.conn)
+        self.assertIn("NHL_CONN_NOT_PROVIDED", report["real_market_parlay_postmortems"])
+        self.assertIn("NHL_CONN_NOT_PROVIDED", report["real_market_parlay_leg_miss_patterns"])
+
+    def test_real_market_postmortems_populate_when_nhl_conn_provided(self):
+        import db
+        import json
+        import tempfile as _tempfile
+        with _tempfile.TemporaryDirectory() as d:
+            nhl_conn = db.init_db(db_path=Path(d) / "nhl.db", wipe=True)
+            for t in ("TOR", "MTL"):
+                nhl_conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES (?, ?)", (t, t))
+            nhl_conn.execute(
+                "INSERT INTO games (game_id, season, game_date, home_team, away_team, game_state, "
+                "home_score, away_score, final_period_type, source) VALUES (1,'20262027','2026-10-15', "
+                "'TOR','MTL','FINAL',4,2,'REG','test')")
+            nhl_conn.execute(
+                "INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, "
+                "shots, hits, blocked_shots, played, revision_number, effective_at_utc, observed_at_utc, "
+                "source) VALUES (1,'P1','TOR',18.0,0,0,1,NULL,NULL,1,1,'2026-10-15T23:30:00Z',"
+                "'2026-10-15T23:30:00Z','test')")
+            nhl_conn.commit()
+            legs = [{"game_id": "1", "market_family": "PLAYER_SOG", "threshold": 4, "side": "OVER",
+                     "participant_id": "P1", "participant_name": "P1"}]
+            pb.record_paper_bet(self.conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
+                                 market_id="REAL_MARKET_PARLAY:x", entry_odds=150, is_combo=True,
+                                 legs_json=json.dumps(legs), conservative_probability=0.75, edge=0.05,
+                                 event_id="evt-1")
+            row = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")[0]
+            pb.settle_paper_bet(self.conn, row["paper_bet_id"], "LOSS")
+
+            report = dpm.run_daily_postmortem(self.conn, nhl_conn=nhl_conn)
+            self.assertEqual(len(report["real_market_parlay_postmortems"]), 1)
+            self.assertEqual(report["real_market_parlay_leg_miss_patterns"][0]["market_family"], "PLAYER_SOG")
+            nhl_conn.close()
 
 
 class TestWriteReportMarkdown(unittest.TestCase):

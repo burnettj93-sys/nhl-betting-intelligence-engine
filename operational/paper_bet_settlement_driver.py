@@ -67,13 +67,31 @@ def _leg_settlement_market_id(leg: dict) -> str | None:
     deliberately different concerns (see provider_adapter.VERIFIED_CONTRACTS's
     own comment on why PLAYER_SOG_ALTERNATE must never be conflated with the
     bare PLAYER_SOG family elsewhere); settlement only cares about the
-    underlying stat, never which raw market key priced it."""
+    underlying stat, never which raw market key priced it.
+
+    Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG and
+    GOALIE_SAVES added -- real bug caught while wiring real_slate_adapter.py::
+    sog_standard_candidate_legs()/goalie_saves_candidate_legs() into the
+    paper trader: without these two cases, any real-market parlay containing
+    one of these legs would return None here, fall into
+    resolver.UNSUPPORTED_SETTLEMENT_MARKET for that leg, and the whole combo
+    would be stuck UNRESOLVED forever -- never reaching a real WIN/LOSS,
+    directly defeating the daily postmortem's "find out why when something
+    doesn't hit" purpose. Both resolve_prediction()'s own dispatch
+    (operational/outcome_resolver.py) already recognizes these exact prefixes
+    -- this was purely a missing translation here, not a missing resolver."""
     family = leg.get("market_family")
     if family == "MONEYLINE":
         return "MONEYLINE"
     if family == "PLAYER_SOG_ALTERNATE":
         threshold = leg.get("threshold")
         return f"PLAYER_SOG_{threshold}PLUS" if threshold is not None else None
+    if family == "PLAYER_SOG":
+        threshold = leg.get("threshold")
+        return f"PLAYER_SOG_{threshold}PLUS" if threshold is not None else None
+    if family == "GOALIE_SAVES":
+        threshold = leg.get("threshold")
+        return f"GOALIE_SAVES_{threshold}PLUS" if threshold is not None else None
     return None
 
 

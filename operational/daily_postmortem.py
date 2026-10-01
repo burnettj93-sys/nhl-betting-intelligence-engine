@@ -274,7 +274,132 @@ def build_parlay_health(conn) -> dict:
     }
 
 
-def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None) -> dict:
+def build_real_market_parlay_health(conn) -> dict:
+    """Standard SOG/Saves Certification block (2026-10-01): the REAL_MARKET_PAPER
+    counterpart to build_parlay_health() above (which is GAME_PARLAY_PAPER-only).
+    Mirrors its exact calibration math (avg modeled joint P vs. actual hit rate,
+    expected vs. actual hit count, calibration gap, 3-leg vs. 4-leg split) for
+    this project's actual real-market daily parlay product, plus a breakdown by
+    which combination of market families each ticket drew its legs from (e.g.
+    "MONEYLINE+PLAYER_SOG") -- useful for spotting whether misses cluster in one
+    family once enough real tickets have settled. Every field is honestly
+    WAITING_FOR_SETTLED_DATA until real settlements exist, same discipline as
+    build_parlay_health()."""
+    settled = [r for r in pb.query_paper_bets(conn, track="REAL_MARKET_PAPER", is_combo=True)
+               if r["result_status"] != "PENDING"]
+    if not settled:
+        return {
+            "status": "WAITING_FOR_SETTLED_DATA", "settled_parlays": 0,
+            "avg_modeled_joint_probability": None, "actual_hit_rate": None,
+            "expected_hit_count": None, "actual_hit_count": None, "calibration_gap": None,
+            "by_leg_count": {}, "by_market_family_combo": {},
+        }
+
+    import json as _json
+    n = len(settled)
+    wins = sum(1 for r in settled if r["result_status"] == "WIN")
+    avg_joint_p = sum(r["conservative_probability"] or 0.0 for r in settled) / n
+    actual_hit_rate = wins / n
+    expected_hit_count = sum(r["conservative_probability"] or 0.0 for r in settled)
+
+    by_leg_count: dict[int, dict[str, int]] = {}
+    by_family_combo: dict[str, dict[str, int]] = {}
+    for r in settled:
+        legs = _json.loads(r["legs_json"]) if r["legs_json"] else []
+        n_legs = len(legs) or 3
+        bucket = by_leg_count.setdefault(n_legs, {"bets": 0, "wins": 0})
+        bucket["bets"] += 1
+        family_key = "+".join(sorted({l.get("market_family", "UNKNOWN") for l in legs})) or "UNKNOWN"
+        fam_bucket = by_family_combo.setdefault(family_key, {"bets": 0, "wins": 0})
+        fam_bucket["bets"] += 1
+        if r["result_status"] == "WIN":
+            bucket["wins"] += 1
+            fam_bucket["wins"] += 1
+
+    return {
+        "status": "OK", "settled_parlays": n,
+        "avg_modeled_joint_probability": avg_joint_p, "actual_hit_rate": actual_hit_rate,
+        "expected_hit_count": expected_hit_count, "actual_hit_count": wins,
+        "calibration_gap": actual_hit_rate - avg_joint_p,
+        "by_leg_count": by_leg_count, "by_market_family_combo": by_family_combo,
+    }
+
+
+def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
+    """The user's explicit, repeated instruction: "when something goes wrong
+    and does not hit I need you to do a post mortem every time and find out
+    why." Re-resolves every settled REAL_MARKET_PAPER combo LOSS against the
+    now-FINAL real games via operational.paper_bet_settlement_driver.
+    resolve_combo_bet() -- never a second, ad-hoc settlement rule invented
+    here -- to identify exactly which leg(s) actually missed, and the real
+    official stat (actual_value) that missed it by, versus which legs in the
+    same losing ticket actually hit. Read-only and safe to call any time
+    after settlement: resolving an already-FINAL game is deterministic, so
+    this never needs its own stored snapshot of "why" -- it recomputes the
+    real answer from the same official boxscore data settlement itself used.
+
+    Deliberately does NOT attempt to assign one of classify_failure()'s
+    deeper root-cause categories (MODEL_CALIBRATION, TOI_PROJECTION_ERROR,
+    etc.) -- those need real per-game diagnostic context (projected vs.
+    actual TOI, lineup/role signals) this function has no access to; it
+    reports the concrete, honest fact of what missed, never a guessed cause."""
+    from operational import outcome_resolver as resolver
+    from operational import paper_bet_settlement_driver as settlement_driver
+
+    losses = [r for r in pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+              if r["result_status"] == "LOSS"]
+    postmortems = []
+    for bet in losses:
+        result = settlement_driver.resolve_combo_bet(nhl_conn, dict(bet))
+        missed, hit, other = [], [], []
+        for leg_result in result["leg_results"]:
+            leg = leg_result["leg"]
+            summary = {
+                "market_family": leg.get("market_family"), "participant_name": leg.get("participant_name"),
+                "threshold": leg.get("threshold"), "side": leg.get("side"), "game_id": leg.get("game_id"),
+                "actual_value": leg_result.get("actual_value"), "resolver_status": leg_result.get("status"),
+            }
+            if leg_result.get("status") == resolver.RESOLVED and not leg_result.get("outcome_hit"):
+                missed.append(summary)
+            elif leg_result.get("status") == resolver.RESOLVED and leg_result.get("outcome_hit"):
+                hit.append(summary)
+            else:
+                other.append(summary)
+
+        def _describe(m: dict) -> str:
+            line = f"{m.get('threshold')}+" if m.get("threshold") is not None else "to win"
+            return f"{m['participant_name']} ({m['market_family']} {line} {m['side']}): actual={m['actual_value']}"
+
+        postmortems.append({
+            "paper_bet_id": bet["paper_bet_id"], "settled_at_utc": bet.get("settled_at_utc"),
+            "stake": bet["stake"], "profit_loss": bet.get("profit_loss"),
+            "conservative_probability": bet.get("conservative_probability"),
+            "missed_legs": missed, "hit_legs": hit, "other_legs": other,
+            "why": "; ".join(_describe(m) for m in missed) if missed else (
+                "no RESOLVED leg in this combo actually missed -- the loss is driven by a leg this "
+                "resolver could not grade (see other_legs), not a clean model miss"),
+        })
+    return postmortems
+
+
+def open_daily_postmortem_report(bankroll_conn, *, classified_failures: list[dict] | None = None) -> dict:
+    """Standard SOG/Saves Certification block (2026-10-01): dashboard/*.py
+    files must never import db.py directly (it can trigger schema
+    migrations on a read-only presentation page -- tests/test_dashboard.py's
+    own structural check) -- same rationale as operational/real_today_bridge.py::
+    open_real_today_state(). This operational-layer function owns opening
+    and closing the real nhl.db connection on the page's behalf, so
+    dashboard/pages/36_Morning_Review.py can get the real_market_parlay_
+    postmortems section without ever importing db itself."""
+    import db
+    nhl_conn = db.get_conn()
+    try:
+        return run_daily_postmortem(bankroll_conn, classified_failures=classified_failures, nhl_conn=nhl_conn)
+    finally:
+        nhl_conn.close()
+
+
+def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None, nhl_conn=None) -> dict:
     """Part 54/55: the main entry point. `classified_failures` is a list
     of {"category": str, "occurrences": int, "unique_game_dates": int,
     "explanation": str} summaries the caller has already aggregated
@@ -283,6 +408,14 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None)
     per-game, where it's actually available); it turns already-classified
     patterns into the report's recommended actions.
 
+    `nhl_conn` (optional, Standard SOG/Saves Certification block,
+    2026-10-01): when provided, also runs real_market_parlay_loss_
+    postmortems() against the REAL_MARKET_PAPER track -- the per-loss
+    "find out why" the user explicitly asked for -- and summarizes which
+    market families its missed legs cluster in. Omitted by every existing
+    caller before this block; when omitted, those two report keys say so
+    honestly rather than silently going empty.
+
     Never writes to any production model file, decision_policy, or
     research/model_registry.py -- only reads paper_bankroll and, via
     recommended_action_for_pattern(), consults (never writes)
@@ -290,6 +423,38 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None)
     classified_failures = classified_failures or []
     scoreboard = build_daily_scoreboard(conn)
     parlay_health = build_parlay_health(conn)
+    real_market_parlay_health = build_real_market_parlay_health(conn)
+
+    # Standard SOG/Saves Certification block (2026-10-01): the user's explicit,
+    # repeated instruction -- "when something goes wrong and does not hit I
+    # need you to do a post mortem every time and find out why" -- for the
+    # REAL_MARKET_PAPER product specifically. `nhl_conn` is optional (every
+    # existing caller of run_daily_postmortem() passes only a bankroll conn)
+    # so this is purely additive: when omitted, the report says so honestly
+    # rather than silently producing an empty/misleading section.
+    if nhl_conn is not None:
+        real_market_postmortems = real_market_parlay_loss_postmortems(conn, nhl_conn)
+        missed_by_family: dict[str, dict] = {}
+        for pm in real_market_postmortems:
+            for m in pm["missed_legs"]:
+                fam = m.get("market_family") or "UNKNOWN"
+                game_date_row = nhl_conn.execute(
+                    "SELECT game_date FROM games WHERE game_id = ?", (m.get("game_id"),)).fetchone()
+                entry = missed_by_family.setdefault(fam, {"occurrences": 0, "game_dates": set()})
+                entry["occurrences"] += 1
+                if game_date_row and game_date_row["game_date"]:
+                    entry["game_dates"].add(game_date_row["game_date"])
+        real_market_leg_miss_patterns = [
+            {"market_family": fam, "occurrences": data["occurrences"],
+             "unique_game_dates": len(data["game_dates"]),
+             "recommended_action": recommended_action_for_pattern(
+                 UNKNOWN, occurrences=data["occurrences"], unique_game_dates=len(data["game_dates"]),
+                 explanation=f"{data['occurrences']} real-market parlay leg miss(es) in {fam}")}
+            for fam, data in missed_by_family.items()
+        ]
+    else:
+        real_market_postmortems = "NHL_CONN_NOT_PROVIDED -- pass nhl_conn= to run_daily_postmortem() for per-loss leg detail"
+        real_market_leg_miss_patterns = "NHL_CONN_NOT_PROVIDED"
 
     issues = []
     for f in classified_failures:
@@ -318,6 +483,9 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None)
         "challenger_ideas": [i for i in issues if i["recommended_action"] == CHALLENGER_IDEA],
         "scoreboard": scoreboard,
         "parlay_health": parlay_health,
+        "real_market_parlay_health": real_market_parlay_health,
+        "real_market_parlay_postmortems": real_market_postmortems,
+        "real_market_parlay_leg_miss_patterns": real_market_leg_miss_patterns,
         "failure_summary": summarize_failures([i["category"] for i in issues]),
     }
     return report
@@ -328,7 +496,12 @@ def _summarize_what_worked(scoreboard: dict) -> str:
     for track, data in scoreboard["tracks"].items():
         s = data["bankroll_summary"]
         if s["bets"] - s["pending"] > 0:
-            parts.append(f"{track}: {s['wins']}W-{s['losses']}L, P&L {s['profit_loss']:+.2f}")
+            # Real bug fix (Standard SOG/Saves Certification block, 2026-10-01): this
+            # read s["profit_loss"], a key bankroll_summary() has never returned (its
+            # real field is "net_profit") -- a guaranteed KeyError the moment any bet on
+            # any track actually settled. Never caught before because every prior
+            # run_daily_postmortem() test exercised only the zero-settled-bets path.
+            parts.append(f"{track}: {s['wins']}W-{s['losses']}L, P&L {s['net_profit']:+.2f}")
     return "; ".join(parts) if parts else "no settled bets yet"
 
 
@@ -385,8 +558,13 @@ def main() -> None:
         ingestion_health.record_run("postmortem", {"status": "DEFERRED", "reason": settlement_reason})
         return
 
+    import db
     conn = pb.init_db()
-    report = run_daily_postmortem(conn)
+    nhl_conn = db.get_conn()
+    try:
+        report = run_daily_postmortem(conn, nhl_conn=nhl_conn)
+    finally:
+        nhl_conn.close()
     path = write_report_markdown(report)
     scoreboard = report.get("scoreboard", {}).get("tracks", {})
     print(f"Daily post-mortem written to {path}")
@@ -396,6 +574,11 @@ def main() -> None:
               f"bankroll ${s['current_bankroll']:,.2f}")
     if report["investigate"]:
         print(f"  {len(report['investigate'])} pattern(s) flagged for review.")
+    real_market_postmortems = report.get("real_market_parlay_postmortems")
+    if isinstance(real_market_postmortems, list) and real_market_postmortems:
+        print(f"  {len(real_market_postmortems)} REAL_MARKET_PAPER loss(es) to review:")
+        for pm in real_market_postmortems:
+            print(f"    paper_bet_id={pm['paper_bet_id']}: {pm['why']}")
     if report["software_bug_candidates"]:
         print(f"  {len(report['software_bug_candidates'])} bug-fix candidate(s) generated -- "
               f"review before acting, nothing is auto-applied.")

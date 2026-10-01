@@ -168,23 +168,31 @@ class TestUnverifiedContract(OrchestratorTestBase):
 
 
 class TestGoalieNotConfirmed(OrchestratorTestBase):
-    """No goalie confirmation events at all -- the existing decision
-    engine's own goalie gate (pricing/engine.py) forces WAIT. WAIT still
-    has a real market price, so it IS recorded as a real recommendation
-    (context/readiness gap is honestly disclosed via the action itself),
-    but never becomes a paper bet."""
+    """Production Gap Closure sprint (2026-10-01), superseding the former
+    assertion here: no goalie confirmation events at all used to force a
+    hard WAIT via pricing/engine.py's old binary goalie gate. That gate was
+    revised (see config.REQUIRE_GOALIE_CONFIRMATION's docstring) because
+    models/goalie_model.py already widens the model's own conservative
+    probability for a non-CONFIRMED starter -- a separate, redundant WAIT
+    block on top of that was blocking real action on a team simply strong
+    enough to clear the edge/EV bar regardless of who starts in net. A real
+    recommendation is still recorded either way; the difference is that a
+    genuinely strong-enough edge now reaches a real BET and a real paper
+    bet, never silently held back purely for lack of goalie confirmation."""
 
     def setUp(self):
         super().setUp()
         self.fx.add_odds(1, "TOR", 150, captured_at=t(10, hour=18, minute=25), label="T-5")
         self.fx.add_odds(1, "BOS", -170, captured_at=t(10, hour=18, minute=25), label="T-5")
 
-    def test_unconfirmed_goalies_wait_is_recorded_without_a_paper_bet(self):
+    def test_unconfirmed_goalies_no_longer_force_wait_a_real_edge_still_bets(self):
         summary = self._run()
         self.assertEqual(summary["recommendations_recorded"], 2)
-        self.assertEqual(summary["paper_bets_created"], 0)
+        self.assertEqual(summary["paper_bets_created"], 1)
         rows = self.pl_conn.execute("SELECT prospective_status FROM predictions").fetchall()
-        self.assertTrue(all(r["prospective_status"] == "WAIT" for r in rows))
+        statuses = {r["prospective_status"] for r in rows}
+        self.assertEqual(statuses, {"BET", "PASS"})
+        self.assertNotIn("WAIT", statuses)
 
 
 if __name__ == "__main__":

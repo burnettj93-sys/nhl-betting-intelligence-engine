@@ -33,9 +33,12 @@ import statistics
 from pathlib import Path
 
 from pricing import odds_math
+from research.generic_prop_pricing import evaluator as ge
 from research.generic_prop_pricing import provider_adapter as pa
 from research.generic_prop_pricing.line_mapping import NonHalfPointLineError, SOG_ACTIONABLE_THRESHOLDS, line_to_threshold
-from research.real_market_parlay.engine import ParlayLeg
+from research.live_sog_pricing.normalized_market_adapter import quote_to_normalized_market
+from research.live_sog_pricing.pricing import threshold_from_point
+from research.real_market_parlay.engine import SAVES_VALIDATED_THRESHOLDS, ParlayLeg
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -299,4 +302,306 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                     model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
                     event_not_started=True,
                 ))
+    return legs, excluded
+
+
+def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
+                                 now: dt.datetime | None = None) -> tuple[list[ParlayLeg], list[dict]]:
+    """Standard SOG/Saves Certification block (2026-10-01): the real,
+    now-certified standard (two-sided) player_shots_on_goal shape -- see
+    provider_adapter.VERIFIED_CONTRACTS's own (draftkings, PLAYER_SOG)
+    entry and real archived evidence. Unlike sog_alternate_candidate_legs()
+    above (a one-sided ladder that can never produce a real no-vig edge),
+    a standard quote carries BOTH an Over and an Under price, so
+    research/generic_prop_pricing/evaluator.py::evaluate_prop() can price
+    a genuine two-sided no-vig edge and reach a real solo BET action --
+    this is the family that actually unlocks real SOG parlay legs.
+
+    Reuses operational/real_prop_orchestrator.py::_price_and_record_sog_pair()'s
+    exact real identity/model/pricing stack (never re-derived): same
+    event/player mapping, same corpus-staleness guard, same
+    project_player_sog() model, same evaluate_prop() core. This function
+    only reads -- it never records an observation or a paper bet."""
+    from operational import eastern_time as et
+    from operational.real_prop_orchestrator import SOG_MARKET_ID, SOG_VALIDATED_THRESHOLDS, _real_nhl_schedule
+    from research.live_sog_pricing import event_mapping, market_parser, player_mapping
+    from research.player_sog.live_projection import corpus_covers_date, project_player_sog
+
+    now = now or dt.datetime.now(dt.timezone.utc)
+    legs: list[ParlayLeg] = []
+    excluded: list[dict] = []
+
+    schedule = _real_nhl_schedule(conn)
+    sog_rows, sog_index, team_schedules, opponent_allowed, league_avg_sog_allowed, weights, alpha = \
+        _sog_model_inputs()
+    player_index = player_mapping.build_player_index(sog_rows)
+
+    for payload in archive_payloads:
+        provider_event_id = payload.get("id")
+        event_map = event_mapping.map_event_to_game(payload, schedule)
+        if event_map["status"] != "MATCHED":
+            excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "PLAYER_SOG",
+                              "reason": f"EVENT_{event_map['status']}: {event_map['reason']}"})
+            continue
+        game_id = event_map["game_id"]
+        game_row = conn.execute("SELECT game_state, scheduled_start_utc FROM games WHERE game_id = ?",
+                                 (game_id,)).fetchone()
+        if game_row is None or game_row["game_state"] != "SCHEDULED":
+            excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "PLAYER_SOG",
+                              "reason": "EVENT_ALREADY_STARTED_OR_UNKNOWN"})
+            continue
+
+        home_abbrev = event_mapping.normalize_team_name(payload.get("home_team", ""))
+        away_abbrev = event_mapping.normalize_team_name(payload.get("away_team", ""))
+        quotes = market_parser.parse_event_odds_response(payload)
+        pairs = market_parser.group_standard_two_sided(quotes)
+
+        for (prov_event_id, bookmaker, player_name_raw, point, market_last_update), pair in pairs.items():
+            identifier = f"event:{prov_event_id}:{player_name_raw}:point={point}"
+            over_q, under_q = pair.get("over"), pair.get("under")
+            any_q = over_q or under_q
+            if any_q is None:
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": "NO_QUOTE_IN_PAIR"})
+                continue
+
+            pmap = player_mapping.map_player(player_name_raw, home_abbrev, away_abbrev, player_index)
+            if pmap["status"] != "MATCHED":
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": f"IDENTITY_{pmap['status']}: {pmap['reason']}"})
+                continue
+            player_id = pmap["player_id"]
+
+            candidates = player_index.get(player_mapping.normalize_name(player_name_raw), [])
+            recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == player_id),
+                                home_abbrev)
+            team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
+            opponent = away_abbrev if team == home_abbrev else home_abbrev
+            prediction_date = et.eastern_date_of(payload["commence_time"])
+            year, month = int(prediction_date[:4]), int(prediction_date[5:7])
+            season_start_year = year if month >= 7 else year - 1
+            season = season_start_year * 10000 + (season_start_year + 1)
+
+            try:
+                threshold = threshold_from_point(any_q["point"])
+            except (TypeError, ValueError) as exc:
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": f"MALFORMED_LINE: {exc}"})
+                continue
+            # Mirrors _price_and_record_sog_pair()'s own convention exactly:
+            # only the Over side is ever evaluated, even when both sides of
+            # the pair are present -- a deliberate, already-established
+            # product choice, not re-derived here.
+            side = "OVER" if over_q else "UNDER"
+            opposing_price = (under_q or {}).get("price_american") if over_q else (over_q or {}).get("price_american")
+
+            market, contract_verified = quote_to_normalized_market(
+                any_q, market_family=SOG_MARKET_ID, canonical_market_id=f"{SOG_MARKET_ID}_{threshold}PLUS",
+                threshold=threshold, side=side, opposing_price=opposing_price, player_id=player_id,
+                sportsbook=bookmaker)
+
+            freshness = _price_freshness(market.captured_at_utc, payload["commence_time"], now)
+            if not freshness["fresh"]:
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
+                                            f"allowed<={freshness['max_age_minutes']}min)"
+                                            if freshness["age_minutes"] is not None else freshness["reason"]})
+                continue
+
+            coverage = corpus_covers_date(team_schedules, team, prediction_date)
+            if not coverage["covers"]:
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": "MODEL_CORPUS_STALE"})
+                continue
+
+            view = project_player_sog(sog_rows, sog_index, team_schedules, opponent_allowed,
+                                       league_avg_sog_allowed, weights, alpha, player_id, team, opponent,
+                                       prediction_date, season)
+            if view["status"] != "PROJECTED_ACTIVE":
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": f"MODEL_{view['status']}"})
+                continue
+
+            priced = ge.evaluate_prop(
+                market_family=SOG_MARKET_ID, model_validated_thresholds=SOG_VALIDATED_THRESHOLDS,
+                threshold=threshold, side=side, probs=view["probs"], conservative_probs=view["conservative_probs"],
+                confidence=view["confidence"], lineup_status="PROJECTED/UNCONFIRMED", market=market,
+                provider_contract_verified=contract_verified)
+            if priced["status"] != ge.PRICED:
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": f"{priced['status']}: {priced.get('reason')}"})
+                continue
+            conservative_prob = priced["conservative_probability"]
+            if conservative_prob is None or not (0.0 < conservative_prob < 1.0):
+                excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
+                                  "reason": "CONSERVATIVE_PROBABILITY_UNAVAILABLE"})
+                continue
+
+            legs.append(ParlayLeg(
+                game_id=str(game_id), event_id=prov_event_id, market_family="PLAYER_SOG",
+                participant_id=player_id, participant_name=player_name_raw, side=market.side,
+                threshold=threshold, american_price=market.american_price,
+                conservative_probability=conservative_prob, sportsbook=bookmaker,
+                captured_at_utc=market.captured_at_utc, provider_contract_verified=contract_verified,
+                model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                event_not_started=True,
+            ))
+    return legs, excluded
+
+
+def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
+                                 now: dt.datetime | None = None) -> tuple[list[ParlayLeg], list[dict]]:
+    """Standard SOG/Saves Certification block (2026-10-01): the real,
+    certified player_total_saves shape -- see provider_adapter.
+    VERIFIED_CONTRACTS's own (draftkings, GOALIE_SAVES) entry.
+
+    Reuses operational/real_prop_orchestrator.py::_price_and_record_saves_pair()'s
+    exact real identity/model/pricing stack, INCLUDING its
+    _apply_starter_certainty_gate() call -- never weakened or bypassed
+    here. That gate forces WAIT on any would-be BET/WATCH unless a real
+    external starter-confirmation source reports CONFIRMED for the
+    matched goalie, and no such source has ever been integrated
+    (docs/STARTING_GOALIE_SOURCE_AUDIT.md) -- so this function is
+    structurally expected to exclude EVERY real quote today, every one
+    tagged STARTER_NOT_CONFIRMED, not CORPUS_STALE or any other gate.
+    This is deliberate, not a bug: a saves prop bets a SPECIFIC named
+    goalie, and if the wrong goalie actually plays the prop itself is
+    void/mispriced -- categorically different from a team-level
+    moneyline probability, which already prices in an unconfirmed
+    starter via uncertainty widening (see config.REQUIRE_GOALIE_
+    CONFIRMATION's docstring). The function is built now, complete and
+    correct, so the day a real starter-confirmation source is integrated
+    this path produces real legs with no further code change."""
+    from dashboard.goalie_saves_view import GoalieSavesEngine, StarterProbabilityEngine, load_results, load_starter_results
+    from operational import eastern_time as et
+    from operational.real_prop_orchestrator import (
+        SAVES_MARKET_ID, _apply_starter_certainty_gate, _build_goalie_identity_index, _real_nhl_schedule)
+    from research.live_sog_pricing import event_mapping, market_parser, player_mapping
+
+    now = now or dt.datetime.now(dt.timezone.utc)
+    legs: list[ParlayLeg] = []
+    excluded: list[dict] = []
+
+    schedule = _real_nhl_schedule(conn)
+    goalie_index = _build_goalie_identity_index()
+    saves_results = load_results()
+    starter_results = load_starter_results()
+    if saves_results is None or starter_results is None:
+        return legs, [{"identifier": "ALL", "market_family": "GOALIE_SAVES",
+                       "reason": "MODEL_RESULTS_NOT_FOUND"}]
+    saves_engine = GoalieSavesEngine(saves_results)
+    starter_engine = StarterProbabilityEngine(starter_results)
+
+    for payload in archive_payloads:
+        provider_event_id = payload.get("id")
+        event_map = event_mapping.map_event_to_game(payload, schedule)
+        if event_map["status"] != "MATCHED":
+            excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "GOALIE_SAVES",
+                              "reason": f"EVENT_{event_map['status']}: {event_map['reason']}"})
+            continue
+        game_id = event_map["game_id"]
+        game_row = conn.execute("SELECT game_state, scheduled_start_utc FROM games WHERE game_id = ?",
+                                 (game_id,)).fetchone()
+        if game_row is None or game_row["game_state"] != "SCHEDULED":
+            excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "GOALIE_SAVES",
+                              "reason": "EVENT_ALREADY_STARTED_OR_UNKNOWN"})
+            continue
+
+        home_abbrev = event_mapping.normalize_team_name(payload.get("home_team", ""))
+        away_abbrev = event_mapping.normalize_team_name(payload.get("away_team", ""))
+        quotes = market_parser.parse_event_odds_response(
+            payload, standard_market_keys=(market_parser.SAVES_MARKET_KEY,))
+        pairs = market_parser.group_standard_two_sided(quotes, market_key=market_parser.SAVES_MARKET_KEY)
+
+        for (prov_event_id, bookmaker, player_name_raw, point, market_last_update), pair in pairs.items():
+            identifier = f"event:{prov_event_id}:{player_name_raw}:point={point}"
+            over_q, under_q = pair.get("over"), pair.get("under")
+            any_q = over_q or under_q
+            if any_q is None:
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": "NO_QUOTE_IN_PAIR"})
+                continue
+
+            gmap = player_mapping.map_player(player_name_raw, home_abbrev, away_abbrev, goalie_index)
+            if gmap["status"] != "MATCHED":
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": f"IDENTITY_{gmap['status']}: {gmap['reason']}"})
+                continue
+            goalie_id = gmap["player_id"]
+
+            candidates = goalie_index.get(player_mapping.normalize_name(player_name_raw), [])
+            recent_team = next((c["most_recent_team"] for c in candidates if c["player_id"] == goalie_id),
+                                home_abbrev)
+            team = recent_team if recent_team in (home_abbrev, away_abbrev) else home_abbrev
+            opponent = away_abbrev if team == home_abbrev else home_abbrev
+            home_away = "home" if team == home_abbrev else "away"
+            prediction_date = et.eastern_date_of(payload["commence_time"])
+            year, month = int(prediction_date[:4]), int(prediction_date[5:7])
+            season_start_year = year if month >= 7 else year - 1
+            season = season_start_year * 10000 + (season_start_year + 1)
+
+            starter_projection = starter_engine.project(team, prediction_date)
+            proj = saves_engine.project(int(goalie_id), team, opponent, home_away, int(game_id),
+                                         prediction_date, season)
+            if proj is None:
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": "INSUFFICIENT_HISTORY"})
+                continue
+            threshold_probs = {t: proj[f"prob_{t}plus"] for t in (20, 25, 30, 35, 40)}
+            conservative_probs = {t: p * 0.9 for t, p in threshold_probs.items()}
+
+            try:
+                threshold = threshold_from_point(any_q["point"])
+            except (TypeError, ValueError) as exc:
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": f"MALFORMED_LINE: {exc}"})
+                continue
+            side = "OVER" if over_q else "UNDER"
+            opposing_price = (under_q or {}).get("price_american") if over_q else (over_q or {}).get("price_american")
+
+            market, contract_verified = quote_to_normalized_market(
+                any_q, market_family=SAVES_MARKET_ID, canonical_market_id=f"{SAVES_MARKET_ID}_{threshold}PLUS",
+                threshold=threshold, side=side, opposing_price=opposing_price, goalie_id=goalie_id,
+                sportsbook=bookmaker)
+
+            priced = ge.evaluate_prop(
+                market_family=SAVES_MARKET_ID, model_validated_thresholds=SAVES_VALIDATED_THRESHOLDS,
+                threshold=threshold, side=side, probs=threshold_probs, conservative_probs=conservative_probs,
+                confidence=proj["confidence"], lineup_status="PROJECTED/UNCONFIRMED", market=market,
+                provider_contract_verified=contract_verified)
+            if priced["status"] != ge.PRICED:
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": f"{priced['status']}: {priced.get('reason')}"})
+                continue
+
+            priced = _apply_starter_certainty_gate(priced, matched_goalie_id=goalie_id, game_id=game_id,
+                                                    team_id=team, starter_projection=starter_projection)
+            if priced["action"] == "WAIT":
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": f"STARTER_NOT_CONFIRMED: {priced['action_reason']}"})
+                continue
+
+            freshness = _price_freshness(market.captured_at_utc, payload["commence_time"], now)
+            if not freshness["fresh"]:
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
+                                            f"allowed<={freshness['max_age_minutes']}min)"
+                                            if freshness["age_minutes"] is not None else freshness["reason"]})
+                continue
+
+            conservative_prob = priced["conservative_probability"]
+            if conservative_prob is None or not (0.0 < conservative_prob < 1.0):
+                excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
+                                  "reason": "CONSERVATIVE_PROBABILITY_UNAVAILABLE"})
+                continue
+
+            legs.append(ParlayLeg(
+                game_id=str(game_id), event_id=prov_event_id, market_family="GOALIE_SAVES",
+                participant_id=goalie_id, participant_name=player_name_raw, side=market.side,
+                threshold=threshold, american_price=market.american_price,
+                conservative_probability=conservative_prob, sportsbook=bookmaker,
+                captured_at_utc=market.captured_at_utc, provider_contract_verified=contract_verified,
+                model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                event_not_started=True,
+            ))
     return legs, excluded

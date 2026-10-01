@@ -50,7 +50,10 @@ if runtime_mode.is_community_cloud():
     st.caption(f"Report computed by the local engine at {report.get('generated_at_utc', 'an unknown time')}.")
 else:
     conn = pb.open_for_dashboard()
-    report = dpm.run_daily_postmortem(conn)
+    # dashboard/*.py must never import db.py directly -- see
+    # operational/daily_postmortem.py::open_daily_postmortem_report()'s own
+    # docstring (same rationale as operational/real_today_bridge.py).
+    report = dpm.open_daily_postmortem_report(conn)
 
 st.markdown("## Yesterday's Scoreboard")
 if report["scoreboard"]["tracks"]:
@@ -79,6 +82,44 @@ else:
     st.caption(f"Target ≈{TARGET_JOINT_PROBABILITY:.0%} modeled joint probability (a preference for "
                f"ranking and this tracking, never a hard qualification cutoff or something this "
                f"engine games to look right).")
+
+st.divider()
+st.markdown("## Real-Market Parlay Health")
+rm_health = report["real_market_parlay_health"]
+if rm_health["status"] == "WAITING_FOR_SETTLED_DATA":
+    comp.render_empty_state("WAITING_FOR_ODDS", "No real-market parlay has settled yet -- expected "
+                                                  "until real 2026-27 games are played, not an error.")
+else:
+    rc1, rc2, rc3, rc4 = st.columns(4)
+    rc1.metric("Settled parlays", rm_health["settled_parlays"])
+    rc2.metric("Actual hit rate", fmt.format_probability(rm_health["actual_hit_rate"]))
+    rc3.metric("Avg modeled joint P", fmt.format_probability(rm_health["avg_modeled_joint_probability"]))
+    rc4.metric("Calibration gap", f"{rm_health['calibration_gap']:+.1%}")
+
+st.markdown("### Real-Market Parlay Post-Mortems")
+st.caption("Every settled real-money-adjacent parlay loss, re-resolved against the official boxscore to "
+           "show exactly which leg(s) missed and by how much -- never a guessed cause.")
+rm_postmortems = report.get("real_market_parlay_postmortems")
+if not isinstance(rm_postmortems, list):
+    st.caption("Not available on this report.")
+elif not rm_postmortems:
+    st.caption("No real-market parlay losses yet.")
+else:
+    for pm in rm_postmortems:
+        with st.expander(f"paper_bet_id {pm['paper_bet_id']} -- stake ${pm['stake']:.2f}, "
+                          f"P&L {pm['profit_loss']:+.2f}" if pm.get("profit_loss") is not None
+                          else f"paper_bet_id {pm['paper_bet_id']} -- stake ${pm['stake']:.2f}"):
+            st.markdown(f"**Why:** {pm['why']}")
+            if pm["hit_legs"]:
+                st.caption("Legs that hit: " + "; ".join(
+                    f"{h['participant_name']} ({h['market_family']})" for h in pm["hit_legs"]))
+
+    rm_patterns = report.get("real_market_parlay_leg_miss_patterns")
+    if isinstance(rm_patterns, list) and rm_patterns:
+        st.markdown("**Miss pattern by market family:**")
+        for p in rm_patterns:
+            st.caption(f"{p['market_family']}: {p['occurrences']} miss(es) across "
+                       f"{p['unique_game_dates']} game date(s) -- {p['recommended_action']}")
 
 st.divider()
 st.markdown("## SOG / Saves Thesis Tracking")

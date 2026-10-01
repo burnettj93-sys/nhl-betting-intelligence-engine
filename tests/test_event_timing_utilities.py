@@ -352,8 +352,13 @@ class Test33ProductionNhlModelUnchanged(unittest.TestCase):
                           "8538d6b2e32112190919ac41f8b60f17d66528d58c2488c0ee7f7f2690411faf")
 
     def test_production_boundary_files_unchanged(self):
+        # config.py hash updated (Standard SOG/Saves Certification block, 2026-10-01):
+        # REQUIRE_GOALIE_CONFIRMATION replaced ALLOW_BETTING_ON_EXPECTED_STARTER -- a
+        # deliberate, reviewed product-policy change (pricing/engine.py no longer hard-
+        # blocks a moneyline bet on a non-CONFIRMED goalie by default), not an accidental
+        # edit this guard exists to catch.
         self.assertEqual(_file_sha256("config.py"),
-                          "c019568da204ace99222954d4f02546a25c31029453c36ed3b0ed4bf97d3df8a")
+                          "6a8090d0225f8982933da8213334aedb7b6b114d7dde87c0b3e5fed8499fbdc9")
         self.assertEqual(_file_sha256("db.py"),
                           "e30ecffb2673cfa209913aa4db6c365c104fdcd23b2d508d088f418bba881d09")
         self.assertEqual(_file_sha256("schema.sql"),

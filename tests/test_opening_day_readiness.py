@@ -108,15 +108,16 @@ class TestRealPropPipelineCheck(unittest.TestCase):
     """Live SOG + Saves Production Certification block (2026-09-24), Part
     39."""
 
-    def test_real_state_reports_pending_live_contract_for_both_markets(self):
-        """The real, current, honest state: DraftKings has never posted
-        either market (docs/LIVE_SOG_SAVES_CERTIFICATION.md) -- this must
-        read as PENDING_LIVE_CONTRACT, never READY (fabricated) or
-        NOT_READY (this is not a failure)."""
+    def test_real_state_reports_ready_for_both_markets_now_certified(self):
+        """Standard SOG/Saves Certification block (2026-10-01): both markets now
+        have a real, archived, regression-tested DraftKings payload behind them
+        (provider_adapter.VERIFIED_CONTRACTS) -- this must read as READY, no
+        longer PENDING_LIVE_CONTRACT (that status required DraftKings to have
+        never posted either market, which is no longer the real, current fact)."""
         result = odr.check_real_prop_pipeline()
         self.assertEqual(result["orchestration_status"], "HEALTHY")
-        self.assertEqual(result["sog_status"], "PENDING_LIVE_CONTRACT")
-        self.assertEqual(result["saves_status"], "PENDING_LIVE_CONTRACT")
+        self.assertEqual(result["sog_status"], "READY")
+        self.assertEqual(result["saves_status"], "READY")
         self.assertEqual(result["game_edge_parlay_status"], "PARTIAL")
 
     def test_saves_starter_data_and_actionability_report_separately_from_market_contract(self):
