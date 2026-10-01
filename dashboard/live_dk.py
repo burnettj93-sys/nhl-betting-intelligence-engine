@@ -130,10 +130,35 @@ def _archive_signature() -> tuple:
     return tuple(sig)
 
 
+def _parse_utc(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
+
+
 def load_latest_verified_moneyline_markets() -> dict[str, dict]:
-    """One entry per event_id (the LATEST archived capture, by
-    retrieved_at_utc, if the same event was probed more than once) --
-    {"market": NormalizedMoneylineMarket, "retrieved_at_utc": str}.
+    """One entry per event_id -- {"market": NormalizedMoneylineMarket,
+    "retrieved_at_utc": str}.
+
+    Production Gap Closure sprint (2026-10-01): this used to keep
+    whichever archived capture was simply the MOST RECENTLY retrieved,
+    with no regard for whether the game had already started by then. An
+    "ordinary refresh" sweep re-pulls prices for the whole slate
+    regardless of game state, so once a game goes live its moneyline
+    price keeps moving (toward a blowout as the outcome becomes known)
+    and each of those later, in-game captures would overwrite the real,
+    correct PRE-game price this page is supposed to show -- a genuinely
+    captured pregame quote (e.g. NYI +120/TOR -142, captured 50 minutes
+    before puck drop) silently replaced by an in-game capture (TOR -1750,
+    captured after the game was already well underway). For each event,
+    the latest capture retrieved AT OR BEFORE that event's own
+    commence_time is now preferred; a capture after commence_time is used
+    only when NO real pregame capture exists at all for that event (still
+    showing something, truthfully, rather than nothing).
 
     Memoized on a stat-only fingerprint of the archive (Community Cloud memory
     sprint, Part 11): a page rerun no longer re-reads/re-parses ~1000 archived
@@ -142,13 +167,25 @@ def load_latest_verified_moneyline_markets() -> dict[str, dict]:
     signature = _archive_signature()
     if _latest_markets_memo is not None and _latest_markets_memo[0] == signature:
         return dict(_latest_markets_memo[1])
-    latest: dict[str, dict] = {}
+    latest_any: dict[str, dict] = {}
+    latest_pregame: dict[str, dict] = {}
     for event_id, market, retrieved_at in _iter_archived_h2h_markets():
         if event_id is None:
             continue
-        current = latest.get(event_id)
-        if current is None or (retrieved_at or "") > (current["retrieved_at_utc"] or ""):
-            latest[event_id] = {"market": market, "retrieved_at_utc": retrieved_at}
+        entry = {"market": market, "retrieved_at_utc": retrieved_at}
+        current_any = latest_any.get(event_id)
+        if current_any is None or (retrieved_at or "") > (current_any["retrieved_at_utc"] or ""):
+            latest_any[event_id] = entry
+
+        commence = _parse_utc(market.commence_time_utc)
+        retrieved = _parse_utc(retrieved_at)
+        is_pregame = commence is None or retrieved is None or retrieved <= commence
+        if is_pregame:
+            current_pre = latest_pregame.get(event_id)
+            if current_pre is None or (retrieved_at or "") > (current_pre["retrieved_at_utc"] or ""):
+                latest_pregame[event_id] = entry
+
+    latest = {eid: latest_pregame.get(eid, entry) for eid, entry in latest_any.items()}
     _latest_markets_memo = (signature, latest)
     return dict(latest)
 

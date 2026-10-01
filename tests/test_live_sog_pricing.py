@@ -297,6 +297,40 @@ class TestEventMapping(unittest.TestCase):
         result = event_mapping.map_event_to_game(event, [])
         self.assertEqual(result["status"], "UNMATCHED")
 
+    def test_evening_game_matches_via_real_scheduled_start_utc_not_game_date_midnight(self):
+        """Production Gap Closure sprint (2026-10-01): a 10 PM ET puck drop is
+        02:xx UTC the NEXT calendar day -- 20+ hours from game_date's own
+        midnight-UTC interpretation, and on a different UTC calendar date. This
+        used to come back UNMATCHED for essentially every real evening game,
+        discarding 100% of real alternate-SOG captures. scheduled_start_utc
+        (the real puck-drop time) fixes it outright."""
+        event = {"id": "e1", "home_team": "Los Angeles Kings", "away_team": "Colorado Avalanche",
+                  "commence_time": "2026-10-01T02:10:00Z"}
+        schedule = [{"game_id": "2026020007", "home_team": "LAK", "away_team": "COL",
+                     "game_date": "2026-09-30", "scheduled_start_utc": "2026-10-01T02:00:00"}]
+        result = event_mapping.map_event_to_game(event, schedule)
+        self.assertEqual(result["status"], "MATCHED")
+        self.assertEqual(result["game_id"], "2026020007")
+
+    def test_scheduled_start_utc_present_but_too_far_from_commence_is_unmatched(self):
+        event = {"id": "e1", "home_team": "Los Angeles Kings", "away_team": "Colorado Avalanche",
+                  "commence_time": "2026-10-01T02:10:00Z"}
+        schedule = [{"game_id": "wrong-game", "home_team": "LAK", "away_team": "COL",
+                     "game_date": "2026-10-05", "scheduled_start_utc": "2026-10-05T23:00:00"}]
+        result = event_mapping.map_event_to_game(event, schedule)
+        self.assertEqual(result["status"], "UNMATCHED")
+
+    def test_no_scheduled_start_utc_still_falls_back_to_game_date_heuristic(self):
+        """Backward compatibility: a schedule source with no precise start
+        time (the frozen historical corpus) must keep working exactly as
+        before this fix."""
+        event = {"id": "e1", "home_team": "Toronto Maple Leafs", "away_team": "Buffalo Sabres",
+                  "commence_time": "2026-10-15T23:10:00Z"}
+        schedule = [{"game_id": 1, "home_team": "TOR", "away_team": "BUF", "game_date": "2026-10-15"}]
+        result = event_mapping.map_event_to_game(event, schedule)
+        self.assertEqual(result["status"], "MATCHED")
+        self.assertEqual(result["game_id"], 1)
+
     def test_unrecognized_team_name_is_unmatched_not_a_crash(self):
         event = {"id": "e1", "home_team": "Some Fictional Team", "away_team": "Buffalo Sabres",
                   "commence_time": "2026-10-15T23:10:00Z"}

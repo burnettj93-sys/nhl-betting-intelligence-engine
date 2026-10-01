@@ -56,6 +56,45 @@ def _tmp_bankroll_conn():
     return paper_bankroll.init_db(Path(path)), Path(path)
 
 
+class TestRealNhlScheduleCarriesScheduledStartUtc(unittest.TestCase):
+    """Production Gap Closure sprint (2026-10-01): _real_nhl_schedule() used
+    to select only game_date, forcing event_mapping.map_event_to_game() to
+    match on a calendar date (midnight UTC) -- a 100%-reproducible false
+    UNMATCHED for any real evening game whose commence_time crosses into
+    the next UTC calendar day. scheduled_start_utc was always real,
+    already-ingested data in nhl.db; it just was never passed through."""
+
+    def test_scheduled_start_utc_is_present_on_every_row(self):
+        conn = _fresh_nhl_conn()
+        try:
+            schedule = rpo._real_nhl_schedule(conn)
+            self.assertEqual(len(schedule), 1)
+            self.assertEqual(schedule[0]["scheduled_start_utc"], "2026-09-29T21:10:47")
+        finally:
+            conn.close()
+
+    def test_an_evening_game_crossing_midnight_utc_now_maps_correctly(self):
+        """The exact reproduction: game_date is the ET calendar day, but the
+        real commence_time (a 10 PM ET game) falls on the NEXT UTC date."""
+        from research.live_sog_pricing import event_mapping
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        conn = db.init_db(db_path=Path(tmp.name), wipe=True)
+        conn.execute("INSERT OR IGNORE INTO teams (team_id) VALUES ('LAK'), ('COL')")
+        conn.execute(
+            "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
+            "schedule_observed_at_utc, game_state, source) VALUES ('2026020007', '20262027', "
+            "'2026-09-30', '2026-10-01T02:00:00', 'COL', 'LAK', '2026-09-30T00:00:00', 'SCHEDULED', 'test')")
+        conn.commit()
+        schedule = rpo._real_nhl_schedule(conn)
+        event = {"id": "e1", "home_team": "Colorado Avalanche", "away_team": "Los Angeles Kings",
+                  "commence_time": "2026-10-01T02:10:00Z"}
+        result = event_mapping.map_event_to_game(event, schedule)
+        self.assertEqual(result["status"], "MATCHED")
+        self.assertEqual(str(result["game_id"]), "2026020007")
+        conn.close()
+
+
 class TestRealSogAlternateReachesTheLedger(unittest.TestCase):
     """The real, certified alternate-ladder fixture, with the REAL (repaired)
     identity corpus -- Andrei Svechnikov and Matthew Tkachuk are real,
