@@ -618,7 +618,17 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         # kind (not even the global odds_quota hard reserve) applied to this
         # loop. may_spend() itself now also applies a real
         # VERIFIED_PRODUCTION_DAILY_BUDGET, not just DISCOVERY's.
-        spend_check = pd.may_spend(now)
+        #
+        # Real decision-feed priority (2026-10-01): the prop sweep is just as
+        # much "the product's real decision feed" as the moneyline pregame
+        # pull already is -- it borrows ahead of the even daily pace with the
+        # SAME odds_quota.PREGAME_SOFT_MULTIPLIER constant
+        # operational/moneyline_pregame.py already uses, rather than being
+        # throttled to an average day's pace on a real, multi-game night.
+        # Still bounded by VERIFIED_PRODUCTION_DAILY_BUDGET and the hard
+        # reserve inside may_spend() either way.
+        from operational import odds_quota
+        spend_check = pd.may_spend(now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
         if not spend_check.get("allow"):
             summary["reason"] = f"{spend_check.get('reason')} reached"
             break
