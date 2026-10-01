@@ -173,14 +173,25 @@ def record_spend(credits: int, now: dt.datetime | None = None, path: Path | None
 
 
 def may_spend(now: dt.datetime | None = None, *, path: Path | None = None, planned: int = 1,
-              remaining: int | None = None) -> dict:
+              remaining: int | None = None, soft_multiplier: float = 1.0) -> dict:
     """A real per-day budget applies in BOTH modes now (Production Sweep Safety
     Cap block, 2026-09-29) -- DISCOVERY_DAILY_BUDGET while unverified,
     VERIFIED_PRODUCTION_DAILY_BUDGET once >=1 contract is VERIFIED -- plus the
     global odds_quota hard reserve / quota-unknown-fails-closed check in every
     case. Callers in both modes must call this before every real spend; see
     operational/live_odds_daily_pull.py's sweep loop, which previously only
-    called this in DISCOVERY mode."""
+    called this in DISCOVERY mode.
+
+    `soft_multiplier` (2026-10-01): lets a real decision-feed job borrow
+    ahead of the even daily pace, same mechanism and same constant
+    (odds_quota.PREGAME_SOFT_MULTIPLIER) operational/moneyline_pregame.py
+    already uses for its own real-time pregame pull -- see
+    operational/live_odds_daily_pull.py::run_targeted_prop_sweep(), which
+    passes it on a real multi-game night so the sweep isn't throttled to an
+    average day's pace while real games are actually on the board. Still
+    bounded by VERIFIED_PRODUCTION_DAILY_BUDGET above and the hard reserve
+    inside odds_quota.evaluate_spend() either way -- this only raises the
+    SOFT pace ceiling, never the hard ones."""
     from operational import odds_quota
     now = now or dt.datetime.now(dt.timezone.utc)
     current_mode = mode()
@@ -189,7 +200,8 @@ def may_spend(now: dt.datetime | None = None, *, path: Path | None = None, plann
         return {"allow": False, "reason": f"{current_mode}_DAILY_BUDGET", "budget": daily_budget}
     remaining = odds_quota.latest_remaining() if remaining is None else remaining
     return odds_quota.evaluate_spend(remaining, odds_quota.credits_spent_today(now) if remaining is not None else 0,
-                                     odds_quota.days_left_in_cycle(now.date()), planned)
+                                     odds_quota.days_left_in_cycle(now.date()), planned,
+                                     soft_multiplier=soft_multiplier)
 
 
 def already_swept(stage: str, event_id: str, now: dt.datetime | None = None, path: Path | None = None) -> bool:

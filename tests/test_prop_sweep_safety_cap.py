@@ -120,6 +120,63 @@ class TestDailyCapByMode(unittest.TestCase):
         self.assertGreater(pd.VERIFIED_PRODUCTION_DAILY_BUDGET, pd.DISCOVERY_DAILY_BUDGET)
 
 
+class TestSoftMultiplierBorrowsAheadOfEvenPace(unittest.TestCase):
+    """Real decision-feed priority (2026-10-01): may_spend(soft_multiplier=...)
+    is the same mechanism operational/moneyline_pregame.py already uses for
+    its own real-time pull -- a prop sweep on a real, multi-game night
+    shouldn't be throttled to an average day's even pace either. Still
+    bounded by VERIFIED_PRODUCTION_DAILY_BUDGET and the hard reserve.
+
+    Uses an early-in-cycle date (days_left ~= 29, with the default reset_day=1)
+    so the even-daily-pace math reflects a realistic mid-month day, not D()'s
+    own Sep 29 (1-2 days left in that cycle, which makes the even pace huge
+    regardless of multiplier and defeats the point of this test)."""
+
+    EARLY = dt.datetime(2026, 9, 2, 12, 0, tzinfo=dt.timezone.utc)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp()) / "spend.json"
+
+    def test_default_multiplier_blocks_at_the_even_daily_pace(self):
+        # The SOFT-budget leg of may_spend() reads real spend from
+        # odds_quota.credits_spent_today() (the real archive's own
+        # requests_last headers), NOT prop_discovery's own may_spend()-local
+        # state file (that file only backs the separate hard
+        # DISCOVERY/VERIFIED_PRODUCTION_DAILY_BUDGET check) -- mocked
+        # directly here rather than via pd.record_spend().
+        from operational import odds_quota
+        with _verified_only(), mock.patch.object(odds_quota, "credits_spent_today", return_value=17):
+            # remaining=483, reserve=20 (default), ~29 days left -> soft ~= 16;
+            # already-spent 17 exceeds it.
+            gate = pd.may_spend(self.EARLY, path=self.tmp, remaining=483)
+        self.assertFalse(gate["allow"])
+        self.assertEqual(gate["reason"], "DAILY_SOFT_BUDGET")
+
+    def test_pregame_multiplier_allows_the_same_spend_through(self):
+        from operational import odds_quota
+        with _verified_only(), mock.patch.object(odds_quota, "credits_spent_today", return_value=17):
+            gate = pd.may_spend(self.EARLY, path=self.tmp, remaining=483,
+                                 soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
+        self.assertTrue(gate["allow"])
+
+    def test_multiplier_never_overrides_the_hard_reserve(self):
+        from operational import odds_quota
+        with _verified_only():
+            gate = pd.may_spend(D(), path=self.tmp, remaining=21, planned=5,
+                                 soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)  # 21-5=16 < RESERVE(20)
+        self.assertFalse(gate["allow"])
+        self.assertEqual(gate["reason"], "HARD_RESERVE")
+
+    def test_multiplier_never_overrides_the_verified_production_hard_cap(self):
+        from operational import odds_quota
+        with _verified_only():
+            pd.record_spend(pd.VERIFIED_PRODUCTION_DAILY_BUDGET, D(), self.tmp)
+            gate = pd.may_spend(D(), path=self.tmp, remaining=999,
+                                 soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
+        self.assertFalse(gate["allow"])
+        self.assertEqual(gate["reason"], "VERIFIED_PRODUCTION_DAILY_BUDGET")
+
+
 class TestGlobalReserveAndUnknownQuota(unittest.TestCase):
     """Restored, real global behavior -- previously skipped entirely for the
     sweep loop once VERIFIED_PRODUCTION was reached."""
@@ -233,6 +290,47 @@ class TestSweepLoopCallsMaySpendInEveryMode(unittest.TestCase):
             result = lop.run_targeted_prop_sweep("first")
         self.assertEqual(result["events_queried"], 0)
         self.assertIn("VERIFIED_PRODUCTION_DAILY_BUDGET", result["reason"])
+
+    def test_sweep_loop_borrows_ahead_of_the_even_daily_pace(self):
+        """Real decision-feed priority (2026-10-01): the sweep loop calls
+        may_spend(soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER) now, the
+        same borrow-ahead treatment moneyline_pregame.py already gets -- a
+        spend level that the DEFAULT even daily pace would have refused (but
+        that is still well under VERIFIED_PRODUCTION_DAILY_BUDGET and the
+        hard reserve) must now be ALLOWED through the real sweep loop."""
+        from operational import live_odds_daily_pull as lop
+        from operational import odds_quota
+
+        now = dt.datetime(2026, 9, 2, 9, 0, tzinfo=dt.timezone.utc)  # ~29 days left in the cycle
+
+        class _Resp:
+            ok = True
+            data = {"id": f"{0:032x}", "home_team": "H", "away_team": "A", "bookmakers": []}
+            error = None
+            requests_remaining = 483
+            requests_last = 1
+            retrieved_at_utc = "2026-09-02T09:00:00Z"
+
+        class _EventsResp(_Resp):
+            data = [{"id": f"{0:032x}", "commence_time": (now + dt.timedelta(hours=4)).isoformat()}]
+
+        tmp_state = Path(tempfile.mkdtemp()) / "sweep_spend.json"
+        with _verified_only(), \
+             mock.patch("operational.prop_discovery.STATE_PATH", tmp_state), \
+             mock.patch.object(lop.client, "get_nhl_events", return_value=_EventsResp()), \
+             mock.patch.object(lop.client, "get_event_odds", return_value=_Resp()), \
+             mock.patch.object(lop.archive, "archive_result"), \
+             mock.patch.object(odds_quota, "latest_remaining", return_value=483), \
+             mock.patch.object(odds_quota, "credits_spent_today", return_value=17), \
+             mock.patch.object(lop, "_now_utc", return_value=now):
+            # 17 already spent today (above the ~15/day even pace at
+            # remaining=483, ~29 days left) -- the DEFAULT soft budget would
+            # refuse this, but the real sweep loop's own
+            # PREGAME_SOFT_MULTIPLIER must let it through, same as the
+            # earlier direct may_spend() test proves for the underlying
+            # function.
+            result = lop.run_targeted_prop_sweep("first")
+        self.assertEqual(result["events_queried"], 1)
 
 
 class TestT35Untouched(unittest.TestCase):
