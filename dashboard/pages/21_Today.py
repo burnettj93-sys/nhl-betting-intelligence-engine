@@ -318,7 +318,10 @@ if _live_priced:
     st.markdown("## Live Model Edges" if _any_current else "## Model Edges — ODDS STALE (not live)")
     _snap_state = _live_priced[0][1]["snapshot_state"]
     st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
-               f"Odds API pull and compared against this engine's real Elo win model. This is not simulated. "
+               f"Odds API pull and compared against a FROZEN, one-time Elo research snapshot (last real game: "
+               f"2026-04-16) -- not the live trading engine's own Elo, which is recomputed fresh from real "
+               f"results on every real recommendation/parlay evaluation and is never this stale. This section "
+               f"is a historical-research comparison, never a reflection of the real engine's own health. "
                f"SNAPSHOT FRESHNESS: {_snap_state.replace('_', ' ')} (separate from each price's own freshness below).")
     for r, _f in sorted(_live_priced, key=lambda rf: -abs(rf[0].get("raw_edge") or 0.0))[:6]:
         lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])

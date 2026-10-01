@@ -48,7 +48,23 @@ def map_event_to_game(event: dict, schedule: list[dict]) -> dict:
     The Odds API. `schedule`: real games, each with at least
     {"game_id", "home_team", "away_team", "game_date"} (3-letter
     abbreviations, ISO game_date) -- e.g. research.elo_comparison.load_corpus()'s
-    output, or any future live-schedule source with the same shape.
+    output, or any future live-schedule source with the same shape. A
+    game dict MAY also carry a real "scheduled_start_utc" (e.g. nhl.db's
+    own games table); when present, it is used for matching INSTEAD of
+    game_date (see COMMENCE_TIME_MATCH_WINDOW_HOURS note below) -- the
+    date-only fallback stays for callers (the frozen historical corpus)
+    that never carry a precise start time.
+
+    Production Gap Closure sprint (2026-10-01): game_date alone is a
+    calendar date with no time-of-day, parsed here as midnight UTC. A
+    real evening NHL game's commence_time (e.g. a 10 PM ET puck drop =
+    02:xx UTC the NEXT calendar day) can be 20+ hours from that midnight
+    and on a different UTC calendar date -- both the window check and the
+    same-date fallback then fail for most evening games, a deterministic,
+    100%-reproducible false UNMATCHED that was silently discarding every
+    real alternate-SOG capture for the whole real NHL slate. Matching
+    against the real scheduled_start_utc timestamp (already stored in
+    nhl.db, just never passed through here) fixes this outright.
     Returns {"status": "MATCHED"|"AMBIGUOUS"|"UNMATCHED", "game_id": ...|None,
     "reason": ...}."""
     home_abbrev = normalize_team_name(event.get("home_team", ""))
@@ -67,6 +83,22 @@ def map_event_to_game(event: dict, schedule: list[dict]) -> dict:
     for game in schedule:
         if game["home_team"] != home_abbrev or game["away_team"] != away_abbrev:
             continue
+
+        scheduled_start_utc = game.get("scheduled_start_utc")
+        if scheduled_start_utc:
+            try:
+                start = dt.datetime.fromisoformat(scheduled_start_utc.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=dt.timezone.utc)
+            hours_apart = abs((commence - start).total_seconds()) / 3600.0
+            if hours_apart <= COMMENCE_TIME_MATCH_WINDOW_HOURS:
+                candidates.append(game)
+            continue
+
+        # Fallback for a schedule source with no precise start time (the
+        # frozen historical corpus) -- the original, coarser date-only heuristic.
         try:
             game_date = dt.datetime.fromisoformat(game["game_date"]).replace(tzinfo=dt.timezone.utc)
         except ValueError:

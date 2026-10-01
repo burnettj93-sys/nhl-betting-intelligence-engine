@@ -66,6 +66,46 @@ class TestLoadLatestVerifiedMoneylineMarkets(unittest.TestCase):
             self.assertEqual(len(markets), 1)
             self.assertEqual(markets["evt1"]["market"].home_price, -140.0)
 
+    def test_a_post_game_start_capture_never_shadows_the_real_pregame_price(self):
+        """Production Gap Closure sprint (2026-10-01): an "ordinary refresh" sweep
+        re-pulls the whole slate regardless of game state, so a game that has
+        already started keeps getting re-captured as its price moves toward a
+        blowout. This used to let that LATER, in-game capture silently replace
+        the real, correct pregame price this page is supposed to show."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            # Real pregame capture, 50 minutes before the 23:40Z puck drop.
+            _write_archive(tmp_path, "a_pregame.json", event_id="evt1", home_team="Toronto Maple Leafs",
+                            away_team="New York Islanders", commence_time="2026-09-30T23:40:00Z",
+                            home_price=-142, away_price=120, last_update="2026-09-30T22:50:00Z",
+                            retrieved_at_utc="2026-09-30T22:50:52Z")
+            # Later, in-game capture after the real audited blowout -- the price
+            # has moved to -1750 because the outcome is already mostly decided.
+            _write_archive(tmp_path, "b_ingame.json", event_id="evt1", home_team="Toronto Maple Leafs",
+                            away_team="New York Islanders", commence_time="2026-09-30T23:40:00Z",
+                            home_price=-1750, away_price=900, last_update="2026-10-01T01:20:00Z",
+                            retrieved_at_utc="2026-10-01T01:20:33Z")
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
+                markets = ldk.load_latest_verified_moneyline_markets()
+            self.assertEqual(markets["evt1"]["market"].home_price, -142.0,
+                              "the real PREGAME price must be shown, never a later in-game capture")
+            self.assertEqual(markets["evt1"]["retrieved_at_utc"], "2026-09-30T22:50:52Z")
+
+    def test_falls_back_to_a_post_start_capture_when_no_pregame_capture_exists(self):
+        """If an event genuinely has no archived pregame capture at all, the
+        latest capture overall is still shown (truthfully) rather than nothing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            _write_archive(tmp_path, "only_ingame.json", event_id="evt1", home_team="Toronto Maple Leafs",
+                            away_team="New York Islanders", commence_time="2026-09-30T23:40:00Z",
+                            home_price=-1750, away_price=900, last_update="2026-10-01T01:20:00Z",
+                            retrieved_at_utc="2026-10-01T01:20:33Z")
+            with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
+                 mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR):
+                markets = ldk.load_latest_verified_moneyline_markets()
+            self.assertEqual(markets["evt1"]["market"].home_price, -1750.0)
+
     def test_player_prop_only_archives_with_no_bookmakers_are_ignored(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

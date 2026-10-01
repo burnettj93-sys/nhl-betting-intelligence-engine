@@ -146,11 +146,21 @@ def flag_prop_contract_candidate_if_observed(market_key: str, payloads: list[dic
 def _real_nhl_schedule(conn) -> list[dict]:
     """The REAL, current nhl.db schedule (not the frozen historical
     research corpus research/live_sog_pricing/refresh.py uses for its own
-    event-mapping schedule) -- event_mapping.map_event_to_game() only
-    needs {"game_id", "home_team", "away_team", "game_date"}, and this
-    project's own live-synced games table already has exactly that
-    shape, kept current by the already-scheduled nhl_sync jobs."""
-    rows = conn.execute("SELECT game_id, home_team, away_team, game_date FROM games").fetchall()
+    event-mapping schedule) -- kept current by the already-scheduled
+    nhl_sync jobs.
+
+    Production Gap Closure sprint (2026-10-01): this used to select only
+    {"game_id", "home_team", "away_team", "game_date"} -- event_mapping.
+    map_event_to_game() then had no choice but to match against game_date
+    alone (a calendar date, midnight UTC), which fails for essentially
+    every real evening game (a 10 PM ET puck drop is already the NEXT UTC
+    calendar date, 20+ hours from that midnight). nhl.db's games table has
+    always carried the real scheduled_start_utc timestamp -- it just was
+    never selected here. Including it lets map_event_to_game() match
+    against the real puck-drop time instead, which is what actually fixed
+    the "every real alternate-SOG quote comes back UNMATCHED" defect."""
+    rows = conn.execute(
+        "SELECT game_id, home_team, away_team, game_date, scheduled_start_utc FROM games").fetchall()
     return [dict(r) for r in rows]
 
 
