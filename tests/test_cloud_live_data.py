@@ -970,23 +970,23 @@ class TestTodayPageStaleRendering(unittest.TestCase):
         self.assertEqual(list(at.exception), [])
         return " ".join([m.value for m in at.markdown] + [c.value for c in at.caption])
 
-    def test_a_stale_snapshot_shows_data_stale_and_no_live_edges_heading(self):
+    def test_a_stale_snapshot_shows_data_stale(self):
+        """Real bug fix (2026-10-01): the dynamic '## Live Model Edges' / '##
+        Model Edges — ODDS STALE' heading was replaced with one static,
+        collapsed expander label (see dashboard/pages/21_Today.py) -- the
+        section is permanently stale by construction (a frozen research Elo
+        snapshot), so the heading never needs to say so dynamically anymore;
+        the per-price MARKET/SNAPSHOT FRESHNESS captions inside still do."""
         text = self._today("STALE")
-        self.assertIn("STALE (not live)", text)
-        self.assertNotIn("## Live Model Edges", text)
         self.assertIn("NOT CURRENT", text)
 
-    def test_a_current_snapshot_keeps_the_live_heading(self):
+    def test_a_current_snapshot_shows_current_market_freshness(self):
         text = self._today("CURRENT")
-        self.assertIn("Live Model Edges", text)
-        self.assertNotIn("STALE (not live)", text)
         self.assertIn("MARKET FRESHNESS: CURRENT", text)
 
     def test_a_current_snapshot_with_an_old_price_is_not_live(self):
         """SNAPSHOT freshness must not launder a stale sportsbook price into a live one."""
         text = self._today("CURRENT", price_age_min=6 * 60)
-        self.assertIn("ODDS STALE (not live)", text)
-        self.assertNotIn("## Live Model Edges", text)
         self.assertIn("MARKET FRESHNESS: STALE", text)
         self.assertIn("SNAPSHOT FRESHNESS: CURRENT", text)
 
