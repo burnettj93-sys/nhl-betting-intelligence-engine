@@ -189,6 +189,36 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ---- Best Bets (+100 target) ----------------------------------------------------
+# Real DraftKings prices matched to the player models: single legs priced +100 or
+# better first, then 2-leg combos -- fewest legs that reach +100 with the highest
+# modeled hit chance. Built by operational/best_bets.py (run by the 15-minute
+# paper-trader job); on Community Cloud it comes from the published snapshot.
+from dashboard import best_bets_view as _bbv
+try:
+    if runtime_mode.is_community_cloud():
+        _bb_state = cloud_snapshot.best_bets()
+    else:
+        from operational import best_bets as _bb_mod
+        _bb_state = _bb_mod.read_state()
+except cloud_snapshot.SnapshotUnavailable:
+    _bb_state = None
+_bb = _bbv.format_state(_bb_state)
+st.markdown("## Best Bets — +100 target")
+st.caption("Fewest legs that reach +100 or better, ranked by modeled hit chance, from real DraftKings prices. "
+           + (_bb.get("limits") or ""))
+if _bb["singles"] or _bb["parlays"]:
+    if _bb["singles"]:
+        st.markdown("**One leg (best)**")
+        st.dataframe(_bb["singles"], hide_index=True, width="stretch")
+    if _bb["parlays"]:
+        st.markdown("**Two legs (different games)**")
+        st.dataframe(_bb["parlays"], hide_index=True, width="stretch")
+    st.caption(f"Updated {(_bb.get('generated_at_utc') or '')[:16]} UTC · {_bb['events_priced']} game(s) priced.")
+else:
+    comp.render_empty_state("NO_QUALIFYING_PICKS", _bb["message"])
+st.divider()
+
 # ---- 1. Today's real slate + real Top Conviction + real Daily Parlays -----
 # Real Product Bridge block (2026-09-29): the ONE canonical real-data
 # structure (dashboard/real_today_view.py) every section below reads from --
