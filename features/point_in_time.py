@@ -470,6 +470,43 @@ def game_result_as_of(conn: sqlite3.Connection, game_id: int,
 # observed by learn_time_utc -- models/combined_model.py::learn() is the
 # only caller.
 
+def team_players_who_played(conn: sqlite3.Connection, game_id: int, team_id: str,
+                             learn_time_utc: str) -> set[str]:
+    """Player ids that dressed (played=1) for `team_id` in `game_id`, using the
+    latest stat revision observed by `learn_time_utc`. The only lineup signal
+    this project has (no live injury/lineup feed) -- used by
+    operational/best_bets.py to consider only players who played in their
+    team's most recent real game."""
+    rows = conn.execute(
+        """SELECT player_id FROM (
+               SELECT player_id, played,
+                      ROW_NUMBER() OVER (
+                          PARTITION BY player_id
+                          ORDER BY observed_at_utc DESC, revision_number DESC
+                      ) AS rn
+               FROM player_game_stats
+               WHERE game_id = ? AND team_id = ? AND observed_at_utc <= ?
+           ) WHERE rn = 1 AND played = 1""",
+        (game_id, team_id, learn_time_utc),
+    ).fetchall()
+    return {str(r["player_id"]) for r in rows}
+
+
+def latest_team_by_player_since(conn: sqlite3.Connection, since_date: str,
+                                 learn_time_utc: str) -> dict[str, str]:
+    """{player_id: team_id of the player's most recent game on/after
+    `since_date`}, observed by `learn_time_utc` -- how a trade shows up as soon
+    as the player plays for the new team."""
+    rows = conn.execute(
+        """SELECT p.player_id, p.team_id, g.game_date
+           FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
+           WHERE g.game_date >= ? AND p.played = 1 AND p.observed_at_utc <= ?
+           ORDER BY g.game_date, g.game_id""",
+        (since_date, learn_time_utc),
+    ).fetchall()
+    return {str(r["player_id"]): r["team_id"] for r in rows}
+
+
 def player_game_stats_as_of(conn: sqlite3.Connection, game_id: int,
                              learn_time_utc: str) -> list[sqlite3.Row]:
     """Latest-revision-observed-by-learn_time_utc stat row per player for

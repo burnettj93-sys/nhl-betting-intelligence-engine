@@ -216,6 +216,10 @@ def real_today() -> dict:
     return _optional("real_today")
 
 
+def best_bets() -> dict:
+    return _optional("best_bets")
+
+
 def real_player_props() -> dict:
     return _optional("real_player_props")
 

@@ -182,6 +182,14 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary}
+    # Best Bets (+100 target), 2026-10-06: refresh today's real-price picks on the
+    # same 15-minute cadence (bounded credit capture + cached model -- see
+    # operational/best_bets.py). Never allowed to break staking/settlement.
+    try:
+        from operational import best_bets
+        result["best_bets"] = best_bets.refresh(now)
+    except Exception as exc:  # noqa: BLE001
+        result["best_bets"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
     # Production Gap Closure sprint (2026-09-30): this job runs every 15
     # minutes via launchd (deploy/launchd/com.nhlengine.real-parlay-paper-
     # trader.plist) but, unlike every other scheduled job in this project,
@@ -197,7 +205,7 @@ def run(now: dt.datetime | None = None) -> dict:
     ingestion_health.record_run("real_parlay_paper_trader", {**stake_summary, "status": "SUCCESS"})
     newly_staked = stake_summary.get("newly_staked", 0)
     settled_count = (settlement_summary or {}).get("settled", 0)
-    if newly_staked > 0 or settled_count > 0:
+    if newly_staked > 0 or settled_count > 0 or result["best_bets"].get("changed"):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result
