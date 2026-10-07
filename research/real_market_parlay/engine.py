@@ -227,6 +227,7 @@ class ParlayResult:
     combined_decimal: float = 0.0
     ev_estimated: float = 0.0        # P_joint * decimal - 1
     ev_conservative: float = 0.0     # same, with every leg's probability lowered by LEG_PROBABILITY_MARGIN
+    leg_probability_margin: float = LEG_PROBABILITY_MARGIN  # the margin ev_conservative used (frozen on recorded tickets)
     offered_parlay_price: None = field(default=None)  # NEVER fabricated -- see module docstring
 
 

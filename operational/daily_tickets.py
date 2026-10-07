@@ -206,10 +206,19 @@ def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.dateti
 
 # ------------------------------------------------------------------ state ----
 
-def _rationale(combo_p: float, implied: float, ev_low: float, n_legs: int) -> str:
+def haircut_ev(leg_probabilities: list[float], decimal_price: float, margin: float) -> float:
+    """EV with every leg's probability lowered by `margin`, exactly as the selector tests it
+    (product of (p_i - margin) x combined decimal - 1)."""
+    p = 1.0
+    for q in leg_probabilities:
+        p *= max(q - margin, 0.0)
+    return p * decimal_price - 1.0
+
+
+def _rationale(combo_p: float, implied: float, ev_low: float, n_legs: int, margin: float = rmp.LEG_PROBABILITY_MARGIN) -> str:
     return (f"{n_legs} legs from different games. Experimental model estimate {combo_p:.0%} against {implied:.0%} implied "
-            f"by the prices (estimated combined price). Still positive after a {rmp.LEG_PROBABILITY_MARGIN:.0%}-point "
-            f"policy haircut per leg (EV {ev_low:+.0%}); the haircut is a margin, not a calibration or proof of an edge.")
+            f"by the prices (estimated combined price). EV after lowering each leg's probability by {margin:.0%} points: "
+            f"{ev_low:+.1%}; the haircut is a policy margin, not a calibration or proof of an edge.")
 
 
 def _status_for_row(row: dict, now: dt.datetime) -> str:
@@ -264,6 +273,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         decimal_price *= l["decimal_price"]
     p = row.get("model_probability") or 0.0
     stake = row["stake"]
+    margin = next((l["haircut_margin"] for l in legs if l.get("haircut_margin") is not None), rmp.LEG_PROBABILITY_MARGIN)
+    ev_after = haircut_ev([l["probability"] for l in card_legs], decimal_price, margin)
     return {
         "ticket_id": row["paper_bet_id"], "status": _status_for_row(row, now), "recorded": True,
         "legs": card_legs, "combined_decimal": round(decimal_price, 4),
@@ -271,9 +282,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         "stake": stake, "potential_return": round(stake * decimal_price, 2),
         "potential_profit": round(stake * (decimal_price - 1.0), 2),
         "hit_probability": p, "ev_estimated": row.get("ev"),
-        "rationale": _rationale(p, 1.0 / decimal_price if decimal_price else 0.0,
-                                (p - rmp.LEG_PROBABILITY_MARGIN * len(card_legs)) * decimal_price - 1.0,
-                                len(card_legs)),
+        "ev_after_haircut": ev_after, "haircut_margin": margin,
+        "rationale": _rationale(p, 1.0 / decimal_price if decimal_price else 0.0, ev_after, len(card_legs), margin),
         "recorded_at_utc": row["created_at_utc"], "event_start_utc": row.get("event_start_utc"),
         "result": {"status": row["result_status"], "profit_loss": row.get("profit_loss"),
                    "settled_at_utc": row.get("settled_at_utc"), "notes": row.get("notes"),
@@ -301,8 +311,9 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
         "stake": stake, "potential_return": round(stake * combo.combined_decimal, 2),
         "potential_profit": round(stake * (combo.combined_decimal - 1.0), 2),
         "hit_probability": combo.joint_probability, "ev_estimated": combo.ev_estimated,
+        "ev_after_haircut": combo.ev_conservative, "haircut_margin": combo.leg_probability_margin,
         "rationale": _rationale(combo.joint_probability, 1.0 / combo.combined_decimal, combo.ev_conservative,
-                                len(combo.legs)),
+                                len(combo.legs), combo.leg_probability_margin),
         "recorded_at_utc": None, "event_start_utc": _earliest_start(combo), "result": None, "alerts": []}
 
 

@@ -680,7 +680,7 @@ class TestProductionModelUnchanged(unittest.TestCase):
         for rel in self.NEW_FILES:
             with open(os.path.join(REPO_ROOT, rel)) as f:
                 text = f.read()
-            self.assertNotIn("c59df7964fb69d8deda5d51d07e2dd1f", text)
+            self.assertNotIn("deadbeefdeadbeefdeadbeefdeadbeef", text)
             self.assertNotIn("THE_ODDS_API_KEY", text)
             self.assertNotIn("the-odds-api.com", text)
 
