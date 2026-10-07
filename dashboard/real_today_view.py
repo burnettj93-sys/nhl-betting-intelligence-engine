@@ -120,6 +120,10 @@ def build_real_today_state(nhl_conn, *, now: dt.datetime | None = None,
         "games": games,
         "eligible_leg_count": len(all_legs),
         "top_conviction": top_conviction if top_conviction else NO_QUALIFYING_REAL_OPPORTUNITIES,
+        # Compatibility only: the Cloud app deployed from master still reads this key. Parlays now live in the
+        # ticket board (snapshot section "tickets"); nothing here is a recommendation.
+        "parlay": {"status": "NO_QUALIFYING_PARLAY",
+                   "reason": "Parlays moved to the ticket board at the top of Today (snapshot section 'tickets')."},
         "excluded_count": len(all_excluded),
         "excluded_by_reason": dict(exclusion_reasons),
     }
