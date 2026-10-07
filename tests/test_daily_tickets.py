@@ -204,6 +204,14 @@ class TestPaperAccountEndToEnd(unittest.TestCase):
         self.assertTrue(state["tickets"])
         self.assertTrue(all(c["status"] == "RECOMMENDED" and not c["recorded"] for c in state["tickets"]))
 
+    def test_funnel_counts_explain_each_selection_stage(self):
+        dtk.run_cycle(None, self.conn, NOW, collected=collected(board(4, price=-110, p=0.50) + [leg(9, "PX", price=-300, p=0.9)]))
+        funnel = dtk.read_state()["diagnostics"]["funnel"]
+        self.assertEqual(funnel["legs_offered"], 5)
+        self.assertEqual(funnel["legs_without_positive_edge"], 4)       # -110 at 50% has no edge
+        self.assertEqual(funnel["legs_in_pool"], 1)
+        self.assertEqual(funnel["two_leg_pairs_cross_game"], 0)
+
     def test_empty_slots_are_explained(self):
         dtk.run_cycle(None, self.conn, NOW, collected=collected(board(2, price=-110, p=0.50)))
         state = dtk.read_state()

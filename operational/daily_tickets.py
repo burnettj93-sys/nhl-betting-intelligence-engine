@@ -435,7 +435,8 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
                          if pb.compute_ticket_id(et_date, c.legs) not in recorded_now]
     diagnostics = {
         "legs_considered": len(legs), "pool_after_edge_filter": picked["pool_size"],
-        "qualifying_tickets": picked["qualifying"], "sources": collected["sources"],
+        "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
+        "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
     }
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,

@@ -288,6 +288,41 @@ def _prepare_pool(candidate_legs: list[ParlayLeg]) -> list[ParlayLeg]:
     return [l for l in eligible if leg_has_edge(l)]
 
 
+def selection_funnel(candidate_legs: list[ParlayLeg]) -> dict:
+    """Counts at each selection stage, so an empty or short board can be explained
+    exactly (diagnostic only; selection itself is select_tickets)."""
+    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
+    pool = [l for l in eligible if leg_has_edge(l)]
+    f = {"legs_offered": len(candidate_legs), "legs_eligible": len(eligible),
+         "legs_failed_eligibility": len(candidate_legs) - len(eligible),
+         "legs_without_positive_edge": len(eligible) - len(pool), "legs_in_pool": len(pool),
+         "two_leg_pairs_cross_game": 0, "pairs_reaching_plus_100": 0, "pairs_with_ev_at_least_min": 0,
+         "pairs_passing_haircut": 0, "best_pair_by_ev": None}
+    best = None
+    for a, b in combinations(pool, 2):
+        combo = _evaluate_combo([a, b])
+        if combo is None:
+            continue
+        f["two_leg_pairs_cross_game"] += 1
+        if combo.combined_decimal < MIN_COMBINED_DECIMAL:
+            continue
+        f["pairs_reaching_plus_100"] += 1
+        if combo.ev_estimated < MIN_ESTIMATED_EV:
+            continue
+        f["pairs_with_ev_at_least_min"] += 1
+        if combo.ev_conservative >= 0.0:
+            f["pairs_passing_haircut"] += 1
+    for a, b in combinations(pool, 2):
+        combo = _evaluate_combo([a, b])
+        if combo is not None and combo.combined_decimal >= MIN_COMBINED_DECIMAL and (
+                best is None or combo.ev_conservative > best.ev_conservative):
+            best = combo
+    if best is not None:
+        f["best_pair_by_ev"] = {"legs": [leg_label(l) for l in best.legs], "combined_decimal": round(best.combined_decimal, 3),
+                                "ev_estimated": round(best.ev_estimated, 4), "ev_after_haircut": round(best.ev_conservative, 4)}
+    return f
+
+
 def select_singles(candidate_legs: list[ParlayLeg], limit: int = MAX_SINGLES) -> list[ParlayLeg]:
     """Informational single-leg ideas at +100 or better under the same EV
     policy. Not staked, and not counted toward the daily parlay tickets."""
