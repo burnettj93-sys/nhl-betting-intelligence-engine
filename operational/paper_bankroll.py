@@ -510,6 +510,7 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     frozen = [_freeze_leg(l) for l in legs]
     for f in frozen:
         f["code_version"] = code_version
+        f["haircut_margin"] = getattr(combo, "leg_probability_margin", None)
     legs_snapshot = json.dumps(frozen)
     model_versions = sorted({l.model_version for l in legs if getattr(l, "model_version", "")})
     if code_version:

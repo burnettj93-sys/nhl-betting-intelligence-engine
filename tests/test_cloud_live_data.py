@@ -122,9 +122,9 @@ class TestValidation(unittest.TestCase):
                 schema.validate_snapshot(doc, for_publication=True)
 
     def test_a_known_secret_value_anywhere_in_the_snapshot_blocks_publication(self):
-        doc = sample_doc(); doc["demo"]["note"] = "prefix c59df7964fb69d8deda5d51d07e2dd1f suffix"
+        doc = sample_doc(); doc["demo"]["note"] = "prefix deadbeefdeadbeefdeadbeefdeadbeef suffix"
         with self.assertRaises(schema.SnapshotInvalid):
-            schema.validate_snapshot(doc, known_secrets=("c59df7964fb69d8deda5d51d07e2dd1f",), for_publication=True)
+            schema.validate_snapshot(doc, known_secrets=("deadbeefdeadbeefdeadbeefdeadbeef",), for_publication=True)
         schema.validate_snapshot(doc, for_publication=True)          # not a KNOWN secret -> allowed by value
 
     def test_credential_looking_strings_and_absolute_paths_are_blocked(self):

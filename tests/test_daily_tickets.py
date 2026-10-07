@@ -307,6 +307,68 @@ class TestTodayScreen(unittest.TestCase):
         self.assertTrue(any("minutes old" in w.value for w in at.warning))
 
 
+class TestDisplayedNumbersMatchSelection(unittest.TestCase):
+    def test_a_recorded_card_shows_the_same_haircut_ev_the_selector_used(self):
+        """Reproduces a defect: recorded cards approximated the haircut as (p - margin*n_legs), while the
+        selector uses the product of (p_i - margin). The card must show what the selector actually tested."""
+        path, conn = fresh_ledger()
+        picked = rmp.select_tickets(board(4))
+        combo = picked["tickets"][0]
+        recommended_card = dtk.ticket_from_combo(combo, "2026-10-15")
+        dtk.run_cycle(None, conn, NOW, collected=collected(board(4)))
+        recorded = next(c for c in dtk.read_state()["tickets"] if c["ticket_id"] == recommended_card["ticket_id"])
+        self.assertEqual(recorded["rationale"], recommended_card["rationale"])
+        self.assertAlmostEqual(recorded["ev_after_haircut"], combo.ev_conservative, places=3)
+        conn.close()
+
+
+class TestSurfaceConsistency(unittest.TestCase):
+    """operational/ticket_consistency.py: ledger, board, published copy and postmortems must describe the same tickets."""
+
+    def setUp(self):
+        from operational import ticket_consistency
+        self.tc = ticket_consistency
+        self.path, self.conn = fresh_ledger()
+        dtk.run_cycle(None, self.conn, NOW, collected=collected(board(4)))
+        self.state = dtk.read_state()
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_agreeing_surfaces_report_nothing(self):
+        import copy
+        self.assertEqual(self.tc.audit(self.conn, self.state, copy.deepcopy(self.state)), [])
+
+    def test_each_kind_of_disagreement_is_reported(self):
+        import copy
+        bad = copy.deepcopy(self.state)
+        bad["tickets"][0]["legs"][0]["american_price"] += 5                      # a price that moved after recording
+        bad["tickets"][1]["status"] = "WON"                                      # a status the ledger does not have
+        bad["account"]["available_cash"] -= 10                                   # a balance that drifted
+        bad["tickets"].pop(2)                                                    # a ticket missing from the surface
+        problems = " | ".join(self.tc.audit(self.conn, self.state, bad))
+        self.assertIn("legs/prices/timestamps differ", problems)
+        self.assertIn("status WON vs ledger PENDING", problems)
+        self.assertIn("available_cash", problems)
+        self.assertIn("is missing", problems)
+
+    def test_settled_tickets_and_their_postmortems_stay_consistent(self):
+        nhl = _fresh_nhl_conn()
+        for g in range(1, 5):
+            _insert_game(nhl, g)
+            _insert_player_stat(nhl, g, f"P{g}", "TOR", shots=1)                 # every leg misses: every ticket loses
+        pb_conn = self.conn
+        pb_conn.execute("UPDATE paper_bets SET event_start_utc='2026-10-01T15:00:00Z'")
+        pb_conn.commit()
+        driver.settle_due_bets(pb_conn, nhl)
+        dtk.refresh_state_only(pb_conn, NOW)
+        state = dtk.read_state()
+        pms = daily_postmortem.real_market_parlay_loss_postmortems(pb_conn, _fresh_nhl_conn())
+        self.assertEqual(self.tc.audit(pb_conn, state, None, postmortems=pms), [])
+        self.assertEqual({p["ticket_id"] for p in pms}, {c["ticket_id"] for c in state["tickets"]})
+        self.assertEqual(pb.account_state(pb_conn, "REAL_MARKET_PAPER")["settled_pnl"], -10.0 * len(pms))
+
+
 class TestSharedExposure(unittest.TestCase):
     def test_players_and_games_shared_across_tickets_are_reported(self):
         path, conn = fresh_ledger()
