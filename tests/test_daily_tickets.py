@@ -152,6 +152,8 @@ class TestPaperAccountEndToEnd(unittest.TestCase):
                 self.assertEqual(f["model_version"], "test-model-v1")
                 self.assertEqual(f["game_start_utc"], FUTURE)
                 self.assertIn("conservative_probability", f)
+                self.assertTrue(f["code_version"])           # exact code commit recorded on every leg
+            self.assertIn("code:", row["model_version"])
 
     def test_points_legs_flow_through_the_same_workflow_with_their_own_labels(self):
         legs = [leg(g, f"P{g}", price=-240, p=0.75, thr=1, family="PLAYER_POINTS") for g in range(1, 5)]

@@ -120,6 +120,8 @@ else:
     if _fresh["stale"]:
         st.warning(f"The board is {_fresh['age_minutes']} minutes old. The scheduled job refreshes it every 15 "
                    "minutes while this Mac is awake; prices may have moved.")
+    if _tk.get("label"):
+        st.warning(_tk["label"])
     if _tk.get("notice"):
         st.info(_tk["notice"].replace("$", "\\$"))
     st.markdown("## Today's tickets")

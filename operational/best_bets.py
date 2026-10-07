@@ -57,7 +57,7 @@ EST_COST_PER_EVENT = 2
 
 
 SOG_K = (1, 2, 3, 4, 5)
-MODEL_VERSION = "rolling-l20-l60-shrunk-v1"
+MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"
 MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
 MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
 HISTORY_CACHE_NAME = "best_bets_history_2022_2025.jsonl"

@@ -42,6 +42,9 @@ TRACK = "REAL_MARKET_PAPER"
 SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY
 RECENT_SETTLED_LIMIT = 10
 
+FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
+              "DraftKings Ontario. Rolling-form probabilities are experimental and uncalibrated.")
+
 STATUS_RECOMMENDED = "RECOMMENDED"
 STATUS_RECORDED = "RECORDED"
 STATUS_PENDING = "PENDING"
@@ -172,13 +175,29 @@ def _earliest_start(combo: rmp.ParlayResult) -> str | None:
     return min(starts) if starts else None
 
 
+def code_version() -> str:
+    """Git commit the running code was loaded from (+dirty when tracked files differ
+    from it), stored on every ticket so a result can be tied to the exact code."""
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short=10", "HEAD"], cwd=root, capture_output=True, text=True,
+                             timeout=10, check=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=root,
+                               capture_output=True, text=True, timeout=10, check=True).stdout.strip()
+        return sha + ("+dirty" if dirty else "")
+    except Exception:  # noqa: BLE001 -- never block recording because git is unavailable
+        return "unknown"
+
+
 def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.datetime) -> list[dict]:
     """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS."""
     results = []
+    version = code_version()
     for combo in combos:
         bet = pb.create_real_market_combo_paper_bet(
             bankroll_conn, {"status": "QUALIFIED", "combo": combo},
-            event_start_utc=_earliest_start(combo), created_at_utc=now.isoformat())
+            event_start_utc=_earliest_start(combo), created_at_utc=now.isoformat(), code_version=version)
         results.append({"ticket_id": pb.compute_ticket_id(et.eastern_today(now), combo.legs), **bet})
         if bet["status"] == "INSUFFICIENT_FUNDS":
             break
@@ -188,9 +207,9 @@ def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.dateti
 # ------------------------------------------------------------------ state ----
 
 def _rationale(combo_p: float, implied: float, ev_low: float, n_legs: int) -> str:
-    return (f"{n_legs} legs from different games. Modeled hit chance {combo_p:.0%} against {implied:.0%} implied by "
-            f"the prices (estimated combined price). Still has value after lowering every leg's probability "
-            f"by {rmp.LEG_PROBABILITY_MARGIN:.0%} (EV {ev_low:+.0%}).")
+    return (f"{n_legs} legs from different games. Experimental model estimate {combo_p:.0%} against {implied:.0%} implied "
+            f"by the prices (estimated combined price). Still positive after a {rmp.LEG_PROBABILITY_MARGIN:.0%}-point "
+            f"policy haircut per leg (EV {ev_low:+.0%}); the haircut is a margin, not a calibration or proof of an edge.")
 
 
 def _status_for_row(row: dict, now: dt.datetime) -> str:
@@ -236,7 +255,7 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
             "team": l.get("team"), "opponent": l.get("opponent"), "game_start_utc": l.get("game_start_utc"),
             "american_price": l["american_price"], "decimal_price": l.get("decimal_price") or rmp.leg_decimal(stub),
             "price_captured_at_utc": l.get("captured_at_utc"), "probability": l["conservative_probability"],
-            "model_version": l.get("model_version", ""),
+            "model_version": l.get("model_version", ""), "code_version": l.get("code_version"),
             "outcome": outcomes.get((l["game_id"], l["participant_id"], l["market_family"], l.get("threshold")))})
     decimal_price = 1.0
     for l in card_legs:
@@ -329,7 +348,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         "singles": [single_card(l) for l in singles],
         "earlier_open_tickets": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in open_rows],
         "recent_settled": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in settled],
-        "policy": {
+        "label": FEED_LABEL, "policy": {
             "min_combined_decimal": rmp.MIN_COMBINED_DECIMAL, "min_estimated_ev": rmp.MIN_ESTIMATED_EV,
             "leg_probability_margin": rmp.LEG_PROBABILITY_MARGIN, "max_tickets_per_day": rmp.MAX_TICKETS_PER_DAY,
             "max_tickets_per_leg": rmp.MAX_TICKETS_PER_LEG, "max_tickets_per_game": rmp.MAX_TICKETS_PER_GAME,

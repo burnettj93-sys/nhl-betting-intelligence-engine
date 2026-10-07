@@ -433,7 +433,8 @@ def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: d
 
 def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict, *,
                                         event_start_utc: str | None = None,
-                                        created_at_utc: str | None = None) -> dict:
+                                        created_at_utc: str | None = None,
+                                        code_version: str | None = None) -> dict:
     """Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
     block, 2026-09-29): REAL_MARKET_PAPER track, is_combo=True -- distinct
     from create_demo_combo_paper_bet (DEMO_PAPER, simulated prices) and
@@ -506,8 +507,13 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     market_id = f"REAL_MARKET_PARLAY:{_stake_date}:" + "+".join(
         sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
     ticket_id = compute_ticket_id(_stake_date, legs)
-    legs_snapshot = json.dumps([_freeze_leg(l) for l in legs])
+    frozen = [_freeze_leg(l) for l in legs]
+    for f in frozen:
+        f["code_version"] = code_version
+    legs_snapshot = json.dumps(frozen)
     model_versions = sorted({l.model_version for l in legs if getattr(l, "model_version", "")})
+    if code_version:
+        model_versions.append(f"code:{code_version}")
     return record_paper_bet(
         conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
         market_id=market_id, entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False,
