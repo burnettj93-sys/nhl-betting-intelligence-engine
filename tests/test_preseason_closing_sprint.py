@@ -229,6 +229,7 @@ class Test07LedgerPageOperationalWidgets(unittest.TestCase):
 class Test08TodayPageProspectiveWidgets(unittest.TestCase):
     def test_today_page_shows_honest_empty_state_without_ledger(self):
         at = _app_test("dashboard/pages/21_Today.py")
+        at.session_state["today_show_technical"] = True
         at.run(timeout=120)
         self.assertEqual(list(at.exception), [])
         md = " ".join(m.value for m in at.markdown)

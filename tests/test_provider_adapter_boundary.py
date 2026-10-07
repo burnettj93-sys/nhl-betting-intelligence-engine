@@ -34,14 +34,15 @@ from research.generic_prop_pricing.evaluator import CONTRACT_NOT_VERIFIED
 
 
 class Test01NoContractsVerifiedYet(unittest.TestCase):
-    def test_verified_contracts_is_exactly_these_five_real_observed_payloads(self):
+    def test_verified_contracts_is_exactly_these_six_real_observed_payloads(self):
         self.assertEqual(pa.VERIFIED_CONTRACTS, frozenset({
             ("draftkings", "MONEYLINE"),
             ("draftkings", "PLAYER_SOG_ALTERNATE"),
             ("draftkings", "ALTERNATE_TEAM_TOTAL"),
             ("draftkings", "PLAYER_SOG"),
             ("draftkings", "GOALIE_SAVES"),
-        }), "Standard SOG/Saves Certification block (2026-10-01): MONEYLINE, PLAYER_SOG_ALTERNATE, "
+            ("draftkings", "PLAYER_POINTS"),
+        }), "Unified ticket workflow (2026-10-07) added PLAYER_POINTS (real archived payload + parity test). Standard SOG/Saves Certification block (2026-10-01): MONEYLINE, PLAYER_SOG_ALTERNATE, "
             "ALTERNATE_TEAM_TOTAL, PLAYER_SOG, and GOALIE_SAVES are the five real, live-observed "
             "DraftKings payload contracts as of this block -- every other market family must stay "
             "unverified until its own real payload is observed")

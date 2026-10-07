@@ -111,6 +111,19 @@ MALFORMED_QUOTE_SHAPE = "MALFORMED_QUOTE_SHAPE"
 # means a genuine no-vig edge can be computed, unlike PLAYER_SOG_ALTERNATE's
 # one-sided ladder.
 #
+# Unified ticket workflow (2026-10-07): one more entry, again against a REAL
+# archived DraftKings payload (no new paid request):
+#   - (draftkings, PLAYER_POINTS): player_points, real payload retrieved
+#     2026-10-06T18:23:43Z, BUF vs MIN, 16 two-sided Over/Under outcomes across 9
+#     players (Over/Under 0.5 for eight, 1.5 for Kirill Kaprizov) -- see
+#     tests/fixtures/draftkings_player_points_real_payload.json and
+#     tests/test_generic_prop_pricing.py::TestPlayerPointsContractParity. The shape
+#     is the same standard two-sided one PLAYER_SOG uses (a half-point line, Over 0.5
+#     == "1+ point", Over 1.5 == "2+"); 12 captures of this market sit in the archive.
+#     Certifying the contract does NOT make the market bettable by itself: the
+#     ticket engine's own allowlist, the settlement mapping and the player model
+#     gates all apply independently.
+#
 # Every other family remains deliberately unverified -- one observed payload
 # shape never validates an unrelated family (Part 16's instruction, unchanged).
 VERIFIED_CONTRACTS: frozenset[tuple[str, str]] = frozenset({
@@ -119,6 +132,7 @@ VERIFIED_CONTRACTS: frozenset[tuple[str, str]] = frozenset({
     ("draftkings", "ALTERNATE_TEAM_TOTAL"),
     ("draftkings", "PLAYER_SOG"),
     ("draftkings", "GOALIE_SAVES"),
+    ("draftkings", "PLAYER_POINTS"),
 })
 
 

@@ -204,7 +204,7 @@ class TestMoneylineContractParity(unittest.TestCase):
         with open(path) as f:
             return json.load(f)
 
-    def test_verified_contracts_is_exactly_these_five_real_observed_payloads(self):
+    def test_verified_contracts_is_exactly_these_six_real_observed_payloads(self):
         """SOG Contract Certification block (2026-09-29): two more real, archived payloads
         certified (PLAYER_SOG_ALTERNATE via player_shots_on_goal_alternate, ALTERNATE_TEAM_TOTAL
         via alternate_team_totals) -- see TestPlayerSogAlternateContractParity /
@@ -224,6 +224,7 @@ class TestMoneylineContractParity(unittest.TestCase):
             ("draftkings", "ALTERNATE_TEAM_TOTAL"),
             ("draftkings", "PLAYER_SOG"),
             ("draftkings", "GOALIE_SAVES"),
+            ("draftkings", "PLAYER_POINTS"),
         }))
 
     def test_parses_the_real_payload_correctly(self):
@@ -279,7 +280,7 @@ class TestMoneylineContractParity(unittest.TestCase):
         # TestPlayerSogStandardContractParity / TestGoalieSavesStandardContractParity
         # below). Everything else here still has zero observed payload evidence and
         # must stay unverified.
-        for market_id in ("PLAYER_GOALS", "PLAYER_ASSISTS", "PLAYER_POINTS", "SPREADS", "TOTALS"):
+        for market_id in ("PLAYER_GOALS", "PLAYER_ASSISTS", "SPREADS", "TOTALS"):
             self.assertFalse(pa.is_contract_verified("draftkings", market_id),
                               f"{market_id} must remain CONTRACT_NOT_VERIFIED")
 
@@ -509,6 +510,65 @@ class TestPlayerSogStandardContractParity(unittest.TestCase):
 
     def test_bare_player_sog_family_is_now_verified_for_draftkings(self):
         self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_SOG"))
+
+
+class TestPlayerPointsContractParity(unittest.TestCase):
+    """Unified ticket workflow (2026-10-07): the real-payload regression test required before
+    (draftkings, PLAYER_POINTS) can sit in VERIFIED_CONTRACTS. Loads a real, archived DraftKings
+    player_points payload (tests/fixtures/draftkings_player_points_real_payload.json, BUF vs MIN,
+    retrieved 2026-10-06T18:23:43Z, trimmed to 9 players, nothing altered) and drives it through
+    the real pipeline (market_parser.parse_event_odds_response -> group_standard_two_sided ->
+    normalized_market_adapter.quote_to_normalized_market), as best_bets and the ticket engine do."""
+
+    @staticmethod
+    def _load_fixture():
+        from pathlib import Path
+        path = Path(__file__).resolve().parent / "fixtures" / "draftkings_player_points_real_payload.json"
+        with open(path) as f:
+            return json.load(f)
+
+    def _pairs(self, payload):
+        quotes = sog_market_parser.parse_event_odds_response(payload, standard_market_keys=("player_points",))
+        return sog_market_parser.group_standard_two_sided(quotes, market_key="player_points")
+
+    def _pair_for(self, payload, name):
+        pairs = self._pairs(payload)
+        return pairs[next(k for k in pairs if k[2] == name)]
+
+    def test_parses_the_real_two_sided_one_plus_point_line(self):
+        payload = self._load_fixture()
+        pair = self._pair_for(payload, "Tage Thompson")
+        over_q, under_q = pair["over"], pair["under"]
+        self.assertIsNotNone(over_q)
+        self.assertIsNotNone(under_q)
+        self.assertEqual(over_q["point"], 0.5)                 # Over 0.5 == "1+ point"
+        market, verified = nma.quote_to_normalized_market(
+            over_q, market_family="PLAYER_POINTS", canonical_market_id="PLAYER_POINTS_1PLUS", threshold=1,
+            side="OVER", opposing_price=under_q["price_american"], player_id="P_THOMPSON_TAGE",
+            sportsbook="draftkings")
+        self.assertTrue(verified)
+        self.assertEqual(market.event_id, "057cbe42c7df314de9ef60d00db04222")
+        self.assertEqual((market.threshold, market.side), (1, "OVER"))
+        self.assertEqual(market.american_price, -240)
+        self.assertEqual(market.opposing_side_price, 175)       # real two-sided Under
+        self.assertTrue(market.has_two_sided_market())
+        self.assertEqual(market.market_last_update_utc, "2026-10-06T18:22:45Z")
+        self.assertEqual(market.provenance, "THE_ODDS_API")
+
+    def test_the_real_payload_also_carries_a_two_plus_point_line(self):
+        pair = self._pair_for(self._load_fixture(), "Kirill Kaprizov")
+        self.assertEqual(pair["over"]["point"], 1.5)           # Over 1.5 == "2+ points"
+        self.assertEqual((pair["over"]["price_american"], pair["under"]["price_american"]), (180, -245))
+
+    def test_unverified_sportsbook_is_not_verified(self):
+        pair = self._pair_for(self._load_fixture(), "Tage Thompson")
+        _market, verified = nma.quote_to_normalized_market(
+            pair["over"], market_family="PLAYER_POINTS", canonical_market_id="PLAYER_POINTS_1PLUS", threshold=1,
+            side="OVER", opposing_price=pair["under"]["price_american"], player_id="P", sportsbook="fanduel")
+        self.assertFalse(verified)
+
+    def test_points_family_is_verified_for_draftkings(self):
+        self.assertTrue(pa.is_contract_verified("draftkings", "PLAYER_POINTS"))
 
 
 class TestGoalieSavesStandardContractParity(unittest.TestCase):

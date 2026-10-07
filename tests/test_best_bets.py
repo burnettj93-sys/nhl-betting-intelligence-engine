@@ -1,5 +1,5 @@
-"""Best Bets (+100 target) -- operational/best_bets.py + dashboard/best_bets_view.py.
-Pure pick logic, capture cadence/budget, payload matching, state refresh, formatting."""
+"""operational/best_bets.py -- price capture, second-opinion model helpers, state refresh.
+Recommendations live in the unified ticket workflow (tests/test_daily_tickets.py)."""
 from __future__ import annotations
 
 import datetime as dt
@@ -10,19 +10,9 @@ from pathlib import Path
 from unittest import mock
 
 import db
-from dashboard import best_bets_view as view
 from operational import best_bets as bb
 
 NOW = dt.datetime(2026, 10, 6, 20, 0, tzinfo=dt.timezone.utc)
-
-
-def _leg(player="A", game="g1", price=-150, p=0.62, hours=3.0, age=20.0, label="2+ shots on goal", market="SOG2",
-         team="PHI", opp="TBL", home=False):
-    dec = bb.american_to_decimal(price)
-    start = (NOW + dt.timedelta(hours=hours)).isoformat()
-    return {"player": player, "team": team, "opp": opp, "home": home, "game_key": game, "start_utc": start,
-            "label": label, "market": market, "price": price, "decimal": dec, "p": p, "implied": 1 / dec,
-            "edge": p - 1 / dec, "captured_at_utc": (NOW - dt.timedelta(minutes=age)).isoformat()}
 
 
 class TestPriceMath(unittest.TestCase):
@@ -54,89 +44,54 @@ class TestCaptureCadence(unittest.TestCase):
         self.assertEqual(bb.capture_decision(1.0, 120.0), "REFRESH")
 
 
-class TestBuildPicks(unittest.TestCase):
-    def test_single_must_be_plus_money_with_real_edge(self):
-        good = _leg("good", price=110, p=0.56)
-        no_edge = _leg("noedge", price=110, p=0.50)          # edge 0.02 < 0.04
-        short_price = _leg("short", price=-150, p=0.80)      # not +100
-        low_p = _leg("lowp", price=300, p=0.30)              # below MIN_SINGLE_P
-        out = bb.build_picks([good, no_edge, short_price, low_p], NOW)
-        self.assertEqual([s["player"] for s in out["singles"]], ["good"])
-
-    def test_singles_ranked_by_hit_chance(self):
-        a, b = _leg("a", price=105, p=0.56), _leg("b", price=120, p=0.52)
-        out = bb.build_picks([b, a], NOW)
-        self.assertEqual([s["player"] for s in out["singles"]], ["a", "b"])
-
-    def test_parlay_needs_plus_100_combined_cross_game_and_positive_ev(self):
-        a = _leg("a", game="g1", price=-150, p=0.70)
-        b = _leg("b", game="g2", price=-120, p=0.62)         # 1.667 * 1.833 = 3.06 -> +206
-        same_game = _leg("c", game="g1", price=-120, p=0.62)
-        out = bb.build_picks([a, b, same_game], NOW)
-        pairs = [frozenset(l["player"] for l in p["legs"]) for p in out["parlays"]]
-        self.assertIn(frozenset({"a", "b"}), pairs)
-        self.assertNotIn(frozenset({"a", "c"}), pairs)       # never two legs from the same game
-        top = next(p for p in out["parlays"] if {l["player"] for l in p["legs"]} == {"a", "b"})
-        self.assertGreaterEqual(top["american"], 100)
-        self.assertAlmostEqual(top["p"], 0.70 * 0.62)
-
-    def test_parlay_below_plus_100_is_rejected(self):
-        a = _leg("a", game="g1", price=-400, p=0.90)
-        b = _leg("b", game="g2", price=-400, p=0.90)         # 1.25*1.25 = 1.56 -> -178
-        self.assertEqual(bb.build_picks([a, b], NOW)["parlays"], [])
-
-    def test_a_junk_short_price_leg_is_not_a_parlay_leg(self):
-        junk = _leg("junk", game="g1", price=-3500, p=0.98)
-        real = _leg("real", game="g2", price=200, p=0.55)
-        out = bb.build_picks([junk, real], NOW)
-        self.assertEqual(out["parlays"], [])
-
-    def test_stale_and_started_prices_are_excluded(self):
-        stale = _leg("stale", price=110, p=0.56, age=500.0)
-        started = _leg("started", price=110, p=0.56, hours=-0.5)
-        near_old = _leg("nearold", price=110, p=0.56, hours=1.0, age=120.0)   # near tier allows 100 min
-        fresh = _leg("fresh", price=110, p=0.56)
-        out = bb.build_picks([stale, started, near_old, fresh], NOW)
-        self.assertEqual([s["player"] for s in out["singles"]], ["fresh"])
-        self.assertEqual(out["priced_legs_considered"], 1)
-
-    def test_a_player_is_not_reused_more_than_twice(self):
-        star = [_leg("star", game="g1", price=-150, p=0.70, label=f"{k}+ x") for k in (1,)]
-        others = [_leg(f"o{i}", game=f"g{i + 2}", price=-130, p=0.62) for i in range(5)]
-        out = bb.build_picks(star + others, NOW)
-        uses = sum(1 for p in out["parlays"] for l in p["legs"] if l["player"] == "star")
-        self.assertLessEqual(uses, bb.MAX_PLAYER_REUSE)
-
-
 def _payload(home="Philadelphia Flyers", away="Tampa Bay Lightning", players=None, shots_point=0.5, price=-300):
     outs = [{"name": "Over", "description": n, "point": shots_point, "price": price} for n in (players or ["Tyler Toffoli"])]
     pts = [{"name": "Over", "description": n, "point": 1.5, "price": 250} for n in (players or ["Tyler Toffoli"])]
     pts.append({"name": "Under", "description": "Tyler Toffoli", "point": 1.5, "price": -400})
-    return {"home_team": home, "away_team": away, "bookmakers": [{"key": "draftkings", "markets": [
+    return {"id": "e" * 32, "home_team": home, "away_team": away, "bookmakers": [{"key": "draftkings", "markets": [
         {"key": "player_shots_on_goal_alternate", "outcomes": outs}, {"key": "player_points", "outcomes": pts}]}]}
 
 
+_SNAPSHOT = {"date": "2026-10-06", "games": {"7": {"home": "PHI", "away": "TBL", "start_utc": "2026-10-06T23:00:00Z"}},
+             "model": {"tyler toffoli|PHI": {"player_id": "8475000", "name": "Tyler Toffoli", "team": "PHI", "opp": "TBL",
+                                              "home": True, "probs": {"SOG1": 0.87, "SOG2": 0.56, "SOG3": 0.30,
+                                                                      "PTS1": 0.55, "PTS2": 0.20}}}}
+
+
 class TestLegsFromPayload(unittest.TestCase):
-    MODEL = {"tyler toffoli|PHI": {"name": "Tyler Toffoli", "team": "PHI", "opp": "TBL", "home": True,
-                                    "probs": {"SOG1": 0.87, "PTS2": 0.18}}}
-    PAIR = {("PHI", "TBL"): {"game_key": "7", "start_utc": "2026-10-06T23:00:00Z"}}
+    def test_over_thresholds_become_certified_family_parlay_legs(self):
+        captured = NOW - dt.timedelta(minutes=10)
+        legs = [l for l in bb._legs_from_payload(_payload(shots_point=1.5, price=105), captured, _SNAPSHOT, NOW)
+                if l.market_family == "PLAYER_SOG_ALTERNATE"]
+        self.assertEqual(len(legs), 1)
+        leg = legs[0]
+        self.assertEqual((leg.market_family, leg.threshold, leg.side), ("PLAYER_SOG_ALTERNATE", 2, "OVER"))
+        self.assertEqual((leg.game_id, leg.participant_id, leg.american_price), ("7", "8475000", 105.0))
+        self.assertAlmostEqual(leg.conservative_probability, 0.56)
+        self.assertEqual(leg.captured_at_utc, captured.isoformat())     # the price timestamp travels with the leg
+        self.assertTrue(leg.provider_contract_verified and leg.price_fresh and leg.event_not_started)
+        self.assertEqual(leg.model_version, bb.MODEL_VERSION)
 
-    def test_over_thresholds_map_to_k_plus_and_unders_are_ignored(self):
-        legs = bb._legs_from_payload(_payload(), NOW, self.MODEL, self.PAIR)
-        by_market = {l["market"]: l for l in legs}
-        self.assertEqual(set(by_market), {"SOG1", "PTS2"})            # 0.5 -> 1+, 1.5 -> 2+; Under dropped
-        self.assertEqual(by_market["SOG1"]["label"], "1+ shots on goal")
-        self.assertEqual(by_market["PTS2"]["label"], "2+ points")
-        self.assertAlmostEqual(by_market["SOG1"]["edge"], 0.87 - 0.75)
+    def test_points_overs_become_certified_points_legs_and_unders_are_ignored(self):
+        payload = _payload(shots_point=1.5)
+        payload["bookmakers"][0]["markets"][1]["outcomes"].append(
+            {"name": "Over", "description": "Tyler Toffoli", "point": 0.5, "price": -140})
+        legs = bb._legs_from_payload(payload, NOW, _SNAPSHOT, NOW)
+        points = sorted((l.threshold, l.american_price, l.conservative_probability) for l in legs
+                        if l.market_family == "PLAYER_POINTS")
+        self.assertEqual(points, [(1, -140.0, 0.55), (2, 250.0, 0.20)])      # Over 0.5 == 1+, Over 1.5 == 2+
+        self.assertTrue(all(l.provider_contract_verified for l in legs))
 
-    def test_unmodelled_player_or_unknown_game_is_skipped(self):
-        self.assertEqual(bb._legs_from_payload(_payload(players=["Nobody Real"]), NOW, self.MODEL, self.PAIR), [])
-        self.assertEqual(bb._legs_from_payload(_payload(home="Boston Bruins", away="Ottawa Senators"),
-                                                NOW, self.MODEL, self.PAIR), [])
+    def test_a_stale_price_is_marked_not_fresh_so_the_selector_rejects_it(self):
+        legs = bb._legs_from_payload(_payload(shots_point=1.5), NOW - dt.timedelta(hours=4), _SNAPSHOT, NOW)
+        self.assertTrue(legs and all(not l.price_fresh for l in legs))
 
-    def test_a_threshold_the_model_has_no_probability_for_is_skipped(self):
-        legs = bb._legs_from_payload(_payload(shots_point=7.5), NOW, self.MODEL, self.PAIR)   # 8+ shots: no SOG8
-        self.assertEqual({l["market"] for l in legs}, {"PTS2"})
+    def test_unmodelled_player_unknown_game_or_missing_threshold_probability_are_skipped(self):
+        self.assertEqual(bb._legs_from_payload(_payload(players=["Nobody Known"]), NOW, _SNAPSHOT, NOW), [])
+        self.assertEqual(bb._legs_from_payload(_payload(home="Boston Bruins"), NOW, _SNAPSHOT, NOW), [])
+        no_shots = [l for l in bb._legs_from_payload(_payload(shots_point=4.5), NOW, _SNAPSHOT, NOW)
+                    if l.market_family == "PLAYER_SOG_ALTERNATE"]
+        self.assertEqual(no_shots, [])
 
 
 class TestArchiveHelpers(unittest.TestCase):
@@ -252,80 +207,32 @@ class TestRefresh(unittest.TestCase):
         conn.commit()
         model = {"tyler toffoli|PHI": {"name": "Tyler Toffoli", "team": "PHI", "opp": "TBL", "home": True,
                                         "probs": {"SOG2": 0.56, "SOG1": 0.87}}}
-        payload = _payload(players=["Tyler Toffoli"], shots_point=1.5, price=105)
-        capture = (NOW - dt.timedelta(minutes=10), payload)
         with mock.patch.object(bb, "_load_or_build_model", return_value=model), \
-             mock.patch.object(bb, "latest_capture", return_value=capture), \
-             mock.patch.object(bb, "_archive_dir", return_value=tmp), \
              mock.patch.object(bb, "_state_path", return_value=tmp / "state.json"):
-            (tmp / f"{NOW.strftime('%Y%m%d')}T190000Z_x-events-{'a' * 32}-odds_1.json").write_text("{}")
             first = bb.refresh(NOW, conn=conn, capture=False)
             second = bb.refresh(NOW, conn=conn, capture=False)
             state = json.loads((tmp / "state.json").read_text())
+            snapshot = bb.current_model(conn, NOW)
         self.assertEqual(first["status"], "OK")
         self.assertTrue(first["changed"])
-        self.assertFalse(second["changed"])                 # identical picks -> no republish churn
-        self.assertEqual(state["singles"][0]["player"], "Tyler Toffoli")
-        self.assertEqual(state["singles"][0]["price"], 105)
-        self.assertEqual(state["events_priced"], 1)
+        self.assertFalse(second["changed"])                 # identical state -> no republish churn
+        self.assertEqual(state["games_today_upcoming"], 1)
+        self.assertEqual(state["modelled_players"], 1)
+        self.assertNotIn("singles", state)                  # best_bets no longer recommends anything
+        self.assertEqual(snapshot["games"]["7"], {"home": "PHI", "away": "TBL", "start_utc": "2026-10-06T23:00:00Z"})
         conn.close()
 
 
-class TestView(unittest.TestCase):
-    def test_formatting_single_and_parlay(self):
-        single = bb.build_picks([_leg("Dvorak", price=105, p=0.56, team="PHI", opp="TBL", home=False)], NOW)["singles"][0]
-        out = view.format_single(single)
-        self.assertEqual(out["Price"], "+105")
-        self.assertEqual(out["Model hit chance"], "56%")
-        self.assertIn("PHI @ TBL", out["Game"])
-        parlay = bb.build_picks([_leg("a", game="g1", price=-150, p=0.70), _leg("b", game="g2", price=-120, p=0.62)], NOW)["parlays"][0]
-        row = view.format_parlay(parlay)
-        self.assertTrue(row["Combined price"].startswith("+"))
-        self.assertIn("a 2+ shots on goal (-150)", row["Leg 1"] + row["Leg 2"])
-
-    def test_empty_states_say_why(self):
-        self.assertEqual(view.format_state(None)["status"], "NOT_RUN")
-        no_games = view.format_state({"status": "NO_QUALIFYING_PICKS", "games_today_upcoming": 0, "events_priced": 0})
-        self.assertIn("No upcoming games", no_games["message"])
-        unpriced = view.format_state({"status": "NO_QUALIFYING_PICKS", "games_today_upcoming": 9, "events_priced": 0})
-        self.assertIn("none have been captured", unpriced["message"])
-        priced = view.format_state({"status": "NO_QUALIFYING_PICKS", "games_today_upcoming": 9, "events_priced": 4})
-        self.assertIn("honest result", priced["message"])
-
-
-class TestSnapshotAndPage(unittest.TestCase):
-    def test_snapshot_section_returns_state_or_an_honest_not_run(self):
+class TestSnapshotSection(unittest.TestCase):
+    def test_snapshot_exposes_the_ticket_state_not_a_second_recommendation_list(self):
         from operational import cloud_snapshot_builder as builder
-        self.assertIn("best_bets", builder._SECTION_BUILDERS)
-        with mock.patch.object(bb, "read_state", return_value={"status": "OK", "singles": []}):
-            self.assertEqual(builder._best_bets()["status"], "OK")
-        with mock.patch.object(bb, "read_state", return_value=None):
-            self.assertEqual(builder._best_bets(), {"status": "NOT_RUN"})
-
-    def _today(self, state):
-        import os
-        from streamlit.testing.v1 import AppTest
-        page = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "pages", "21_Today.py")
-        with mock.patch.object(bb, "read_state", return_value=state):
-            at = AppTest.from_file(page, default_timeout=120)
-            at.run()
-        self.assertEqual(len(at.exception), 0)
-        return at
-
-    def test_today_page_shows_the_picks_tables(self):
-        picks = bb.build_picks([_leg("Dvorak", price=105, p=0.56, game="g1"),
-                                _leg("a", game="g2", price=-150, p=0.70), _leg("b", game="g3", price=-120, p=0.62)], NOW)
-        state = {"status": "OK", "generated_at_utc": NOW.isoformat(), "games_today_upcoming": 3, "events_priced": 3,
-                 "limits": "x", **picks}
-        at = self._today(state)
-        self.assertTrue(any("Best Bets" in m.value for m in at.markdown))
-        self.assertGreaterEqual(len(at.dataframe), 2)            # singles + two-leg tables
-
-    def test_today_page_says_why_when_there_are_no_picks(self):
-        at = self._today({"status": "NO_QUALIFYING_PICKS", "games_today_upcoming": 9, "events_priced": 0,
-                          "singles": [], "parlays": [], "limits": "x"})
-        self.assertTrue(any("NO_QUALIFYING_PICKS" in m.value for m in at.markdown))
-        self.assertTrue(any("none have been captured" in m.value for m in at.markdown))
+        from operational import daily_tickets
+        self.assertIn("tickets", builder._SECTION_BUILDERS)
+        self.assertNotIn("best_bets", builder._SECTION_BUILDERS)
+        with mock.patch.object(daily_tickets, "read_state", return_value={"account": {}, "tickets": []}):
+            self.assertEqual(builder._tickets()["tickets"], [])
+        with mock.patch.object(daily_tickets, "read_state", return_value=None):
+            self.assertEqual(builder._tickets(), {"status": "NOT_RUN"})
 
 
 class TestPointInTimeLineupHelpers(unittest.TestCase):

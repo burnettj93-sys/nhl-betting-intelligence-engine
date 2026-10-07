@@ -965,6 +965,7 @@ class TestTodayPageStaleRendering(unittest.TestCase):
              mock.patch.object(schema, "recommendation_freshness", _aged), \
              mock.patch.object(comp, "live_data_state", return_value=state):
             at = AppTest.from_file(str(REPO / "dashboard" / "pages" / "21_Today.py"), default_timeout=120)
+            at.session_state["today_show_technical"] = True
             at.session_state["_auth_username"] = "t"; at.session_state["_auth_role"] = "USER"
             at.run()
         self.assertEqual(list(at.exception), [])

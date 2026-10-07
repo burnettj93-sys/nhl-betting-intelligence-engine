@@ -62,6 +62,17 @@ def _price_freshness(captured_at_utc: str | None, game_start_utc: str, now: dt.d
             "age_minutes": round(age_minutes, 1), "max_age_minutes": max_age}
 
 
+def _game_not_open_exclusion(game_id, game_row) -> dict:
+    """Why a matched provider event cannot supply legs. Replaces the old catch-all
+    EVENT_ALREADY_STARTED_OR_UNKNOWN: the three cases need different responses."""
+    if game_row is None:
+        return {"reason": "EVENT_GAME_ROW_MISSING", "game_id": game_id}
+    state = game_row["game_state"]
+    reason = "EVENT_GAME_ALREADY_FINAL" if state == "FINAL" else f"EVENT_GAME_NOT_SCHEDULED_{state}"
+    return {"reason": reason, "game_id": game_id, "game_state": state,
+            "scheduled_start_utc": game_row["scheduled_start_utc"]}
+
+
 def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list[ParlayLeg], list[dict]]:
     """Real, current MONEYLINE candidates for every SCHEDULED game, using the
     REAL, unmodified T-35 decision engine (pricing.engine.evaluate_moneyline_for_game)
@@ -216,7 +227,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                                  (game_id,)).fetchone()
         if game_row is None or game_row["game_state"] != "SCHEDULED":
             excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "PLAYER_SOG_ALTERNATE",
-                              "reason": "EVENT_ALREADY_STARTED_OR_UNKNOWN"})
+                              **_game_not_open_exclusion(game_id, game_row)})
             continue
 
         home_abbrev = event_mapping.normalize_team_name(payload.get("home_team", ""))
@@ -348,7 +359,7 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                                  (game_id,)).fetchone()
         if game_row is None or game_row["game_state"] != "SCHEDULED":
             excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "PLAYER_SOG",
-                              "reason": "EVENT_ALREADY_STARTED_OR_UNKNOWN"})
+                              **_game_not_open_exclusion(game_id, game_row)})
             continue
 
         home_abbrev = event_mapping.normalize_team_name(payload.get("home_team", ""))
@@ -504,7 +515,7 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                                  (game_id,)).fetchone()
         if game_row is None or game_row["game_state"] != "SCHEDULED":
             excluded.append({"identifier": f"event:{provider_event_id}", "market_family": "GOALIE_SAVES",
-                              "reason": "EVENT_ALREADY_STARTED_OR_UNKNOWN"})
+                              **_game_not_open_exclusion(game_id, game_row)})
             continue
 
         home_abbrev = event_mapping.normalize_team_name(payload.get("home_team", ""))

@@ -350,7 +350,7 @@ class Test12ZeroAndLowSampleHandling(unittest.TestCase):
         result = dmr.run_daily_review(conn, now_utc=NOW)
         self.assertEqual(result["engine_status"], "WATCH")
         self.assertNotIn("incomplete", result)
-        self.assertEqual(result["contract_status"]["verified_contracts"], 5)
+        self.assertEqual(result["contract_status"]["verified_contracts"], 6)  # PLAYER_POINTS certified 2026-10-07
 
     def test_valid_promotion_candidate_case_still_works_above_minimum(self):
         """promotion_candidates()/recommendation are challenger-registry

@@ -362,27 +362,27 @@ class TestRealSlateEndToEnd(unittest.TestCase):
             provider_contract_verified=True, model_threshold_eligible=True, identity_resolved=True,
             price_fresh=True, event_not_started=True)
 
-    def test_cross_game_3leg_and_4leg_candidates_from_real_shaped_legs(self):
-        legs3 = [self._leg(f"G{i}") for i in range(3)]
-        result3 = rmp.build_real_market_parlay(legs3)
-        self.assertEqual(result3["status"], "QUALIFIED")
-        self.assertEqual(result3["recommended_legs"], 3)
+    def test_two_leg_cross_game_ticket_from_real_shaped_legs_reaches_plus_100(self):
+        legs = [self._leg(f"G{i}", conservative_probability=0.70) for i in range(2)]   # two -150 legs: 2.78x
+        result = rmp.build_real_market_parlay(legs)
+        self.assertEqual(result["status"], "QUALIFIED")
+        self.assertEqual(result["recommended_legs"], 2)
+        self.assertGreaterEqual(result["combo"].combined_decimal, 2.0)
 
-        # 3-leg joint = 0.90^3 = 0.729; a 4th leg must keep the product >= 0.70
-        # (0.729 * 0.97 = 0.707) for the engine to prefer 4 legs over 3.
-        legs4 = legs3 + [self._leg("G3", conservative_probability=0.97)]
-        result4 = rmp.build_real_market_parlay(legs4)
-        self.assertEqual(result4["status"], "QUALIFIED")
-        self.assertEqual(result4["recommended_legs"], 4)
+    def test_a_third_leg_is_only_added_when_two_cannot_reach_plus_100(self):
+        short = [self._leg(f"G{i}", conservative_probability=0.80, american_price=-300) for i in range(4)]
+        result = rmp.build_real_market_parlay(short)           # two -300 legs = 1.78x; three = 2.37x
+        self.assertEqual(result["status"], "QUALIFIED")
+        self.assertEqual(result["recommended_legs"], 3)
 
-    def test_below_70_percent_rejected_and_at_or_above_accepted(self):
-        below = [self._leg(f"G{i}", conservative_probability=0.85) for i in range(3)]
-        self.assertEqual(rmp.build_real_market_parlay(below)["status"], "NO_QUALIFYING_PARLAY")
-        at_or_above = [self._leg(f"G{i}", conservative_probability=0.90) for i in range(3)]
-        self.assertEqual(rmp.build_real_market_parlay(at_or_above)["status"], "QUALIFIED")
+    def test_no_edge_is_rejected_even_with_a_high_hit_chance(self):
+        no_edge = [self._leg(f"G{i}", conservative_probability=0.60, american_price=-150) for i in range(3)]
+        self.assertEqual(rmp.build_real_market_parlay(no_edge)["status"], "NO_QUALIFYING_PARLAY")
+        edge = [self._leg(f"G{i}", conservative_probability=0.70, american_price=-150) for i in range(3)]
+        self.assertEqual(rmp.build_real_market_parlay(edge)["status"], "QUALIFIED")
 
     def test_ten_dollar_paper_object_created_in_isolated_test_db(self):
-        legs = [self._leg(f"G{i}") for i in range(3)]
+        legs = [self._leg(f"G{i}", conservative_probability=0.70) for i in range(3)]
         result = rmp.build_real_market_parlay(legs)
         tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         tmp.close()
@@ -396,7 +396,7 @@ class TestRealSlateEndToEnd(unittest.TestCase):
             test_conn.close()
 
     def test_offered_parlay_price_remains_null_end_to_end(self):
-        legs = [self._leg(f"G{i}") for i in range(3)]
+        legs = [self._leg(f"G{i}", conservative_probability=0.70) for i in range(3)]
         result = rmp.build_real_market_parlay(legs)
         self.assertIsNone(result["combo"].offered_parlay_price)
 

@@ -42,7 +42,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "operational" / "paper_bankroll.db"
 SCHEMA_PATH = REPO_ROOT / "operational" / "paper_bankroll_schema.sql"
-SCHEMA_VERSION = 2  # v2: Live Odds/Parlay/Post-Mortem activation sprint,
+SCHEMA_VERSION = 3  # v3: settlement_json column + ticket_alerts table (alerts-only revalidation).
+                    # v2: Live Odds/Parlay/Post-Mortem activation sprint,
                     # Part 49 -- added the GAME_PARLAY_PAPER track.
 
 PAPER_STARTING_BANKROLL = 500.00
@@ -178,9 +179,19 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
         conn.commit()
     elif row["version"] < 2:
         _migrate_v1_to_v2(conn)
+    if row is not None and row["version"] < SCHEMA_VERSION:
+        _migrate_to_v3(conn)
         conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
         conn.commit()
     return conn
+
+
+def _migrate_to_v3(conn: sqlite3.Connection) -> None:
+    """Additive only: nothing already stored is rewritten. (ticket_alerts is
+    created by the schema file's CREATE IF NOT EXISTS before this runs.)"""
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
+    if "settlement_json" not in columns:
+        conn.execute("ALTER TABLE paper_bets ADD COLUMN settlement_json TEXT")
 
 
 def _utcnow_iso() -> str:
@@ -239,6 +250,26 @@ _COLUMNS = [
 ]
 
 
+def account_state(conn: sqlite3.Connection, track: str) -> dict:
+    """The paper account for one track, derived only from stored rows.
+    cash = starting bankroll + realized P&L - stakes still open
+    (PENDING or UNRESOLVED: money is committed until a ticket settles).
+    equity = cash + open stakes at cost (nothing is marked to market)."""
+    row = conn.execute(
+        """SELECT
+             COALESCE(SUM(CASE WHEN result_status IN ('WIN','LOSS','VOID') THEN COALESCE(profit_loss, 0) END), 0) AS realized,
+             COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN stake END), 0) AS open_stakes,
+             COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN 1 END), 0) AS open_tickets,
+             COUNT(*) AS tickets
+           FROM paper_bets WHERE track = ?""", (track,)).fetchone()
+    realized, open_stakes = float(row["realized"]), float(row["open_stakes"])
+    cash = PAPER_STARTING_BANKROLL + realized - open_stakes
+    return {"track": track, "starting_bankroll": PAPER_STARTING_BANKROLL, "available_cash": round(cash, 2),
+            "open_stakes": round(open_stakes, 2), "open_tickets": int(row["open_tickets"]),
+            "equity": round(cash + open_stakes, 2), "settled_pnl": round(realized, 2),
+            "tickets": int(row["tickets"])}
+
+
 def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str, market_id: str,
                       entry_odds: float, event_id=None, game_date=None, player_id=None,
                       player_name_snapshot=None, team=None, opponent=None, market_family=None,
@@ -247,10 +278,17 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
                       market_no_vig_probability=None, edge=None, ev=None, confidence=None,
                       model_version=None, prediction_checkpoint=None, stake: float = PAPER_BET_STAKE,
                       created_at_utc: str | None = None, event_start_utc=None,
-                      idempotency_key: str | None = None) -> dict:
+                      idempotency_key: str | None = None, paper_bet_id: str | None = None) -> dict:
     """Part 28-30: FIRST ACTIONABLE BET CHECKPOINT entry only -- returns
     {"status": "DUPLICATE", "paper_bet_id": ...} on any later re-call
-    with the same idempotency key, never a second $10 stake (Part 29)."""
+    with the same idempotency key, never a second $10 stake (Part 29).
+
+    Account integrity: the duplicate check, the available-funds check and
+    the INSERT happen inside one BEGIN IMMEDIATE transaction, so two
+    concurrent writers cannot both spend the last $10. If the track's
+    available cash is below `stake` nothing is written and the result is
+    {"status": "INSUFFICIENT_FUNDS", "available_cash": ...}. There is no
+    automatic top-up: cash only grows through settled winnings/refunds."""
     if track not in TRACKS:
         raise InvalidPaperBetError(f"unknown track {track!r}")
     if price_source not in PRICE_SOURCES:
@@ -265,13 +303,7 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
     idempotency_key = idempotency_key or compute_paper_idempotency_key(
         track=track, event_id=event_id, participant_id=player_id or team, market_id=market_id,
         threshold=threshold, side=side, price_source=price_source)
-    existing = conn.execute("SELECT paper_bet_id FROM paper_bets WHERE idempotency_key = ?",
-                             (idempotency_key,)).fetchone()
-    if existing:
-        return {"status": "DUPLICATE", "paper_bet_id": existing["paper_bet_id"]}
-
-    paper_bet_id = str(uuid.uuid4())
-    created_at_utc = created_at_utc or _utcnow_iso()
+    paper_bet_id = paper_bet_id or str(uuid.uuid4())
     row = {
         "paper_bet_id": paper_bet_id, "idempotency_key": idempotency_key, "track": track,
         "is_combo": int(is_combo), "top_conviction": int(top_conviction),
@@ -284,14 +316,32 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         "market_no_vig_probability": market_no_vig_probability, "edge": edge, "ev": ev,
         "confidence": confidence, "model_version": model_version,
         "prediction_checkpoint": prediction_checkpoint, "stake": stake,
-        "created_at_utc": created_at_utc, "event_start_utc": event_start_utc,
+        "created_at_utc": created_at_utc or _utcnow_iso(), "event_start_utc": event_start_utc,
     }
-    values = [row.get(c) for c in _COLUMNS]
-    placeholders = ", ".join("?" for _ in _COLUMNS)
-    conn.execute(f"INSERT INTO paper_bets ({', '.join(_COLUMNS)}) VALUES ({placeholders})", values)
-    conn.execute("INSERT INTO paper_audit_log (timestamp_utc, paper_bet_id, action) VALUES (?, ?, 'INSERT')",
-                 (_utcnow_iso(), paper_bet_id))
-    conn.commit()
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        existing = conn.execute("SELECT paper_bet_id FROM paper_bets WHERE idempotency_key = ? OR paper_bet_id = ?",
+                                 (idempotency_key, paper_bet_id)).fetchone()
+        if existing:
+            conn.rollback()
+            return {"status": "DUPLICATE", "paper_bet_id": existing["paper_bet_id"]}
+        account = account_state(conn, track)
+        if account["available_cash"] + 1e-9 < stake:
+            conn.rollback()
+            return {"status": "INSUFFICIENT_FUNDS", "available_cash": account["available_cash"],
+                    "required": stake}
+        placeholders = ", ".join("?" for _ in _COLUMNS)
+        conn.execute(f"INSERT INTO paper_bets ({', '.join(_COLUMNS)}) VALUES ({placeholders})",
+                     [row.get(c) for c in _COLUMNS])
+        conn.execute("INSERT INTO paper_audit_log (timestamp_utc, paper_bet_id, action) VALUES (?, ?, 'INSERT')",
+                     (_utcnow_iso(), paper_bet_id))
+        conn.commit()
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
     return {"status": "INSERTED", "paper_bet_id": paper_bet_id}
 
 
@@ -383,7 +433,8 @@ def create_game_edge_parlay_paper_bet(conn: sqlite3.Connection, parlay_result: d
 
 def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: dict, *,
                                         event_start_utc: str | None = None,
-                                        created_at_utc: str | None = None) -> dict:
+                                        created_at_utc: str | None = None,
+                                        code_version: str | None = None) -> dict:
     """Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
     block, 2026-09-29): REAL_MARKET_PAPER track, is_combo=True -- distinct
     from create_demo_combo_paper_bet (DEMO_PAPER, simulated prices) and
@@ -455,21 +506,44 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
     # costs nothing and closes the gap outright rather than merely noting it.
     market_id = f"REAL_MARKET_PARLAY:{_stake_date}:" + "+".join(
         sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
-    legs_snapshot = json.dumps([
-        {"participant_id": l.participant_id, "participant_name": l.participant_name,
-         "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
-         "american_price": l.american_price, "conservative_probability": l.conservative_probability,
-         "game_id": l.game_id, "event_id": l.event_id, "sportsbook": l.sportsbook,
-         "captured_at_utc": l.captured_at_utc}
-        for l in legs
-    ])
+    ticket_id = compute_ticket_id(_stake_date, legs)
+    frozen = [_freeze_leg(l) for l in legs]
+    for f in frozen:
+        f["code_version"] = code_version
+    legs_snapshot = json.dumps(frozen)
+    model_versions = sorted({l.model_version for l in legs if getattr(l, "model_version", "")})
+    if code_version:
+        model_versions.append(f"code:{code_version}")
     return record_paper_bet(
         conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
         market_id=market_id, entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False,
         legs_json=legs_snapshot, model_probability=combo.joint_probability,
         conservative_probability=combo.joint_probability, edge=combo.combo_edge,
+        ev=getattr(combo, "ev_estimated", None), model_version=",".join(model_versions) or None,
         prediction_checkpoint="FIRST_ACTIONABLE", event_start_utc=event_start_utc,
-        created_at_utc=created_at_utc)
+        created_at_utc=created_at_utc, idempotency_key=ticket_id, paper_bet_id=ticket_id)
+
+
+def compute_ticket_id(stake_date: str, legs) -> str:
+    """Deterministic ticket identity: Eastern date + the sorted economic
+    identity (game, participant, market, line, side) of every leg. A price
+    move does not change it, so the recommendation shown, the ticket
+    recorded, its settlement and its postmortem all carry the same id."""
+    identities = [f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}:{l.side}" for l in legs]
+    identities.sort()  # order-independent identity of the leg set (not a training or eligibility ordering)
+    return "T" + hashlib.sha256(f"{stake_date}|{'|'.join(identities)}".encode()).hexdigest()[:14].upper()
+
+
+def _freeze_leg(l) -> dict:
+    a = l.american_price
+    return {"participant_id": l.participant_id, "participant_name": l.participant_name,
+            "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
+            "american_price": a, "decimal_price": round(1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a)), 4),
+            "conservative_probability": l.conservative_probability,
+            "game_id": l.game_id, "event_id": l.event_id, "sportsbook": l.sportsbook,
+            "captured_at_utc": l.captured_at_utc, "team": getattr(l, "team", None),
+            "opponent": getattr(l, "opponent", None), "game_start_utc": getattr(l, "game_start_utc", None),
+            "model_version": getattr(l, "model_version", "")}
 
 
 def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:
@@ -507,7 +581,8 @@ def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:
 
 def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status: str, *,
                       closing_odds: float | None = None, closing_captured_at_utc: str | None = None,
-                      clv: float | None = None, notes: str | None = None) -> dict:
+                      clv: float | None = None, notes: str | None = None,
+                      settled_odds: float | None = None, settlement_json: str | None = None) -> dict:
     """Part 33: only ever writes the settlement columns -- the DB
     trigger (paper_bets_immutability) additionally guarantees entry
     columns can never change even if this function's own SQL is edited
@@ -522,7 +597,10 @@ def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status:
     if row["result_status"] != "PENDING" and row["result_status"] != "UNRESOLVED":
         raise InvalidPaperBetError(f"paper bet {paper_bet_id} already settled as {row['result_status']} "
                                     f"-- settlement is idempotent, never re-applied")
-    profit_loss = compute_payout(row["stake"], row["entry_odds"], result_status)
+    # settled_odds is only passed when a parlay was repriced because a leg
+    # was voided (see paper_bet_settlement_driver); entry_odds stays frozen.
+    payout_odds = settled_odds if settled_odds is not None else row["entry_odds"]
+    profit_loss = compute_payout(row["stake"], payout_odds, result_status)
     computed_clv = clv
     if computed_clv is None and closing_odds is not None:
         from pricing import odds_math as pm
@@ -530,23 +608,44 @@ def settle_paper_bet(conn: sqlite3.Connection, paper_bet_id: str, result_status:
     settled_at_utc = _utcnow_iso()
     conn.execute(
         """UPDATE paper_bets SET result_status=?, settled_at_utc=?, profit_loss=?, closing_odds=?,
-           closing_captured_at_utc=?, clv=?, notes=? WHERE paper_bet_id=?""",
+           closing_captured_at_utc=?, clv=?, notes=?, settlement_json=? WHERE paper_bet_id=?""",
         (result_status, settled_at_utc, profit_loss, closing_odds, closing_captured_at_utc,
-         computed_clv, notes, paper_bet_id))
+         computed_clv, notes, settlement_json, paper_bet_id))
     conn.execute("INSERT INTO paper_audit_log (timestamp_utc, paper_bet_id, action) VALUES (?, ?, ?)",
                  (settled_at_utc, paper_bet_id, "VOID" if result_status == "VOID" else "SETTLE"))
     conn.commit()
     return dict(conn.execute("SELECT * FROM paper_bets WHERE paper_bet_id = ?", (paper_bet_id,)).fetchone())
 
 
-def find_unresolved_past_event_bets(conn: sqlite3.Connection, track: str | None = None) -> list[dict]:
+def record_ticket_alert(conn: sqlite3.Connection, paper_bet_id: str, kind: str, detail: str) -> bool:
+    """Revalidation outcome. Never touches the ticket itself; returns True
+    only when this exact alert was not already on file."""
+    cur = conn.execute(
+        "INSERT OR IGNORE INTO ticket_alerts (paper_bet_id, kind, detail, created_at_utc) VALUES (?, ?, ?, ?)",
+        (paper_bet_id, kind, detail, _utcnow_iso()))
+    conn.commit()
+    return cur.rowcount == 1
+
+
+def ticket_alerts(conn: sqlite3.Connection, paper_bet_ids: list[str] | None = None) -> dict[str, list[dict]]:
+    rows = conn.execute("SELECT * FROM ticket_alerts ORDER BY alert_id").fetchall()
+    out: dict[str, list[dict]] = {}
+    for r in rows:
+        if paper_bet_ids is None or r["paper_bet_id"] in paper_bet_ids:
+            out.setdefault(r["paper_bet_id"], []).append(dict(r))
+    return out
+
+
+def find_unresolved_past_event_bets(conn: sqlite3.Connection, track: str | None = None,
+                                     include_unresolved: bool = False) -> list[dict]:
     """Part 33's batch-scanner concept: PENDING bets whose event has
     already started (or a nhl.db game_id doesn't yet exist to resolve
     against) become UNRESOLVED rather than silently staying PENDING
     forever with no visible signal that something needs attention --
     this NEVER guesses a WIN/LOSS outcome (Part 43/44)."""
     now_iso = _utcnow_iso()
-    clauses = ["result_status = 'PENDING'", "event_start_utc IS NOT NULL", "event_start_utc < ?"]
+    states = "('PENDING', 'UNRESOLVED')" if include_unresolved else "('PENDING')"
+    clauses = [f"result_status IN {states}", "event_start_utc IS NOT NULL", "event_start_utc < ?"]
     params: list = [now_iso]
     if track is not None:
         clauses.append("track = ?")

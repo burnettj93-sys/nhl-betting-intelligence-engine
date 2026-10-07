@@ -1,0 +1,122 @@
+{
+ "id": "057cbe42c7df314de9ef60d00db04222",
+ "sport_key": "icehockey_nhl",
+ "commence_time": "2026-10-06T23:10:00Z",
+ "home_team": "Buffalo Sabres",
+ "away_team": "Minnesota Wild",
+ "bookmakers": [
+  {
+   "key": "draftkings",
+   "title": "DraftKings",
+   "markets": [
+    {
+     "key": "player_points",
+     "last_update": "2026-10-06T18:22:45Z",
+     "outcomes": [
+      {
+       "description": "Kirill Kaprizov",
+       "name": "Over",
+       "point": 1.5,
+       "price": 180
+      },
+      {
+       "description": "Kirill Kaprizov",
+       "name": "Under",
+       "point": 1.5,
+       "price": -245
+      },
+      {
+       "description": "Tage Thompson",
+       "name": "Over",
+       "point": 0.5,
+       "price": -240
+      },
+      {
+       "description": "Tage Thompson",
+       "name": "Under",
+       "point": 0.5,
+       "price": 175
+      },
+      {
+       "description": "Rasmus Dahlin",
+       "name": "Over",
+       "point": 0.5,
+       "price": -225
+      },
+      {
+       "description": "Rasmus Dahlin",
+       "name": "Under",
+       "point": 0.5,
+       "price": 165
+      },
+      {
+       "description": "Matt Boldy",
+       "name": "Over",
+       "point": 0.5,
+       "price": -215
+      },
+      {
+       "description": "Matt Boldy",
+       "name": "Under",
+       "point": 0.5,
+       "price": 160
+      },
+      {
+       "description": "Quinn Hughes",
+       "name": "Over",
+       "point": 0.5,
+       "price": -210
+      },
+      {
+       "description": "Quinn Hughes",
+       "name": "Under",
+       "point": 0.5,
+       "price": 155
+      },
+      {
+       "description": "Joel Eriksson Ek",
+       "name": "Over",
+       "point": 0.5,
+       "price": -125
+      },
+      {
+       "description": "Joel Eriksson Ek",
+       "name": "Under",
+       "point": 0.5,
+       "price": -105
+      },
+      {
+       "description": "Zach Benson",
+       "name": "Over",
+       "point": 0.5,
+       "price": -120
+      },
+      {
+       "description": "Zach Benson",
+       "name": "Under",
+       "point": 0.5,
+       "price": -115
+      },
+      {
+       "description": "Jack Quinn",
+       "name": "Over",
+       "point": 0.5,
+       "price": -115
+      },
+      {
+       "description": "Jack Quinn",
+       "name": "Under",
+       "point": 0.5,
+       "price": -115
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "_provenance": {
+  "archived_file": "20261006T182343Z_sports-icehockey_nhl-events-057cbe42c7df314de9ef60d00db04222-odds_057cbe42c7df314de9ef60d00db04222_player_shots_on_goal_alternate+player_points.json",
+  "retrieved_at_utc": "2026-10-06T18:23:43Z",
+  "note": "Real DraftKings payload via The Odds API, trimmed to 9 players; nothing altered."
+ }
+}

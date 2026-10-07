@@ -290,14 +290,14 @@ def _health() -> dict:
     return {"items": items, "production": summary, "odds_status": odds_status, "operations": ops}
 
 
-def _best_bets() -> dict:
-    from operational import best_bets
-    return best_bets.read_state() or {"status": "NOT_RUN"}
+def _tickets() -> dict:
+    from operational import daily_tickets
+    return daily_tickets.read_state() or {"status": "NOT_RUN"}
 
 
 _SECTION_BUILDERS = {
     "live_moneyline_rows": _live_rows,
-    "best_bets": _best_bets,
+    "tickets": _tickets,
     "real_recommendations": _real_recommendations,
     "real_today": _real_today,
     "real_player_props": _real_player_props,

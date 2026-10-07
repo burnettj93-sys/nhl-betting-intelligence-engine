@@ -27,6 +27,7 @@ fabricating a specific root cause it can't actually see.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 from typing import Any
 
@@ -350,14 +351,25 @@ def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
               if r["result_status"] == "LOSS"]
     postmortems = []
     for bet in losses:
-        result = settlement_driver.resolve_combo_bet(nhl_conn, dict(bet))
+        # Prefer the leg results stored at settlement (the exact evidence the
+        # LOSS was decided on); only recompute for tickets settled before that
+        # column existed.
+        stored = json.loads(bet["settlement_json"]) if bet.get("settlement_json") else None
+        leg_results = (stored or {}).get("leg_results") or \
+            settlement_driver.resolve_combo_bet(nhl_conn, dict(bet))["leg_results"]
+        frozen = {(l["game_id"], l["participant_id"], l["market_family"], l.get("threshold")): l
+                  for l in json.loads(bet.get("legs_json") or "[]")}
         missed, hit, other = [], [], []
-        for leg_result in result["leg_results"]:
+        for leg_result in leg_results:
             leg = leg_result["leg"]
+            entry = frozen.get((leg.get("game_id"), leg.get("participant_id"), leg.get("market_family"),
+                                leg.get("threshold")), leg)
             summary = {
                 "market_family": leg.get("market_family"), "participant_name": leg.get("participant_name"),
                 "threshold": leg.get("threshold"), "side": leg.get("side"), "game_id": leg.get("game_id"),
                 "actual_value": leg_result.get("actual_value"), "resolver_status": leg_result.get("status"),
+                "predicted_probability": entry.get("conservative_probability"),
+                "recorded_price": entry.get("american_price"), "model_version": entry.get("model_version"),
             }
             if leg_result.get("status") == resolver.RESOLVED and not leg_result.get("outcome_hit"):
                 missed.append(summary)
@@ -368,12 +380,17 @@ def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
 
         def _describe(m: dict) -> str:
             line = f"{m.get('threshold')}+" if m.get("threshold") is not None else "to win"
-            return f"{m['participant_name']} ({m['market_family']} {line} {m['side']}): actual={m['actual_value']}"
+            p = m.get("predicted_probability")
+            predicted = f", predicted {p:.0%}" if p is not None else ""
+            return (f"{m['participant_name']} ({m['market_family']} {line} {m['side']}): "
+                    f"actual={m['actual_value']}{predicted}")
 
         postmortems.append({
-            "paper_bet_id": bet["paper_bet_id"], "settled_at_utc": bet.get("settled_at_utc"),
+            "ticket_id": bet["paper_bet_id"], "paper_bet_id": bet["paper_bet_id"],
+            "settled_at_utc": bet.get("settled_at_utc"),
             "stake": bet["stake"], "profit_loss": bet.get("profit_loss"),
             "conservative_probability": bet.get("conservative_probability"),
+            "recorded_price": bet.get("entry_odds"), "model_version": bet.get("model_version"),
             "missed_legs": missed, "hit_legs": hit, "other_legs": other,
             "why": "; ".join(_describe(m) for m in missed) if missed else (
                 "no RESOLVED leg in this combo actually missed -- the loss is driven by a leg this "

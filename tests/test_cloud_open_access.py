@@ -29,6 +29,7 @@ def _run_app(mode, *, users=0, env=None):
             auth_store.create_user(conn, "someone", "Some!Passw0rd-2026", "USER")
             conn.close()
         at = AppTest.from_file(APP, default_timeout=120)
+        at.session_state["today_show_technical"] = True
         at.run()
     return at
 
