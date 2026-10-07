@@ -498,12 +498,12 @@ def capture_plan(now: dt.datetime, *, hours_ahead: float = 30.0) -> list[dict]:
         age = None if last is None else (now - last[0]).total_seconds() / 60.0
         decision = capture_decision(hours, age)
         if last is None and now < opens:
-            nxt = f"first capture on the first 15-minute trader cycle at or after {opens.strftime('%H:%M')}Z"
+            nxt = f"first capture on the first 15-minute trader cycle at or after {opens.strftime('%b %-d %H:%M')} UTC"
         elif decision:
             nxt = f"{decision} on the next 15-minute trader cycle"
         elif last is not None and hours > REFRESH_WITHIN_H:
             refresh_at = max(start - dt.timedelta(hours=REFRESH_WITHIN_H), last[0] + dt.timedelta(minutes=REFRESH_MIN_AGE_MIN))
-            nxt = f"refresh on the first cycle at or after {refresh_at.strftime('%H:%M')}Z"
+            nxt = f"refresh on the first cycle at or after {refresh_at.strftime('%b %-d %H:%M')} UTC"
         else:
             nxt = "none planned"
         plan.append({
