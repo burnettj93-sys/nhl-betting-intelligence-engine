@@ -9,9 +9,12 @@ operational/daily_tickets.py. What remains here:
 
   1. Capture (credit-metered, bounded): for each of today's upcoming games,
      pull DraftKings' player_shots_on_goal_alternate + player_points once when
-     the game is within CAPTURE_HORIZON_H, and once more near puck drop
-     (REFRESH_WITHIN_H) if the first capture has aged -- never more than
-     DAILY_CREDIT_CAP credits a day, never past the global odds_quota guard.
+     the game is within CAPTURE_HORIZON_H, then again each time the newest
+     prices are REFRESH_LEAD_MIN short of the freshness limit (so eligible prices
+     never expire between captures) -- never more than DAILY_CREDIT_CAP credits a
+     day, never past the global odds_quota guard. Roughly four captures (8
+     credits) per game; on a big slate the cap stops the farthest-out refreshes.
+     The newest capture of EITHER job counts, so the prop sweeps' pulls are not duplicated.
      The archived payloads feed the same adapters the ticket selector uses.
   2. Model (second opinion): shots (empirical, conservative: the LOWER of
      last-20 and last-60 hit rates, shrunk toward the position average) and
@@ -50,8 +53,7 @@ MP_DAILY_ROOT = REPO_ROOT / "data" / "raw" / "moneypuck" / "skater" / "2026"
 
 MARKETS = "player_shots_on_goal_alternate,player_points"
 CAPTURE_HORIZON_H = 5.0
-REFRESH_WITHIN_H = 1.5
-REFRESH_MIN_AGE_MIN = 90.0
+REFRESH_LEAD_MIN = 45.0            # refresh this long BEFORE a price would exceed its freshness limit (3 trader cycles)
 DAILY_CREDIT_CAP = 36
 EST_COST_PER_EVENT = 2
 
@@ -287,7 +289,7 @@ def _archive_dir() -> Path:
 
 
 def latest_capture(event_id: str, archive_dir: Path | None = None, *,
-                   require_points: bool = True) -> tuple[dt.datetime, dict] | None:
+                   require_points: bool = True, market: str | None = None) -> tuple[dt.datetime, dict] | None:
     """Newest archived payload for one provider event. By default only this
     job's own captures (shots-alternate AND points) count -- that is what the
     capture cadence keys on. require_points=False accepts any capture that
@@ -302,7 +304,10 @@ def latest_capture(event_id: str, archive_dir: Path | None = None, *,
             continue
         meta = doc.get("meta") or {}
         filt = meta.get("market_filter") or ""
-        if "player_shots_on_goal_alternate" not in filt or (require_points and "player_points" not in filt):
+        if market is not None:
+            if market not in filt:
+                continue
+        elif "player_shots_on_goal_alternate" not in filt or (require_points and "player_points" not in filt):
             continue
         ts = meta.get("retrieved_at_utc")
         if not ts:
@@ -329,18 +334,63 @@ def credits_spent_today_by_this_job(now: dt.datetime, archive_dir: Path | None =
     return total
 
 
+def price_age_limit_min(hours_to_start: float) -> float:
+    return MAX_PRICE_AGE_MIN_FAR if hours_to_start >= 2.0 else MAX_PRICE_AGE_MIN_NEAR
+
+
 def capture_decision(hours_to_start: float, last_capture_age_min: float | None) -> str | None:
-    """'FIRST' / 'REFRESH' / None -- pure, so the cadence is testable."""
+    """'FIRST' / 'REFRESH' / None -- pure, so the cadence is testable. A refresh is due once the
+    newest price is within REFRESH_LEAD_MIN of the freshness limit that applies at this distance
+    from puck drop, so a price is replaced before the selector would reject it as stale."""
     if hours_to_start <= 0 or hours_to_start > CAPTURE_HORIZON_H:
         return None
     if last_capture_age_min is None:
         return "FIRST"
-    if hours_to_start <= REFRESH_WITHIN_H and last_capture_age_min >= REFRESH_MIN_AGE_MIN:
+    if last_capture_age_min >= price_age_limit_min(hours_to_start) - REFRESH_LEAD_MIN:
         return "REFRESH"
     return None
 
 
-def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None) -> dict:
+SOG_MARKET_KEY = "player_shots_on_goal_alternate"
+POINTS_MARKET_KEY = "player_points"
+
+
+def decision_age_min(event_id: str, now: dt.datetime) -> float | None:
+    """Age of the OLDER of the newest shots and newest points captures (by any job); None if either is missing."""
+    ages = []
+    for market in (SOG_MARKET_KEY, POINTS_MARKET_KEY):
+        cap = latest_capture(event_id, market=market)
+        if cap is None:
+            return None
+        ages.append((now - cap[0]).total_seconds() / 60.0)
+    return max(ages)
+
+
+def match_game(event: dict, games: dict) -> tuple[str, dict] | None:
+    """The nhl.db game (id, info) a provider event is, by team abbreviations."""
+    from research.live_sog_pricing import event_mapping
+    home = event_mapping.normalize_team_name(event.get("home_team", ""))
+    away = event_mapping.normalize_team_name(event.get("away_team", ""))
+    for gid, g in games.items():
+        if g["home"] == home and g["away"] == away:
+            return gid, g
+    return None
+
+
+def effective_start(provider_commence_utc: str, official_start_utc: str | None) -> dt.datetime:
+    """Start time used for every cutoff (capture window, freshness limit, 'not started'): the EARLIER of the
+    provider's commence_time and the official NHL schedule. Never the later one, so a leg is never offered
+    after either source says the game began. Display and settlement use the official schedule."""
+    def parse(value: str) -> dt.datetime:
+        parsed = _parse_utc(value)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)   # nhl.db stores naive UTC
+    provider = parse(provider_commence_utc)
+    if not official_start_utc:
+        return provider
+    return min(provider, parse(official_start_utc))
+
+
+def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None, games: dict | None = None) -> dict:
     from operational import odds_quota
     from research.live_sog_pricing import archive as _archive, client as _client
     client = client or _client
@@ -353,12 +403,16 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         summary["error"] = events.error
         return summary
     spent_today = credits_spent_today_by_this_job(now)
-    upcoming = sorted((e for e in events.data if _parse_utc(e["commence_time"]) > now),
-                      key=lambda e: e["commence_time"])
+    games = games or {}
+
+    def start_of(e):
+        matched = match_game(e, games)
+        return effective_start(e["commence_time"], matched[1]["start_utc"] if matched else None)
+
+    upcoming = sorted((e for e in events.data if start_of(e) > now), key=start_of)
     for e in upcoming:
-        hours = (_parse_utc(e["commence_time"]) - now).total_seconds() / 3600.0
-        last = latest_capture(e["id"])
-        age_min = None if last is None else (now - last[0]).total_seconds() / 60.0
+        hours = (start_of(e) - now).total_seconds() / 3600.0
+        age_min = decision_age_min(e["id"], now)
         decision = capture_decision(hours, age_min)
         if decision is None:
             continue
@@ -382,7 +436,8 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
     return summary
 
 
-def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime) -> list:
+def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime,
+                       only_market: str | None = None) -> list:
     """ParlayLegs for DraftKings' Over prices -- shots-on-goal alternate ladder
     (k+ shots) and player_points (Over 0.5 / 1.5 = 1+ / 2+ points) -- for players
     the rolling-form model covers (dressed in their team's last game, 20+ games
@@ -399,7 +454,10 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
     if game_id is None:
         return []
     game = snapshot["games"][game_id]
-    hours = (_parse_utc(game["start_utc"]) - now).total_seconds() / 3600.0
+    # Cutoffs use the earlier of the provider's and the official start (see effective_start); the leg
+    # displays and stores the official start, and also keeps the provider's.
+    hours = (effective_start(payload.get("commence_time") or game["start_utc"], game["start_utc"]) - now
+             ).total_seconds() / 3600.0
     age_min = (now - captured_at).total_seconds() / 60.0
     fresh = hours > 0 and age_min <= (MAX_PRICE_AGE_MIN_FAR if hours >= 2.0 else MAX_PRICE_AGE_MIN_NEAR)
     verified = {"PLAYER_SOG_ALTERNATE": provider_adapter.is_contract_verified("draftkings", "PLAYER_SOG_ALTERNATE"),
@@ -412,7 +470,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
         if bm.get("key") != "draftkings":
             continue
         for m in bm.get("markets", []):
-            if m.get("key") not in markets:
+            if m.get("key") not in markets or (only_market and m.get("key") != only_market):
                 continue
             family, prob_prefix, thresholds = markets[m["key"]]
             for o in m.get("outcomes", []):
@@ -434,7 +492,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
-                    model_version=MODEL_VERSION))
+                    provider_start_utc=payload.get("commence_time"), model_version=MODEL_VERSION))
     return legs
 
 
@@ -456,13 +514,16 @@ def candidate_legs(conn, now: dt.datetime) -> tuple[list, dict]:
                 seen_events.add(m.group(1))
     legs: list = []
     for event_id in sorted(seen_events):
-        cap = latest_capture(event_id, require_points=False)
-        if cap is None:
-            continue
-        got = _legs_from_payload(cap[1], cap[0], snapshot, now)
-        if got:
+        got_any = False
+        for market in (SOG_MARKET_KEY, POINTS_MARKET_KEY):      # newest capture of EACH market, whichever job pulled it
+            cap = latest_capture(event_id, market=market)
+            if cap is None:
+                continue
+            got = _legs_from_payload(cap[1], cap[0], snapshot, now, only_market=market)
+            got_any = got_any or bool(got)
+            legs.extend(got)
+        if got_any:
             report["events_with_capture"] += 1
-        legs.extend(got)
     report["legs"] = len(legs)
     return legs, report
 
@@ -480,39 +541,54 @@ def _latest_events_listing(archive_dir: Path | None = None) -> list[dict]:
     return []
 
 
-def capture_plan(now: dt.datetime, *, hours_ahead: float = 30.0) -> list[dict]:
-    """Per upcoming game: start time, when OUR capture window opens, the last capture and
-    its age, and the next planned capture. The window is our own credit policy
-    (CAPTURE_HORIZON_H); it is not the provider's availability -- DraftKings has had these
-    markets posted for days (see docs/MARKET_COVERAGE_AUDIT.md), and prices older than
-    MAX_PRICE_AGE_MIN_* are rejected anyway, so capturing earlier would only go stale."""
+def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: float = 30.0) -> list[dict]:
+    """Per upcoming game: provider and official start times, which one the cutoffs use, when OUR capture
+    window opens, the newest shots/points prices and their age, when they stop being fresh, and the
+    next planned capture. The window is our own credit policy (CAPTURE_HORIZON_H), not the provider's
+    availability: DraftKings has had these markets posted for days (docs/MARKET_COVERAGE_AUDIT.md)."""
+    games = games or {}
     plan = []
-    for e in sorted(_latest_events_listing(), key=lambda e: e["commence_time"]):
-        start = _parse_utc(e["commence_time"])
+    for e in _latest_events_listing():
+        matched = match_game(e, games)
+        official = matched[1]["start_utc"] if matched else None
+        start = effective_start(e["commence_time"], official)
         hours = (start - now).total_seconds() / 3600.0
         if hours <= 0 or hours > hours_ahead:
             continue
         opens = start - dt.timedelta(hours=CAPTURE_HORIZON_H)
-        last = latest_capture(e["id"])
-        last_any = latest_capture(e["id"], require_points=False)
-        age = None if last is None else (now - last[0]).total_seconds() / 60.0
+        shots, pts = latest_capture(e["id"], market=SOG_MARKET_KEY), latest_capture(e["id"], market=POINTS_MARKET_KEY)
+        age = decision_age_min(e["id"], now)
         decision = capture_decision(hours, age)
-        if last is None and now < opens:
-            nxt = f"first capture on the first 15-minute trader cycle at or after {opens.strftime('%b %-d %H:%M')} UTC"
+        fmt = lambda t: t.strftime("%b %-d %H:%M") + " UTC"  # noqa: E731
+        if age is None and now < opens:
+            nxt = f"first capture on the first 15-minute trader cycle at or after {fmt(opens)}"
         elif decision:
             nxt = f"{decision} on the next 15-minute trader cycle"
-        elif last is not None and hours > REFRESH_WITHIN_H:
-            refresh_at = max(start - dt.timedelta(hours=REFRESH_WITHIN_H), last[0] + dt.timedelta(minutes=REFRESH_MIN_AGE_MIN))
-            nxt = f"refresh on the first cycle at or after {refresh_at.strftime('%b %-d %H:%M')} UTC"
         else:
-            nxt = "none planned"
+            oldest = min(c[0] for c in (shots, pts))
+            far_t = oldest + dt.timedelta(minutes=MAX_PRICE_AGE_MIN_FAR - REFRESH_LEAD_MIN)
+            if (start - far_t).total_seconds() / 3600.0 >= 2.0:
+                due = far_t
+            else:
+                due = max(oldest + dt.timedelta(minutes=MAX_PRICE_AGE_MIN_NEAR - REFRESH_LEAD_MIN),
+                          start - dt.timedelta(hours=2.0))
+            nxt = f"refresh on the first cycle at or after {fmt(due)}" if due < start else "none planned before puck drop"
+        stale_at = None
+        if shots and pts:
+            oldest = min(shots[0], pts[0])
+            stale_at = (oldest + dt.timedelta(minutes=price_age_limit_min(hours))).isoformat()
         plan.append({
             "provider_event_id": e["id"], "matchup": f"{e['away_team']} at {e['home_team']}",
-            "start_utc": e["commence_time"], "capture_window_opens_utc": opens.isoformat().replace("+00:00", "Z"),
-            "last_capture_utc": None if last is None else last[0].isoformat(),
-            "last_capture_age_min": None if age is None else round(age, 1),
-            "last_any_shots_price_utc": None if last_any is None else last_any[0].isoformat(),
-            "next_planned_capture": nxt})
+            "provider_start_utc": e["commence_time"], "official_start_utc": official,
+            "start_discrepancy_min": None if not official else round(
+                (_parse_utc(e["commence_time"]) - _parse_utc(official)).total_seconds() / 60.0, 1),
+            "cutoff_start_utc": start.isoformat().replace("+00:00", "Z"),
+            "capture_window_opens_utc": opens.isoformat().replace("+00:00", "Z"),
+            "newest_shots_price_utc": None if shots is None else shots[0].isoformat(),
+            "newest_points_price_utc": None if pts is None else pts[0].isoformat(),
+            "price_age_min": None if age is None else round(age, 1),
+            "prices_stop_being_fresh_utc": stale_at, "next_planned_capture": nxt})
+    plan.sort(key=lambda r: r["cutoff_start_utc"])
     return plan
 
 
@@ -581,7 +657,8 @@ def _refresh_locked(now, *, conn, capture, client) -> dict:
         # Capture first, so the model and the downstream selector see the
         # prices just pulled. current_model() needs only the schedule.
         snapshot = current_model(conn, now)
-        capture_summary = capture_prices(now, client=client) if (capture and snapshot["games"]) else None
+        capture_summary = (capture_prices(now, client=client, games=snapshot["games"])
+                           if (capture and snapshot["games"]) else None)
         state = {
             "status": "OK" if snapshot["games"] else "NO_UPCOMING_GAMES",
             "date_et": snapshot["date"], "generated_at_utc": now.isoformat(),

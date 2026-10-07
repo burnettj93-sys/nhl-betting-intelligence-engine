@@ -122,6 +122,7 @@ class ParlayLeg:
     opponent: str | None = None
     game_start_utc: str | None = None
     model_version: str = ""
+    provider_start_utc: str | None = None   # the provider's commence_time; game_start_utc is the official NHL schedule
 
 
 def leg_is_eligible(leg: ParlayLeg) -> bool:

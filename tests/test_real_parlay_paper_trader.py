@@ -161,5 +161,18 @@ class TestTraderRun(unittest.TestCase):
         self.assertTrue(all(r["result_status"] == "WIN" for r in pb.query_paper_bets(conn, track="REAL_MARKET_PAPER")))
 
 
+class TestPublishHeartbeat(unittest.TestCase):
+    def test_a_quiet_board_is_republished_once_the_last_publication_is_old_enough(self):
+        import json
+        tmp = Path(tempfile.mkdtemp()) / "state.json"
+        now = dt.datetime(2026, 10, 7, 19, 0, tzinfo=dt.timezone.utc)
+        with mock.patch.object(trader._sp, "path", return_value=tmp):
+            self.assertTrue(trader._publish_heartbeat_due(now))                                  # never published
+            tmp.write_text(json.dumps({"last_success_at": (now - dt.timedelta(minutes=10)).isoformat()}))
+            self.assertFalse(trader._publish_heartbeat_due(now))
+            tmp.write_text(json.dumps({"last_success_at": (now - dt.timedelta(minutes=30)).isoformat()}))
+            self.assertTrue(trader._publish_heartbeat_due(now))
+
+
 if __name__ == "__main__":
     unittest.main()

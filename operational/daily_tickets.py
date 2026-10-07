@@ -252,6 +252,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
             model_threshold_eligible=True, identity_resolved=True, price_fresh=True, event_not_started=True)
         card_legs.append({
             "label": rmp.leg_label(stub), "market_family": l["market_family"], "game_id": l["game_id"],
+            "participant_id": l["participant_id"], "participant_name": l["participant_name"],
+            "provider_start_utc": l.get("provider_start_utc"),
             "team": l.get("team"), "opponent": l.get("opponent"), "game_start_utc": l.get("game_start_utc"),
             "american_price": l["american_price"], "decimal_price": l.get("decimal_price") or rmp.leg_decimal(stub),
             "price_captured_at_utc": l.get("captured_at_utc"), "probability": l["conservative_probability"],
@@ -284,7 +286,9 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
     legs = []
     for l in combo.legs:
         legs.append({
-            "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id, "team": l.team,
+            "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
+            "participant_id": l.participant_id, "participant_name": l.participant_name,
+            "provider_start_utc": l.provider_start_utc, "team": l.team,
             "opponent": l.opponent, "game_start_utc": l.game_start_utc, "american_price": l.american_price,
             "decimal_price": round(rmp.leg_decimal(l), 4), "price_captured_at_utc": l.captured_at_utc,
             "probability": l.conservative_probability, "model_version": l.model_version, "outcome": None})
@@ -300,6 +304,31 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
         "rationale": _rationale(combo.joint_probability, 1.0 / combo.combined_decimal, combo.ev_conservative,
                                 len(combo.legs)),
         "recorded_at_utc": None, "event_start_utc": _earliest_start(combo), "result": None, "alerts": []}
+
+
+def exposure(cards: list[dict]) -> dict:
+    """Which players and games sit on more than one of today's tickets. Tickets that share a leg's player or
+    game win and lose together more often than independent tickets would; the estimated combined price and
+    hit chance of each ticket assume its own legs are independent (they are always different games)."""
+    players: dict = {}
+    games: dict = {}
+    for c in cards:
+        for l in c["legs"]:
+            p = players.setdefault(l["participant_id"], {"player": l["participant_name"], "tickets": []})
+            if c["ticket_id"] not in p["tickets"]:
+                p["tickets"].append(c["ticket_id"])
+            g = games.setdefault(l["game_id"], {"game_id": l["game_id"], "matchup": " vs ".join(
+                x for x in (l.get("team"), l.get("opponent")) if x) or l["game_id"], "tickets": []})
+            if c["ticket_id"] not in g["tickets"]:
+                g["tickets"].append(c["ticket_id"])
+    fin = lambda d: sorted(({**v, "count": len(v["tickets"])} for v in d.values()),  # noqa: E731
+                           key=lambda v: (-v["count"], v.get("player") or v.get("matchup")))
+    recorded = [c for c in cards if c["recorded"]]
+    return {"tickets_counted": len(cards), "recorded_stake_at_risk": round(sum(c["stake"] for c in recorded), 2),
+            "players": fin(players), "games": fin(games),
+            "players_on_multiple_tickets": sum(1 for v in players.values() if len(v["tickets"]) > 1),
+            "note": ("Tickets that share a player or a game are correlated: they tend to win or lose together, so the "
+                     "open stake is less diversified than the ticket count suggests.")}
 
 
 def single_card(leg: rmp.ParlayLeg) -> dict:
@@ -345,7 +374,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         "date_et": et_date, "generated_at_utc": now.isoformat(),
         "account": account, "slots": {"total": SLOT_COUNT, "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
-        "singles": [single_card(l) for l in singles],
+        "singles": [single_card(l) for l in singles], "exposure": exposure(cards),
         "earlier_open_tickets": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in open_rows],
         "recent_settled": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in settled],
         "label": FEED_LABEL, "policy": {
@@ -385,10 +414,11 @@ def read_state() -> dict | None:
 
 # ------------------------------------------------------------------- cycle ----
 
-def _capture_plan(now: dt.datetime) -> list[dict]:
+def _capture_plan(nhl_conn, now: dt.datetime) -> list[dict]:
     from operational import best_bets
     try:
-        return best_bets.capture_plan(now)
+        games = best_bets.current_model(nhl_conn, now)["games"] if nhl_conn is not None else {}
+        return best_bets.capture_plan(now, games=games)
     except Exception as exc:  # noqa: BLE001 -- diagnostics only
         return [{"error": f"{exc.__class__.__name__}: {exc}"}]
 
@@ -446,7 +476,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
-        "capture_plan": _capture_plan(now),
+        "capture_plan": _capture_plan(nhl_conn, now),
     }
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
                         diagnostics=diagnostics, record_results=record_results)

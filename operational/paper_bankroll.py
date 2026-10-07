@@ -543,6 +543,7 @@ def _freeze_leg(l) -> dict:
             "game_id": l.game_id, "event_id": l.event_id, "sportsbook": l.sportsbook,
             "captured_at_utc": l.captured_at_utc, "team": getattr(l, "team", None),
             "opponent": getattr(l, "opponent", None), "game_start_utc": getattr(l, "game_start_utc", None),
+            "provider_start_utc": getattr(l, "provider_start_utc", None),
             "model_version": getattr(l, "model_version", "")}
 
 

@@ -272,7 +272,9 @@ class TestTodayScreen(unittest.TestCase):
 
     def test_account_header_cards_and_badges(self):
         now = dt.datetime.now(dt.timezone.utc)
-        state = self._state(board(8, start=(now + dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")), now=now)
+        legs = [dataclasses_replace(l, model_version="EXPERIMENTAL-test-v1")
+                for l in board(8, start=(now + dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))]
+        state = self._state(legs, now=now)
         at = self._page(state)
         metrics = {m.label: m.value for m in at.metric}
         self.assertEqual(metrics["Available cash"], "$450.00")
@@ -283,7 +285,10 @@ class TestTodayScreen(unittest.TestCase):
         for ticket in state["tickets"]:
             self.assertIn(ticket["ticket_id"], text)
         self.assertEqual(text.count("Recorded</span>"), 5)
-        self.assertEqual(len(at.dataframe), 5)                          # one leg table per ticket
+        self.assertGreaterEqual(len(at.dataframe), 5)                   # one leg table per ticket (+ exposure tables)
+        self.assertTrue(any('Shared exposure' in m.value for m in at.markdown))
+        self.assertTrue(any('EXPERIMENTAL model probabilities' in c.value for c in at.caption))
+        self.assertTrue(any('estimated combined price' in c.value for c in at.caption))
         self.assertFalse(any("Market coverage" in m.value for m in at.markdown))   # technical stays collapsed
 
     def test_recommended_tickets_are_badged_and_the_cash_notice_is_shown(self):
@@ -300,6 +305,20 @@ class TestTodayScreen(unittest.TestCase):
         at = self._page(state)
         self.assertTrue(any("5 of 5 ticket slots empty" in i.value for i in at.info))
         self.assertTrue(any("minutes old" in w.value for w in at.warning))
+
+
+class TestSharedExposure(unittest.TestCase):
+    def test_players_and_games_shared_across_tickets_are_reported(self):
+        path, conn = fresh_ledger()
+        dtk.run_cycle(None, conn, NOW, collected=collected(board(3)))
+        ex = dtk.read_state()["exposure"]
+        self.assertEqual(ex["tickets_counted"], 3)
+        self.assertEqual(ex["recorded_stake_at_risk"], 30.0)
+        self.assertEqual(ex["players_on_multiple_tickets"], 3)         # three games, three tickets: each player on two
+        self.assertTrue(all(p["count"] == 2 for p in ex["players"]))
+        self.assertTrue(all(g["count"] == 2 for g in ex["games"]))
+        self.assertIn("correlated", ex["note"])
+        conn.close()
 
 
 class TestLegSourceMerge(unittest.TestCase):
