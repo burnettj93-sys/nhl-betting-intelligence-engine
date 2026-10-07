@@ -48,10 +48,10 @@ class TestAllowlist(unittest.TestCase):
         GOALIE_SAVES structurally produces zero real legs today regardless of
         being allowlisted here (the real starter-certainty gate upstream)."""
         self.assertEqual(rmp.ALLOWED_MARKET_FAMILIES,
-                          frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES"}))
+                          frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES", "PLAYER_POINTS"}))
 
     def test_an_unlisted_market_family_is_never_eligible(self):
-        for family in ("PLAYER_POINTS", "PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
+        for family in ("PLAYER_GOALS", "PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
                        "PLAYER_HITS", "PLAYER_BLOCKS"):
             leg = _leg(market_family=family)
             self.assertFalse(rmp.leg_is_eligible(leg), f"{family} must never be parlay-eligible in V1")
@@ -70,6 +70,12 @@ class TestAllowlist(unittest.TestCase):
                               f"Saves threshold {bad_threshold} must not be parlay-eligible")
         for good_threshold in (20, 25):
             self.assertTrue(rmp.leg_is_eligible(_leg(market_family="GOALIE_SAVES", threshold=good_threshold)))
+
+    def test_points_thresholds_are_one_and_two_only(self):
+        self.assertTrue(rmp.leg_is_eligible(_leg(market_family="PLAYER_POINTS", threshold=1)))
+        self.assertTrue(rmp.leg_is_eligible(_leg(market_family="PLAYER_POINTS", threshold=2)))
+        for bad in (0, 3, 4):
+            self.assertFalse(rmp.leg_is_eligible(_leg(market_family="PLAYER_POINTS", threshold=bad)))
 
     def test_moneyline_has_no_threshold_requirement(self):
         self.assertTrue(rmp.leg_is_eligible(_moneyline_leg()))

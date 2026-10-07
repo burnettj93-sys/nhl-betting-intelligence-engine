@@ -153,6 +153,16 @@ class TestPaperAccountEndToEnd(unittest.TestCase):
                 self.assertEqual(f["game_start_utc"], FUTURE)
                 self.assertIn("conservative_probability", f)
 
+    def test_points_legs_flow_through_the_same_workflow_with_their_own_labels(self):
+        legs = [leg(g, f"P{g}", price=-240, p=0.75, thr=1, family="PLAYER_POINTS") for g in range(1, 5)]
+        result = dtk.run_cycle(None, self.conn, NOW, collected=collected(legs))
+        self.assertGreater(result["newly_recorded"], 0)
+        state = dtk.read_state()
+        labels = [l["label"] for c in state["tickets"] for l in c["legs"]]
+        self.assertTrue(all(lbl.endswith("1+ point") for lbl in labels))
+        for c in state["tickets"]:
+            self.assertGreaterEqual(c["combined_decimal"], 2.0)
+
     def test_refresh_with_moved_prices_and_a_restart_never_duplicate_or_rewrite(self):
         dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
         before = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
@@ -349,6 +359,20 @@ class TestSettlementReconciliation(unittest.TestCase):
         self.assertAlmostEqual(row["profit_loss"], 10.0 * (combo.combined_decimal - 1.0), places=1)
         self.assertAlmostEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"],
                                500.0 + row["profit_loss"], places=2)
+
+    def test_settled_tickets_show_won_or_lost_with_per_leg_results_on_the_same_card(self):
+        _insert_player_stat(self.nhl, 1, "P1", "TOR", shots=4)
+        _insert_player_stat(self.nhl, 2, "P2", "TOR", shots=1)
+        tid, _ = self._record([leg(1, "P1", price=120, p=0.55), leg(2, "P2", price=-105, p=0.60)])
+        self._settle()
+        dtk.refresh_state_only(self.conn, NOW)
+        state = dtk.read_state()
+        card = next(c for c in state["tickets"] if c["ticket_id"] == tid)
+        self.assertEqual(card["status"], "LOST")
+        self.assertEqual([l["outcome"] for l in card["legs"]], ["WIN", "LOSS"])
+        self.assertEqual(card["result"]["profit_loss"], -10.0)
+        self.assertNotIn(tid, [c["ticket_id"] for c in state["recent_settled"]])   # today's ticket is not listed twice
+        self.assertEqual(state["account"]["available_cash"], 490.0)
 
     def test_losing_ticket_loses_exactly_ten_dollars(self):
         _insert_player_stat(self.nhl, 1, "P1", "TOR", shots=4)

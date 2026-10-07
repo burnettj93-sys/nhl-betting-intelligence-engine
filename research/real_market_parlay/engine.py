@@ -69,7 +69,13 @@ SAVES_VALIDATED_THRESHOLDS = frozenset({20, 25})
 # preserved gate (betting a specific named goalie's saves line when the wrong
 # goalie plays is a void/mispriced bet, not merely "less certain" the way a
 # team-level moneyline probability is) -- never weakened to manufacture legs.
-ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES"})
+# Unified ticket workflow (2026-10-07): PLAYER_POINTS added after its own contract
+# certification (a real archived DraftKings player_points payload, see
+# provider_adapter.VERIFIED_CONTRACTS) and a settlement mapping. Lines on the DK Ontario
+# menu are the 1+/2+ milestones (Over 0.5 / 1.5); 3+ is not modeled.
+POINTS_ACTIONABLE_THRESHOLDS = frozenset({1, 2})
+ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES",
+                                     "PLAYER_POINTS"})
 
 MIN_LEGS = 2
 MAX_LEGS = 4
@@ -93,7 +99,7 @@ class ParlayLeg:
     the caller has to trust blindly."""
     game_id: str                   # internal nhl.db game_id -- NEVER the provider's event_id
     event_id: str | None
-    market_family: str             # "MONEYLINE" | "PLAYER_SOG_ALTERNATE" | "PLAYER_SOG" | "GOALIE_SAVES"
+    market_family: str             # "MONEYLINE" | "PLAYER_SOG_ALTERNATE" | "PLAYER_SOG" | "GOALIE_SAVES" | "PLAYER_POINTS"
     participant_id: str            # team abbrev (MONEYLINE) or player_id/goalie_id (SOG/Saves)
     participant_name: str
     side: str                      # "HOME"/"AWAY" (MONEYLINE); "OVER" (PLAYER_SOG_ALTERNATE -- the
@@ -132,6 +138,8 @@ def leg_is_eligible(leg: ParlayLeg) -> bool:
     if leg.market_family in ("PLAYER_SOG_ALTERNATE", "PLAYER_SOG") and leg.threshold not in SOG_ACTIONABLE_THRESHOLDS:
         return False
     if leg.market_family == "GOALIE_SAVES" and leg.threshold not in SAVES_VALIDATED_THRESHOLDS:
+        return False
+    if leg.market_family == "PLAYER_POINTS" and leg.threshold not in POINTS_ACTIONABLE_THRESHOLDS:
         return False
     if not (0.0 < leg.conservative_probability < 1.0):
         return False
@@ -203,6 +211,8 @@ def leg_label(leg: ParlayLeg) -> str:
         return f"{leg.participant_name} {leg.threshold}+ shots on goal"
     if leg.market_family == "GOALIE_SAVES":
         return f"{leg.participant_name} {leg.threshold}+ saves"
+    if leg.market_family == "PLAYER_POINTS":
+        return f"{leg.participant_name} {leg.threshold}+ point{'s' if leg.threshold != 1 else ''}"
     return f"{leg.participant_name} {leg.market_family} {leg.threshold}"
 
 

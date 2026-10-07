@@ -178,6 +178,21 @@ class TestComboSettlement(unittest.TestCase):
                  "side": "OVER", "participant_id": "PX", "participant_name": "PX", "american_price": 110}]
         self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})["status"], "UNRESOLVED")
 
+    def test_points_leg_settles_from_goals_plus_assists(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_game(conn, 2)
+        conn.execute("UPDATE player_game_stats SET goals=0")
+        _insert_player_stat(conn, 1, "P1", "TOR", shots=2)
+        _insert_player_stat(conn, 2, "P2", "TOR", shots=2)
+        conn.execute("UPDATE player_game_stats SET goals=1, assists=1 WHERE game_id=1")   # 2 points
+        conn.execute("UPDATE player_game_stats SET goals=0, assists=0 WHERE game_id=2")   # 0 points
+        conn.commit()
+        win = self._leg(1, market_family="PLAYER_POINTS", threshold=2, participant_id="P1")
+        miss = self._leg(2, market_family="PLAYER_POINTS", threshold=1, participant_id="P2")
+        self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps([win])})["status"], "WIN")
+        self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps([miss])})["status"], "LOSS")
+
     def test_a_data_gap_leg_settles_unresolved_never_guessed(self):
         conn = _fresh_nhl_conn()
         _insert_game(conn, 1)

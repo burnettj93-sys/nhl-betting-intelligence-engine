@@ -316,7 +316,8 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
             empty_reason = notice
     settled = [dict(r) for r in bankroll_conn.execute(
         "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND result_status IN ('WIN','LOSS','VOID') "
-        "ORDER BY settled_at_utc DESC LIMIT ?", (TRACK, RECENT_SETTLED_LIMIT)).fetchall()]
+        "AND market_id NOT LIKE ? ORDER BY settled_at_utc DESC LIMIT ?",
+        (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", RECENT_SETTLED_LIMIT)).fetchall()]
     open_rows = [dict(r) for r in bankroll_conn.execute(
         "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND result_status IN ('PENDING','UNRESOLVED') "
         "AND market_id NOT LIKE ? ORDER BY created_at_utc", (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%")).fetchall()]

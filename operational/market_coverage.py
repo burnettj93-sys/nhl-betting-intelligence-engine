@@ -73,14 +73,17 @@ _ROWS = [
     },
     {
         "market": "Points (1+, 2+)", "family": "PLAYER_POINTS",
-        "ontario_menu": "Listed (verified), ladder 1-3.",
-        "prices": ("OK", "player_points captured by best_bets (12 captures on 2026-10-06/07)."),
+        "ontario_menu": "Listed (verified), ladder 1-3. Only the 1+ and 2+ lines are modeled.",
+        "prices": ("OK", "player_points (two-sided Over/Under at 0.5, sometimes 1.5) captured by best_bets "
+                         "(12 captures on 2026-10-06/07)."),
         "identity_mapping": ("OK", "Name + team to player id."),
-        "projection": ("OK", "Locked points model blended with the last-60 hit rate (rolling-form second source)."),
-        "context_confirmation": ("MISSING", "Same dressed-last-game proxy only."),
-        "eligibility": ("MISSING", "No contract certification: not in VERIFIED_CONTRACTS, not in the engine allowlist. "
-                                   "Excluded on purpose until certified; not used to fill slots."),
-        "settlement": ("PARTIAL", "The resolver supports points, but the ledger does not map a PLAYER_POINTS leg yet."),
+        "projection": ("PARTIAL", "Locked points model blended with the last-60 hit rate, current-season data. A research "
+                                  "model, not validated against live results."),
+        "context_confirmation": ("MISSING", "No lineup/injury feed; same dressed-last-game proxy as shots."),
+        "eligibility": ("OK", "Contract certified against a real archived payload (tests/fixtures/"
+                              "draftkings_player_points_real_payload.json); thresholds 1 and 2 in the engine allowlist."),
+        "settlement": ("OK", "PLAYER_POINTS_<k>PLUS (goals + assists) via the outcome resolver; did-not-dress legs void under "
+                             "the documented rules."),
     },
     {
         "market": "Goals (anytime scorer)", "family": "ANYTIME_GOALSCORER",
@@ -138,11 +141,11 @@ def render_markdown() -> str:
         out += [f"* {m}" for m in r["missing"]] or ["* nothing"]
         out.append("")
     out += ["## Consequences", "",
-            "* Only shots on goal (rolling-form model, plus the validated model when its corpus is fresh) and, when",
-            "  goalies are confirmed near T-35, moneyline can produce ticket legs today.",
+            "* Shots on goal and points (rolling-form model; the validated shots model joins when its corpus is fresh) and,",
+            "  when goalies are confirmed near T-35, moneyline can produce ticket legs today.",
             "* Saves and moneyline are blocked by the missing starting-goalie confirmation. That gate is not bypassed.",
-            "* Points, puck line and goals are not enabled to fill slots. Points is closest: prices, identity, a model and",
-            "  a resolver exist; it needs a contract certification against real archived payloads and a ledger mapping.",
+            "* Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled",
+            "  to fill slots: they lack prices, models and/or settlement.",
             "* An empty board on a day with few priced shots legs is a correct result, not a bug.", ""]
     return "\n".join(out)
 

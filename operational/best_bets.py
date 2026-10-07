@@ -383,11 +383,11 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
 
 
 def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime) -> list:
-    """ParlayLegs for DraftKings' player_shots_on_goal_alternate Over prices,
-    for players the rolling-form model covers (dressed in their team's last
-    game, 20+ games of history). Points prices are deliberately not turned
-    into legs: PLAYER_POINTS is not a certified contract (see
-    docs/MARKET_COVERAGE_AUDIT.md)."""
+    """ParlayLegs for DraftKings' Over prices -- shots-on-goal alternate ladder
+    (k+ shots) and player_points (Over 0.5 / 1.5 = 1+ / 2+ points) -- for players
+    the rolling-form model covers (dressed in their team's last game, 20+ games
+    of history). Both contracts are certified against real archived payloads
+    (provider_adapter.VERIFIED_CONTRACTS)."""
     from research.generic_prop_pricing import provider_adapter
     from research.generic_prop_pricing.line_mapping import SOG_ACTIONABLE_THRESHOLDS
     from research.live_sog_pricing import event_mapping
@@ -402,14 +402,19 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
     hours = (_parse_utc(game["start_utc"]) - now).total_seconds() / 3600.0
     age_min = (now - captured_at).total_seconds() / 60.0
     fresh = hours > 0 and age_min <= (MAX_PRICE_AGE_MIN_FAR if hours >= 2.0 else MAX_PRICE_AGE_MIN_NEAR)
-    verified = provider_adapter.is_contract_verified("draftkings", "PLAYER_SOG_ALTERNATE")
+    verified = {"PLAYER_SOG_ALTERNATE": provider_adapter.is_contract_verified("draftkings", "PLAYER_SOG_ALTERNATE"),
+                "PLAYER_POINTS": provider_adapter.is_contract_verified("draftkings", "PLAYER_POINTS")}
+    from research.real_market_parlay.engine import POINTS_ACTIONABLE_THRESHOLDS
+    markets = {"player_shots_on_goal_alternate": ("PLAYER_SOG_ALTERNATE", "SOG", SOG_ACTIONABLE_THRESHOLDS),
+               "player_points": ("PLAYER_POINTS", "PTS", POINTS_ACTIONABLE_THRESHOLDS)}
     legs = []
     for bm in payload.get("bookmakers", []):
         if bm.get("key") != "draftkings":
             continue
         for m in bm.get("markets", []):
-            if m.get("key") != "player_shots_on_goal_alternate":
+            if m.get("key") not in markets:
                 continue
+            family, prob_prefix, thresholds = markets[m["key"]]
             for o in m.get("outcomes", []):
                 if o.get("name") != "Over" or o.get("point") is None or o.get("price") is None:
                     continue
@@ -419,14 +424,14 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     entry = snapshot["model"].get(f"{norm_name(o.get('description', ''))}|{team}")
                     if entry:
                         break
-                if not entry or f"SOG{k}" not in entry["probs"] or not entry.get("player_id"):
+                if not entry or f"{prob_prefix}{k}" not in entry["probs"] or not entry.get("player_id"):
                     continue
                 legs.append(ParlayLeg(
-                    game_id=game_id, event_id=payload.get("id"), market_family="PLAYER_SOG_ALTERNATE",
+                    game_id=game_id, event_id=payload.get("id"), market_family=family,
                     participant_id=entry["player_id"], participant_name=entry["name"], side="OVER", threshold=k,
-                    american_price=float(o["price"]), conservative_probability=entry["probs"][f"SOG{k}"],
+                    american_price=float(o["price"]), conservative_probability=entry["probs"][f"{prob_prefix}{k}"],
                     sportsbook="draftkings", captured_at_utc=captured_at.isoformat(),
-                    provider_contract_verified=verified, model_threshold_eligible=k in SOG_ACTIONABLE_THRESHOLDS,
+                    provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
                     model_version=MODEL_VERSION))

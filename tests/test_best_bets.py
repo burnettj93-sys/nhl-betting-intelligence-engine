@@ -54,13 +54,15 @@ def _payload(home="Philadelphia Flyers", away="Tampa Bay Lightning", players=Non
 
 _SNAPSHOT = {"date": "2026-10-06", "games": {"7": {"home": "PHI", "away": "TBL", "start_utc": "2026-10-06T23:00:00Z"}},
              "model": {"tyler toffoli|PHI": {"player_id": "8475000", "name": "Tyler Toffoli", "team": "PHI", "opp": "TBL",
-                                              "home": True, "probs": {"SOG1": 0.87, "SOG2": 0.56, "SOG3": 0.30}}}}
+                                              "home": True, "probs": {"SOG1": 0.87, "SOG2": 0.56, "SOG3": 0.30,
+                                                                      "PTS1": 0.55, "PTS2": 0.20}}}}
 
 
 class TestLegsFromPayload(unittest.TestCase):
     def test_over_thresholds_become_certified_family_parlay_legs(self):
         captured = NOW - dt.timedelta(minutes=10)
-        legs = bb._legs_from_payload(_payload(shots_point=1.5, price=105), captured, _SNAPSHOT, NOW)
+        legs = [l for l in bb._legs_from_payload(_payload(shots_point=1.5, price=105), captured, _SNAPSHOT, NOW)
+                if l.market_family == "PLAYER_SOG_ALTERNATE"]
         self.assertEqual(len(legs), 1)
         leg = legs[0]
         self.assertEqual((leg.market_family, leg.threshold, leg.side), ("PLAYER_SOG_ALTERNATE", 2, "OVER"))
@@ -70,18 +72,26 @@ class TestLegsFromPayload(unittest.TestCase):
         self.assertTrue(leg.provider_contract_verified and leg.price_fresh and leg.event_not_started)
         self.assertEqual(leg.model_version, bb.MODEL_VERSION)
 
-    def test_points_prices_are_never_turned_into_legs(self):
-        legs = bb._legs_from_payload(_payload(shots_point=1.5), NOW, _SNAPSHOT, NOW)
-        self.assertTrue(all(l.market_family == "PLAYER_SOG_ALTERNATE" for l in legs))
+    def test_points_overs_become_certified_points_legs_and_unders_are_ignored(self):
+        payload = _payload(shots_point=1.5)
+        payload["bookmakers"][0]["markets"][1]["outcomes"].append(
+            {"name": "Over", "description": "Tyler Toffoli", "point": 0.5, "price": -140})
+        legs = bb._legs_from_payload(payload, NOW, _SNAPSHOT, NOW)
+        points = sorted((l.threshold, l.american_price, l.conservative_probability) for l in legs
+                        if l.market_family == "PLAYER_POINTS")
+        self.assertEqual(points, [(1, -140.0, 0.55), (2, 250.0, 0.20)])      # Over 0.5 == 1+, Over 1.5 == 2+
+        self.assertTrue(all(l.provider_contract_verified for l in legs))
 
     def test_a_stale_price_is_marked_not_fresh_so_the_selector_rejects_it(self):
         legs = bb._legs_from_payload(_payload(shots_point=1.5), NOW - dt.timedelta(hours=4), _SNAPSHOT, NOW)
-        self.assertFalse(legs[0].price_fresh)
+        self.assertTrue(legs and all(not l.price_fresh for l in legs))
 
     def test_unmodelled_player_unknown_game_or_missing_threshold_probability_are_skipped(self):
         self.assertEqual(bb._legs_from_payload(_payload(players=["Nobody Known"]), NOW, _SNAPSHOT, NOW), [])
         self.assertEqual(bb._legs_from_payload(_payload(home="Boston Bruins"), NOW, _SNAPSHOT, NOW), [])
-        self.assertEqual(bb._legs_from_payload(_payload(shots_point=4.5), NOW, _SNAPSHOT, NOW), [])
+        no_shots = [l for l in bb._legs_from_payload(_payload(shots_point=4.5), NOW, _SNAPSHOT, NOW)
+                    if l.market_family == "PLAYER_SOG_ALTERNATE"]
+        self.assertEqual(no_shots, [])
 
 
 class TestArchiveHelpers(unittest.TestCase):

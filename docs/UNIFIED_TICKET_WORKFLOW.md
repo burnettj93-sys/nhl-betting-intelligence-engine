@@ -10,7 +10,7 @@ launchd (every 15 min)  operational/real_parlay_paper_trader.py
   1 revalidate recorded tickets      -> ALERTS only (ticket_alerts); never refunds or voids
   2 refresh DraftKings prices        operational/best_bets.py (bounded credit capture + rolling-form model)
   3 collect legs                     operational/daily_tickets.py::collect_candidate_legs
-        validated adapters (moneyline, standard shots, saves, alternate shots)  +  rolling-form shots legs
+        validated adapters (moneyline, standard shots, saves, alternate shots)  +  rolling-form shots and points legs
   4 select                           research/real_market_parlay/engine.py::select_tickets   (the only selector)
   5 record ($10 each, atomic funds check)    operational/paper_bankroll.py::create_real_market_combo_paper_bet
   6 settle                           operational/paper_bet_settlement_driver.py   (docs/PAPER_SETTLEMENT_RULES.md)
@@ -50,10 +50,15 @@ $500 start, $10 per ticket. `available cash = 500 + realized P&L - open stakes` 
 Funds are checked inside the same `BEGIN IMMEDIATE` transaction as the insert; under $10 nothing is recorded and no
 top-up exists. Five fresh tickets leave $450 cash and $50 open.
 
-## Where the shots probabilities come from
+## Where the shots and points probabilities come from
 
 The validated shots model reads a research corpus that ends 2026-04-15, so the sweeps log `CORPUS_STALE` for the 2026
 season. The rolling-form model (last 20 / 60 games from the daily MoneyPuck file, shrunk toward the position average,
 lower of the two) works on current data and requires the player to have dressed in his team's last game. A shots leg
 that both models price takes the **lower** probability. A validated shots leg the rolling model cannot confirm is
 dropped. This is a research model, not validated against live results; the model version is stored on every leg.
+
+Points (1+ / 2+) use the locked points model blended 50/50 with the player's last-60-game rate, home/away adjusted,
+priced against DraftKings' `player_points` Over 0.5 / 1.5. The contract was certified against a real archived payload
+(`tests/fixtures/draftkings_player_points_real_payload.json`), settlement is mapped (goals + assists), and only the
+rolling-form source supplies these legs. Same research-model caveat applies.

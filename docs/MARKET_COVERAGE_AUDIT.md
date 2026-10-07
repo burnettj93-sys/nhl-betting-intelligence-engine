@@ -19,7 +19,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 | Goalie saves | OK | OK | PARTIAL | MISSING | MISSING | OK | yes |
 | Moneyline | PARTIAL | OK | OK | MISSING | PARTIAL | OK | yes |
 | Puck line | MISSING | OK | MISSING | MISSING | MISSING | MISSING | no |
-| Points (1+, 2+) | OK | OK | OK | MISSING | MISSING | PARTIAL | no |
+| Points (1+, 2+) | OK | OK | PARTIAL | MISSING | OK | OK | yes |
 | Goals (anytime scorer) | MISSING | OK | PARTIAL | MISSING | MISSING | PARTIAL | no |
 
 ## What is missing, per market
@@ -56,10 +56,9 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 * settlement: No resolver for margin lines.
 
 ### Points (1+, 2+)
-* Ontario menu: Listed (verified), ladder 1-3.
-* context confirmation: Same dressed-last-game proxy only.
-* eligibility: No contract certification: not in VERIFIED_CONTRACTS, not in the engine allowlist. Excluded on purpose until certified; not used to fill slots.
-* settlement: The resolver supports points, but the ledger does not map a PLAYER_POINTS leg yet.
+* Ontario menu: Listed (verified), ladder 1-3. Only the 1+ and 2+ lines are modeled.
+* projection: Locked points model blended with the last-60 hit rate, current-season data. A research model, not validated against live results.
+* context confirmation: No lineup/injury feed; same dressed-last-game proxy as shots.
 
 ### Goals (anytime scorer)
 * Ontario menu: Listed (verified).
@@ -71,9 +70,9 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ## Consequences
 
-* Only shots on goal (rolling-form model, plus the validated model when its corpus is fresh) and, when
-  goalies are confirmed near T-35, moneyline can produce ticket legs today.
+* Shots on goal and points (rolling-form model; the validated shots model joins when its corpus is fresh) and,
+  when goalies are confirmed near T-35, moneyline can produce ticket legs today.
 * Saves and moneyline are blocked by the missing starting-goalie confirmation. That gate is not bypassed.
-* Points, puck line and goals are not enabled to fill slots. Points is closest: prices, identity, a model and
-  a resolver exist; it needs a contract certification against real archived payloads and a ledger mapping.
+* Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled
+  to fill slots: they lack prices, models and/or settlement.
 * An empty board on a day with few priced shots legs is a correct result, not a bug.

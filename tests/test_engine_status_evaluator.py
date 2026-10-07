@@ -62,9 +62,12 @@ class Test04ContractStatus(unittest.TestCase):
         #
         # Standard SOG/Saves Certification block (2026-10-01): two more real, archived
         # payloads certified (bare PLAYER_SOG, GOALIE_SAVES) -- verified_contracts is now 5.
+        #
+        # Unified ticket workflow (2026-10-07): PLAYER_POINTS certified against a real archived
+        # payload -- verified_contracts is now 6.
         result = ese.check_contract_status()
         self.assertEqual(result["status"], ese.WATCH)
-        self.assertEqual(result["verified_contracts"], 5)
+        self.assertEqual(result["verified_contracts"], 6)
 
 
 class Test05InputDrift(unittest.TestCase):
