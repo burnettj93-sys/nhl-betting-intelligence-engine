@@ -110,7 +110,7 @@ class TestFullChainBetWinAndClv(unittest.TestCase):
             "home_team_abbrev": "TOR", "away_team_abbrev": "BOS",
             "commence_time_utc": self.fx.scheduled_start + "Z",
             "home_price": 150.0, "away_price": -170.0,
-            "captured_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
+            "captured_at_utc": t(10, hour=18, minute=25), "quote_updated_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
         }])
         bridge_summary, orch_summary = self._sync_and_orchestrate(t(10, hour=18, minute=26))
 
@@ -137,7 +137,7 @@ class TestFullChainBetWinAndClv(unittest.TestCase):
             "home_team_abbrev": "TOR", "away_team_abbrev": "BOS",
             "commence_time_utc": self.fx.scheduled_start + "Z",
             "home_price": 140.0, "away_price": -160.0,
-            "captured_at_utc": t(10, hour=18, minute=55), "snapshot_label": "close",
+            "captured_at_utc": t(10, hour=18, minute=55), "quote_updated_at_utc": t(10, hour=18, minute=55), "snapshot_label": "close",
         }])
         rob.sync_moneyline_odds_to_snapshots(conn=self.nhl_conn, cache_path=self.cache_path)
 
@@ -183,7 +183,7 @@ class TestFullChainBetWinAndClv(unittest.TestCase):
             "home_team_abbrev": "TOR", "away_team_abbrev": "BOS",
             "commence_time_utc": self.fx.scheduled_start + "Z",
             "home_price": 150.0, "away_price": -170.0,
-            "captured_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
+            "captured_at_utc": t(10, hour=18, minute=25), "quote_updated_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
         }])
         first_bridge, first_orch = self._sync_and_orchestrate(t(10, hour=18, minute=26))
         second_bridge, second_orch = self._sync_and_orchestrate(t(10, hour=18, minute=27))
@@ -216,7 +216,7 @@ class TestFullChainBetWinAndClv(unittest.TestCase):
             "home_team_abbrev": "TOR", "away_team_abbrev": "BOS",
             "commence_time_utc": self.fx.scheduled_start + "Z",
             "home_price": 150.0, "away_price": -170.0,
-            "captured_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
+            "captured_at_utc": t(10, hour=18, minute=25), "quote_updated_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
         }])
         self._sync_and_orchestrate(t(10, hour=18, minute=26))
         self.fx.finalize_game(1, home_score=4, away_score=1)
@@ -239,7 +239,7 @@ class TestFullChainBetWinAndClv(unittest.TestCase):
             "home_team_abbrev": "TOR", "away_team_abbrev": "BOS",
             "commence_time_utc": self.fx.scheduled_start + "Z",
             "home_price": 150.0, "away_price": -170.0,
-            "captured_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
+            "captured_at_utc": t(10, hour=18, minute=25), "quote_updated_at_utc": t(10, hour=18, minute=25), "snapshot_label": "T-5",
         }])
         self._sync_and_orchestrate(t(10, hour=18, minute=26))
         self.nhl_conn.execute("DELETE FROM odds_snapshots WHERE selection = 'TOR'")

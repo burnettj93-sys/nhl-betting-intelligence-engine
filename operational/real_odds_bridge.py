@@ -28,6 +28,7 @@ from pathlib import Path
 
 import db
 from ingest.timestamps import normalize_utc_timestamp
+from operational import quote_freshness
 from operational.live_odds_daily_pull import MONEYLINE_CACHE_PATH
 
 MONEYLINE_MARKET = "MONEYLINE"
@@ -80,7 +81,7 @@ def sync_moneyline_odds_to_snapshots(conn=None, cache_path: Path | None = None,
     cache_path = cache_path if cache_path is not None else MONEYLINE_CACHE_PATH
     now = now or dt.datetime.now(dt.timezone.utc)
     summary = {"status": "SUCCESS", "rows_seen": 0, "rows_written": 0, "rows_skipped_unmatched": 0,
-               "unmatched": [], "error": None}
+               "rows_skipped_bad_quote_timestamp": {}, "unmatched": [], "error": None}
 
     cache = _load_cache(cache_path)
     if cache is None:
@@ -118,7 +119,18 @@ def sync_moneyline_odds_to_snapshots(conn=None, cache_path: Path | None = None,
                 continue
 
             event_start_utc = normalize_utc_timestamp(row["commence_time_utc"])
-            captured_at = normalize_utc_timestamp(row["captured_at_utc"])
+            # The snapshot's price time is the QUOTE's own provider update time, never the time we fetched it: a
+            # response retrieved a minute ago can carry a market last updated days ago. A row without a usable
+            # quote timestamp (missing, malformed, or in the future) is not written at all (policy and reasons:
+            # operational/quote_freshness.py). The retrieval time stays in the raw archive's meta and the cache row;
+            # odds_snapshots has no column for it (received_at_utc is this bridge's own wall-clock time).
+            verdict = quote_freshness.assess(row.get("quote_updated_at_utc"), row.get("captured_at_utc"), now,
+                                             limit_min=float("inf"))
+            if verdict["status"] not in (quote_freshness.FRESH,):
+                bad = summary["rows_skipped_bad_quote_timestamp"]
+                bad[verdict["status"]] = bad.get(verdict["status"], 0) + 1
+                continue
+            captured_at = normalize_utc_timestamp(verdict["quote_updated_utc"])
             for selection, price in ((row["home_team_abbrev"], row["home_price"]),
                                       (row["away_team_abbrev"], row["away_price"])):
                 try:

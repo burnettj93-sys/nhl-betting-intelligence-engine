@@ -5,6 +5,7 @@ temp cache files, never the real nhl.db or moneyline_snapshot_cache.json.
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
 import tempfile
 import unittest
@@ -61,6 +62,41 @@ class TestFindRealGameId(unittest.TestCase):
         self.assertIsNone(rob._find_real_game_id(conn, "EDM", "CGY", "not-a-real-timestamp"))
 
 
+class TestQuoteTimestampPolicy(unittest.TestCase):
+    """Audit regression: moneyline snapshots were stamped with the retrieval time, so an old h2h quote fetched a
+    minute ago looked fresh. The snapshot's price time is now the provider's own last_update."""
+
+    def _sync(self, quote_value, include_key=True):
+        conn = _fresh_conn()
+        _seed_game(conn, 1, "EDM", "CGY", "2026-09-29")
+        row = {"home_team_abbrev": "EDM", "away_team_abbrev": "CGY", "commence_time_utc": "2026-09-29T23:00:00Z",
+               "home_price": -150.0, "away_price": 130.0, "captured_at_utc": "2026-09-29T12:01:00Z",
+               "snapshot_label": "morning"}
+        if include_key:
+            row["quote_updated_at_utc"] = quote_value
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "cache.json"
+            _write_cache(cache_path, [row])
+            summary = rob.sync_moneyline_odds_to_snapshots(
+                conn=conn, cache_path=cache_path, now=dt.datetime(2026, 9, 29, 12, 2, tzinfo=dt.timezone.utc))
+        return conn, summary
+
+    def test_the_snapshot_is_stamped_with_the_quote_time_not_the_retrieval_time(self):
+        conn, summary = self._sync("2026-09-24T09:00:00Z")                       # quote last updated five days earlier
+        self.assertEqual(summary["rows_written"], 2)
+        stamped = {r[0] for r in conn.execute("SELECT captured_at_utc FROM odds_snapshots")}
+        self.assertEqual(stamped, {"2026-09-24T09:00:00"})                       # the retrieval time (2026-09-29) is not used
+
+    def test_missing_malformed_and_future_quote_times_write_nothing(self):
+        for value, key, include in ((None, "MISSING_QUOTE_TIMESTAMP", True), ("", "MISSING_QUOTE_TIMESTAMP", True),
+                                    ("junk", "MALFORMED_QUOTE_TIMESTAMP", True), ("2026-09-29T14:00:00Z", "FUTURE_QUOTE_TIMESTAMP", True),
+                                    (None, "MISSING_QUOTE_TIMESTAMP", False)):
+            conn, summary = self._sync(value, include_key=include)
+            self.assertEqual(summary["rows_written"], 0, (value, include))
+            self.assertEqual(summary["rows_skipped_bad_quote_timestamp"], {key: 1}, (value, include))
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM odds_snapshots").fetchone()[0], 0)
+
+
 class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
     def test_matched_row_writes_both_sides(self):
         conn = _fresh_conn()
@@ -70,7 +106,7 @@ class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
             _write_cache(cache_path, [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -150.0, "away_price": 130.0,
-                "captured_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
+                "captured_at_utc": "2026-09-24T12:00:00Z", "quote_updated_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
             }])
             summary = rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
         self.assertEqual(summary["status"], "SUCCESS")
@@ -102,7 +138,7 @@ class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
             _write_cache(cache_path, [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -150.0, "away_price": 130.0,
-                "captured_at_utc": "2026-09-24T12:00:52Z", "snapshot_label": "morning",
+                "captured_at_utc": "2026-09-24T12:00:52Z", "quote_updated_at_utc": "2026-09-24T12:00:52Z", "snapshot_label": "morning",
             }])
             rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
         row = conn.execute(
@@ -125,7 +161,7 @@ class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
             _write_cache(cache_path, [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -150.0, "away_price": 130.0,
-                "captured_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
+                "captured_at_utc": "2026-09-24T12:00:00Z", "quote_updated_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
             }])
             summary = rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
         self.assertEqual(summary["status"], "SUCCESS")
@@ -146,7 +182,7 @@ class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
             rows = [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -150.0, "away_price": 130.0,
-                "captured_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
+                "captured_at_utc": "2026-09-24T12:00:00Z", "quote_updated_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
             }]
             _write_cache(cache_path, rows)
             first = rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
@@ -167,13 +203,13 @@ class TestSyncMoneylineOddsToSnapshots(unittest.TestCase):
             _write_cache(cache_path, [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -150.0, "away_price": 130.0,
-                "captured_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
+                "captured_at_utc": "2026-09-24T12:00:00Z", "quote_updated_at_utc": "2026-09-24T12:00:00Z", "snapshot_label": "morning",
             }])
             rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
             _write_cache(cache_path, [{
                 "home_team_abbrev": "EDM", "away_team_abbrev": "CGY",
                 "commence_time_utc": "2026-09-29T23:00:00Z", "home_price": -160.0, "away_price": 140.0,
-                "captured_at_utc": "2026-09-24T17:00:00Z", "snapshot_label": "afternoon",
+                "captured_at_utc": "2026-09-24T17:00:00Z", "quote_updated_at_utc": "2026-09-24T17:00:00Z", "snapshot_label": "afternoon",
             }])
             rob.sync_moneyline_odds_to_snapshots(conn=conn, cache_path=cache_path)
         total = conn.execute("SELECT COUNT(*) c FROM odds_snapshots WHERE game_id=1").fetchall()[0]["c"]

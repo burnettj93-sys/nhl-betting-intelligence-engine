@@ -78,6 +78,18 @@ def freshness(state: dict, now: dt.datetime | None = None) -> dict:
             "stale": age > STALE_AFTER_MINUTES}
 
 
+def quote_text(leg: dict) -> str:
+    """The price's own timestamp and age, and when we fetched it. Pre-audit tickets (recorded before the quote time
+    was kept) say so instead of implying a quote time."""
+    quote = leg.get("quote_updated_utc")
+    retrieved = leg.get("retrieved_at_utc") or leg.get("price_captured_at_utc")
+    if not quote:
+        return f"quote time not recorded · fetched {et_time(retrieved)}"
+    age = leg.get("quote_age_min_at_entry")
+    age_text = f" ({age:.0f} min old when recorded)" if age is not None else ""
+    return f"quote {et_time(quote)}{age_text} · fetched {et_time(retrieved)}"
+
+
 def leg_row(leg: dict) -> dict:
     where = ""
     if leg.get("team") and leg.get("opponent"):
@@ -87,18 +99,9 @@ def leg_row(leg: dict) -> dict:
         "selection": f"{mark}{leg['label']}",
         "game": f"{where}{et_time(leg.get('game_start_utc'))}",
         "price": american(leg["american_price"]),
-        "priced_at": et_time(leg.get("price_captured_at_utc")),
+        "priced_at": quote_text(leg),
         "model": percent(leg.get("probability")),
     }
-
-
-def alert_text(alert: dict) -> str:
-    detail = alert["detail"]
-    prefix = f"{alert['kind']}: "
-    if detail.startswith(prefix):
-        detail = detail[len(prefix):]
-    return (f"Alert, ticket unchanged — {alert['kind'].replace('_', ' ').lower()}: {detail}. "
-            f"The stake stays open; if a player does not play, that leg is settled under the void rules.")
 
 
 def labels_line(ticket: dict) -> str:

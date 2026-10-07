@@ -195,9 +195,14 @@ def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.dateti
     results = []
     version = code_version()
     for combo in combos:
+        # A ticket is recorded after the prices it freezes were retrieved: never stamp it earlier than its newest
+        # price (the run's start time can precede a capture made during the same run).
+        from operational import quote_freshness
+        stamps = [quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc) for l in combo.legs]
+        created = max([now] + [t for t in stamps if t is not None and (t - now).total_seconds() <= 120.0])
         bet = pb.create_real_market_combo_paper_bet(
             bankroll_conn, {"status": "QUALIFIED", "combo": combo},
-            event_start_utc=_earliest_start(combo), created_at_utc=now.isoformat(), code_version=version)
+            event_start_utc=_earliest_start(combo), created_at_utc=created.isoformat(), code_version=version)
         results.append({"ticket_id": pb.compute_ticket_id(et.eastern_today(now), combo.legs), **bet})
         if bet["status"] == "INSUFFICIENT_FUNDS":
             break
@@ -263,6 +268,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
             "label": rmp.leg_label(stub), "market_family": l["market_family"], "game_id": l["game_id"],
             "participant_id": l["participant_id"], "participant_name": l["participant_name"],
             "provider_start_utc": l.get("provider_start_utc"),
+            "retrieved_at_utc": l.get("retrieved_at_utc"), "quote_updated_utc": l.get("quote_updated_utc"),
+            "quote_age_min_at_entry": l.get("quote_age_min_at_entry"), "freshness_status": l.get("freshness_status"),
             "team": l.get("team"), "opponent": l.get("opponent"), "game_start_utc": l.get("game_start_utc"),
             "american_price": l["american_price"], "decimal_price": l.get("decimal_price") or rmp.leg_decimal(stub),
             "price_captured_at_utc": l.get("captured_at_utc"), "probability": l["conservative_probability"],
@@ -298,7 +305,9 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
         legs.append({
             "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
             "participant_id": l.participant_id, "participant_name": l.participant_name,
-            "provider_start_utc": l.provider_start_utc, "team": l.team,
+            "provider_start_utc": l.provider_start_utc,
+            "retrieved_at_utc": l.retrieved_at_utc, "quote_updated_utc": l.quote_updated_utc,
+            "quote_age_min_at_entry": l.quote_age_min, "freshness_status": l.freshness_status or None, "team": l.team,
             "opponent": l.opponent, "game_start_utc": l.game_start_utc, "american_price": l.american_price,
             "decimal_price": round(rmp.leg_decimal(l), 4), "price_captured_at_utc": l.captured_at_utc,
             "probability": l.conservative_probability, "model_version": l.model_version, "outcome": None})

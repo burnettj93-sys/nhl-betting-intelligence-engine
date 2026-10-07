@@ -483,6 +483,9 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
                 "away_team_abbrev": m.away_team_abbrev, "home_price": m.home_price,
                 "away_price": m.away_price, "commence_time_utc": m.commence_time_utc,
                 "captured_at_utc": r_odds.retrieved_at_utc, "snapshot_label": snapshot_label,
+                # The provider's own h2h last_update. captured_at_utc above is only the retrieval time; the bridge
+                # prices freshness from THIS (operational/quote_freshness.py).
+                "quote_updated_at_utc": m.market_last_update_utc,
             })
 
     payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": rows}

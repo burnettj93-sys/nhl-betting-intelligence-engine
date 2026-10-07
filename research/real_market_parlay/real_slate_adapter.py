@@ -43,23 +43,43 @@ from research.real_market_parlay.engine import SAVES_VALIDATED_THRESHOLDS, Parla
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def _price_freshness(captured_at_utc: str | None, game_start_utc: str, now: dt.datetime) -> dict:
-    """Reuses pricing/odds_math.py's own dynamic, time-to-puck-drop-sensitive
-    staleness policy (odds_math.dynamic_max_staleness_minutes /
-    config.ODDS_STALENESS_TIERS) -- the SAME function pricing/engine.py's
-    real MONEYLINE decision engine already uses -- never a second, looser
-    staleness rule invented for SOG."""
-    if not captured_at_utc:
-        return {"fresh": False, "reason": "NO_PRICE_TIMESTAMP", "age_minutes": None, "max_age_minutes": None}
-    now_iso = now.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    hours_to_puck_drop = odds_math.hours_between(now_iso, game_start_utc)
+def _quote_time(market) -> str | None:
+    """The provider's own update time for the quote: the market-level last_update (what the real DraftKings
+    payloads carry), else the bookmaker-level one. Never the retrieval time."""
+    return getattr(market, "market_last_update_utc", None) or getattr(market, "bookmaker_last_update_utc", None) \
+        or getattr(market, "captured_at_utc", None) or None
+
+
+def _price_freshness(quote_updated_utc: str | None, game_start_utc: str, now: dt.datetime,
+                     retrieved_at_utc: str | None = None) -> dict:
+    """Reuses pricing/odds_math.py's own dynamic, time-to-puck-drop-sensitive staleness limit
+    (odds_math.dynamic_max_staleness_minutes / config.ODDS_STALENESS_TIERS) -- the SAME limit pricing/engine.py's
+    real MONEYLINE decision engine uses -- and applies it to the QUOTE's own timestamp through the shared policy in
+    operational/quote_freshness.py: a missing, malformed or future timestamp is never fresh, and the limit is checked
+    against the provider's last_update, not against when we fetched it."""
+    from operational import quote_freshness
+    start = quote_freshness.parse_utc(game_start_utc)
+    if start is None:
+        return {"fresh": False, "reason": "MALFORMED_EVENT_START", "age_minutes": None, "max_age_minutes": None,
+                "quote_updated_utc": None}
+    hours_to_puck_drop = (start - now).total_seconds() / 3600.0
     if hours_to_puck_drop <= 0:
-        return {"fresh": False, "reason": "EVENT_ALREADY_STARTED", "age_minutes": None, "max_age_minutes": None}
+        return {"fresh": False, "reason": "EVENT_ALREADY_STARTED", "age_minutes": None, "max_age_minutes": None,
+                "quote_updated_utc": None}
     max_age = odds_math.dynamic_max_staleness_minutes(hours_to_puck_drop)
-    age_minutes = odds_math.hours_between(captured_at_utc, now_iso) * 60.0
-    fresh = 0 <= age_minutes <= max_age
-    return {"fresh": fresh, "reason": None if fresh else "STALE_PRICE",
-            "age_minutes": round(age_minutes, 1), "max_age_minutes": max_age}
+    verdict = quote_freshness.assess(quote_updated_utc, retrieved_at_utc, now, max_age, require_retrieval=False)
+    reason = None if verdict["fresh"] else (
+        "STALE_PRICE" if verdict["status"] in (quote_freshness.STALE_QUOTE, quote_freshness.STALE_RETRIEVAL)
+        else verdict["status"])                      # STALE_PRICE keeps this adapter's established reason vocabulary
+    return {"fresh": verdict["fresh"], "reason": reason,
+            "age_minutes": verdict["quote_age_min"], "max_age_minutes": max_age,
+            "quote_updated_utc": verdict["quote_updated_utc"]}
+
+
+def _age_minutes(timestamp: str | None, now: dt.datetime) -> float | None:
+    from operational import quote_freshness
+    parsed = quote_freshness.parse_utc(timestamp)
+    return None if parsed is None else round(max((now - parsed).total_seconds(), 0.0) / 60.0, 1)
 
 
 def _game_not_open_exclusion(game_id, game_row) -> dict:
@@ -162,6 +182,8 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
                 american_price=report.current_draftkings_price,
                 conservative_probability=report.model_conservative_probability,
                 sportsbook="draftkings", captured_at_utc=captured_at_utc,
+                quote_updated_utc=captured_at_utc, freshness_status="FRESH",
+                quote_age_min=_age_minutes(captured_at_utc, now),
                 provider_contract_verified=True, model_threshold_eligible=True,
                 identity_resolved=True, price_fresh=True, event_not_started=True,
             ))
@@ -277,7 +299,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                     continue
                 market = parsed["market"]
 
-                freshness = _price_freshness(market.captured_at_utc, payload["commence_time"], now)
+                freshness = _price_freshness(_quote_time(market), payload["commence_time"], now)
                 if not freshness["fresh"]:
                     excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG_ALTERNATE",
                                       "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
@@ -309,7 +331,8 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                     participant_id=player_id, participant_name=player_name_raw, side=market.side,
                     threshold=threshold, american_price=market.american_price,
                     conservative_probability=conservative_prob, sportsbook=bookmaker,
-                    captured_at_utc=market.captured_at_utc, provider_contract_verified=True,
+                    captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
+                    quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=True,
                     model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
                     event_not_started=True,
                 ))
@@ -411,7 +434,7 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                 threshold=threshold, side=side, opposing_price=opposing_price, player_id=player_id,
                 sportsbook=bookmaker)
 
-            freshness = _price_freshness(market.captured_at_utc, payload["commence_time"], now)
+            freshness = _price_freshness(_quote_time(market), payload["commence_time"], now)
             if not freshness["fresh"]:
                 excluded.append({"identifier": identifier, "market_family": "PLAYER_SOG",
                                   "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
@@ -453,7 +476,8 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                 participant_id=player_id, participant_name=player_name_raw, side=market.side,
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
-                captured_at_utc=market.captured_at_utc, provider_contract_verified=contract_verified,
+                captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
+                quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
                 event_not_started=True,
             ))
@@ -592,7 +616,7 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                                   "reason": f"STARTER_NOT_CONFIRMED: {priced['action_reason']}"})
                 continue
 
-            freshness = _price_freshness(market.captured_at_utc, payload["commence_time"], now)
+            freshness = _price_freshness(_quote_time(market), payload["commence_time"], now)
             if not freshness["fresh"]:
                 excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
                                   "reason": f"{freshness['reason']} (age={freshness['age_minutes']}min, "
@@ -611,7 +635,8 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                 participant_id=goalie_id, participant_name=player_name_raw, side=market.side,
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
-                captured_at_utc=market.captured_at_utc, provider_contract_verified=contract_verified,
+                captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
+                quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
                 event_not_started=True,
             ))

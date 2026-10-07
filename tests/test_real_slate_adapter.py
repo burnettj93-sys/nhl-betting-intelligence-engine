@@ -256,6 +256,37 @@ class TestSogAlternateAdapter(unittest.TestCase):
         self.assertEqual(legs, [])
         self.assertTrue(any("STALE_PRICE" in e["reason"] for e in excluded))
 
+    def _run_with_market_time(self, last_update, now):
+        import copy
+        payload = copy.deepcopy(self._load_payload())
+        for market in payload["bookmakers"][0]["markets"]:
+            if last_update is None:
+                market.pop("last_update", None)
+            else:
+                market["last_update"] = last_update
+        with mock.patch("research.live_sog_pricing.player_mapping.map_player",
+                         return_value=self._matched_player_mapping()), \
+             mock.patch("research.real_market_parlay.real_slate_adapter._sog_model_inputs",
+                         return_value=([], object(), {}, {}, 1.0, [], None)), \
+             mock.patch("research.player_sog.live_projection.project_player_sog",
+                         return_value=self._active_projection()):
+            return adapter.sog_alternate_candidate_legs(self._schedule_conn(), [payload], now=now)
+
+    def test_quote_timestamp_policy_missing_malformed_future_and_stale_quotes_never_qualify(self):
+        """Audit regression: the adapters' freshness must follow the provider's own market last_update."""
+        fresh_now = dt.datetime(2026, 9, 29, 12, 20, 0, tzinfo=dt.timezone.utc)
+        legs, _ = self._run_with_market_time("2026-09-29T12:14:34Z", fresh_now)
+        self.assertTrue(legs and all(l.quote_updated_utc == "2026-09-29T12:14:34Z" and l.freshness_status == "FRESH"
+                                     for l in legs))
+        self.assertTrue(all(l.quote_age_min == 5.4 for l in legs))
+        for value, expected in ((None, "MISSING_QUOTE_TIMESTAMP"), ("garbage", "MALFORMED_QUOTE_TIMESTAMP"),
+                                ("2026-09-29T13:30:00Z", "FUTURE_QUOTE_TIMESTAMP"),
+                                ("2026-09-23T12:14:34Z", "STALE_PRICE")):          # six days old, fetched "now"
+            legs, excluded = self._run_with_market_time(value, fresh_now)
+            self.assertEqual(legs, [], value)
+            reasons = {e["reason"].split(" ")[0] for e in excluded if e["market_family"] == "PLAYER_SOG_ALTERNATE"}
+            self.assertIn(expected, reasons, (value, reasons))
+
     def test_1plus_threshold_is_excluded(self):
         payload = self._load_payload()
         conn = self._schedule_conn()

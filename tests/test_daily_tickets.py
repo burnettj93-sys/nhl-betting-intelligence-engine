@@ -307,6 +307,42 @@ class TestTodayScreen(unittest.TestCase):
         self.assertTrue(any("minutes old" in w.value for w in at.warning))
 
 
+class TestQuoteTimestampsAreFrozenAndShown(unittest.TestCase):
+    def test_both_timestamps_and_the_quote_age_are_frozen_and_displayed(self):
+        from dashboard import tickets_view as tv
+        path, conn = fresh_ledger()
+        legs = [dataclasses_replace(l, retrieved_at_utc="2026-10-15T16:55:00Z", quote_updated_utc="2026-10-15T16:50:00Z",
+                                    quote_age_min=7.0, freshness_status="FRESH") for l in board(4)]
+        dtk.run_cycle(None, conn, NOW, collected=collected(legs))
+        row = pb.query_paper_bets(conn, track="REAL_MARKET_PAPER")[0]
+        for frozen in json.loads(row["legs_json"]):
+            self.assertEqual((frozen["retrieved_at_utc"], frozen["quote_updated_utc"]),
+                             ("2026-10-15T16:55:00Z", "2026-10-15T16:50:00Z"))
+            self.assertEqual((frozen["quote_age_min_at_entry"], frozen["freshness_status"]), (7.0, "FRESH"))
+        card = dtk.read_state()["tickets"][0]
+        text = tv.quote_text(card["legs"][0])
+        self.assertIn("7 min old when recorded", text)
+        self.assertIn("fetched", text)
+        conn.close()
+
+    def test_a_ticket_is_never_stamped_earlier_than_its_newest_price(self):
+        """Reproduces a live quirk: the run's start time preceded a capture made during the same run."""
+        path, conn = fresh_ledger()
+        late = "2026-10-15T17:00:09Z"                                   # 9 seconds after NOW
+        legs = [dataclasses_replace(l, captured_at_utc=late, retrieved_at_utc=late, quote_updated_utc=late)
+                for l in board(4)]
+        dtk.run_cycle(None, conn, NOW, collected=collected(legs))
+        for row in pb.query_paper_bets(conn, track="REAL_MARKET_PAPER"):
+            self.assertGreaterEqual(dt.datetime.fromisoformat(row["created_at_utc"]),
+                                    dt.datetime(2026, 10, 15, 17, 0, 9, tzinfo=dt.timezone.utc))
+        conn.close()
+
+    def test_pre_audit_legs_say_the_quote_time_was_not_recorded(self):
+        from dashboard import tickets_view as tv
+        text = tv.quote_text({"price_captured_at_utc": "2026-10-07T18:32:39+00:00", "quote_updated_utc": None})
+        self.assertIn("quote time not recorded", text)
+
+
 class TestDisplayedNumbersMatchSelection(unittest.TestCase):
     def test_a_recorded_card_shows_the_same_haircut_ev_the_selector_used(self):
         """Reproduces a defect: recorded cards approximated the haircut as (p - margin*n_legs), while the
