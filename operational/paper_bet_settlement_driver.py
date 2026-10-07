@@ -45,6 +45,12 @@ from operational import outcome_resolver as resolver
 
 PENDING_STILL_WAITING = "PENDING_STILL_WAITING"
 
+# The did-not-play void and parlay-reduction conventions below are modelled on common sportsbook practice but have
+# NOT been checked against DraftKings Ontario's published house rules (the official page was unreachable: HTTP 403;
+# secondary sources only). Until a person verifies them and flips this flag, any ticket whose result depends on a
+# void/reduction stays UNRESOLVED with its stake open, and the provisional outcome is only recorded, not applied.
+VOID_RULES_VERIFIED = False
+
 # Fail-closed resolver statuses that mean "this specific leg's real-world
 # event genuinely did not occur" -- the one, universal real push/void case.
 _PUSH_STATUSES = frozenset({
@@ -168,6 +174,9 @@ def resolve_combo_bet(nhl_conn, bet: dict) -> dict:
     if "UNRESOLVED" in outcomes:
         return {"status": "UNRESOLVED", **detail}
     if all(o == "VOID" for o in outcomes):
+        if not VOID_RULES_VERIFIED:
+            return {"status": "UNRESOLVED", "reason": "VOID_RULE_UNVERIFIED",
+                    "provisional": {"status": "VOID"}, **detail}
         return {"status": "VOID", **detail}
     voided = [r["leg"] for r in leg_results if r["outcome"] == "VOID"]
     if voided:
@@ -175,8 +184,11 @@ def resolve_combo_bet(nhl_conn, bet: dict) -> dict:
         for r in leg_results:
             if r["outcome"] == "WIN":
                 decimal_odds *= _decimal_from_american(r["leg"]["american_price"])
-        return {"status": "WIN", "settled_odds": _american_from_decimal(decimal_odds),
-                "voided_legs": voided, **detail}
+        repriced = _american_from_decimal(decimal_odds)
+        if not VOID_RULES_VERIFIED:
+            return {"status": "UNRESOLVED", "reason": "VOID_RULE_UNVERIFIED",
+                    "provisional": {"status": "WIN", "settled_odds": repriced, "voided_legs": voided}, **detail}
+        return {"status": "WIN", "settled_odds": repriced, "voided_legs": voided, **detail}
     return {"status": "WIN", **detail}
 
 
@@ -207,17 +219,22 @@ def settle_due_bets(bankroll_conn, nhl_conn, *, track: str | None = None) -> dic
         elif status in ("WIN", "LOSS", "VOID"):
             final_status = status
         elif status in _PUSH_STATUSES:  # a single ticket whose player/team did not play: refund
-            final_status = "VOID"
+            final_status = "VOID" if VOID_RULES_VERIFIED else "UNRESOLVED"
         else:
             final_status = "UNRESOLVED"
         if final_status == "UNRESOLVED" and bet["result_status"] == "UNRESOLVED":
             summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": "STILL_UNRESOLVED"})
             continue
         notes = None
-        if result.get("voided_legs"):
+        if result.get("reason") == "VOID_RULE_UNVERIFIED" or (status in _PUSH_STATUSES and not VOID_RULES_VERIFIED):
+            notes = ("A leg did not play. DraftKings Ontario's void/parlay-reduction rule is unverified, so the ticket "
+                     "stays open (UNRESOLVED); provisional outcome: "
+                     + json.dumps(result.get("provisional") or {"status": "VOID"}, default=str))
+        elif result.get("voided_legs"):
             names = ", ".join(str(l.get("participant_name")) for l in result["voided_legs"])
             notes = f"Parlay repriced: voided leg(s) {names} removed; settled at {result['settled_odds']:+.0f}"
-        detail = ({"leg_results": result["leg_results"], "settled_odds": result.get("settled_odds")}
+        detail = ({"leg_results": result["leg_results"], "settled_odds": result.get("settled_odds"),
+                   "provisional": result.get("provisional")}
                   if "leg_results" in result else {"resolver": result})
         pb.settle_paper_bet(bankroll_conn, bet["paper_bet_id"], final_status,
                             settled_odds=result.get("settled_odds"), notes=notes,

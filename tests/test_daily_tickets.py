@@ -384,6 +384,7 @@ class TestSettlementReconciliation(unittest.TestCase):
         account = pb.account_state(self.conn, "REAL_MARKET_PAPER")
         self.assertEqual((account["available_cash"], account["open_stakes"], account["settled_pnl"]), (490.0, 0.0, -10.0))
 
+    @mock.patch.object(driver, "VOID_RULES_VERIFIED", True)
     def test_did_not_play_leg_is_removed_and_ticket_repriced_not_voided(self):
         _insert_player_stat(self.nhl, 1, "P1", "TOR", shots=4)          # P2 never dressed
         tid, _ = self._record([leg(1, "P1", price=120, p=0.55), leg(2, "P2", price=-105, p=0.60)])
@@ -395,11 +396,25 @@ class TestSettlementReconciliation(unittest.TestCase):
         self.assertEqual(row["entry_odds"], rmp._evaluate_combo(
             [leg(1, "P1", price=120, p=0.55), leg(2, "P2", price=-105, p=0.60)]).estimated_combo_price)
 
+    @mock.patch.object(driver, "VOID_RULES_VERIFIED", True)
     def test_ticket_with_every_leg_void_refunds_the_stake(self):
         self._record([leg(1, "P1", price=120, p=0.55), leg(2, "P2", price=-105, p=0.60)])
         self._settle()
         account = pb.account_state(self.conn, "REAL_MARKET_PAPER")
         self.assertEqual((account["available_cash"], account["settled_pnl"]), (500.0, 0.0))
+
+    def test_default_unverified_void_rule_keeps_the_stake_open_instead_of_assuming_a_refund_or_repricing(self):
+        _insert_player_stat(self.nhl, 1, "P1", "TOR", shots=4)          # P2 never dressed
+        tid, _ = self._record([leg(1, "P1", price=120, p=0.55), leg(2, "P2", price=-105, p=0.60)])
+        self._settle()
+        row = [r for r in pb.query_paper_bets(self.conn) if r["paper_bet_id"] == tid][0]
+        self.assertEqual(row["result_status"], "UNRESOLVED")
+        self.assertIn("unverified", row["notes"])
+        self.assertIn("provisional", row["notes"])
+        account = pb.account_state(self.conn, "REAL_MARKET_PAPER")
+        self.assertEqual((account["available_cash"], account["open_stakes"], account["settled_pnl"]), (490.0, 10.0, 0.0))
+        self._settle()                                                   # re-scanning never rewrites or duplicates
+        self.assertEqual(len(self.conn.execute("SELECT * FROM paper_audit_log WHERE paper_bet_id=?", (tid,)).fetchall()), 2)
 
     def test_unsupported_leg_leaves_the_ticket_unresolved_and_stake_open(self):
         _insert_player_stat(self.nhl, 1, "P1", "TOR", shots=4)

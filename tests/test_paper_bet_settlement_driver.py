@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import db
@@ -139,6 +140,7 @@ class TestComboSettlement(unittest.TestCase):
         result = driver.resolve_combo_bet(conn, bet)
         self.assertEqual(result["status"], driver.PENDING_STILL_WAITING)
 
+    @mock.patch.object(driver, "VOID_RULES_VERIFIED", True)
     def test_a_dnp_leg_is_removed_and_the_parlay_is_repriced_on_the_remaining_legs(self):
         conn = _fresh_nhl_conn()
         _insert_game(conn, 1)
@@ -152,6 +154,20 @@ class TestComboSettlement(unittest.TestCase):
         self.assertEqual(result["settled_odds"], 150.0)   # only the +150 leg remains
         self.assertEqual(len(result["voided_legs"]), 1)
 
+    def test_with_the_void_rule_unverified_a_dnp_ticket_stays_unresolved_and_records_the_provisional_outcome(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_game(conn, 2)
+        _insert_player_stat(conn, 1, "P1", "TOR", shots=4)          # P2 never dressed
+        legs = [dict(self._leg(1, participant_id="P1"), american_price=+150),
+                dict(self._leg(2, participant_id="P2"), american_price=-120)]
+        result = driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})
+        self.assertFalse(driver.VOID_RULES_VERIFIED)
+        self.assertEqual(result["status"], "UNRESOLVED")
+        self.assertEqual(result["reason"], "VOID_RULE_UNVERIFIED")
+        self.assertEqual(result["provisional"]["status"], "WIN")
+        self.assertEqual(result["provisional"]["settled_odds"], 150.0)
+
     def test_a_dnp_leg_never_hides_a_lost_leg(self):
         conn = _fresh_nhl_conn()
         _insert_game(conn, 1)
@@ -161,6 +177,7 @@ class TestComboSettlement(unittest.TestCase):
                 dict(self._leg(2, participant_id="P2"), american_price=-120)]
         self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})["status"], "LOSS")
 
+    @mock.patch.object(driver, "VOID_RULES_VERIFIED", True)
     def test_every_leg_void_refunds_the_ticket(self):
         conn = _fresh_nhl_conn()
         _insert_game(conn, 1)

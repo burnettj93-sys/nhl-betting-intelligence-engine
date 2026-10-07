@@ -53,12 +53,16 @@ _ROWS = [
         "market": "Moneyline", "family": "MONEYLINE",
         "ontario_menu": "Listed (verified).",
         "prices": ("PARTIAL", "h2h is pulled every 2 minutes, but the T-35 evaluation only accepts a quote for its "
-                              "evaluation time (about 35 minutes before puck drop); earlier it reports no valid quote."),
+                              "evaluation time (about 35 minutes before puck drop); earlier it reports DATA_UNAVAILABLE "
+                              "(no valid quote as of that time). That is today's actual exclusion reason."),
         "identity_mapping": ("OK", "Team abbreviations."),
-        "projection": ("OK", "T-35 Elo-based model."),
-        "context_confirmation": ("MISSING", "Goalie confirmation is required and no feed exists; unconfirmed games are "
-                                            "excluded (GOALIE_NOT_CONFIRMED). Not bypassed."),
-        "eligibility": ("PARTIAL", "Eligible only for games whose goalies are confirmed, which is none today."),
+        "projection": ("PARTIAL", "T-35 Elo-based model; its uncertainty band is a heuristic, never calibrated."),
+        "context_confirmation": ("PARTIAL", "Starting goalies are never confirmed (no feed). Moneyline is NOT blocked by that: "
+                                            "config.REQUIRE_GOALIE_CONFIRMATION is False, and an unconfirmed starter widens the "
+                                            "model's confidence band 1.4x (UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING, a "
+                                            "heuristic) before the edge/EV gates run."),
+        "eligibility": ("PARTIAL", "Eligible whenever the T-35 evaluation has a valid quote and clears its own edge/EV "
+                                   "gates; if the strict gate were ever enabled, the adapter reports WAIT."),
         "settlement": ("OK", "Final score including overtime/shootout."),
     },
     {
@@ -67,7 +71,7 @@ _ROWS = [
         "prices": ("MISSING", "The spreads market is never requested from the odds provider."),
         "identity_mapping": ("OK", "Team abbreviations would reuse the moneyline mapping."),
         "projection": ("MISSING", "No goal-margin model."),
-        "context_confirmation": ("MISSING", "Same goalie gap as moneyline."),
+        "context_confirmation": ("PARTIAL", "Same unconfirmed-starter situation as moneyline (widened band, no gate)."),
         "eligibility": ("MISSING", "Not in the contract allowlist; no certified contract."),
         "settlement": ("MISSING", "No resolver for margin lines."),
     },
@@ -141,9 +145,10 @@ def render_markdown() -> str:
         out += [f"* {m}" for m in r["missing"]] or ["* nothing"]
         out.append("")
     out += ["## Consequences", "",
-            "* Shots on goal and points (rolling-form model; the validated shots model joins when its corpus is fresh) and,",
-            "  when goalies are confirmed near T-35, moneyline can produce ticket legs today.",
-            "* Saves and moneyline are blocked by the missing starting-goalie confirmation. That gate is not bypassed.",
+            "* Shots on goal and points (EXPERIMENTAL rolling-form model; the validated shots model joins when its corpus is",
+            "  fresh) and moneyline (from about 35 minutes before puck drop) can produce ticket legs.",
+            "* Saves are blocked by the starter-certainty gate (no starting-goalie confirmation exists). That gate is not",
+            "  bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic widened band instead.",
             "* Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled",
             "  to fill slots: they lack prices, models and/or settlement.",
             "* An empty board on a day with few priced shots legs is a correct result, not a bug.", ""]

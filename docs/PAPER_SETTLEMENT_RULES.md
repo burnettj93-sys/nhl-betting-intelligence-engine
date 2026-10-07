@@ -1,5 +1,13 @@
 # Paper ticket settlement rules
 
+> **Status: void and parlay-reduction rules are UNVERIFIED.** DraftKings Ontario's published house rules could not be
+> retrieved (the official page returned HTTP 403; only secondary articles were reachable, and they describe other US
+> books' practice). `paper_bet_settlement_driver.VOID_RULES_VERIFIED` is therefore `False`: any ticket whose result
+> depends on a void or a reduction (a did-not-play leg, alone or in a parlay) stays **UNRESOLVED** with its $10 still
+> open, and the provisional outcome (e.g. "WIN repriced to +150" or "VOID") is stored in its notes and
+> `settlement_json` but not applied to the account. A person must read Ontario's rules, confirm or correct the
+> sections below, then flip the flag. A lost leg still loses the parlay (that holds under every convention).
+
 These are the rules the paper ledger (`operational/paper_bankroll.db`) applies.
 They are this project's own documented convention modelled on common
 sportsbook practice. They have **not** been verified against DraftKings

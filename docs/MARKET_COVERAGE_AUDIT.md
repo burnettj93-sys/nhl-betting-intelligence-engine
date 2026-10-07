@@ -17,8 +17,8 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 | Shots on goal (alternate ladder 2+..5+) | OK | OK | PARTIAL | MISSING | OK | OK | yes |
 | Shots on goal (standard two-sided) | PARTIAL | OK | PARTIAL | MISSING | OK | OK | yes |
 | Goalie saves | OK | OK | PARTIAL | MISSING | MISSING | OK | yes |
-| Moneyline | PARTIAL | OK | OK | MISSING | PARTIAL | OK | yes |
-| Puck line | MISSING | OK | MISSING | MISSING | MISSING | MISSING | no |
+| Moneyline | PARTIAL | OK | PARTIAL | PARTIAL | PARTIAL | OK | yes |
+| Puck line | MISSING | OK | MISSING | PARTIAL | MISSING | MISSING | no |
 | Points (1+, 2+) | OK | OK | PARTIAL | MISSING | OK | OK | yes |
 | Goals (anytime scorer) | MISSING | OK | PARTIAL | MISSING | MISSING | PARTIAL | no |
 
@@ -43,15 +43,16 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Moneyline
 * Ontario menu: Listed (verified).
-* prices: h2h is pulled every 2 minutes, but the T-35 evaluation only accepts a quote for its evaluation time (about 35 minutes before puck drop); earlier it reports no valid quote.
-* context confirmation: Goalie confirmation is required and no feed exists; unconfirmed games are excluded (GOALIE_NOT_CONFIRMED). Not bypassed.
-* eligibility: Eligible only for games whose goalies are confirmed, which is none today.
+* prices: h2h is pulled every 2 minutes, but the T-35 evaluation only accepts a quote for its evaluation time (about 35 minutes before puck drop); earlier it reports DATA_UNAVAILABLE (no valid quote as of that time). That is today's actual exclusion reason.
+* projection: T-35 Elo-based model; its uncertainty band is a heuristic, never calibrated.
+* context confirmation: Starting goalies are never confirmed (no feed). Moneyline is NOT blocked by that: config.REQUIRE_GOALIE_CONFIRMATION is False, and an unconfirmed starter widens the model's confidence band 1.4x (UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING, a heuristic) before the edge/EV gates run.
+* eligibility: Eligible whenever the T-35 evaluation has a valid quote and clears its own edge/EV gates; if the strict gate were ever enabled, the adapter reports WAIT.
 
 ### Puck line
 * Ontario menu: Listed (verified), plus alternate lines.
 * prices: The spreads market is never requested from the odds provider.
 * projection: No goal-margin model.
-* context confirmation: Same goalie gap as moneyline.
+* context confirmation: Same unconfirmed-starter situation as moneyline (widened band, no gate).
 * eligibility: Not in the contract allowlist; no certified contract.
 * settlement: No resolver for margin lines.
 
@@ -70,9 +71,10 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ## Consequences
 
-* Shots on goal and points (rolling-form model; the validated shots model joins when its corpus is fresh) and,
-  when goalies are confirmed near T-35, moneyline can produce ticket legs today.
-* Saves and moneyline are blocked by the missing starting-goalie confirmation. That gate is not bypassed.
+* Shots on goal and points (EXPERIMENTAL rolling-form model; the validated shots model joins when its corpus is
+  fresh) and moneyline (from about 35 minutes before puck drop) can produce ticket legs.
+* Saves are blocked by the starter-certainty gate (no starting-goalie confirmation exists). That gate is not
+  bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic widened band instead.
 * Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled
   to fill slots: they lack prices, models and/or settlement.
 * An empty board on a day with few priced shots legs is a correct result, not a bug.

@@ -110,7 +110,7 @@ def card(ticket: dict) -> dict:
         if result.get("settled_odds"):
             outcome += f" (repriced to {american(result['settled_odds'])} after a void leg)"
     elif ticket["status"] == "UNRESOLVED":
-        outcome = "A leg could not be graded; the stake stays open until it can."
+        outcome = result.get("notes") or "A leg could not be graded; the stake stays open until it can."
     return {
         "title": f"Ticket {ticket['ticket_id']}", "badge": label, "badge_fg": fg, "badge_bg": bg,
         "legs": [leg_row(l) for l in ticket["legs"]],
