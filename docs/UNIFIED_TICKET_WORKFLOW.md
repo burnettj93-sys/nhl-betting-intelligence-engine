@@ -62,3 +62,31 @@ Points (1+ / 2+) use the locked points model blended 50/50 with the player's las
 priced against DraftKings' `player_points` Over 0.5 / 1.5. The contract was certified against a real archived payload
 (`tests/fixtures/draftkings_player_points_real_payload.json`), settlement is mapped (goals + assists), and only the
 rolling-form source supplies these legs. Same research-model caveat applies.
+
+## Start times: which source controls what
+
+The provider (The Odds API) and the league schedule can disagree. PIT at WSH on 2026-10-07: the NHL API (`api-web.nhle.com`,
+confirmed live that day) says 23:30Z; the provider has listed 23:40Z in all 849 archived listings since 2026-09-24, so the
+10-minute offset is persistent, not a late schedule change. The league schedule is the authority for the game; the provider's
+time only describes the book's listing.
+
+| Decision | Source |
+|---|---|
+| Which game a provider event is | team abbreviations matched to the nhl.db schedule (ids, never times) |
+| Final state, scores, settlement | nhl.db / NHL API |
+| Start time shown on a card and stored as `game_start_utc`; ticket `event_start_utc` (when settlement may begin) | official NHL schedule (earliest leg) |
+| "Game has started" cutoff, price-freshness limit (150 min if >= 2 h out, 100 min inside), capture window (5 h before) | the **earlier** of provider and official start, so a leg is never offered after either source says the game began |
+| Schedule-change alerts on recorded tickets | `game_schedule_events` (NHL API revisions) |
+| Moneyline T-35 evaluation | official schedule (pricing engine) |
+
+The provider's start is stored on every frozen leg as `provider_start_utc` for audit; Today's technical section lists both
+times and the difference per game.
+
+## Capture cadence
+
+A refresh is due once the newest price is within 45 minutes (three 15-minute trader cycles) of its freshness limit: at
+105 minutes of age while the game is 2+ hours away, at 55 minutes inside two hours. Cutoffs are unchanged; prices are replaced
+before they would be rejected. The newest capture of either job counts (the prop sweeps' pulls are not duplicated), shots
+and points prices are taken from the newest capture of each market, and the existing 36-credit daily cap and the global
+quota guard are untouched. One game costs about four captures (8 credits); a three-game evening about 24. On a larger slate
+the cap stops the farthest-out refreshes first, and a price that is not refreshed simply drops out as stale.

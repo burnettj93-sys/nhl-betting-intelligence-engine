@@ -98,6 +98,7 @@ def _render_ticket_card(ticket: dict) -> None:
         c2.metric("Stake", view["stake"])
         c3.metric("Potential return", view["potential_return"].split(" return")[0])
         c4.metric("Modeled hit chance", view["hit"])
+        st.caption(view["labels"])
         st.caption(view["rationale"].replace("$", "\\$"))
         if view["recorded_at"]:
             st.caption(f"Recorded {view['recorded_at']} · prices and probabilities above are frozen at that moment.")
@@ -129,6 +130,17 @@ else:
                "bets and never change; Recommended tickets can still change with the next price refresh.")
     for _ticket in _tk["tickets"]:
         _render_ticket_card(_ticket)
+    if _tk.get("exposure") and _tk["tickets"]:
+        _ex = _tk["exposure"]
+        st.markdown("### Shared exposure across these tickets")
+        _pl, _gm = tv.exposure_rows(_ex)
+        st.caption(f"Open stake at risk on recorded tickets: ${_ex['recorded_stake_at_risk']:.2f}. ".replace("$", "\\$")
+                   + _ex["note"])
+        if _pl:
+            st.dataframe(_pl, hide_index=True, width="stretch")
+        else:
+            st.caption("No player appears on more than one ticket.")
+        st.dataframe(_gm, hide_index=True, width="stretch")
     _empty = tv.empty_slots_text(_tk)
     if _empty:
         st.info(_empty.replace("$", "\\$"))

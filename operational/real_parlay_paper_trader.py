@@ -39,6 +39,22 @@ MAX_PARLAYS_PER_DAY = rmp.MAX_TICKETS_PER_DAY
 LOCK_PATH = _sp.path("real_parlay_paper_trader.lock", area="operational")
 
 
+HEARTBEAT_PUBLISH_MIN = 25.0
+
+
+def _publish_heartbeat_due(now: dt.datetime) -> bool:
+    """The Today board shows a 'board is N minutes old' warning after 45 minutes. A quiet stretch changes nothing,
+    so without a heartbeat the published board would look stale while the engine is healthy: republish when the
+    last successful publication is at least HEARTBEAT_PUBLISH_MIN old."""
+    import json
+    path = _sp.path("cloud_publish_state.json")
+    try:
+        last = json.loads(path.read_text()).get("last_success_at")
+        return last is None or (now - dt.datetime.fromisoformat(last)).total_seconds() / 60.0 >= HEARTBEAT_PUBLISH_MIN
+    except (OSError, ValueError):
+        return True
+
+
 def run(now: dt.datetime | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     today_et = et.eastern_today(now)
@@ -84,7 +100,7 @@ def run(now: dt.datetime | None = None) -> dict:
         "insufficient_funds": stake_summary["insufficient_funds"], "status": "SUCCESS"})
     settled_count = (settlement_summary or {}).get("settled", 0)
     if (stake_summary["newly_recorded"] > 0 or settled_count > 0 or stake_summary["state_changed"]
-            or revalidation_summary.get("alerts_recorded")):
+            or revalidation_summary.get("alerts_recorded") or _publish_heartbeat_due(now)):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result

@@ -101,6 +101,22 @@ def alert_text(alert: dict) -> str:
             f"The stake stays open; if a player does not play, that leg is settled under the void rules.")
 
 
+def labels_line(ticket: dict) -> str:
+    versions = sorted({l.get("model_version") for l in ticket["legs"] if l.get("model_version")})
+    experimental = any("EXPERIMENTAL" in v for v in versions)
+    parts = ["EXPERIMENTAL model probabilities (not calibrated)" if experimental else "Model probabilities (research)",
+             "DraftKings US-feed prices, not matched to Ontario", "estimated combined price (product of leg prices)"]
+    return " · ".join(parts)
+
+
+def exposure_rows(exposure_state: dict) -> tuple[list[dict], list[dict]]:
+    players = [{"Player": p["player"], "On tickets": p["count"], "Ticket IDs": ", ".join(p["tickets"])}
+               for p in exposure_state["players"] if p["count"] > 1]
+    games = [{"Game": g["matchup"], "On tickets": g["count"], "Ticket IDs": ", ".join(g["tickets"])}
+             for g in exposure_state["games"]]
+    return players, games
+
+
 def card(ticket: dict) -> dict:
     label, fg, bg = badge(ticket["status"])
     result = ticket.get("result") or {}
@@ -119,6 +135,7 @@ def card(ticket: dict) -> dict:
         "potential_return": f"{money(ticket['potential_return'])} return · {money(ticket['potential_profit'])} profit",
         "hit": percent(ticket.get("hit_probability")),
         "rationale": ticket.get("rationale", ""),
+        "labels": labels_line(ticket),
         "recorded_at": et_time(ticket.get("recorded_at_utc"), with_date=True) if ticket.get("recorded_at_utc") else None,
         "outcome": outcome,
         "alerts": [alert_text(a) for a in ticket.get("alerts", [])],

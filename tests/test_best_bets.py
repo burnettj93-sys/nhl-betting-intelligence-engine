@@ -38,10 +38,50 @@ class TestCaptureCadence(unittest.TestCase):
     def test_first_capture_inside_the_horizon(self):
         self.assertEqual(bb.capture_decision(4.0, None), "FIRST")
 
-    def test_refresh_only_near_puck_drop_and_only_when_aged(self):
-        self.assertIsNone(bb.capture_decision(4.0, 200.0))                  # aged, but far from puck drop
-        self.assertIsNone(bb.capture_decision(1.0, 30.0))                   # near, but fresh
-        self.assertEqual(bb.capture_decision(1.0, 120.0), "REFRESH")
+    def test_a_refresh_is_due_before_the_price_reaches_its_freshness_limit(self):
+        far_limit, near_limit = bb.MAX_PRICE_AGE_MIN_FAR, bb.MAX_PRICE_AGE_MIN_NEAR
+        lead = bb.REFRESH_LEAD_MIN
+        self.assertIsNone(bb.capture_decision(4.0, far_limit - lead - 1))
+        self.assertEqual(bb.capture_decision(4.0, far_limit - lead), "REFRESH")      # 105 min old, limit 150
+        self.assertIsNone(bb.capture_decision(1.0, near_limit - lead - 1))
+        self.assertEqual(bb.capture_decision(1.0, near_limit - lead), "REFRESH")     # 55 min old, limit 100
+        # With 15-minute trader cycles the refresh always lands at least two cycles before expiry.
+        for hours, limit in ((4.0, far_limit), (1.0, near_limit)):
+            due = limit - lead
+            self.assertGreaterEqual(limit - (due + 15.0), 15.0)
+
+    def test_simulated_slate_day_keeps_prices_fresh_within_the_credit_budget(self):
+        """Fifteen-minute trader cycles from five hours out until puck drop: the newest price is never older than
+        its freshness limit at any cycle after the first capture, and one game costs a bounded number of captures."""
+        start = dt.datetime(2026, 10, 7, 23, 30, tzinfo=dt.timezone.utc)
+        t = start - dt.timedelta(hours=bb.CAPTURE_HORIZON_H)
+        last, captures, worst_overage = None, [], 0.0
+        while t < start - dt.timedelta(minutes=5):
+            hours = (start - t).total_seconds() / 3600.0
+            age = None if last is None else (t - last).total_seconds() / 60.0
+            if bb.capture_decision(hours, age):
+                last = t
+                captures.append(t)
+                age = 0.0
+            worst_overage = max(worst_overage, age - bb.price_age_limit_min(hours))
+            t += dt.timedelta(minutes=15)
+        self.assertLessEqual(worst_overage, 0.0)                              # never past its limit
+        self.assertLessEqual(len(captures), 5)
+        self.assertLessEqual(len(captures) * bb.EST_COST_PER_EVENT, 10)       # 5 captures x 2 credits at most per game
+        # The daily cap covers a 3-game evening; larger slates are limited by the cap, not by this cadence.
+        self.assertLessEqual(3 * len(captures) * bb.EST_COST_PER_EVENT, bb.DAILY_CREDIT_CAP)
+
+    def test_the_decision_never_fires_outside_the_window_or_after_puck_drop(self):
+        self.assertIsNone(bb.capture_decision(bb.CAPTURE_HORIZON_H + 0.1, 500.0))
+        self.assertIsNone(bb.capture_decision(0.0, 500.0))
+
+    def test_cutoffs_use_the_earlier_of_provider_and_official_start(self):
+        eff = bb.effective_start("2026-10-07T23:40:00Z", "2026-10-07T23:30:00")      # PIT-WSH: provider 10 min later
+        self.assertEqual(eff, dt.datetime(2026, 10, 7, 23, 30, tzinfo=dt.timezone.utc))
+        eff = bb.effective_start("2026-10-07T23:20:00Z", "2026-10-07T23:30:00")      # provider earlier wins instead
+        self.assertEqual(eff, dt.datetime(2026, 10, 7, 23, 20, tzinfo=dt.timezone.utc))
+        self.assertEqual(bb.effective_start("2026-10-07T23:40:00Z", None),
+                         dt.datetime(2026, 10, 7, 23, 40, tzinfo=dt.timezone.utc))
 
 
 def _payload(home="Philadelphia Flyers", away="Tampa Bay Lightning", players=None, shots_point=0.5, price=-300):
@@ -82,6 +122,17 @@ class TestLegsFromPayload(unittest.TestCase):
         self.assertEqual(points, [(1, -140.0, 0.55), (2, 250.0, 0.20)])      # Over 0.5 == 1+, Over 1.5 == 2+
         self.assertTrue(all(l.provider_contract_verified for l in legs))
 
+    def test_provider_start_is_kept_and_the_earlier_start_governs_not_started(self):
+        payload = _payload(shots_point=1.5)
+        payload["commence_time"] = "2026-10-06T22:30:00Z"            # provider says the game began 30 min before the official time
+        legs = bb._legs_from_payload(payload, NOW - dt.timedelta(minutes=5), _SNAPSHOT, dt.datetime(2026, 10, 6, 22, 45, tzinfo=dt.timezone.utc))
+        self.assertTrue(legs and all(not l.event_not_started for l in legs))
+        later = _payload(shots_point=1.5)
+        later["commence_time"] = "2026-10-06T23:10:00Z"
+        legs = bb._legs_from_payload(later, NOW - dt.timedelta(minutes=5), _SNAPSHOT, dt.datetime(2026, 10, 6, 20, 0, tzinfo=dt.timezone.utc))
+        self.assertTrue(all(l.event_not_started and l.game_start_utc == "2026-10-06T23:00:00Z"
+                            and l.provider_start_utc == "2026-10-06T23:10:00Z" for l in legs))
+
     def test_a_stale_price_is_marked_not_fresh_so_the_selector_rejects_it(self):
         legs = bb._legs_from_payload(_payload(shots_point=1.5), NOW - dt.timedelta(hours=4), _SNAPSHOT, NOW)
         self.assertTrue(legs and all(not l.price_fresh for l in legs))
@@ -92,6 +143,41 @@ class TestLegsFromPayload(unittest.TestCase):
         no_shots = [l for l in bb._legs_from_payload(_payload(shots_point=4.5), NOW, _SNAPSHOT, NOW)
                     if l.market_family == "PLAYER_SOG_ALTERNATE"]
         self.assertEqual(no_shots, [])
+
+
+class TestCapturePlan(unittest.TestCase):
+    EVENT = {"id": "8" * 32, "home_team": "Washington Capitals", "away_team": "Pittsburgh Penguins",
+             "commence_time": "2026-10-07T23:40:00Z"}
+    GAMES = {"2026020053": {"home": "WSH", "away": "PIT", "start_utc": "2026-10-07T23:30:00Z"}}
+
+    def _plan(self, now, captures):
+        def latest(event_id, archive_dir=None, require_points=True, market=None):
+            return captures.get(market)
+        with mock.patch.object(bb, "_latest_events_listing", return_value=[self.EVENT]), \
+             mock.patch.object(bb, "latest_capture", side_effect=latest):
+            return bb.capture_plan(now, games=self.GAMES)
+
+    def test_both_start_times_are_shown_and_the_earlier_one_governs(self):
+        now = dt.datetime(2026, 10, 7, 17, 0, tzinfo=dt.timezone.utc)
+        row = self._plan(now, {})[0]
+        self.assertEqual((row["provider_start_utc"], row["official_start_utc"]), ("2026-10-07T23:40:00Z", "2026-10-07T23:30:00Z"))
+        self.assertEqual(row["start_discrepancy_min"], 10.0)
+        self.assertEqual(row["cutoff_start_utc"], "2026-10-07T23:30:00Z")
+        self.assertEqual(row["capture_window_opens_utc"], "2026-10-07T18:30:00Z")        # five hours before the EARLIER start
+        self.assertIn("Oct 7 18:30 UTC", row["next_planned_capture"])
+
+    def test_next_refresh_and_stale_time_follow_the_freshness_limit(self):
+        now = dt.datetime(2026, 10, 7, 19, 0, tzinfo=dt.timezone.utc)
+        t0 = dt.datetime(2026, 10, 7, 18, 32, tzinfo=dt.timezone.utc)
+        row = self._plan(now, {bb.SOG_MARKET_KEY: (t0, {}), bb.POINTS_MARKET_KEY: (t0, {})})[0]
+        self.assertIn("Oct 7 20:17 UTC", row["next_planned_capture"])                      # 18:32 + 105 min
+        self.assertEqual(row["prices_stop_being_fresh_utc"], "2026-10-07T21:02:00+00:00")  # 18:32 + 150 min
+
+    def test_an_aged_price_is_refreshed_on_the_next_cycle(self):
+        now = dt.datetime(2026, 10, 7, 20, 30, tzinfo=dt.timezone.utc)
+        t0 = dt.datetime(2026, 10, 7, 18, 32, tzinfo=dt.timezone.utc)
+        row = self._plan(now, {bb.SOG_MARKET_KEY: (t0, {}), bb.POINTS_MARKET_KEY: (t0, {})})[0]
+        self.assertTrue(row["next_planned_capture"].startswith("REFRESH"))
 
 
 class TestArchiveHelpers(unittest.TestCase):
