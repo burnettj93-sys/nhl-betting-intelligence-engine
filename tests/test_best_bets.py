@@ -84,12 +84,20 @@ class TestCaptureCadence(unittest.TestCase):
                          dt.datetime(2026, 10, 7, 23, 40, tzinfo=dt.timezone.utc))
 
 
-def _payload(home="Philadelphia Flyers", away="Tampa Bay Lightning", players=None, shots_point=0.5, price=-300):
+def _payload(home="Philadelphia Flyers", away="Tampa Bay Lightning", players=None, shots_point=0.5, price=-300,
+             last_update="2026-10-06T19:49:00Z"):
+    """`last_update` is the provider's market update time (default: a minute before NOW's capture below); None omits it."""
     outs = [{"name": "Over", "description": n, "point": shots_point, "price": price} for n in (players or ["Tyler Toffoli"])]
     pts = [{"name": "Over", "description": n, "point": 1.5, "price": 250} for n in (players or ["Tyler Toffoli"])]
     pts.append({"name": "Under", "description": "Tyler Toffoli", "point": 1.5, "price": -400})
+
+    def market(key, outcomes):
+        m = {"key": key, "outcomes": outcomes}
+        if last_update is not None:
+            m["last_update"] = last_update
+        return m
     return {"id": "e" * 32, "home_team": home, "away_team": away, "bookmakers": [{"key": "draftkings", "markets": [
-        {"key": "player_shots_on_goal_alternate", "outcomes": outs}, {"key": "player_points", "outcomes": pts}]}]}
+        market("player_shots_on_goal_alternate", outs), market("player_points", pts)]}]}
 
 
 _SNAPSHOT = {"date": "2026-10-06", "games": {"7": {"home": "PHI", "away": "TBL", "start_utc": "2026-10-06T23:00:00Z"}},
@@ -143,6 +151,69 @@ class TestLegsFromPayload(unittest.TestCase):
         no_shots = [l for l in bb._legs_from_payload(_payload(shots_point=4.5), NOW, _SNAPSHOT, NOW)
                     if l.market_family == "PLAYER_SOG_ALTERNATE"]
         self.assertEqual(no_shots, [])
+
+
+class TestQuoteFreshness(unittest.TestCase):
+    """Regression for the audit finding: retrieval time was used as the price time, so a market last updated days ago
+    but fetched a minute ago looked fresh. The provider's own last_update now governs, separately from retrieval."""
+
+    def _legs(self, last_update, captured=None, now=None, bookmaker_update=None):
+        payload = _payload(shots_point=1.5, last_update=last_update)
+        if bookmaker_update:
+            payload["bookmakers"][0]["last_update"] = bookmaker_update
+        captured = captured or (NOW - dt.timedelta(minutes=1))
+        return bb._legs_from_payload(payload, captured, _SNAPSHOT, now or NOW)
+
+    def test_a_six_day_old_market_retrieved_a_minute_ago_is_not_fresh(self):
+        legs = self._legs("2026-09-30T19:49:00Z")
+        self.assertTrue(legs)
+        for leg in legs:
+            self.assertFalse(leg.price_fresh)
+            self.assertEqual(leg.freshness_status, "STALE_QUOTE")
+            self.assertGreater(leg.quote_age_min, 8000)                        # ~6 days, in minutes
+            self.assertEqual(leg.captured_at_utc, (NOW - dt.timedelta(minutes=1)).isoformat())   # retrieval kept apart
+            self.assertEqual(leg.quote_updated_utc, "2026-09-30T19:49:00Z")
+
+    def test_a_current_quote_is_fresh_and_both_timestamps_are_kept(self):
+        for leg in self._legs("2026-10-06T19:49:00Z"):
+            self.assertTrue(leg.price_fresh)
+            self.assertEqual(leg.freshness_status, "FRESH")
+            self.assertEqual(leg.quote_age_min, 11.0)
+            self.assertEqual(leg.retrieved_at_utc, "2026-10-06T19:59:00Z")
+
+    def test_missing_malformed_and_future_quote_timestamps_never_qualify(self):
+        for value, status in ((None, "MISSING_QUOTE_TIMESTAMP"), ("", "MISSING_QUOTE_TIMESTAMP"),
+                              ("not-a-time", "MALFORMED_QUOTE_TIMESTAMP"), ("2026-13-45T99:00:00Z", "MALFORMED_QUOTE_TIMESTAMP"),
+                              ("2026-10-06T21:00:00Z", "FUTURE_QUOTE_TIMESTAMP")):
+            legs = self._legs(value)
+            self.assertTrue(legs, value)
+            self.assertTrue(all(not l.price_fresh and l.freshness_status == status for l in legs), (value, status))
+
+    def test_a_bookmaker_level_time_is_used_only_when_the_market_has_none(self):
+        self.assertTrue(all(l.freshness_status == "FRESH" for l in self._legs(None, bookmaker_update="2026-10-06T19:50:00Z")))
+        self.assertTrue(all(l.freshness_status == "STALE_QUOTE" for l in self._legs(
+            "2026-09-30T19:49:00Z", bookmaker_update="2026-10-06T19:50:00Z")))     # the market's own (older) time wins
+
+    def test_old_retrievals_are_rejected_and_a_quote_newer_than_its_own_retrieval_is_impossible(self):
+        old_capture = NOW - dt.timedelta(hours=4)
+        stale = self._legs((old_capture - dt.timedelta(minutes=1)).strftime("%Y-%m-%dT%H:%M:%SZ"), captured=old_capture)
+        self.assertTrue(stale and all(l.freshness_status == "STALE_QUOTE" and not l.price_fresh for l in stale))
+        impossible = self._legs("2026-10-06T19:49:00Z", captured=old_capture)         # quote time after the retrieval time
+        self.assertTrue(impossible and all(l.freshness_status == "FUTURE_QUOTE_TIMESTAMP" and not l.price_fresh
+                                           for l in impossible))
+
+    def test_the_selector_rejects_stale_legs_and_the_funnel_counts_them_by_reason(self):
+        from research.real_market_parlay import engine as rmp
+        legs = self._legs("2026-09-30T19:49:00Z")
+        funnel = rmp.selection_funnel(legs)
+        self.assertEqual(funnel["legs_eligible"], 0)
+        self.assertEqual(funnel["freshness_status_counts"], {"STALE_QUOTE": len(legs)})
+
+    def test_threshold_window_uses_the_distance_to_puck_drop(self):
+        near = dt.datetime(2026, 10, 6, 22, 0, tzinfo=dt.timezone.utc)                # one hour before the 23:00Z game
+        legs = bb._legs_from_payload(_payload(shots_point=1.5, last_update="2026-10-06T20:00:00Z"),
+                                     near - dt.timedelta(minutes=1), _SNAPSHOT, near)   # quote 120 min old > 100-minute near limit
+        self.assertTrue(all(l.freshness_status == "STALE_QUOTE" for l in legs))
 
 
 class TestCapturePlan(unittest.TestCase):

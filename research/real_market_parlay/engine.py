@@ -123,6 +123,12 @@ class ParlayLeg:
     game_start_utc: str | None = None
     model_version: str = ""
     provider_start_utc: str | None = None   # the provider's commence_time; game_start_utc is the official NHL schedule
+    # Price timestamps, kept apart (see operational/quote_freshness.py): captured_at_utc is the price timestamp the
+    # source has always carried; these add the provider's own market update time and the verdict on it.
+    retrieved_at_utc: str | None = None      # when this system pulled the response
+    quote_updated_utc: str | None = None     # the provider's last_update for this bookmaker market
+    quote_age_min: float | None = None       # quote age when the leg was built
+    freshness_status: str = ""               # FRESH or the specific reason the quote is not fresh
 
 
 def leg_is_eligible(leg: ParlayLeg) -> bool:
@@ -319,6 +325,9 @@ def selection_funnel(candidate_legs: list[ParlayLeg], near_miss_limit: int = 6) 
          "legs_failed_eligibility": len(candidate_legs) - len(eligible),
          "legs_without_positive_edge": len(eligible) - len(pool), "legs_in_pool": len(pool),
          "games_with_pool_legs": len({l.game_id for l in pool}),
+         "freshness_status_counts": dict(sorted(
+             __import__("collections").Counter(l.freshness_status or "UNSPECIFIED" for l in candidate_legs
+                                               if l.freshness_status != "FRESH").items())),
          "two_leg_pairs_cross_game": 0, "pairs_reaching_plus_100": 0, "pairs_with_ev_at_least_min": 0,
          "pairs_passing_haircut": 0, "by_probability_model": {}, "nearest_rejected_legs": [],
          "nearest_rejected_pairs": []}

@@ -181,6 +181,8 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
         _migrate_v1_to_v2(conn)
     if row is not None and row["version"] < SCHEMA_VERSION:
         _migrate_to_v3(conn)
+        with open(SCHEMA_PATH) as f:     # re-create any trigger that a table rebuild dropped (all are IF NOT EXISTS)
+            conn.executescript(f.read())
         conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
         conn.commit()
     return conn
@@ -270,6 +272,22 @@ def account_state(conn: sqlite3.Connection, track: str) -> dict:
             "tickets": int(row["tickets"])}
 
 
+def _validate_stake_and_odds(track: str, stake, entry_odds) -> None:
+    """Rejects, before anything is written, a stake or price that could corrupt the account: a stake must be a
+    real number (not a bool/string), finite and > 0; the official ticket track stakes exactly PAPER_BET_STAKE;
+    American odds must be finite with |odds| >= 100 (a value between -100 and +100 is not a price)."""
+    import math
+    for name, value in (("stake", stake), ("entry_odds", entry_odds)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+            raise InvalidPaperBetError(f"{name} must be a finite number, got {value!r}")
+    if stake <= 0:
+        raise InvalidPaperBetError(f"stake must be positive, got {stake!r}")
+    if track == "REAL_MARKET_PAPER" and abs(stake - PAPER_BET_STAKE) > 1e-9:
+        raise InvalidPaperBetError(f"official tickets stake exactly ${PAPER_BET_STAKE:.2f}, got {stake!r}")
+    if abs(entry_odds) < 100:
+        raise InvalidPaperBetError(f"entry_odds must be American odds (|odds| >= 100), got {entry_odds!r}")
+
+
 def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str, market_id: str,
                       entry_odds: float, event_id=None, game_date=None, player_id=None,
                       player_name_snapshot=None, team=None, opponent=None, market_family=None,
@@ -299,6 +317,7 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
     if track == "DEMO_PAPER" and price_source != "SIMULATED_DEMO":
         raise InvalidPaperBetError("DEMO_PAPER bets must be priced with SIMULATED_DEMO -- "
                                     "never mix a real price into the demo track")
+    _validate_stake_and_odds(track, stake, entry_odds)
 
     idempotency_key = idempotency_key or compute_paper_idempotency_key(
         track=track, event_id=event_id, participant_id=player_id or team, market_id=market_id,
@@ -545,6 +564,12 @@ def _freeze_leg(l) -> dict:
             "captured_at_utc": l.captured_at_utc, "team": getattr(l, "team", None),
             "opponent": getattr(l, "opponent", None), "game_start_utc": getattr(l, "game_start_utc", None),
             "provider_start_utc": getattr(l, "provider_start_utc", None),
+            # price timestamps, frozen apart: retrieval vs the provider's own market update, and the quote's age
+            # when the ticket was recorded (see operational/quote_freshness.py)
+            "retrieved_at_utc": getattr(l, "retrieved_at_utc", None),
+            "quote_updated_utc": getattr(l, "quote_updated_utc", None),
+            "quote_age_min_at_entry": getattr(l, "quote_age_min", None),
+            "freshness_status": getattr(l, "freshness_status", "") or None,
             "model_version": getattr(l, "model_version", "")}
 
 

@@ -97,3 +97,14 @@ CREATE TABLE IF NOT EXISTS ticket_alerts (
     created_at_utc  TEXT NOT NULL,
     UNIQUE (paper_bet_id, kind, detail)
 );
+
+-- v3 hardening: the database itself refuses a row that could corrupt the account, whatever wrote it. A
+-- non-positive or missing stake, or a price that is not American odds, aborts the insert. (Applies to new rows
+-- only; nothing already stored is touched.)
+CREATE TRIGGER IF NOT EXISTS paper_bets_valid_stake_and_odds
+BEFORE INSERT ON paper_bets
+FOR EACH ROW
+WHEN NEW.stake IS NULL OR NEW.stake <= 0 OR NEW.entry_odds IS NULL OR ABS(NEW.entry_odds) < 100
+BEGIN
+    SELECT RAISE(ABORT, 'paper_bets: stake must be > 0 and entry_odds must be American odds (|odds| >= 100)');
+END;

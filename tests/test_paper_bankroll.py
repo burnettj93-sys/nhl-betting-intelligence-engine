@@ -477,6 +477,82 @@ class TestGameEdgeParlayPaperBet(TestPaperBankroll):
         self.assertEqual(r2["status"], "DUPLICATE")
 
 
+class TestInvalidInputsNeverTouchTheLedger(unittest.TestCase):
+    """Audit regression: record_paper_bet(stake=-10) used to create $510 available cash and -$10 open exposure."""
+
+    def setUp(self):
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        self.conn = pb.init_db(Path(tmp.name))
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _snapshot(self):
+        return (self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0],
+                self.conn.execute("SELECT COUNT(*) FROM paper_audit_log").fetchone()[0],
+                pb.account_state(self.conn, "REAL_MARKET_PAPER"))
+
+    def _record(self, **kw):
+        base = dict(track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id="M1", entry_odds=150,
+                    is_combo=True, legs_json="[]")
+        base.update(kw)
+        return pb.record_paper_bet(self.conn, **base)
+
+    def test_negative_zero_nonfinite_and_non_numeric_stakes_are_rejected_and_leave_the_ledger_unchanged(self):
+        before = self._snapshot()
+        for bad in (-10, -0.01, 0, 0.0, float("nan"), float("inf"), -float("inf"), "10", None, True, [10]):
+            with self.assertRaises(pb.InvalidPaperBetError, msg=repr(bad)):
+                self._record(stake=bad)
+            self.assertEqual(self._snapshot(), before, repr(bad))
+        self.assertEqual(before[2]["available_cash"], 500.0)
+
+    def test_the_official_ticket_stake_is_fixed_at_ten_dollars(self):
+        before = self._snapshot()
+        for stake in (5.0, 10.01, 9.99, 20, 100):
+            with self.assertRaises(pb.InvalidPaperBetError, msg=str(stake)):
+                self._record(stake=stake)
+        self.assertEqual(self._snapshot(), before)
+        self.assertEqual(self._record(stake=10)["status"], "INSERTED")
+        self.assertEqual(self._record(stake=10.0, market_id="M2")["status"], "INSERTED")
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 480.0)
+
+    def test_invalid_american_odds_are_rejected(self):
+        before = self._snapshot()
+        for bad in (0, 50, -50, 99, -99, float("nan"), float("inf"), None, "150", True):
+            with self.assertRaises(pb.InvalidPaperBetError, msg=repr(bad)):
+                self._record(entry_odds=bad)
+        self.assertEqual(self._snapshot(), before)
+        self.assertEqual(self._record(entry_odds=-110, market_id="M3")["status"], "INSERTED")
+        self.assertEqual(self._record(entry_odds=100, market_id="M4")["status"], "INSERTED")
+
+    def test_other_tracks_still_require_a_positive_finite_stake(self):
+        with self.assertRaises(pb.InvalidPaperBetError):
+            pb.record_paper_bet(self.conn, track="DEMO_PAPER", price_source="SIMULATED_DEMO", market_id="D1",
+                                entry_odds=120, stake=-5)
+        self.assertEqual(pb.record_paper_bet(self.conn, track="DEMO_PAPER", price_source="SIMULATED_DEMO",
+                                             market_id="D1", entry_odds=120, stake=5)["status"], "INSERTED")
+
+    def test_the_database_itself_refuses_a_bad_row_even_if_the_python_checks_were_bypassed(self):
+        import sqlite3
+        before = self._snapshot()
+        cols = "(paper_bet_id, idempotency_key, track, is_combo, market_id, price_source, entry_odds, stake, created_at_utc)"
+        for stake, odds in ((-10, 150), (0, 150), (10, 0), (10, 50), (None, 150)):
+            with self.assertRaises(sqlite3.IntegrityError, msg=f"{stake}/{odds}"):
+                self.conn.execute(f"INSERT INTO paper_bets {cols} VALUES (?,?,?,?,?,?,?,?,?)",
+                                  ("x", "k", "REAL_MARKET_PAPER", 1, "M", "LIVE_DRAFTKINGS", odds, stake, "2026-01-01T00:00:00Z"))
+            self.conn.rollback()
+        self.assertEqual(self._snapshot(), before)
+
+    def test_duplicates_and_funds_checks_still_work_after_validation(self):
+        self.assertEqual(self._record()["status"], "INSERTED")
+        self.assertEqual(self._record()["status"], "DUPLICATE")
+        for i in range(49):
+            self._record(market_id=f"F{i}")
+        self.assertEqual(self._record(market_id="LAST")["status"], "INSUFFICIENT_FUNDS")
+
+
 class TestRealMarketComboPaperBet(TestPaperBankroll):
     """Production Hardening + Parlay Build block (2026-09-29):
     create_real_market_combo_paper_bet() -- the REAL_MARKET_PAPER,

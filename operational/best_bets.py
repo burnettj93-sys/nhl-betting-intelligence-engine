@@ -45,7 +45,7 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-from operational import state_paths
+from operational import quote_freshness, state_paths
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MP_RAW_DIR = REPO_ROOT / "research" / "player_sog" / "raw"
@@ -458,8 +458,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
     # displays and stores the official start, and also keeps the provider's.
     hours = (effective_start(payload.get("commence_time") or game["start_utc"], game["start_utc"]) - now
              ).total_seconds() / 3600.0
-    age_min = (now - captured_at).total_seconds() / 60.0
-    fresh = hours > 0 and age_min <= (MAX_PRICE_AGE_MIN_FAR if hours >= 2.0 else MAX_PRICE_AGE_MIN_NEAR)
+    limit = price_age_limit_min(hours)
     verified = {"PLAYER_SOG_ALTERNATE": provider_adapter.is_contract_verified("draftkings", "PLAYER_SOG_ALTERNATE"),
                 "PLAYER_POINTS": provider_adapter.is_contract_verified("draftkings", "PLAYER_POINTS")}
     from research.real_market_parlay.engine import POINTS_ACTIONABLE_THRESHOLDS
@@ -473,6 +472,11 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
             if m.get("key") not in markets or (only_market and m.get("key") != only_market):
                 continue
             family, prob_prefix, thresholds = markets[m["key"]]
+            # The provider's own update time for this market (bookmaker-level time only if the market has none).
+            # Retrieval time says when WE fetched; only this says how old the price is.
+            quote = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(),
+                                           now, limit)
+            fresh = hours > 0 and quote["fresh"]
             for o in m.get("outcomes", []):
                 if o.get("name") != "Over" or o.get("point") is None or o.get("price") is None:
                     continue
@@ -489,6 +493,8 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     participant_id=entry["player_id"], participant_name=entry["name"], side="OVER", threshold=k,
                     american_price=float(o["price"]), conservative_probability=entry["probs"][f"{prob_prefix}{k}"],
                     sportsbook="draftkings", captured_at_utc=captured_at.isoformat(),
+                    retrieved_at_utc=quote["retrieved_at_utc"], quote_updated_utc=quote["quote_updated_utc"],
+                    quote_age_min=quote["quote_age_min"], freshness_status=quote["status"],
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
