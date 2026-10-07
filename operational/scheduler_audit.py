@@ -131,10 +131,31 @@ def find_duplicates(jobs: list[dict]) -> list[dict]:
     return dups
 
 
+def release_checkout() -> dict | None:
+    """The pinned execution checkout scheduled jobs may run from: a git worktree of THIS repository
+    (default ~/nhl_engine_release, override NHL_RELEASE_DIR; see deploy/release_checkout.sh). Returns
+    {"path", "commit"} only when it really is a worktree sharing this repo's git directory."""
+    path = Path(os.environ.get("NHL_RELEASE_DIR") or Path.home() / "nhl_engine_release")
+    if not path.is_dir():
+        return None
+    try:
+        def git(cwd, *args):
+            return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=10, check=True).stdout.strip()
+        mine = Path(git(REPO_ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+        theirs = Path(git(path, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve()
+        if mine != theirs:
+            return None
+        return {"path": str(path.resolve()), "commit": git(path, "rev-parse", "--short=10", "HEAD")}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def audit(agents_dir: Path | None = None, runner=_run) -> dict:
     if sys.platform != "darwin" and runner is _run:
         return {"status": "UNAVAILABLE", "reason": "launchd is macOS-only", "jobs": []}
     agents_dir = agents_dir or AGENTS_DIR
+    release = release_checkout()
+    allowed_dirs = {REPO_ROOT.resolve()} | ({Path(release["path"])} if release else set())
     jobs = []
     for path in sorted(glob.glob(str(agents_dir / f"{PREFIX}*.plist"))):
         plist = read_plist(Path(path), runner)
@@ -149,7 +170,7 @@ def audit(agents_dir: Path | None = None, runner=_run) -> dict:
             problems.append("NOT_LOADED")
         if not target_exists(plist):
             problems.append("TARGET_MISSING")
-        if wd and Path(wd).resolve() != REPO_ROOT.resolve():
+        if wd and Path(wd).resolve() not in allowed_dirs:
             problems.append("OTHER_WORKING_DIRECTORY")
         short = label.replace(PREFIX, "")
         jobs.append({"label": label, "short": short, "cadence": cadence_of(plist), "command": command_of(plist),
@@ -158,7 +179,7 @@ def audit(agents_dir: Path | None = None, runner=_run) -> dict:
     dups = find_duplicates(jobs)
     problems = [f"{j['label']}: {','.join(j['problems'])}" for j in jobs if j.get("problems")]
     return {"status": "OK" if not dups and not problems else "ATTENTION", "job_count": len(jobs), "jobs": jobs,
-            "duplicates": dups, "problems": problems, "boot_time_utc": booted.isoformat() if booted else None,
+            "duplicates": dups, "problems": problems, "release_checkout": release, "boot_time_utc": booted.isoformat() if booted else None,
             "note": "launchd `runs` restarts at every boot and calendar slots missed while the Mac was off are not replayed."}
 
 
