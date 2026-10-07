@@ -288,38 +288,93 @@ def _prepare_pool(candidate_legs: list[ParlayLeg]) -> list[ParlayLeg]:
     return [l for l in eligible if leg_has_edge(l)]
 
 
-def selection_funnel(candidate_legs: list[ParlayLeg]) -> dict:
-    """Counts at each selection stage, so an empty or short board can be explained
-    exactly (diagnostic only; selection itself is select_tickets)."""
+def _model_class(version: str) -> str:
+    return "experimental_rolling_form" if "EXPERIMENTAL" in (version or "") else "validated_model"
+
+
+def _leg_ev(leg: ParlayLeg) -> tuple[float, float]:
+    d = leg_decimal(leg)
+    return (leg.conservative_probability * d - 1.0,
+            max(leg.conservative_probability - LEG_PROBABILITY_MARGIN, 0.0) * d - 1.0)
+
+
+def _leg_rejection(leg: ParlayLeg) -> str | None:
+    d = leg_decimal(leg)
+    if leg.conservative_probability * d - 1.0 <= 0.0:
+        return "no positive edge: modeled probability does not beat the price"
+    if d < MIN_LEG_DECIMAL:
+        return f"price too short (decimal {d:.2f} < {MIN_LEG_DECIMAL})"
+    return None
+
+
+def selection_funnel(candidate_legs: list[ParlayLeg], near_miss_limit: int = 6) -> dict:
+    """Counts at each selection stage, split by which model supplied the probability, plus
+    the nearest rejected candidates (never recorded). Diagnostic only; selection itself is
+    select_tickets."""
     eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
     pool = [l for l in eligible if leg_has_edge(l)]
     f = {"legs_offered": len(candidate_legs), "legs_eligible": len(eligible),
          "legs_failed_eligibility": len(candidate_legs) - len(eligible),
          "legs_without_positive_edge": len(eligible) - len(pool), "legs_in_pool": len(pool),
+         "games_with_pool_legs": len({l.game_id for l in pool}),
          "two_leg_pairs_cross_game": 0, "pairs_reaching_plus_100": 0, "pairs_with_ev_at_least_min": 0,
-         "pairs_passing_haircut": 0, "best_pair_by_ev": None}
-    best = None
-    for a, b in combinations(pool, 2):
+         "pairs_passing_haircut": 0, "by_probability_model": {}, "nearest_rejected_legs": [],
+         "nearest_rejected_pairs": []}
+    for leg in candidate_legs:
+        cls = f["by_probability_model"].setdefault(_model_class(leg.model_version), {"offered": 0, "eligible": 0, "in_pool": 0, "versions": []})
+        cls["offered"] += 1
+        if leg.model_version not in cls["versions"]:
+            cls["versions"].append(leg.model_version)
+    for leg in eligible:
+        f["by_probability_model"][_model_class(leg.model_version)]["eligible"] += 1
+    for leg in pool:
+        f["by_probability_model"][_model_class(leg.model_version)]["in_pool"] += 1
+
+    legs_view = []
+    for leg in eligible:
+        reason = _leg_rejection(leg)
+        if reason:
+            ev, ev_low = _leg_ev(leg)
+            legs_view.append((ev, {"selection": leg_label(leg), "game_id": leg.game_id, "american_price": leg.american_price,
+                                   "modeled_probability": round(leg.conservative_probability, 4),
+                                   "probability_model": leg.model_version, "ev_estimated": round(ev, 4),
+                                   "ev_after_haircut": round(ev_low, 4), "rejection_reason": reason}))
+    legs_view.sort(key=lambda t: -t[0])
+    f["nearest_rejected_legs"] = [v for _, v in legs_view[:near_miss_limit]]
+
+    pairs_view = []
+    for a, b in combinations(eligible, 2):
         combo = _evaluate_combo([a, b])
         if combo is None:
             continue
-        f["two_leg_pairs_cross_game"] += 1
-        if combo.combined_decimal < MIN_COMBINED_DECIMAL:
-            continue
-        f["pairs_reaching_plus_100"] += 1
-        if combo.ev_estimated < MIN_ESTIMATED_EV:
-            continue
-        f["pairs_with_ev_at_least_min"] += 1
-        if combo.ev_conservative >= 0.0:
-            f["pairs_passing_haircut"] += 1
-    for a, b in combinations(pool, 2):
-        combo = _evaluate_combo([a, b])
-        if combo is not None and combo.combined_decimal >= MIN_COMBINED_DECIMAL and (
-                best is None or combo.ev_conservative > best.ev_conservative):
-            best = combo
-    if best is not None:
-        f["best_pair_by_ev"] = {"legs": [leg_label(l) for l in best.legs], "combined_decimal": round(best.combined_decimal, 3),
-                                "ev_estimated": round(best.ev_estimated, 4), "ev_after_haircut": round(best.ev_conservative, 4)}
+        if leg_has_edge(a) and leg_has_edge(b):
+            f["two_leg_pairs_cross_game"] += 1
+        reason = None
+        if combo.combined_decimal >= MIN_COMBINED_DECIMAL and leg_has_edge(a) and leg_has_edge(b):
+            f["pairs_reaching_plus_100"] += 1
+            if combo.ev_estimated >= MIN_ESTIMATED_EV:
+                f["pairs_with_ev_at_least_min"] += 1
+                if combo.ev_conservative >= 0.0:
+                    f["pairs_passing_haircut"] += 1
+                else:
+                    reason = "EV negative after the per-leg probability haircut"
+            else:
+                reason = f"estimated EV below the {MIN_ESTIMATED_EV:.0%} minimum"
+        elif combo.combined_decimal < MIN_COMBINED_DECIMAL:
+            reason = "combined price below +100 (decimal < 2.0)"
+        else:
+            reason = "a leg has no positive edge"
+        if reason:
+            pairs_view.append((combo.ev_conservative, {
+                "legs": [leg_label(l) for l in combo.legs], "leg_prices": [l.american_price for l in combo.legs],
+                "probability_models": [l.model_version for l in combo.legs],
+                "combined_decimal": round(combo.combined_decimal, 3),
+                "combined_american_estimated": round(combo.estimated_combo_price),
+                "estimated_hit_probability": round(combo.joint_probability, 4),
+                "ev_estimated": round(combo.ev_estimated, 4), "ev_after_haircut": round(combo.ev_conservative, 4),
+                "rejection_reason": reason}))
+    pairs_view.sort(key=lambda t: -t[0])
+    f["nearest_rejected_pairs"] = [v for _, v in pairs_view[:near_miss_limit]]
     return f
 
 

@@ -385,6 +385,14 @@ def read_state() -> dict | None:
 
 # ------------------------------------------------------------------- cycle ----
 
+def _capture_plan(now: dt.datetime) -> list[dict]:
+    from operational import best_bets
+    try:
+        return best_bets.capture_plan(now)
+    except Exception as exc:  # noqa: BLE001 -- diagnostics only
+        return [{"error": f"{exc.__class__.__name__}: {exc}"}]
+
+
 def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
     base = "No eligible priced legs right now (no fresh prices for games that haven't started)."
     if nhl_conn is None:
@@ -438,6 +446,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
+        "capture_plan": _capture_plan(now),
     }
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
                         diagnostics=diagnostics, record_results=record_results)

@@ -160,6 +160,8 @@ if _show_technical:
         if _diag:
             st.caption(f"Last cycle: {_diag.get('legs_considered', 0)} legs considered, "
                        f"{_diag.get('qualifying_tickets', 0)} qualifying tickets.")
+            st.markdown("Capture plan (our 5-hour window is a credit policy, not provider availability)")
+            st.dataframe(_diag.get("capture_plan") or [], hide_index=True, width="stretch")
             st.markdown("Selection funnel (why tickets did or did not qualify)")
             st.json(_diag.get("funnel") or {}, expanded=False)
             st.json(_diag.get("sources") or {}, expanded=False)

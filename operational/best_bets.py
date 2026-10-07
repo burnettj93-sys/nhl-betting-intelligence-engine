@@ -467,6 +467,55 @@ def candidate_legs(conn, now: dt.datetime) -> tuple[list, dict]:
     return legs, report
 
 
+def _latest_events_listing(archive_dir: Path | None = None) -> list[dict]:
+    """The newest archived (free) provider events listing: id, teams, commence_time."""
+    files = sorted(glob.glob(str((archive_dir or _archive_dir()) / "*events_na_none.json")))
+    for path in reversed(files):
+        try:
+            doc = json.loads(Path(path).read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(doc.get("response"), list):
+            return doc["response"]
+    return []
+
+
+def capture_plan(now: dt.datetime, *, hours_ahead: float = 30.0) -> list[dict]:
+    """Per upcoming game: start time, when OUR capture window opens, the last capture and
+    its age, and the next planned capture. The window is our own credit policy
+    (CAPTURE_HORIZON_H); it is not the provider's availability -- DraftKings has had these
+    markets posted for days (see docs/MARKET_COVERAGE_AUDIT.md), and prices older than
+    MAX_PRICE_AGE_MIN_* are rejected anyway, so capturing earlier would only go stale."""
+    plan = []
+    for e in sorted(_latest_events_listing(), key=lambda e: e["commence_time"]):
+        start = _parse_utc(e["commence_time"])
+        hours = (start - now).total_seconds() / 3600.0
+        if hours <= 0 or hours > hours_ahead:
+            continue
+        opens = start - dt.timedelta(hours=CAPTURE_HORIZON_H)
+        last = latest_capture(e["id"])
+        last_any = latest_capture(e["id"], require_points=False)
+        age = None if last is None else (now - last[0]).total_seconds() / 60.0
+        decision = capture_decision(hours, age)
+        if last is None and now < opens:
+            nxt = f"first capture on the first 15-minute trader cycle at or after {opens.strftime('%H:%M')}Z"
+        elif decision:
+            nxt = f"{decision} on the next 15-minute trader cycle"
+        elif last is not None and hours > REFRESH_WITHIN_H:
+            refresh_at = max(start - dt.timedelta(hours=REFRESH_WITHIN_H), last[0] + dt.timedelta(minutes=REFRESH_MIN_AGE_MIN))
+            nxt = f"refresh on the first cycle at or after {refresh_at.strftime('%H:%M')}Z"
+        else:
+            nxt = "none planned"
+        plan.append({
+            "provider_event_id": e["id"], "matchup": f"{e['away_team']} at {e['home_team']}",
+            "start_utc": e["commence_time"], "capture_window_opens_utc": opens.isoformat().replace("+00:00", "Z"),
+            "last_capture_utc": None if last is None else last[0].isoformat(),
+            "last_capture_age_min": None if age is None else round(age, 1),
+            "last_any_shots_price_utc": None if last_any is None else last_any[0].isoformat(),
+            "next_planned_capture": nxt})
+    return plan
+
+
 def _content_hash(state: dict) -> str:
     body = {k: v for k, v in state.items() if k not in ("generated_at_utc", "capture")}
     return hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()
