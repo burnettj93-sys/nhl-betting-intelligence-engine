@@ -62,16 +62,16 @@ def run(now: dt.datetime | None = None, archive_max_age_hours: float = 24.0) -> 
     all_excluded = moneyline_excluded + sog_excluded
     parlay_result = rmp.build_real_market_parlay(all_legs)
 
-    # Near-miss diagnostics (Step 16): every 3-leg cross-game combination
-    # that failed ONLY the quality gates (not the same-game rule), ranked by
-    # joint probability, reported but never bet.
+    # Near-miss diagnostics: every 2-leg cross-game combination that failed
+    # ONLY the ticket policy (not the same-game rule), ranked by joint
+    # probability, reported but never bet.
     near_misses = []
     from itertools import combinations
-    for group in combinations(all_legs, 3):
+    for group in combinations(all_legs, 2):
         combo = rmp._evaluate_combo(list(group))  # noqa: SLF001 -- diagnostic-only, read-only
         if combo is None:
             continue
-        if not rmp._passes_quality_gates(combo):  # noqa: SLF001
+        if not rmp.ticket_passes_policy(combo):
             near_misses.append(combo)
     near_misses.sort(key=lambda c: c.joint_probability, reverse=True)
 
@@ -97,8 +97,9 @@ def run(now: dt.datetime | None = None, archive_max_age_hours: float = 24.0) -> 
         "near_misses": [
             {"legs": [f"{l.participant_name}:{l.market_family}:{l.threshold}" for l in c.legs],
              "joint_probability": round(c.joint_probability, 4), "combo_edge": round(c.combo_edge, 4),
-             "reason_rejected": "below 70% floor" if c.joint_probability < rmp.MIN_JOINT_PROBABILITY
-                                 else "combo edge not positive"}
+             "reason_rejected": ("combined price below +100" if c.combined_decimal < rmp.MIN_COMBINED_DECIMAL
+                                 else "estimated EV below the policy minimum" if c.ev_estimated < rmp.MIN_ESTIMATED_EV
+                                 else "EV not positive after the uncertainty haircut")}
             for c in near_misses[:5]
         ],
         "paper_bet_created_in_test_db": False,

@@ -1,72 +1,42 @@
 """
-Real-Market Paper Parlay engine V1 (Production Hardening + Parlay Build
-block, 2026-09-29). Built only after PLAYER_SOG_ALTERNATE became the first
-DK-Ontario-aligned prop family to clear every gate in the DraftKings-
-Ontario-aligned parlay roadmap (MODEL STATUS -> TARGET_BOOK_AVAILABLE ->
-LIVE PROVIDER CONTRACT -> INGESTION -> IDENTITY -> SETTLEMENT -> CONTEXT
-GATE -> PARLAY ELIGIBLE) -- see the RECOVERY PASS block's own
-FIRST_PROP_FAMILY_FULLY_GREEN=YES determination for PLAYER_SOG_ALTERNATE
-thresholds 2-5.
+Unified NHL paper-ticket selector (the ONE engine behind Today, the paper
+trader, ticket history, settlement and postmortems).
 
-Deliberately narrow for V1: exactly two market families are ever eligible
-(ALLOWED_MARKET_FAMILIES below) -- MONEYLINE (real and verified since the
-Live DK completion sprint) and PLAYER_SOG_ALTERNATE (this block's own
-certification, restricted to its validated thresholds 2-5). Every other
-family this project has ever modeled or discussed for DK Ontario (Saves,
-Points, Assists, Team/Game Totals, Hits, Blocks, ...) stays OUT of this
-engine's allowlist until it independently earns its own place here --
-never "if it's eligible somewhere else, allow it here too."
+History: this module began as the Real-Market Paper Parlay engine V1 (3-4
+leg parlays, hard 70% joint-probability floor). The +100 "Best Bets" work
+then produced a second, parallel recommendation list under different rules,
+so what the user saw was not what the ledger staked. Both now go through
+`select_tickets()` below; there is no other place that decides what a
+recommended ticket is.
 
-CROSS-GAME ONLY, by design, not by omission: this engine refuses to
-combine two legs that share the same internal nhl.db game_id (see
-legs_share_a_game()). This is the one design choice that lets every
-combo's joint probability be an honest, un-fudged product of each leg's
-own conservative_probability -- two different NHL games are genuinely
-independent events (no shared roster, no shared game state), so no
-correlation modeling is needed, invented, or assumed away. This project's
-own same-game combo engine (research/game_edge_parlay/engine.py) already
-exists specifically to handle same-game dependence (same-player copulas,
-a Frechet-bounded cross-player shooter/goalie case) -- reusing that
-machinery here would be the wrong tool: this product is explicitly a
-cross-game, MONEYLINE+SOG-only daily parlay, never a same-game builder.
-Naively combining two same-game legs without going through that real
-dependence machinery would be exactly the "blindly multiplying same-game
-legs" this block explicitly forbids -- so this engine simply never does
-it, rather than attempting a partial, unvalidated correlation estimate.
+TICKET POLICY (all constants below, all documented, none tuned to fill a board):
+  * Cross-game parlays only. Two legs from the same nhl.db game are never
+    combined -- no same-game parlay without a joint-probability model and a
+    verified combined price, neither of which exists here.
+  * Combined decimal price >= 2.0 (+100 or better). The combined price is the
+    product of each leg's own sportsbook price. It is an ESTIMATED combined
+    price, not a quoted DraftKings parlay price.
+  * Two legs by default. A longer ticket is only allowed when no sub-ticket
+    of two or more of its legs passes this same policy on its own ("add legs
+    only when justified").
+  * EV policy replaces the old inherited 70% hit-chance rule. A hit chance
+    cannot be both high and +100 for long, so the test is value, not size:
+      - each leg's conservative probability must beat its own implied price;
+      - estimated EV  = P_joint * decimal - 1  >= MIN_ESTIMATED_EV;
+      - model-uncertainty EV, with every leg's probability lowered by
+        LEG_PROBABILITY_MARGIN, must still be >= 0.
+    Probabilities are never inflated; the margin only ever lowers them.
+  * Up to MAX_TICKETS_PER_DAY distinct tickets per Eastern day. Singles are a
+    separate, informational list and do not count toward it.
+  * No blanket "a game can be used once" rule across tickets. Instead:
+    identical leg sets are duplicates, one leg may sit on at most
+    MAX_TICKETS_PER_LEG tickets, one game on at most MAX_TICKETS_PER_GAME
+    tickets, and opposite moneyline sides of one game are never both held.
 
-ONE-SIDED PRICING, explicitly reconciled: research/generic_prop_pricing/
-evaluator.py::evaluate_prop() -- the generic pricer real PLAYER_SOG_ALTERNATE
-quotes are actually priced through -- returns action="NOT_AVAILABLE" for
-every one-sided market (Part 42's deliberate "never fake the opposite
-side" rule), because it refuses to derive an edge/EV against a raw,
-un-vig-stripped implied probability. Since the real, certified
-PLAYER_SOG_ALTERNATE payload shape is ALWAYS one-sided (DraftKings has
-never posted an Under here -- see provider_adapter.VERIFIED_CONTRACTS's
-own evidence), this means no real SOG leg can ever reach a solo "BET"
-action label from that generic pipeline alone -- a real, disclosed
-consequence of Part 42's conservatism, not something this module patches
-over. This engine therefore never requires a candidate leg to already
-carry a solo "BET" action; it requires the narrower, real ingredients
-from the SOG threshold-eligibility matrix (provider_contract_verified,
-model_threshold_eligible, identity_resolved, price_fresh,
-event_not_started) plus a real conservative_probability -- see
-leg_is_eligible(). COMBO-level value is judged separately (see
-_evaluate_combo()'s combo_edge), using each leg's own single-sided
-implied probability -- the SAME honest pattern research/game_edge_parlay/
-engine.py already uses for its own "estimated_combo_price" (explicitly
-never a real DK combined price, Part 47).
-
-NEVER FABRICATES a combined DraftKings same-game-parlay price: the only
-"price" this module ever reports for a qualifying combo is
-estimated_combo_price, the plain product of each leg's own real,
-verified American price converted to implied probability and back --
-labeled exactly that, never presented as a real DK SGP quote. A real
-combined DK price for this cross-game combination does not exist (DK
-does not price cross-game same-slip combos at a discount/premium the way
-a same-game parlay is priced) and is not needed: paper settlement uses
-this same estimated_combo_price as the paper stake's entry price,
-exactly as research/game_edge_parlay/engine.py's own ComboResult already
-does for its single-game product.
+Everything else below (ParlayLeg, leg_is_eligible, etc.) is the original
+leg-eligibility machinery, unchanged: the contract-verified allowlist, the
+validated SOG/Saves thresholds and the identity/price/start checks are the
+same gates as before.
 """
 from __future__ import annotations
 
@@ -101,14 +71,18 @@ SAVES_VALIDATED_THRESHOLDS = frozenset({20, 25})
 # team-level moneyline probability is) -- never weakened to manufacture legs.
 ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES"})
 
-MIN_LEGS = 3
+MIN_LEGS = 2
 MAX_LEGS = 4
 
-# A HARD floor, not a soft target/tie-breaker like research/game_edge_parlay's
-# own 0.50 floor / 0.70 preference split -- this block's own explicit
-# instruction for the real-market product is "require conservative joint
-# probability >= 70%", never merely "prefer it".
-MIN_JOINT_PROBABILITY = 0.70
+MIN_COMBINED_DECIMAL = 2.0          # +100 or better, always
+MIN_LEG_DECIMAL = 1.20              # a -500 leg is filler: lowers the hit chance for almost no payout
+MIN_ESTIMATED_EV = 0.05             # P_joint * decimal - 1, at the conservative leg probabilities
+LEG_PROBABILITY_MARGIN = 0.03       # absolute haircut per leg for the uncertainty test (never added)
+MAX_TICKETS_PER_DAY = 5
+MAX_TICKETS_PER_LEG = 2
+MAX_TICKETS_PER_GAME = 3
+MAX_POOL_FOR_LONG_TICKETS = 24      # bounds the 3-4 leg search; best legs by edge are kept
+MAX_SINGLES = 5
 
 
 @dataclass(frozen=True)
@@ -136,6 +110,12 @@ class ParlayLeg:
     identity_resolved: bool
     price_fresh: bool
     event_not_started: bool
+    # Display / audit context frozen onto recorded tickets. All optional so the
+    # eligibility machinery above is unaffected.
+    team: str | None = None
+    opponent: str | None = None
+    game_start_utc: str | None = None
+    model_version: str = ""
 
 
 def leg_is_eligible(leg: ParlayLeg) -> bool:
@@ -202,6 +182,30 @@ def joint_probability(legs: list[ParlayLeg]) -> float:
     return p
 
 
+LegIdentity = tuple
+
+
+def leg_identity(leg: ParlayLeg) -> LegIdentity:
+    """Economic identity of a leg, line included, price excluded: the same
+    bet at a moved price is the same leg."""
+    return (leg.game_id, leg.participant_id, leg.market_family, leg.threshold, leg.side)
+
+
+def leg_decimal(leg: ParlayLeg) -> float:
+    a = leg.american_price
+    return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
+
+
+def leg_label(leg: ParlayLeg) -> str:
+    if leg.market_family == "MONEYLINE":
+        return f"{leg.participant_name} to win"
+    if leg.market_family in ("PLAYER_SOG_ALTERNATE", "PLAYER_SOG"):
+        return f"{leg.participant_name} {leg.threshold}+ shots on goal"
+    if leg.market_family == "GOALIE_SAVES":
+        return f"{leg.participant_name} {leg.threshold}+ saves"
+    return f"{leg.participant_name} {leg.market_family} {leg.threshold}"
+
+
 @dataclass(frozen=True)
 class ParlayResult:
     legs: list[ParlayLeg]
@@ -209,142 +213,167 @@ class ParlayResult:
     fair_combo_price: float          # the MODEL's own fair price for the joint probability
     estimated_combo_price: float     # product of each leg's OWN real price -- never a DK SGP quote
     combo_edge: float                # joint_probability - product of each leg's own raw implied prob
+    combined_decimal: float = 0.0
+    ev_estimated: float = 0.0        # P_joint * decimal - 1
+    ev_conservative: float = 0.0     # same, with every leg's probability lowered by LEG_PROBABILITY_MARGIN
     offered_parlay_price: None = field(default=None)  # NEVER fabricated -- see module docstring
 
 
 def _evaluate_combo(legs: list[ParlayLeg]) -> ParlayResult | None:
-    """None means this leg group is not a candidate combo at all (shares
-    a game) -- distinct from a candidate that simply fails the quality
-    gates, mirroring research/game_edge_parlay/engine.py's own
-    None-means-rejected-outright convention."""
+    """None means this leg group is not a candidate at all (shares a game)."""
     if legs_share_a_game(legs):
         return None
     jp = joint_probability(legs)
-    estimated_product_prob = 1.0
+    decimal_price = 1.0
     for leg in legs:
-        estimated_product_prob *= odds_math.american_to_prob(leg.american_price)
+        decimal_price *= leg_decimal(leg)
+    p_low = 1.0
+    for leg in legs:
+        p_low *= max(leg.conservative_probability - LEG_PROBABILITY_MARGIN, 0.0)
+    implied = 1.0 / decimal_price
     return ParlayResult(
         legs=legs, joint_probability=jp,
         fair_combo_price=odds_math.prob_to_american(jp),
-        estimated_combo_price=odds_math.prob_to_american(estimated_product_prob),
-        combo_edge=jp - estimated_product_prob,
+        estimated_combo_price=odds_math.prob_to_american(implied),
+        combo_edge=jp - implied,
+        combined_decimal=decimal_price,
+        ev_estimated=jp * decimal_price - 1.0,
+        ev_conservative=p_low * decimal_price - 1.0,
     )
 
 
-def _passes_quality_gates(combo: ParlayResult) -> bool:
-    return combo.joint_probability >= MIN_JOINT_PROBABILITY and combo.combo_edge > 0.0
+def leg_has_edge(leg: ParlayLeg) -> bool:
+    return leg.conservative_probability * leg_decimal(leg) - 1.0 > 0.0 and leg_decimal(leg) >= MIN_LEG_DECIMAL
 
 
-def _best_combo_of_size(legs: list[ParlayLeg], size: int) -> ParlayResult | None:
-    best: ParlayResult | None = None
-    for group in combinations(legs, size):
-        combo = _evaluate_combo(list(group))
-        if combo is None or not _passes_quality_gates(combo):
+def ticket_passes_policy(combo: ParlayResult) -> bool:
+    return (combo.combined_decimal >= MIN_COMBINED_DECIMAL
+            and combo.ev_estimated >= MIN_ESTIMATED_EV
+            and combo.ev_conservative >= 0.0)
+
+
+def _qualifying_tickets(pool: list[ParlayLeg]) -> list[ParlayResult]:
+    """Every cross-game ticket of 2..MAX_LEGS legs that passes the policy and
+    is not made redundant by a passing sub-ticket (longer tickets must be
+    needed, not merely possible)."""
+    passing: dict[frozenset, ParlayResult] = {}
+    ordered = sorted(pool, key=lambda l: -(l.conservative_probability * leg_decimal(l)))
+    for size in range(MIN_LEGS, MAX_LEGS + 1):
+        candidates = ordered if size == MIN_LEGS else ordered[:MAX_POOL_FOR_LONG_TICKETS]
+        for group in combinations(candidates, size):
+            keys = [leg_identity(l) for l in group]
+            if size > MIN_LEGS and any(
+                    frozenset(sub) in passing
+                    for n in range(MIN_LEGS, size) for sub in combinations(keys, n)):
+                continue
+            combo = _evaluate_combo(list(group))
+            if combo is None or not ticket_passes_policy(combo):
+                continue
+            passing[frozenset(keys)] = combo
+    return list(passing.values())
+
+
+def _prepare_pool(candidate_legs: list[ParlayLeg]) -> list[ParlayLeg]:
+    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
+    return [l for l in eligible if leg_has_edge(l)]
+
+
+def select_singles(candidate_legs: list[ParlayLeg], limit: int = MAX_SINGLES) -> list[ParlayLeg]:
+    """Informational single-leg ideas at +100 or better under the same EV
+    policy. Not staked, and not counted toward the daily parlay tickets."""
+    singles = []
+    for leg in _prepare_pool(candidate_legs):
+        d = leg_decimal(leg)
+        if (d >= MIN_COMBINED_DECIMAL and leg.conservative_probability * d - 1.0 >= MIN_ESTIMATED_EV
+                and (leg.conservative_probability - LEG_PROBABILITY_MARGIN) * d - 1.0 >= 0.0):
+            singles.append(leg)
+    singles.sort(key=lambda l: (-l.conservative_probability, -(l.conservative_probability * leg_decimal(l))))
+    return singles[:limit]
+
+
+def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegIdentity]] | None = None,
+                   max_tickets: int = MAX_TICKETS_PER_DAY) -> dict:
+    """Pick up to `max_tickets` NEW tickets, given the leg sets already
+    recorded today (`existing`; they count toward every exposure limit and can
+    never be re-selected). Ranked by hit probability, then EV, among tickets
+    that pass the policy. Returns
+      {"tickets": [ParlayResult...], "pool_size": int, "qualifying": int, "reason": str|None}
+    `reason` explains an empty or short result; it is never padded."""
+    existing = existing or []
+    pool = _prepare_pool(candidate_legs)
+    result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None}
+    if max_tickets <= 0:
+        result["reason"] = "all of today's ticket slots are already used"
+        return result
+    if len(pool) < MIN_LEGS:
+        result["reason"] = (f"only {len(pool)} eligible leg(s) with a positive edge; a ticket needs at least "
+                            f"{MIN_LEGS} legs from different games")
+        return result
+    qualifying = _qualifying_tickets(pool)
+    result["qualifying"] = len(qualifying)
+    if not qualifying:
+        result["reason"] = (f"no cross-game combination reaches +100 with estimated EV >= "
+                            f"{MIN_ESTIMATED_EV:.0%} that also survives the uncertainty haircut")
+        return result
+
+    taken_sets = {frozenset(e) for e in existing}
+    leg_use: dict = {}
+    game_use: dict = {}
+    ml_side: dict = {}
+    for e in existing:
+        for ident in e:
+            leg_use[ident] = leg_use.get(ident, 0) + 1
+            game_use[ident[0]] = game_use.get(ident[0], 0) + 1
+            if ident[2] == "MONEYLINE":
+                ml_side[ident[0]] = ident[1]
+
+    qualifying.sort(key=lambda c: (-c.joint_probability, -c.ev_estimated, len(c.legs)))
+    blocked = 0
+    for combo in qualifying:
+        if len(result["tickets"]) >= max_tickets:
+            break
+        idents = [leg_identity(l) for l in combo.legs]
+        if frozenset(idents) in taken_sets:
             continue
-        if best is None or combo.joint_probability > best.joint_probability:
-            best = combo
-    return best
+        if any(leg_use.get(i, 0) >= MAX_TICKETS_PER_LEG for i in idents):
+            blocked += 1
+            continue
+        if any(game_use.get(i[0], 0) >= MAX_TICKETS_PER_GAME for i in idents):
+            blocked += 1
+            continue
+        if any(i[2] == "MONEYLINE" and ml_side.get(i[0], i[1]) != i[1] for i in idents):
+            blocked += 1
+            continue
+        result["tickets"].append(combo)
+        taken_sets.add(frozenset(idents))
+        for i in idents:
+            leg_use[i] = leg_use.get(i, 0) + 1
+            game_use[i[0]] = game_use.get(i[0], 0) + 1
+            if i[2] == "MONEYLINE":
+                ml_side[i[0]] = i[1]
+    if len(result["tickets"]) < max_tickets:
+        if result["tickets"]:
+            result["reason"] = (f"only {len(result['tickets'])} more ticket(s) qualified; the other qualifying "
+                                f"combinations were duplicates or would exceed the shared-exposure limits")
+        else:
+            result["reason"] = (f"{len(qualifying)} qualifying ticket(s) exist but all are already recorded or "
+                                f"would exceed the shared-exposure limits")
+    return result
+
+
+# --- compatibility wrappers (old return shapes; the logic is select_tickets) ----------------
+
+def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: int = MAX_TICKETS_PER_DAY) -> dict:
+    picked = select_tickets(candidate_legs, max_tickets=max_parlays)
+    if not picked["tickets"]:
+        return {"status": "NO_QUALIFYING_PARLAY", "reason": picked["reason"]}
+    return {"status": "QUALIFIED",
+            "parlays": [{"recommended_legs": len(c.legs), "combo": c} for c in picked["tickets"]]}
 
 
 def build_real_market_parlay(candidate_legs: list[ParlayLeg]) -> dict:
-    """The main entry point. Returns either:
-      {"status": "QUALIFIED", "recommended_legs": 3|4, "combo": ParlayResult, "alternative_3leg": ParlayResult|None}
-      {"status": "NO_QUALIFYING_PARLAY", "reason": str, "informational_2leg": ParlayResult|None}
-    Never manufactures a result for the MONITORED 3/4-leg cohort: 0
-    qualifying parlays on a given slate is a real, expected, correct PASS
-    outcome, never forced up to meet a bet count.
-
-    Platform Recovery block (2026-09-29): when the monitored cohort doesn't
-    qualify but a real, quality-gated (same >= 70% joint-probability floor,
-    same positive-edge requirement, same cross-game-only rule) 2-leg
-    combination exists, it is surfaced as `informational_2leg` -- real
-    information worth showing rather than a bare "not enough legs" message.
-    It is explicitly NOT a monitored bet: callers must never create a paper
-    bet from it or count it in the monitored 3/4-leg performance cohort."""
-    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
-    if len(eligible) < MIN_LEGS:
-        return {"status": "NO_QUALIFYING_PARLAY",
-                "reason": f"only {len(eligible)} PARLAY_ELIGIBLE leg(s) on the allowlist "
-                          f"({sorted(ALLOWED_MARKET_FAMILIES)}) -- need at least {MIN_LEGS} for a monitored parlay",
-                "informational_2leg": _best_combo_of_size(eligible, 2) if len(eligible) >= 2 else None}
-
-    best_3 = _best_combo_of_size(eligible, 3)
-    if best_3 is None:
-        return {"status": "NO_QUALIFYING_PARLAY",
-                "reason": "no 3-leg, single-game-max combination cleared both the "
-                          f">= {MIN_JOINT_PROBABILITY:.0%} joint-probability floor and a positive combo edge",
-                "informational_2leg": _best_combo_of_size(eligible, 2)}
-
-    best_4 = _best_combo_of_size(eligible, MAX_LEGS) if len(eligible) >= MAX_LEGS else None
-    # The 4th leg is added only if it doesn't drag the combo below the real
-    # floor and combo-level value stays positive -- otherwise the 3-leg
-    # stands (always compare, never assume more legs is better).
-    if best_4 is not None and _passes_quality_gates(best_4):
-        return {"status": "QUALIFIED", "recommended_legs": 4, "combo": best_4, "alternative_3leg": best_3}
-    return {"status": "QUALIFIED", "recommended_legs": 3, "combo": best_3, "alternative_3leg": None}
-
-
-def build_top_real_market_parlays(candidate_legs: list[ParlayLeg], max_parlays: int = 5) -> dict:
-    """Owner Escalation block (2026-09-30): build_real_market_parlay() above
-    only ever returns the SINGLE best combo for the day -- correct as far
-    as it goes, but not what was actually being asked for repeatedly:
-    "the best 4-5 parlays," several independent tickets, not one ticket
-    using up to 4-5 legs. This is that: every independent qualifying
-    parlay the day's real eligible legs actually support, up to
-    max_parlays, each built from the SAME real gates as build_real_market_parlay()
-    (>= 70% joint probability, positive combo edge, cross-game-only) --
-    never a looser bar just to manufacture more tickets.
-
-    Legs are removed from the pool after each parlay is selected (greedy,
-    by joint probability), so no leg is ever double-counted across two
-    tracked tickets on the same day -- two "different" parlays that just
-    re-slice the same underlying bets would inflate the apparent hit rate
-    and are not what a real bettor would call two separate parlays.
-
-    Production Gap Closure sprint (2026-09-30): "no identical legs reused"
-    is NOT the same claim as "these tickets are statistically independent
-    of each other." Two tickets with no leg in common could still each
-    hold a leg from the SAME game (e.g. one ticket takes Team X's
-    moneyline, another takes a prop on Team X's opponent) -- a real,
-    correlated exposure this engine's own cross-game-only design
-    explicitly refuses to allow WITHIN a single ticket. To make that same
-    guarantee hold ACROSS today's several tickets too (so "N independent
-    parlays" is actually true, not just "N parlays with no duplicate
-    legs"), every game used by a chosen combo is removed from the pool
-    entirely, not just that combo's own leg objects -- no two of today's
-    tickets can ever share a game.
-
-    Never pads or forces a count: 0, 1, 2, ... up to max_parlays real
-    independent qualifiers is returned exactly as the pool supports, never
-    more, never manufactured to hit a target number.
-
-    Returns:
-      {"status": "QUALIFIED", "parlays": [{"recommended_legs": 3|4, "combo": ParlayResult}, ...]}
-      {"status": "NO_QUALIFYING_PARLAY", "reason": str, "informational_2leg": ParlayResult|None}
-    """
-    eligible = dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)])
-    remaining = list(eligible)
-    parlays: list[dict] = []
-    while len(parlays) < max_parlays and len(remaining) >= MIN_LEGS:
-        best_3 = _best_combo_of_size(remaining, 3)
-        if best_3 is None:
-            break
-        best_4 = _best_combo_of_size(remaining, MAX_LEGS) if len(remaining) >= MAX_LEGS else None
-        if best_4 is not None and _passes_quality_gates(best_4):
-            chosen, recommended_legs = best_4, 4
-        else:
-            chosen, recommended_legs = best_3, 3
-        parlays.append({"recommended_legs": recommended_legs, "combo": chosen})
-        used_games = {l.game_id for l in chosen.legs}
-        remaining = [l for l in remaining if l.game_id not in used_games]
-
-    if not parlays:
-        if len(eligible) < MIN_LEGS:
-            reason = (f"only {len(eligible)} PARLAY_ELIGIBLE leg(s) on the allowlist "
-                      f"({sorted(ALLOWED_MARKET_FAMILIES)}) -- need at least {MIN_LEGS} for a monitored parlay")
-        else:
-            reason = ("no 3-leg, single-game-max combination cleared both the "
-                      f">= {MIN_JOINT_PROBABILITY:.0%} joint-probability floor and a positive combo edge")
-        return {"status": "NO_QUALIFYING_PARLAY", "reason": reason,
-                "informational_2leg": _best_combo_of_size(eligible, 2) if len(eligible) >= 2 else None}
-    return {"status": "QUALIFIED", "parlays": parlays}
+    result = build_top_real_market_parlays(candidate_legs, max_parlays=1)
+    if result["status"] != "QUALIFIED":
+        return result
+    entry = result["parlays"][0]
+    return {"status": "QUALIFIED", "recommended_legs": entry["recommended_legs"], "combo": entry["combo"]}

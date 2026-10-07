@@ -111,26 +111,6 @@ def build_real_today_state(nhl_conn, *, now: dt.datetime | None = None,
             game["strongest_leg"] = _leg_summary(best)
 
     top_conviction = real_top_conviction(all_legs)
-    # Owner Escalation block (2026-09-30): shows EVERY independent
-    # qualifying parlay the day's real legs support (up to
-    # real_parlay_paper_trader.MAX_PARLAYS_PER_DAY), the exact same set
-    # operational/real_parlay_paper_trader.py stakes $10 on each -- never
-    # just the single best one. Never a second, contradictory source of
-    # truth from what actually gets staked.
-    from operational.real_parlay_paper_trader import MAX_PARLAYS_PER_DAY
-    parlay_result = rmp.build_top_real_market_parlays(all_legs, max_parlays=MAX_PARLAYS_PER_DAY)
-    parlay_view = {"status": parlay_result["status"], "reason": parlay_result.get("reason")}
-    if parlay_result["status"] == "QUALIFIED":
-        parlay_view["parlays"] = [_combo_summary(p["combo"], p["recommended_legs"])
-                                  for p in parlay_result["parlays"]]
-    elif parlay_result.get("informational_2leg") is not None:
-        # Platform Recovery block (2026-09-29): a real, quality-gated 2-leg
-        # combo exists even though the monitored 3/4-leg cohort doesn't
-        # qualify -- shown as real information, never as a monitored bet
-        # (the Today page must label this INFORMATIONAL ONLY and the paper
-        # bet lifecycle must never stake against it).
-        parlay_view["informational_2leg"] = _combo_summary(parlay_result["informational_2leg"], 2)
-
     from collections import Counter
     exclusion_reasons = Counter(e["reason"].split("(")[0].split(":")[0].strip() for e in all_excluded)
 
@@ -140,7 +120,6 @@ def build_real_today_state(nhl_conn, *, now: dt.datetime | None = None,
         "games": games,
         "eligible_leg_count": len(all_legs),
         "top_conviction": top_conviction if top_conviction else NO_QUALIFYING_REAL_OPPORTUNITIES,
-        "parlay": parlay_view,
         "excluded_count": len(all_excluded),
         "excluded_by_reason": dict(exclusion_reasons),
     }

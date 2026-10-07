@@ -30,15 +30,14 @@ already-existing data sources -- it invents no new ingestion:
     corpus (or whatever live roster source eventually feeds player_mapping.
     build_player_index()) is ever refreshed with the trade.
 
-On ANY trigger firing for ANY leg, the WHOLE combo is VOIDED (refund the
-stake) -- the same "a push voids the whole ticket" convention
-operational/paper_bet_settlement_driver.py already uses for a real DNP leg,
-never a partial-ticket reduction this project has never documented a real
-sportsbook convention for. This module NEVER re-prices a bet to a new
-stake/probability -- "reevaluate" here means "is the premise this bet was
-placed under still true," not "adjust the bet to the new odds." A bet whose
-premise is no longer true is voided, exactly like a real push; a bet
-whose premise still holds is left untouched.
+A trigger firing for ANY leg writes an ALERT (operational/paper_bankroll.py::
+record_ticket_alert, shown on the Today ticket card) and nothing else. A
+recorded paper ticket is never refunded, voided or edited because a goalie,
+roster, trade or schedule signal changed, and a revalidation error is itself
+only an alert. Whether a leg is actually void is decided at settlement, from
+what happened in the game, under docs/PAPER_SETTLEMENT_RULES.md (e.g. a
+scratched player simply never dresses, which the resolver reports as a
+did-not-play push for that leg).
 """
 from __future__ import annotations
 
@@ -151,15 +150,13 @@ def _load_player_index() -> dict[str, list[dict]]:
 
 
 def revalidate_pending_real_market_bets(bankroll_conn, nhl_conn, now: dt.datetime | None = None) -> dict:
-    """The real entry point: re-checks every PENDING, not-yet-started
-    REAL_MARKET_PAPER combo bet and VOIDs any whose premise no longer
-    holds. Called at the start of every real pull/trader cycle (see
-    operational/real_parlay_paper_trader.py::run()), so a genuine change
-    is caught before the affected game starts, not only discovered after
-    the fact at settlement."""
+    """Re-checks every PENDING, not-yet-started REAL_MARKET_PAPER combo bet
+    against the current real state and records ALERTS for anything that
+    changed. Never settles, voids, refunds or modifies a ticket. Called at
+    the start of every trader cycle (operational/real_parlay_paper_trader.py)."""
     now = now or dt.datetime.now(dt.timezone.utc)
     now_iso = now.isoformat()
-    summary = {"checked": 0, "voided": 0, "results": []}
+    summary = {"checked": 0, "alerts_recorded": 0, "results": []}
 
     try:
         player_index = _load_player_index()
@@ -171,19 +168,17 @@ def revalidate_pending_real_market_bets(bankroll_conn, nhl_conn, now: dt.datetim
         summary["checked"] += 1
         legs = json.loads(bet.get("legs_json") or "[]")
         since_utc = bet.get("created_at_utc") or now_iso
-        all_reasons: list[str] = []
+        reasons: list[tuple[str, str]] = []
         for leg in legs:
             try:
-                all_reasons.extend(_invalidation_reasons_for_leg(nhl_conn, leg, since_utc, now_iso, player_index))
+                reasons.extend((r.split(":", 1)[0], r) for r in
+                               _invalidation_reasons_for_leg(nhl_conn, leg, since_utc, now_iso, player_index))
             except Exception as exc:  # noqa: BLE001 -- one bad leg must never block the rest of the batch
-                all_reasons.append(f"REVALIDATION_CHECK_ERROR: {exc.__class__.__name__}: {exc}")
-
-        if all_reasons:
-            note = "VOIDED on re-validation: " + "; ".join(all_reasons)
-            pb.settle_paper_bet(bankroll_conn, bet["paper_bet_id"], "VOID", notes=note)
-            summary["voided"] += 1
-            summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": "VOIDED",
-                                        "reasons": all_reasons})
-        else:
-            summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": "UNCHANGED"})
+                reasons.append(("REVALIDATION_ERROR", f"REVALIDATION_ERROR: {exc.__class__.__name__}: {exc}"))
+        new_alerts = sum(pb.record_ticket_alert(bankroll_conn, bet["paper_bet_id"], kind, detail)
+                         for kind, detail in reasons)
+        summary["alerts_recorded"] += new_alerts
+        summary["results"].append({"paper_bet_id": bet["paper_bet_id"],
+                                    "status": "ALERTS" if reasons else "UNCHANGED",
+                                    "reasons": [d for _, d in reasons]})
     return summary

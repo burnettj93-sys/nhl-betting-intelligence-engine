@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS paper_bets (
     closing_odds                          REAL,
     closing_captured_at_utc               REAL,
     clv                                   REAL,
-    notes                                 TEXT
+    notes                                 TEXT,
+    settlement_json                       TEXT  -- v3: per-leg results + repriced odds applied at settlement
 );
 
 CREATE TRIGGER IF NOT EXISTS paper_bets_immutability
@@ -82,4 +83,17 @@ CREATE TABLE IF NOT EXISTS paper_audit_log (
     timestamp_utc   TEXT NOT NULL,
     paper_bet_id     TEXT NOT NULL,
     action            TEXT NOT NULL CHECK (action IN ('INSERT', 'SETTLE', 'VOID'))
+);
+
+-- v3: revalidation findings are ALERTS ONLY. A changed goalie, roster move or
+-- schedule revision never refunds, voids or edits a recorded ticket; it is
+-- written here so the Today screen can show it. UNIQUE keeps a 15-minute
+-- revalidation cycle from writing the same alert repeatedly.
+CREATE TABLE IF NOT EXISTS ticket_alerts (
+    alert_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    paper_bet_id    TEXT NOT NULL,
+    kind            TEXT NOT NULL,
+    detail          TEXT NOT NULL,
+    created_at_utc  TEXT NOT NULL,
+    UNIQUE (paper_bet_id, kind, detail)
 );

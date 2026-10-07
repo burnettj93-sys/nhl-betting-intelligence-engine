@@ -139,15 +139,44 @@ class TestComboSettlement(unittest.TestCase):
         result = driver.resolve_combo_bet(conn, bet)
         self.assertEqual(result["status"], driver.PENDING_STILL_WAITING)
 
-    def test_a_genuine_dnp_leg_voids_the_whole_ticket(self):
+    def test_a_dnp_leg_is_removed_and_the_parlay_is_repriced_on_the_remaining_legs(self):
         conn = _fresh_nhl_conn()
         _insert_game(conn, 1)
         _insert_game(conn, 2)
         _insert_player_stat(conn, 1, "P1", "TOR", shots=5)
         # P2 never dressed for game 2 -- no player_game_stats row at all.
-        bet = {"legs_json": json.dumps([self._leg(1, participant_id="P1"), self._leg(2, participant_id="P2")])}
-        result = driver.resolve_combo_bet(conn, bet)
-        self.assertEqual(result["status"], "VOID")
+        legs = [dict(self._leg(1, participant_id="P1"), american_price=+150),
+                dict(self._leg(2, participant_id="P2"), american_price=-120)]
+        result = driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})
+        self.assertEqual(result["status"], "WIN")
+        self.assertEqual(result["settled_odds"], 150.0)   # only the +150 leg remains
+        self.assertEqual(len(result["voided_legs"]), 1)
+
+    def test_a_dnp_leg_never_hides_a_lost_leg(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_game(conn, 2)
+        _insert_player_stat(conn, 1, "P1", "TOR", shots=1)   # needs 4+, real loss
+        legs = [dict(self._leg(1, participant_id="P1"), american_price=+150),
+                dict(self._leg(2, participant_id="P2"), american_price=-120)]
+        self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})["status"], "LOSS")
+
+    def test_every_leg_void_refunds_the_ticket(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_game(conn, 2)
+        legs = [dict(self._leg(1, participant_id="P1"), american_price=+150),
+                dict(self._leg(2, participant_id="P2"), american_price=-120)]
+        self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})["status"], "VOID")
+
+    def test_a_dnp_leg_plus_a_data_gap_leg_stays_unresolved(self):
+        conn = _fresh_nhl_conn()
+        _insert_game(conn, 1)
+        _insert_game(conn, 2)
+        legs = [dict(self._leg(1, participant_id="P1"), american_price=+150),
+                {"game_id": "2", "market_family": "SOMETHING_UNRECOGNIZED", "threshold": 1,
+                 "side": "OVER", "participant_id": "PX", "participant_name": "PX", "american_price": 110}]
+        self.assertEqual(driver.resolve_combo_bet(conn, {"legs_json": json.dumps(legs)})["status"], "UNRESOLVED")
 
     def test_a_data_gap_leg_settles_unresolved_never_guessed(self):
         conn = _fresh_nhl_conn()

@@ -109,102 +109,6 @@ class TestSameGameExclusion(unittest.TestCase):
         self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
 
 
-class TestJointProbabilityFloor(unittest.TestCase):
-    def _three_cross_game_legs(self, conservative_probability, american_price=-150):
-        return [_leg(game_id=f"G{i}", participant_id=f"P{i}",
-                     conservative_probability=conservative_probability, american_price=american_price)
-                for i in range(3)]
-
-    def test_below_70_percent_is_rejected(self):
-        # 0.85^3 = 0.614125, well under the 0.70 hard floor.
-        legs = self._three_cross_game_legs(0.85)
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-
-    def test_at_or_above_70_percent_with_positive_edge_qualifies(self):
-        # 0.90^3 = 0.729 >= 0.70; price -150 implies 0.60 -> 0.60^3 = 0.216 << 0.729,
-        # a large positive combo edge.
-        legs = self._three_cross_game_legs(0.90)
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertEqual(result["recommended_legs"], 3)
-        self.assertAlmostEqual(result["combo"].joint_probability, 0.729, places=6)
-        self.assertGreater(result["combo"].combo_edge, 0.0)
-
-    def test_high_joint_probability_but_negative_combo_edge_is_rejected(self):
-        # 0.90^3 = 0.729 clears the floor, but pricing each leg at -2000
-        # (implied 0.952381) means the market already prices these legs
-        # MORE confidently than the model does -- 0.952381^3 = 0.86366 > 0.729,
-        # a genuinely negative combo edge that must still be rejected.
-        legs = self._three_cross_game_legs(0.90, american_price=-2000)
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-
-
-class TestLegCountNeverForced(unittest.TestCase):
-    def test_zero_legs_is_a_valid_pass(self):
-        result = rmp.build_real_market_parlay([])
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-
-    def test_one_or_two_eligible_legs_is_a_valid_pass(self):
-        self.assertEqual(rmp.build_real_market_parlay([_leg(game_id="G1")])["status"], "NO_QUALIFYING_PARLAY")
-        self.assertEqual(
-            rmp.build_real_market_parlay([_leg(game_id="G1"), _leg(game_id="G2")])["status"],
-            "NO_QUALIFYING_PARLAY")
-
-    def test_ineligible_legs_are_never_counted_toward_the_minimum(self):
-        legs = [_leg(game_id="G1", market_family="GOALIE_SAVES"),
-                _leg(game_id="G2", market_family="GOALIE_SAVES"),
-                _leg(game_id="G3", conservative_probability=0.90)]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-
-
-class TestInformational2LegFallback(unittest.TestCase):
-    """Platform Recovery block (2026-09-29): when the monitored 3/4-leg
-    cohort doesn't qualify but a real, quality-gated 2-leg combo exists,
-    it is surfaced as real information -- never as a monitored bet."""
-
-    def test_two_strong_eligible_legs_surface_an_informational_2leg_combo(self):
-        legs = [_leg(game_id="G1", conservative_probability=0.90),
-                _leg(game_id="G2", conservative_probability=0.90)]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-        self.assertIsNotNone(result["informational_2leg"])
-        self.assertEqual(len(result["informational_2leg"].legs), 2)
-
-    def test_zero_or_one_eligible_legs_has_no_informational_2leg(self):
-        self.assertIsNone(rmp.build_real_market_parlay([])["informational_2leg"])
-        self.assertIsNone(rmp.build_real_market_parlay([_leg(game_id="G1")])["informational_2leg"])
-
-    def test_weak_2leg_below_the_joint_probability_floor_has_no_informational_2leg(self):
-        legs = [_leg(game_id="G1", conservative_probability=0.5),
-                _leg(game_id="G2", conservative_probability=0.5)]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertIsNone(result["informational_2leg"])
-
-    def test_informational_2leg_key_is_absent_once_a_monitored_parlay_qualifies(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(3)]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertNotIn("informational_2leg", result)
-
-    def test_informational_2leg_still_respects_the_same_game_exclusion(self):
-        legs = [_leg(game_id="G1", conservative_probability=0.90),
-                _leg(game_id="G1", conservative_probability=0.90, participant_id="P2")]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertIsNone(result["informational_2leg"])
-
-    def test_informational_2leg_surfaces_when_three_eligible_legs_exist_but_no_3leg_qualifies(self):
-        legs = [_leg(game_id="G1", conservative_probability=0.95),
-                _leg(game_id="G2", conservative_probability=0.95),
-                _leg(game_id="G3", conservative_probability=0.3)]
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-        self.assertIsNotNone(result["informational_2leg"])
-        self.assertEqual({l.game_id for l in result["informational_2leg"].legs}, {"G1", "G2"})
-
-
 class TestOfferedParlayPriceNeverFabricated(unittest.TestCase):
     def test_offered_parlay_price_is_always_none(self):
         legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(3)]
@@ -218,79 +122,6 @@ class TestOfferedParlayPriceNeverFabricated(unittest.TestCase):
         # estimated_combo_price must reflect the (worse) market-implied
         # probability product, not the model's own fair price.
         self.assertNotAlmostEqual(result["combo"].estimated_combo_price, result["combo"].fair_combo_price, places=2)
-
-
-class TestFourLegSelection(unittest.TestCase):
-    def test_prefers_4_legs_when_the_4th_still_clears_every_gate(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.95, american_price=-300) for i in range(3)]
-        legs.append(_leg(game_id="G3", conservative_probability=0.90, american_price=-300))
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertEqual(result["recommended_legs"], 4)
-        self.assertEqual(len(result["combo"].legs), 4)
-        self.assertIsNotNone(result["alternative_3leg"])
-
-    def test_falls_back_to_3_legs_when_the_4th_drags_below_the_floor(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.95, american_price=-300) for i in range(3)]
-        legs.append(_leg(game_id="G3", conservative_probability=0.50, american_price=-300))
-        result = rmp.build_real_market_parlay(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertEqual(result["recommended_legs"], 3)
-        self.assertEqual(len(result["combo"].legs), 3)
-        self.assertIsNone(result["alternative_3leg"])
-
-
-class TestTopRealMarketParlaysBuildsSeveralIndependentTickets(unittest.TestCase):
-    """Owner Escalation block (2026-09-30): build_top_real_market_parlays()
-    is the "several independent parlay tickets" entry point -- distinct
-    from build_real_market_parlay()'s single-best-combo behavior."""
-
-    def test_multiple_independent_parlays_are_built_when_the_pool_supports_them(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(9)]
-        result = rmp.build_top_real_market_parlays(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertEqual(len(result["parlays"]), 3)
-
-    def test_no_leg_is_reused_across_two_parlays(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(9)]
-        result = rmp.build_top_real_market_parlays(legs)
-        seen_ids = set()
-        for p in result["parlays"]:
-            for l in p["combo"].legs:
-                self.assertNotIn(id(l), seen_ids, "the same leg object was used in two parlays")
-                seen_ids.add(id(l))
-
-    def test_respects_the_max_parlays_cap(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(15)]
-        result = rmp.build_top_real_market_parlays(legs, max_parlays=2)
-        self.assertEqual(len(result["parlays"]), 2)
-
-    def test_never_forces_more_parlays_than_the_real_pool_supports(self):
-        # Only enough real legs for exactly one 3-leg parlay, even though
-        # max_parlays defaults to 5 -- never padded, never manufactured.
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(4)]
-        result = rmp.build_top_real_market_parlays(legs)
-        self.assertEqual(result["status"], "QUALIFIED")
-        self.assertEqual(len(result["parlays"]), 1)
-
-    def test_zero_eligible_legs_is_a_valid_pass_never_forced(self):
-        result = rmp.build_top_real_market_parlays([])
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-        self.assertNotIn("parlays", result)
-
-    def test_informational_2leg_is_offered_when_nothing_qualifies(self):
-        legs = [_leg(game_id="G1", conservative_probability=0.90),
-                _leg(game_id="G2", conservative_probability=0.90)]
-        result = rmp.build_top_real_market_parlays(legs)
-        self.assertEqual(result["status"], "NO_QUALIFYING_PARLAY")
-        self.assertIsNotNone(result["informational_2leg"])
-
-    def test_each_parlay_still_passes_the_same_real_quality_gates(self):
-        legs = [_leg(game_id=f"G{i}", conservative_probability=0.90) for i in range(6)]
-        result = rmp.build_top_real_market_parlays(legs)
-        for p in result["parlays"]:
-            self.assertGreaterEqual(p["combo"].joint_probability, rmp.MIN_JOINT_PROBABILITY)
-            self.assertGreater(p["combo"].combo_edge, 0.0)
 
 
 class TestRealCertifiedPayloadCompatibility(unittest.TestCase):
@@ -350,7 +181,7 @@ class TestEconomicIdentityDedup(unittest.TestCase):
         deduped = rmp.dedupe_legs_by_economic_identity(legs)
         self.assertEqual(len(deduped), 3)
 
-    def test_duplicate_quote_objects_cannot_be_split_across_two_tickets(self):
+    def test_duplicate_quote_objects_never_exceed_the_shared_leg_limit(self):
         older = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:00:00Z",
                      conservative_probability=0.90)
         newer = _leg("G1", participant_id="P1", threshold=3, captured_at_utc="2026-09-29T12:30:00Z",
@@ -359,31 +190,36 @@ class TestEconomicIdentityDedup(unittest.TestCase):
         result = rmp.build_top_real_market_parlays([older, newer] + other_legs, max_parlays=5)
         self.assertEqual(result["status"], "QUALIFIED")
         seen_g1 = sum(1 for p in result["parlays"] for l in p["combo"].legs if l.game_id == "G1")
-        self.assertEqual(seen_g1, 1, "the same real G1 quote must never appear in two different tickets")
+        # Two captures of one quote are one leg, so it can sit on at most MAX_TICKETS_PER_LEG tickets
+        # (never two "different" copies each counted separately).
+        self.assertLessEqual(seen_g1, rmp.MAX_TICKETS_PER_LEG)
+        ids = [frozenset(rmp.leg_identity(l) for l in p["combo"].legs) for p in result["parlays"]]
+        self.assertEqual(len(ids), len(set(ids)), "duplicate tickets are never selected")
 
 
-class TestCrossTicketGameExclusivity(unittest.TestCase):
-    """"No identical legs reused" is not the same claim as "independent
-    tickets" -- two tickets with zero overlapping legs could still each
-    hold a leg from the SAME game (a real correlated exposure). Every
-    game used by one ticket must be unavailable to every other ticket
-    built in the same call."""
-
-    def test_no_two_tickets_share_a_game_even_with_different_legs_available(self):
-        # G1 has two DIFFERENT real legs (a moneyline leg and a SOG leg) --
-        # without cross-ticket game exclusivity, each could seed a separate
-        # ticket even though both belong to the same real game.
-        g1_moneyline = _moneyline_leg("G1", conservative_probability=0.90)
-        g1_sog = _leg("G1", participant_id="P1", threshold=3, conservative_probability=0.90)
-        other_legs = [_leg(f"G{i}", participant_id=f"P{i}", conservative_probability=0.90) for i in range(2, 8)]
-
-        result = rmp.build_top_real_market_parlays([g1_moneyline, g1_sog] + other_legs, max_parlays=5)
-        self.assertEqual(result["status"], "QUALIFIED")
-        game_ids_per_ticket = [{l.game_id for l in p["combo"].legs} for p in result["parlays"]]
-        all_games_used = [gid for ticket_games in game_ids_per_ticket for gid in ticket_games]
-        self.assertEqual(len(all_games_used), len(set(all_games_used)),
-                          "no game may appear in more than one of today's tickets")
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestUnifiedPolicyConstants(unittest.TestCase):
+    """The old 70% joint-probability floor is gone; the policy is explicit EV with an uncertainty haircut."""
+
+    def test_the_inherited_70_percent_rule_no_longer_exists(self):
+        self.assertFalse(hasattr(rmp, "MIN_JOINT_PROBABILITY"))
+
+    def test_policy_is_documented_in_constants(self):
+        self.assertEqual(rmp.MIN_COMBINED_DECIMAL, 2.0)
+        self.assertEqual(rmp.MIN_LEGS, 2)
+        self.assertEqual(rmp.MAX_TICKETS_PER_DAY, 5)
+        self.assertGreater(rmp.MIN_ESTIMATED_EV, 0)
+        self.assertGreater(rmp.LEG_PROBABILITY_MARGIN, 0)
+
+    def test_combined_price_is_the_product_of_leg_prices_and_never_a_quoted_price(self):
+        a, b = _leg("G1", american_price=120, conservative_probability=0.60), _leg("G2", american_price=-105, conservative_probability=0.62)
+        combo = rmp._evaluate_combo([a, b])
+        self.assertAlmostEqual(combo.combined_decimal, 2.2 * (1 + 100 / 105), places=6)
+        self.assertIsNone(combo.offered_parlay_price)
+
+    def test_probabilities_are_only_ever_lowered_by_the_uncertainty_haircut(self):
+        a, b = _leg("G1", american_price=120, conservative_probability=0.60), _leg("G2", american_price=-105, conservative_probability=0.62)
+        combo = rmp._evaluate_combo([a, b])
+        self.assertAlmostEqual(combo.joint_probability, 0.60 * 0.62)
+        self.assertLess(combo.ev_conservative, combo.ev_estimated)

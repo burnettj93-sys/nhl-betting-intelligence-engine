@@ -486,6 +486,7 @@ class Test39TodayOffseasonState(unittest.TestCase):
     def test_today_page_renders_even_with_no_games(self):
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(str(REPO_ROOT / "dashboard/pages/21_Today.py"))
+        at.session_state["today_show_technical"] = True
         at.run(timeout=60)
         self.assertEqual(list(at.exception), [])
 

@@ -70,6 +70,7 @@ class TestBettingPagesStillWorkAfterFantasyAddition(unittest.TestCase):
 
     def test_today_page_still_renders(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         self.assertEqual(len(at.exception), 0)
 

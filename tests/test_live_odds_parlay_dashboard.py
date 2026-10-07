@@ -20,17 +20,20 @@ def _page(name: str) -> str:
 class TestTodayPageGameParlaysSection(unittest.TestCase):
     def test_renders_without_exception(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         self.assertEqual(len(at.exception), 0)
 
     def test_game_parlays_section_present(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         markdown_text = " ".join(m.value for m in at.markdown)
         self.assertIn("Game Parlays", markdown_text)
 
     def test_odds_collection_metrics_present(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         labels = [m.label for m in at.metric]
         for expected in ("Odds last updated", "Credits remaining", "Verified DK contracts", "Tracked events"):
@@ -38,6 +41,7 @@ class TestTodayPageGameParlaysSection(unittest.TestCase):
 
     def test_never_claims_a_live_draftkings_parlay_price(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         markdown_text = " ".join(m.value for m in at.markdown)
         caption_text = " ".join(c.value for c in at.caption)
@@ -151,6 +155,7 @@ class TestBettingPagesStillWorkAfterSprint(unittest.TestCase):
 
     def test_today_page_still_renders(self):
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+        at.session_state["today_show_technical"] = True
         at.run()
         self.assertEqual(len(at.exception), 0)
 

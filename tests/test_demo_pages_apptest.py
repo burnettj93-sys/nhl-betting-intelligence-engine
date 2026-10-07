@@ -107,6 +107,7 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
 
         with mock.patch.object(schema, "recommendation_freshness", aged):
             at = AppTest.from_file(_page("21_Today.py"), default_timeout=90)
+            at.session_state["today_show_technical"] = True
             at.run()
         self.assertEqual(len(at.exception), 0)
         expander_labels = [e.label for e in at.expander]
@@ -118,6 +119,7 @@ class TestDemoPagesLoadWithoutExceptions(unittest.TestCase):
         Recorded Recommendations sections -- read as a continuation of real content. It must now say
         SIMULATED/DEMO explicitly, and the old bare heading must be gone."""
         at = AppTest.from_file(_page("21_Today.py"), default_timeout=60)
+        at.session_state["today_show_technical"] = True
         at.run()
         self.assertEqual(len(at.exception), 0)
         markdown_text = " ".join(m.value for m in at.markdown)

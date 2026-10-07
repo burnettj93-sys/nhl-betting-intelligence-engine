@@ -11,6 +11,7 @@ import datetime as dt
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import db
@@ -69,7 +70,7 @@ class TestNoChangeLeavesTheBetAlone(unittest.TestCase):
         _stake(self.bankroll_conn, [_leg()])
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
         self.assertEqual(summary["checked"], 1)
-        self.assertEqual(summary["voided"], 0)
+        self.assertEqual(summary["alerts_recorded"], 0)
         row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
         self.assertEqual(row["result_status"], "PENDING")
 
@@ -90,7 +91,7 @@ class TestScheduleChangeVoids(unittest.TestCase):
         self.nhl_conn.close()
         self.bankroll_conn.close()
 
-    def test_a_real_schedule_revision_after_staking_voids_the_bet(self):
+    def test_a_real_schedule_revision_after_staking_alerts_without_voiding(self):
         bet = _stake(self.bankroll_conn, [_leg()], created_at_utc="2026-10-15T18:00:00+00:00")
         # A real schedule revision (e.g. a weather postponement) observed
         # AFTER the bet was staked -- puck drop genuinely moved.
@@ -100,12 +101,13 @@ class TestScheduleChangeVoids(unittest.TestCase):
             "'TOR', 'MTL', '2026-10-15T19:00:00', 'test')")
         self.nhl_conn.commit()
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 1)
+        self.assertEqual(summary["alerts_recorded"], 1)
         row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
-        self.assertEqual(row["result_status"], "VOID")
-        self.assertIn("SCHEDULE_CHANGED", row["notes"])
+        self.assertEqual(row["result_status"], "PENDING")  # alert only, never voided/refunded
+        alerts = pb.ticket_alerts(self.bankroll_conn)[row["paper_bet_id"]]
+        self.assertIn("SCHEDULE_CHANGED", alerts[0]["kind"])
 
-    def test_a_schedule_revision_before_staking_never_voids(self):
+    def test_a_schedule_revision_before_staking_never_alerts_without_voiding(self):
         # The revision was already reflected BEFORE the bet was placed --
         # not new information, must not trigger a void.
         self.nhl_conn.execute(
@@ -115,7 +117,35 @@ class TestScheduleChangeVoids(unittest.TestCase):
         self.nhl_conn.commit()
         _stake(self.bankroll_conn, [_leg()], created_at_utc="2026-10-15T18:00:00+00:00")
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 0)
+        self.assertEqual(summary["alerts_recorded"], 0)
+
+
+class TestErrorsAndRepeatsNeverRefund(unittest.TestCase):
+    def setUp(self):
+        self.nhl_conn = _fresh_nhl_conn()
+        self.bankroll_conn = _fresh_bankroll_conn()
+
+    def tearDown(self):
+        self.nhl_conn.close()
+        self.bankroll_conn.close()
+
+    def test_a_revalidation_error_is_an_alert_and_the_stake_stays_open(self):
+        _stake(self.bankroll_conn, [_leg()])
+        with mock.patch.object(br, "_invalidation_reasons_for_leg", side_effect=RuntimeError("boom")):
+            summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
+        self.assertEqual(summary["alerts_recorded"], 1)
+        row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
+        self.assertEqual(row["result_status"], "PENDING")
+        self.assertEqual(pb.account_state(self.bankroll_conn, "REAL_MARKET_PAPER")["open_stakes"], 10.0)
+        self.assertEqual(pb.ticket_alerts(self.bankroll_conn)[row["paper_bet_id"]][0]["kind"], "REVALIDATION_ERROR")
+
+    def test_repeating_the_same_finding_does_not_duplicate_alerts(self):
+        _stake(self.bankroll_conn, [_leg()])
+        with mock.patch.object(br, "_invalidation_reasons_for_leg", side_effect=RuntimeError("boom")):
+            br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
+            second = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
+        self.assertEqual(second["alerts_recorded"], 0)
+        self.assertEqual(len(self.bankroll_conn.execute("SELECT * FROM ticket_alerts").fetchall()), 1)
 
 
 class TestGoalieChangeVoidsMoneyline(unittest.TestCase):
@@ -127,7 +157,7 @@ class TestGoalieChangeVoidsMoneyline(unittest.TestCase):
         self.nhl_conn.close()
         self.bankroll_conn.close()
 
-    def test_a_real_changed_goalie_status_after_staking_voids_the_moneyline_bet(self):
+    def test_a_real_changed_goalie_status_after_staking_alerts_without_voiding(self):
         _stake(self.bankroll_conn, [_leg(market_family="MONEYLINE", participant_id="TOR")],
                created_at_utc="2026-10-15T18:00:00+00:00")
         self.nhl_conn.execute(
@@ -136,9 +166,11 @@ class TestGoalieChangeVoidsMoneyline(unittest.TestCase):
             "'2026-10-15T19:00:00', 'test')")
         self.nhl_conn.commit()
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 1)
+        self.assertEqual(summary["alerts_recorded"], 1)
         row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
-        self.assertIn("GOALIE_STATUS_CHANGED", row["notes"])
+        self.assertEqual(row["result_status"], "PENDING")  # alert only, never voided/refunded
+        alerts = pb.ticket_alerts(self.bankroll_conn)[row["paper_bet_id"]]
+        self.assertEqual(alerts[0]["kind"], "GOALIE_STATUS_CHANGED")
 
 
 class TestRosterStatusVoidsPlayerLegs(unittest.TestCase):
@@ -150,7 +182,7 @@ class TestRosterStatusVoidsPlayerLegs(unittest.TestCase):
         self.nhl_conn.close()
         self.bankroll_conn.close()
 
-    def test_a_real_injury_report_after_staking_voids_the_sog_leg(self):
+    def test_a_real_injury_report_after_staking_alerts_without_voiding(self):
         _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
                created_at_utc="2026-10-15T18:00:00+00:00")
         self.nhl_conn.execute(
@@ -159,12 +191,13 @@ class TestRosterStatusVoidsPlayerLegs(unittest.TestCase):
             "'2026-10-15T19:00:00', 'test')")
         self.nhl_conn.commit()
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 1)
+        self.assertEqual(summary["alerts_recorded"], 1)
         row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
-        self.assertIn("ROSTER_STATUS_CHANGED", row["notes"])
-        self.assertIn("OUT", row["notes"])
+        self.assertEqual(row["result_status"], "PENDING")  # alert only, never voided/refunded
+        alerts = pb.ticket_alerts(self.bankroll_conn)[row["paper_bet_id"]]
+        self.assertEqual(alerts[0]["kind"], "ROSTER_STATUS_CHANGED")
 
-    def test_a_suspended_goalie_voids_the_saves_leg(self):
+    def test_a_suspended_goalie_alerts_without_voiding(self):
         _stake(self.bankroll_conn, [_leg(market_family="GOALIE_SAVES", threshold=25, participant_id="G1")],
                created_at_utc="2026-10-15T18:00:00+00:00")
         self.nhl_conn.execute(
@@ -173,9 +206,9 @@ class TestRosterStatusVoidsPlayerLegs(unittest.TestCase):
             "'2026-10-15T19:00:00', 'test')")
         self.nhl_conn.commit()
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 1)
+        self.assertEqual(summary["alerts_recorded"], 1)
 
-    def test_a_status_already_known_at_staking_time_never_voids(self):
+    def test_a_status_already_known_at_staking_time_never_alerts_without_voiding(self):
         self.nhl_conn.execute(
             "INSERT INTO roster_status_events (player_id, team_id, status, effective_at_utc, "
             "observed_at_utc, source) VALUES ('P1', 'TOR', 'OUT', '2026-10-15T10:00:00', "
@@ -184,7 +217,7 @@ class TestRosterStatusVoidsPlayerLegs(unittest.TestCase):
         _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
                created_at_utc="2026-10-15T18:00:00+00:00")
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 0)
+        self.assertEqual(summary["alerts_recorded"], 0)
 
 
 class TestMultipleBetsOnlyAffectedOneVoids(unittest.TestCase):
@@ -201,7 +234,7 @@ class TestMultipleBetsOnlyAffectedOneVoids(unittest.TestCase):
         self.nhl_conn.close()
         self.bankroll_conn.close()
 
-    def test_only_the_bet_with_a_real_change_is_voided(self):
+    def test_only_the_bet_with_a_real_change_is_alerted(self):
         pb.record_paper_bet(
             self.bankroll_conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS",
             market_id="REAL_MARKET_PARLAY:2026-10-15:a", entry_odds=150, is_combo=True,
@@ -224,7 +257,7 @@ class TestMultipleBetsOnlyAffectedOneVoids(unittest.TestCase):
         # both bets; included to prove an unrelated real event never
         # cross-contaminates a different bet's revalidation.
         summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 0)
+        self.assertEqual(summary["alerts_recorded"], 0)
         rows = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")
         self.assertTrue(all(r["result_status"] == "PENDING" for r in rows))
 
@@ -243,7 +276,7 @@ class TestTradeDetectionVoids(unittest.TestCase):
         self.nhl_conn.close()
         self.bankroll_conn.close()
 
-    def test_a_player_no_longer_on_either_team_in_the_game_voids(self):
+    def test_a_player_no_longer_on_either_team_in_the_game_alerts_without_voiding(self):
         from unittest import mock
         _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
                created_at_utc="2026-10-15T18:00:00+00:00")
@@ -251,11 +284,13 @@ class TestTradeDetectionVoids(unittest.TestCase):
                                "most_recent_game_date": "2026-10-15"}]}
         with mock.patch.object(br, "_load_player_index", return_value=fake_index):
             summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 1)
+        self.assertEqual(summary["alerts_recorded"], 1)
         row = pb.query_paper_bets(self.bankroll_conn, track="REAL_MARKET_PAPER")[0]
-        self.assertIn("TEAM_CHANGED", row["notes"])
+        self.assertEqual(row["result_status"], "PENDING")  # alert only, never voided/refunded
+        alerts = pb.ticket_alerts(self.bankroll_conn)[row["paper_bet_id"]]
+        self.assertEqual(alerts[0]["kind"], "TEAM_CHANGED")
 
-    def test_a_player_still_on_the_home_or_away_team_never_voids(self):
+    def test_a_player_still_on_the_home_or_away_team_never_alerts_without_voiding(self):
         from unittest import mock
         _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
                created_at_utc="2026-10-15T18:00:00+00:00")
@@ -263,7 +298,7 @@ class TestTradeDetectionVoids(unittest.TestCase):
                                "most_recent_game_date": "2026-10-15"}]}
         with mock.patch.object(br, "_load_player_index", return_value=fake_index):
             summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
-        self.assertEqual(summary["voided"], 0)
+        self.assertEqual(summary["alerts_recorded"], 0)
 
 
 if __name__ == "__main__":

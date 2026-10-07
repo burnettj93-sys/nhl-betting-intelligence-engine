@@ -1,31 +1,28 @@
 """
-Best Bets (+100 target), 2026-10-06. The owner's explicit requirement: "I need
-a high chance of cashing, AND I need it to reach +100 odds in as few legs as
-possible." This module produces exactly that for today's real games, from REAL
-DraftKings prices matched against the project's own player models:
+Price capture + second-opinion player model for the unified ticket workflow.
+
+This module no longer recommends anything. It used to build its own +100
+singles and 2-leg parlays under rules that differed from the ledger's, so what
+Today showed was not what the paper trader staked. The one selector is now
+research/real_market_parlay/engine.py::select_tickets, driven by
+operational/daily_tickets.py. What remains here:
 
   1. Capture (credit-metered, bounded): for each of today's upcoming games,
      pull DraftKings' player_shots_on_goal_alternate + player_points once when
      the game is within CAPTURE_HORIZON_H, and once more near puck drop
      (REFRESH_WITHIN_H) if the first capture has aged -- never more than
      DAILY_CREDIT_CAP credits a day, never past the global odds_quota guard.
-  2. Model: shots (empirical, conservative: the LOWER of last-20 and last-60 hit
-     rates, shrunk toward the position average) and points (the project's locked
-     points model blended with the last-60 hit rate, home/away adjusted), built
-     from the FULL MoneyPuck history (all teams) refreshed daily by
-     operational/moneypuck_daily.py. Only players who dressed in their team's
-     most recent real game are considered (the only lineup signal that exists
-     here -- there is no injury/lineup feed).
-  3. Picks: SINGLES priced >= +100 first (one leg is always better than two at
-     the same price), then 2-LEG parlays whose combined price is >= +100,
-     cross-game only (legs from different games, so the joint probability is an
-     honest product). Ranked by modeled hit chance, and only if the model's
-     edge over the book's own implied probability clears a minimum margin.
-
-HONEST LIMITS (stated on the page too): at >= +100 the book's own price implies
-~50%, so a genuinely higher hit chance needs a real edge over DraftKings -- the
-model is a research model, not validated against live results; edges here are
-small. No injury/lineup/goalie feed exists. Prices move.
+     The archived payloads feed the same adapters the ticket selector uses.
+  2. Model (second opinion): shots (empirical, conservative: the LOWER of
+     last-20 and last-60 hit rates, shrunk toward the position average) and
+     points (the project's locked points model blended with the last-60 hit
+     rate, home/away adjusted), built from the full MoneyPuck history
+     refreshed daily by operational/moneypuck_daily.py. Only players who
+     dressed in their team's most recent real game are modelled (the only
+     lineup signal that exists here -- there is no injury/lineup feed).
+     daily_tickets.py lowers each shots leg's probability to the lower of the
+     validated pipeline's and this model's, and drops shots legs for players
+     this model has no dress confirmation for.
 
 Run: python3 -m operational.best_bets
 """
@@ -37,7 +34,6 @@ import fcntl
 import glob
 import hashlib
 import io
-import itertools
 import json
 import re
 import statistics
@@ -59,18 +55,11 @@ REFRESH_MIN_AGE_MIN = 90.0
 DAILY_CREDIT_CAP = 36
 EST_COST_PER_EVENT = 2
 
-MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
-MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
-MIN_LEG_DECIMAL_FOR_PARLAY = 1.20  # a -1100 "leg" is filler: it only lowers the hit chance for a bigger payout
-MIN_SINGLE_P = 0.40
-MIN_SINGLE_EDGE = 0.04
-MIN_PARLAY_LEG_P = 0.50
-MIN_PARLAY_EV = 0.05
-TOP_SINGLES = 5
-TOP_PARLAYS = 5
-MAX_PLAYER_REUSE = 2
 
 SOG_K = (1, 2, 3, 4, 5)
+MODEL_VERSION = "rolling-l20-l60-shrunk-v1"
+MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
+MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
 HISTORY_CACHE_NAME = "best_bets_history_2022_2025.jsonl"
 STATE_NAME = "best_bets_state.json"
 MODEL_CACHE_NAME = "best_bets_model.json"
@@ -261,7 +250,8 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
             emp = lambda n: sum(1 for r in l60 if r["points"] >= n) / len(l60)  # noqa: E731
             probs["PTS1"] = 0.5 * tp_pts(mu, palpha, 1) + 0.5 * emp(1)
             probs["PTS2"] = 0.5 * tp_pts(mu, palpha, 2) + 0.5 * emp(2)
-        model[f"{norm_name(name)}|{team}"] = {"name": name, "team": team, "opp": opp, "home": is_home, "probs": probs}
+        model[f"{norm_name(name)}|{team}"] = {"player_id": str(pid), "name": name, "team": team, "opp": opp,
+                                              "home": is_home, "probs": probs}
     return model
 
 
@@ -274,12 +264,14 @@ def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None =
     if cache_path.exists():
         cached = json.loads(cache_path.read_text())
         _, checksum = _current_season_rows()
-        if cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature:
+        if (cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature
+                    and cached.get("version") == MODEL_VERSION):
             return cached["model"]
     rows, checksum = history_rows()
     model = compute_model(rows, today, dressed, curteam, date)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature, "model": model}))
+    cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature,
+                                      "version": MODEL_VERSION, "model": model}))
     return model
 
 
@@ -294,8 +286,13 @@ def _archive_dir() -> Path:
     return Path(archive.ARCHIVE_DIR)
 
 
-def latest_capture(event_id: str, archive_dir: Path | None = None) -> tuple[dt.datetime, dict] | None:
-    """Newest archived best-bets payload (MARKETS) for one provider event."""
+def latest_capture(event_id: str, archive_dir: Path | None = None, *,
+                   require_points: bool = True) -> tuple[dt.datetime, dict] | None:
+    """Newest archived payload for one provider event. By default only this
+    job's own captures (shots-alternate AND points) count -- that is what the
+    capture cadence keys on. require_points=False accepts any capture that
+    includes the shots-alternate market (e.g. the prop sweeps'), which is what
+    pricing wants: the freshest real DraftKings shots prices, whoever pulled them."""
     archive_dir = archive_dir or _archive_dir()
     best = None
     for path in glob.glob(str(archive_dir / f"*events-{event_id}-odds*.json")):
@@ -305,7 +302,7 @@ def latest_capture(event_id: str, archive_dir: Path | None = None) -> tuple[dt.d
             continue
         meta = doc.get("meta") or {}
         filt = meta.get("market_filter") or ""
-        if "player_points" not in filt or "player_shots_on_goal_alternate" not in filt:
+        if "player_shots_on_goal_alternate" not in filt or (require_points and "player_points" not in filt):
             continue
         ts = meta.get("retrieved_at_utc")
         if not ts:
@@ -385,86 +382,84 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
     return summary
 
 
-# --------------------------------------------------------------------- picks --
-
-def _legs_from_payload(payload: dict, captured_at: dt.datetime, model: dict, today_by_pair: dict) -> list[dict]:
+def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime) -> list:
+    """ParlayLegs for DraftKings' player_shots_on_goal_alternate Over prices,
+    for players the rolling-form model covers (dressed in their team's last
+    game, 20+ games of history). Points prices are deliberately not turned
+    into legs: PLAYER_POINTS is not a certified contract (see
+    docs/MARKET_COVERAGE_AUDIT.md)."""
+    from research.generic_prop_pricing import provider_adapter
+    from research.generic_prop_pricing.line_mapping import SOG_ACTIONABLE_THRESHOLDS
     from research.live_sog_pricing import event_mapping
+    from research.real_market_parlay.engine import ParlayLeg
+
     home = event_mapping.normalize_team_name(payload.get("home_team", ""))
     away = event_mapping.normalize_team_name(payload.get("away_team", ""))
-    game = today_by_pair.get((home, away))
-    if game is None:
+    game_id = next((gid for gid, g in snapshot["games"].items() if g["home"] == home and g["away"] == away), None)
+    if game_id is None:
         return []
+    game = snapshot["games"][game_id]
+    hours = (_parse_utc(game["start_utc"]) - now).total_seconds() / 3600.0
+    age_min = (now - captured_at).total_seconds() / 60.0
+    fresh = hours > 0 and age_min <= (MAX_PRICE_AGE_MIN_FAR if hours >= 2.0 else MAX_PRICE_AGE_MIN_NEAR)
+    verified = provider_adapter.is_contract_verified("draftkings", "PLAYER_SOG_ALTERNATE")
     legs = []
     for bm in payload.get("bookmakers", []):
         if bm.get("key") != "draftkings":
             continue
         for m in bm.get("markets", []):
+            if m.get("key") != "player_shots_on_goal_alternate":
+                continue
             for o in m.get("outcomes", []):
                 if o.get("name") != "Over" or o.get("point") is None or o.get("price") is None:
                     continue
                 k = int(o["point"] + 0.5)
-                if m["key"] == "player_shots_on_goal_alternate":
-                    pkey, label = f"SOG{k}", f"{k}+ shots on goal"
-                elif m["key"] == "player_points":
-                    pkey, label = f"PTS{k}", f"{k}+ point{'s' if k > 1 else ''}"
-                else:
-                    continue
                 entry = None
                 for team in (home, away):
-                    entry = model.get(f"{norm_name(o.get('description', ''))}|{team}")
+                    entry = snapshot["model"].get(f"{norm_name(o.get('description', ''))}|{team}")
                     if entry:
                         break
-                if not entry or pkey not in entry["probs"]:
+                if not entry or f"SOG{k}" not in entry["probs"] or not entry.get("player_id"):
                     continue
-                dec = american_to_decimal(o["price"])
-                p = entry["probs"][pkey]
-                legs.append({
-                    "player": entry["name"], "team": entry["team"], "opp": entry["opp"], "home": entry["home"],
-                    "game_key": game["game_key"], "start_utc": game["start_utc"], "label": label, "market": pkey,
-                    "price": int(o["price"]), "decimal": dec, "p": p, "implied": 1.0 / dec,
-                    "edge": p - 1.0 / dec, "captured_at_utc": captured_at.isoformat()})
+                legs.append(ParlayLeg(
+                    game_id=game_id, event_id=payload.get("id"), market_family="PLAYER_SOG_ALTERNATE",
+                    participant_id=entry["player_id"], participant_name=entry["name"], side="OVER", threshold=k,
+                    american_price=float(o["price"]), conservative_probability=entry["probs"][f"SOG{k}"],
+                    sportsbook="draftkings", captured_at_utc=captured_at.isoformat(),
+                    provider_contract_verified=verified, model_threshold_eligible=k in SOG_ACTIONABLE_THRESHOLDS,
+                    identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
+                    team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
+                    model_version=MODEL_VERSION))
     return legs
 
 
-def build_picks(legs: list[dict], now: dt.datetime) -> dict:
-    fresh = []
-    for l in legs:
-        hours = (_parse_utc(l["start_utc"]) - now).total_seconds() / 3600.0
-        age = (now - _parse_utc(l["captured_at_utc"])).total_seconds() / 60.0
-        if hours <= 0:
+def candidate_legs(conn, now: dt.datetime) -> tuple[list, dict]:
+    """Shots-on-goal ParlayLegs from the newest archived DraftKings capture of
+    every game still to start today, priced against the rolling-form model.
+    Returns (legs, report). The ticket selector decides what, if anything, to
+    recommend; this only supplies legs."""
+    snapshot = current_model(conn, now)
+    report = {"games_upcoming": len(snapshot["games"]), "modelled_players": len(snapshot["model"]),
+              "events_with_capture": 0, "legs": 0}
+    if not snapshot["games"]:
+        return [], report
+    seen_events = set()
+    for day in (now, now - dt.timedelta(days=1)):
+        for payload_path in glob.glob(str(_archive_dir() / f"{day.strftime('%Y%m%d')}T*events-*odds*.json")):
+            m = re.search(r"events-([0-9a-f]{32})-odds", payload_path)
+            if m:
+                seen_events.add(m.group(1))
+    legs: list = []
+    for event_id in sorted(seen_events):
+        cap = latest_capture(event_id, require_points=False)
+        if cap is None:
             continue
-        if age > (MAX_PRICE_AGE_MIN_FAR if hours >= 2.0 else MAX_PRICE_AGE_MIN_NEAR):
-            continue
-        fresh.append({**l, "price_age_min": round(age, 1), "hours_to_start": round(hours, 2)})
-
-    singles = [l for l in fresh if l["decimal"] >= 2.0 and l["p"] >= MIN_SINGLE_P and l["edge"] >= MIN_SINGLE_EDGE]
-    singles.sort(key=lambda l: (-l["p"], -l["edge"]))
-    singles = singles[:TOP_SINGLES]
-
-    pool = [l for l in fresh if l["p"] >= MIN_PARLAY_LEG_P and l["decimal"] >= MIN_LEG_DECIMAL_FOR_PARLAY]
-    combos = []
-    for a, b in itertools.combinations(pool, 2):
-        if a["game_key"] == b["game_key"]:
-            continue
-        dec = a["decimal"] * b["decimal"]
-        if dec < 2.0:
-            continue
-        p = a["p"] * b["p"]
-        if p * dec - 1 < MIN_PARLAY_EV:
-            continue
-        combos.append((p, dec, a, b))
-    combos.sort(key=lambda t: -t[0])
-    used: dict = defaultdict(int)
-    parlays = []
-    for p, dec, a, b in combos:
-        if used[a["player"]] >= MAX_PLAYER_REUSE or used[b["player"]] >= MAX_PLAYER_REUSE:
-            continue
-        used[a["player"]] += 1
-        used[b["player"]] += 1
-        parlays.append({"legs": [a, b], "decimal": dec, "american": decimal_to_american(dec), "p": p, "ev": p * dec - 1})
-        if len(parlays) >= TOP_PARLAYS:
-            break
-    return {"singles": singles, "parlays": parlays, "priced_legs_considered": len(fresh)}
+        got = _legs_from_payload(cap[1], cap[0], snapshot, now)
+        if got:
+            report["events_with_capture"] += 1
+        legs.extend(got)
+    report["legs"] = len(legs)
+    return legs, report
 
 
 def _content_hash(state: dict) -> str:
@@ -504,55 +499,41 @@ def refresh(now: dt.datetime | None = None, *, conn=None, capture: bool = True, 
         lock_file.close()
 
 
+def current_model(conn, now: dt.datetime, *, upcoming_only: bool = True) -> dict:
+    """Today's (ET) not-yet-started games and the second-opinion player model.
+    {"date", "games": {game_id: {"home", "away", "start_utc"}}, "model": {...}}"""
+    from operational import eastern_time as et
+    date = et.eastern_today(now)
+    rows = conn.execute(
+        "select game_id, home_team, away_team, scheduled_start_utc from games "
+        "where game_date=? and game_state='SCHEDULED'", (date,)).fetchall()
+    today, games = {}, {}
+    for r in rows:
+        start = r["scheduled_start_utc"] if r["scheduled_start_utc"].endswith("Z") else r["scheduled_start_utc"] + "Z"
+        if upcoming_only and _parse_utc(start) <= now:
+            continue
+        today[r["home_team"]] = (r["away_team"], True, r["game_id"])
+        today[r["away_team"]] = (r["home_team"], False, r["game_id"])
+        games[str(r["game_id"])] = {"home": r["home_team"], "away": r["away_team"], "start_utc": start}
+    model = _load_or_build_model(conn, today, date, now) if today else {}
+    return {"date": date, "games": games, "model": model}
+
+
 def _refresh_locked(now, *, conn, capture, client) -> dict:
     import db
-    from operational import eastern_time as et
     owns = conn is None
     conn = conn or db.get_conn()
     try:
-        date = et.eastern_today(now)
-        rows = conn.execute(
-            "select game_id, home_team, away_team, scheduled_start_utc from games "
-            "where game_date=? and game_state='SCHEDULED'", (date,)).fetchall()
-        today, by_pair = {}, {}
-        for r in rows:
-            start = r["scheduled_start_utc"] if r["scheduled_start_utc"].endswith("Z") else r["scheduled_start_utc"] + "Z"
-            if _parse_utc(start) <= now:
-                continue
-            today[r["home_team"]] = (r["away_team"], True, r["game_id"])
-            today[r["away_team"]] = (r["home_team"], False, r["game_id"])
-            by_pair[(r["home_team"], r["away_team"])] = {"game_key": str(r["game_id"]), "start_utc": start}
-        capture_summary = capture_prices(now, client=client) if (capture and today) else None
-
-        legs: list[dict] = []
-        events_priced = 0
-        if today:
-            model = _load_or_build_model(conn, today, date, now)
-            seen_events = set()
-            for payload_path in glob.glob(str(_archive_dir() / f"{now.strftime('%Y%m%d')}T*events-*odds*.json")) + \
-                    glob.glob(str(_archive_dir() / f"{(now - dt.timedelta(days=1)).strftime('%Y%m%d')}T*events-*odds*.json")):
-                m = re.search(r"events-([0-9a-f]{32})-odds", payload_path)
-                if m:
-                    seen_events.add(m.group(1))
-            for event_id in seen_events:
-                cap = latest_capture(event_id)
-                if cap is None:
-                    continue
-                got = _legs_from_payload(cap[1], cap[0], model, by_pair)
-                if got:
-                    events_priced += 1
-                legs.extend(got)
-        picks = build_picks(legs, now)
+        # Capture first, so the model and the downstream selector see the
+        # prices just pulled. current_model() needs only the schedule.
+        snapshot = current_model(conn, now)
+        capture_summary = capture_prices(now, client=client) if (capture and snapshot["games"]) else None
         state = {
-            "status": "OK" if picks["singles"] or picks["parlays"] else "NO_QUALIFYING_PICKS",
-            "date_et": date, "generated_at_utc": now.isoformat(),
-            "games_today_upcoming": len(by_pair), "events_priced": events_priced,
-            "modelled_players": len(model) if today else 0, **picks,
+            "status": "OK" if snapshot["games"] else "NO_UPCOMING_GAMES",
+            "date_et": snapshot["date"], "generated_at_utc": now.isoformat(),
+            "games_today_upcoming": len(snapshot["games"]),
+            "modelled_players": len(snapshot["model"]),
             "capture": capture_summary,
-            "limits": ("Modeled hit chances, not guarantees. At +100 or better the book's own price implies about "
-                       "50%, so any edge shown is small and the model is a research model not yet validated against "
-                       "live results. There is no injury/lineup/goalie feed -- only players who dressed in their "
-                       "team's last game are considered. Prices move; confirm before betting."),
         }
         old = read_state()
         changed = old is None or _content_hash(old) != _content_hash(state)
@@ -561,8 +542,8 @@ def _refresh_locked(now, *, conn, capture, client) -> dict:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(state, indent=1, default=str))
         tmp.replace(path)
-        return {"status": state["status"], "changed": changed, "singles": len(picks["singles"]),
-                "parlays": len(picks["parlays"]), "capture": capture_summary}
+        return {"status": state["status"], "changed": changed, "capture": capture_summary,
+                "modelled_players": state["modelled_players"]}
     finally:
         if owns:
             conn.close()

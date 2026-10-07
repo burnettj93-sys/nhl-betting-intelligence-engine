@@ -491,7 +491,7 @@ class TestRealMarketComboPaperBet(TestPaperBankroll):
             captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
             model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
             event_not_started=True) for i in range(3)]
-        return rmp.build_real_market_parlay(legs)
+        return {"status": "QUALIFIED", "combo": rmp._evaluate_combo(legs)}
 
     def test_qualified_result_creates_a_bet_in_the_real_market_track(self):
         result = pb.create_real_market_combo_paper_bet(self.conn, self._qualified_result())
@@ -555,7 +555,7 @@ class TestRealMarketComboPaperBet(TestPaperBankroll):
                 captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
                 event_not_started=True) for i in range(3)]
-            return rmp.build_real_market_parlay(legs)
+            return {"status": "QUALIFIED", "combo": rmp._evaluate_combo(legs)}
 
         r1 = pb.create_real_market_combo_paper_bet(self.conn, _combo("A"))
         r2 = pb.create_real_market_combo_paper_bet(self.conn, _combo("B"))
@@ -580,7 +580,7 @@ class TestTodaysRealParlayUsage(TestPaperBankroll):
             captured_at_utc="2026-09-29T12:00:00Z", provider_contract_verified=True,
             model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
             event_not_started=True) for gid in game_ids]
-        return rmp.build_real_market_parlay(legs)
+        return {"status": "QUALIFIED", "combo": rmp._evaluate_combo(legs)}
 
     def test_empty_before_anything_is_staked(self):
         usage = pb.todays_real_parlay_usage(self.conn, "2026-09-29")
@@ -653,11 +653,13 @@ class TestSchemaV1ToV2Migration(unittest.TestCase):
         self.assertEqual(row["track"], "DEMO_PAPER")
         conn.close()
 
-    def test_schema_version_bumped_to_2(self):
+    def test_schema_version_bumped_to_current(self):
         self._create_v1_db()
         conn = pb.init_db(self.db_path)
         version = conn.execute("SELECT version FROM schema_version").fetchone()["version"]
-        self.assertEqual(version, 2)
+        self.assertEqual(version, pb.SCHEMA_VERSION)
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
+        self.assertIn("settlement_json", columns)
         conn.close()
 
     def test_game_parlay_paper_insertable_after_migration(self):
