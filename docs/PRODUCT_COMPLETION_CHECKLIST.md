@@ -55,7 +55,7 @@ input only a person can supply, **BLOCKED** — cannot be completed from here, w
 | Shots, points, goals models | DONE | skater model beats both baselines for shots 1–5+, points 1+/2+, goals 1+ (held-out 2025-26); shots and points price tickets |
 | Saves | DONE (blocked input) | validated 20+ to 35+; legs exist only for goalies with a recorded confirmation (gate unchanged) |
 | Moneyline | PARTIAL (stated) | pricing path unchanged (Elo with a heuristic band, unvalidated on this corpus); the validated strength model beats the home-rate baseline and is shown, not used to price |
-| Puck line | BLOCKED (specific) | spreads prices never requested, no margin model, no settlement resolver (`docs/MARKET_COVERAGE_AUDIT.md`) |
+| Puck line | BLOCKED (specific) | a margin model was built and validated (docs/MODEL_VALIDATION.md §Puck line) and does NOT beat the base rate on held-out games; spreads prices are never requested; no settlement resolver (`docs/MARKET_COVERAGE_AUDIT.md`) |
 | Anytime goals pricing | BLOCKED (specific) | model validated, but `player_goal_scorer_anytime` prices are never requested (credit cost on a metered plan) and no payload exists to certify |
 | Safeguards (exact $10, invalid stake/odds no writes, atomic funds, timestamps, no silent stale/future, no rewrites, alerts not refunds, supported settlement only, reconciliation) | DONE | existing tests kept and passing; `deploy/export_audit_zip.py` writes `ledger_board_reconciliation.json` |
 
