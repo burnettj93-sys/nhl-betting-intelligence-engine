@@ -1,7 +1,7 @@
 {
  "alpha_ga": 0.0,
  "alpha_saves": 0.0259,
- "elapsed_seconds": 3.6,
+ "elapsed_seconds": 4.0,
  "expected_value_mae_final": {
   "goals_against_league": 1.2223,
   "goals_against_model": 1.2056,
@@ -91,6 +91,58 @@
    0.9353525609994001,
    -0.44564656196316876
   ]
+ },
+ "puck_line": {
+  "away_plus_1_5": {
+   "base_rate": 0.7826,
+   "brier": 0.17269,
+   "log_loss": 0.52926,
+   "mean_pred": 0.7029,
+   "n": 1311
+  },
+  "base_rate_baseline": {
+   "base_rate": 0.2174,
+   "brier": 0.17157,
+   "log_loss": 0.52751,
+   "mean_pred": 0.2553,
+   "n": 1311
+  },
+  "calibration": [
+   {
+    "bin": "0.0-0.2",
+    "mean_pred": 0.1802,
+    "n": 40,
+    "observed": 0.05
+   },
+   {
+    "bin": "0.2-0.4",
+    "mean_pred": 0.2964,
+    "n": 1229,
+    "observed": 0.214
+   },
+   {
+    "bin": "0.4-0.6",
+    "mean_pred": 0.4293,
+    "n": 42,
+    "observed": 0.4762
+   }
+  ],
+  "event": "home -1.5 covers (wins by 2+); away +1.5 is its complement",
+  "fit_on": 2024,
+  "games_scored": 1311,
+  "mae_margin": 1.7086,
+  "margin_model": {
+   "b0": 0.2687,
+   "b1": 0.7884,
+   "total": 5.6227
+  },
+  "model": {
+   "base_rate": 0.2174,
+   "brier": 0.17269,
+   "log_loss": 0.52926,
+   "mean_pred": 0.2971,
+   "n": 1311
+  }
  },
  "rows": {
   "goalie_calibration": 2621,
