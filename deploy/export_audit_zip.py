@@ -202,6 +202,12 @@ def main(argv=None) -> int:
             "generated_at_utc": d.get("generated_at_utc"), "data_through": d.get("data_through"), "et_today": d.get("et_today"),
             "games": len(d["games"]["games"]), "players": len(d["players"]), "goalies": len(d["goalies"]), "teams": len(d["teams"]),
             "model_health": d.get("model_health"), "board_sample": [g for g in d["games"]["games"] if g["date_et"] == d.get("default_date")][:12]}, indent=1).encode()
+    df_state = REPO / "operational" / "runtime" / "dailyfaceoff_state.json"
+    if df_state.exists():                       # public data fetched from the starter/lineup source, with fetch times and any error
+        extras["audit_evidence/dailyfaceoff_state.json"] = df_state.read_bytes()
+    checks = REPO / "operational" / "runtime" / "order_path_checks.json"
+    if checks.exists():
+        extras["audit_evidence/order_path_checks.json"] = checks.read_bytes()
     files.update(extras)
 
     secrets = env_values()
@@ -239,11 +245,11 @@ def main(argv=None) -> int:
           "`operational/paper_bankroll.py`, `operational/paper_bet_settlement_driver.py`, `operational/best_bets.py`, `operational/product_data.py`, `operational/manual_orders.py`, `operational/player_options.py`, `research/product_models/`,",
           "`tests/test_daily_tickets.py`. `audit_evidence/` holds the live ledger rows and published board.", "",
           "Also read `docs/MODEL_VALIDATION.md` (method, results, live-model policy), `docs/MANUAL_ORDERS.md`, `docs/ONTARIO_VERIFICATION.md`, "
-          "`docs/PRODUCT_COMPLETION_CHECKLIST.md`; validation reports are in `docs/validation/`; `audit_evidence/postmortems/` holds generated postmortems "
+          "`docs/PRODUCT_COMPLETION_CHECKLIST.md`, `docs/ODDS_CREDIT_AUDIT.md`, `docs/STARTING_GOALIE_SOURCE_AUDIT.md`; validation reports are in `docs/validation/`; `audit_evidence/postmortems/` holds generated postmortems "
           "(including the first losing ticket) and `audit_evidence/ledger_board_reconciliation.json` the ledger-vs-board check.", "",
           "Labels that must stay true: probabilities come from validated projection models but no profitability is claimed (no historical prices); "
           "combined parlay prices are ESTIMATED; prices are US-feed, not matched to DraftKings Ontario; tickets can share players/games (correlated); "
-          "starting goalies are unconfirmed unless a person recorded a confirmation."]
+          "a starting goalie is confirmed only by the team's own post (read automatically) or a person's recorded confirmation."]
     omitted = ["# Omitted runtime data", "", "Excluded on purpose (credentials, private account data, or regenerated runtime state):", ""]
     omitted += [f"* **{what}** — {why}" for what, why in OMITTED]
     omitted += ["", "Consequently the ZIP cannot reproduce live runs by itself. The unit tests use isolated temp databases and do not "
