@@ -377,6 +377,22 @@ def reported_pp(p: dict) -> str:
 
 # ---- order-path check: proves the click-to-queue path end to end without staking anything ----
 
+def identity_probe() -> dict:
+    """Names only (never values): what identity the running app can actually see, so a missing email is explained rather than guessed."""
+    out = {"streamlit": getattr(st, "__version__", "?"), "is_logged_in": None, "user_fields": [], "header_names": []}
+    try:
+        user = st.user
+        out["is_logged_in"] = getattr(user, "is_logged_in", None)
+        out["user_fields"] = sorted(k for k, v in user.to_dict().items() if v not in (None, "", False))
+    except Exception:  # noqa: BLE001 - diagnostic only
+        pass
+    try:
+        out["header_names"] = sorted(h for h in st.context.headers.keys() if h.lower().startswith(("x-", "cf-")) and "cookie" not in h.lower() and "auth" not in h.lower())
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 def order_path_panel() -> None:
     email = getattr(getattr(st, "user", None), "email", None)
     stat = order_client.path_status(getattr(st, "secrets", {}), email)
@@ -387,6 +403,9 @@ def order_path_panel() -> None:
                   {"Check": "One-click (direct) path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
                  hide_index=True, width="stretch")
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
+    probe = identity_probe()
+    st.caption(f"What the hosted app's authentication exposes (names only, no values): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
+               f"`st.user` fields = {probe['user_fields'] or 'none'}; request headers present = {probe['header_names'] or 'unavailable'}.")
     sess = st.session_state.setdefault("_path_checks", {})
     if st.button("Run non-staking order-path check", key="path_check_run"):
         cid = order_client.new_order_id().replace("ord_", "chk_")
