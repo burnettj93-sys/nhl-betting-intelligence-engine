@@ -95,7 +95,7 @@ the cap stops the farthest-out refreshes first, and a price that is not refreshe
 ## Recording windows (reserved slots) — added 2026-10
 
 Prices appear within about five hours of each puck drop, so on a day with early and late games the first qualifying tickets could use all five slots
-before the later games are priced. The selector now groups the day's games into *waves* (puck drops within 90 minutes of each other). A ticket belongs
+before the later games are priced. The selector now groups the day's games into *waves* (puck drops within 90 minutes of the first puck drop of that wave). A ticket belongs
 to the wave of its earliest game. While later waves have yet to start, an earlier wave may hold at most 5 slots minus the number of later waves (up to 2) — so with one
 later wave, an earlier wave can record at most 4 tickets; with two or more, at most 3. On a single-wave day nothing changes. The reservation only removes a
 qualifying ticket from the current cycle; it never admits a ticket the ticket rules reject (+100 combined, estimated edge ≥ 5%, positive after the 3-point haircut,

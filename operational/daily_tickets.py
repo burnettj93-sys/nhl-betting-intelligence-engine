@@ -161,7 +161,7 @@ def collect_candidate_legs(nhl_conn, now: dt.datetime) -> dict:
 
 # ------------------------------------------------- recording windows (reserved slots) ----
 
-WAVE_GAP_MIN = 90.0         # games whose puck drops are within this of each other form one "wave" of the day
+WAVE_SPAN_MIN = 90.0        # games whose puck drops fall within this of the wave's FIRST puck drop form one "wave" of the day
 RESERVED_FOR_LATER = 2      # slots held back for later waves while any later wave has yet to start
 
 
@@ -175,14 +175,14 @@ def day_waves(nhl_conn, et_date: str) -> list[dict]:
             continue
         t = dt.datetime.fromisoformat(r["scheduled_start_utc"].replace("Z", "+00:00"))
         t = t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
-        if waves and (t - waves[-1]["_last"]).total_seconds() / 60.0 <= WAVE_GAP_MIN:
+        if waves and (t - waves[-1]["_first"]).total_seconds() / 60.0 <= WAVE_SPAN_MIN:
             waves[-1]["game_ids"].append(str(r["game_id"]))
             waves[-1]["_last"], waves[-1]["end_utc"] = t, t.isoformat()
         else:
-            waves.append({"start_utc": t.isoformat(), "end_utc": t.isoformat(), "_last": t, "game_ids": [str(r["game_id"])]})
+            waves.append({"start_utc": t.isoformat(), "end_utc": t.isoformat(), "_first": t, "_last": t, "game_ids": [str(r["game_id"])]})
     for i, w in enumerate(waves):
         w["index"] = i
-        del w["_last"]
+        del w["_last"], w["_first"]
     return waves
 
 
@@ -219,7 +219,7 @@ def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[se
 
     info = {"waves": [{"index": w["index"], "first_puck_drop_utc": w["start_utc"], "games": len(w["game_ids"]), "slot_cap": cap(w["index"]),
                        "recorded": used[w["index"]]} for w in waves], "reserved_for_later_waves": RESERVED_FOR_LATER,
-            "gap_minutes": WAVE_GAP_MIN}
+            "span_minutes": WAVE_SPAN_MIN}
     return ticket_filter, info
 
 
