@@ -378,7 +378,8 @@ def _prospective_checks(nhl, now: dt.datetime, live_tg: dict, games_out: list[di
     try:
         from research.product_models import puck_line_alternative as pla
         if pla.OUT_PATH.exists():
-            sched = [g for g in games_out if g["state"] == "SCHEDULED" and g["type"] == "REGULAR" and g["season"] == CURRENT_SEASON_ID]
+            horizon = (dt.date.fromisoformat(et.eastern_today(now)) + dt.timedelta(days=1)).isoformat()      # log close to the start, with that day's strength
+            sched = [g for g in games_out if g["state"] == "SCHEDULED" and g["type"] == "REGULAR" and g["season"] == CURRENT_SEASON_ID and g["date_et"] <= horizon]
             logged = 0
             for g in sched:
                 try:
