@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+from collections import defaultdict
 from pathlib import Path
 
 from operational import eastern_time as et
@@ -156,6 +157,70 @@ def collect_candidate_legs(nhl_conn, now: dt.datetime) -> dict:
     legs, notes = _merge_and_add_context(nhl_conn, adapter_legs, bb_legs)
     report["ROLLING_FORM_SHOTS"] = bb_report
     return {"legs": legs, "sources": report, "second_opinion": notes}
+
+
+# ------------------------------------------------- recording windows (reserved slots) ----
+
+WAVE_GAP_MIN = 90.0         # games whose puck drops are within this of each other form one "wave" of the day
+RESERVED_FOR_LATER = 2      # slots held back for later waves while any later wave has yet to start
+
+
+def day_waves(nhl_conn, et_date: str) -> list[dict]:
+    """The day's puck-drop waves from the schedule: [{"index", "start_utc", "end_utc", "game_ids"}] in time order."""
+    rows = nhl_conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ? AND game_state = 'SCHEDULED' "
+                            "ORDER BY scheduled_start_utc", (et_date,)).fetchall()
+    waves: list[dict] = []
+    for r in rows:
+        if not r["scheduled_start_utc"]:
+            continue
+        t = dt.datetime.fromisoformat(r["scheduled_start_utc"].replace("Z", "+00:00"))
+        t = t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+        if waves and (t - waves[-1]["_last"]).total_seconds() / 60.0 <= WAVE_GAP_MIN:
+            waves[-1]["game_ids"].append(str(r["game_id"]))
+            waves[-1]["_last"], waves[-1]["end_utc"] = t, t.isoformat()
+        else:
+            waves.append({"start_utc": t.isoformat(), "end_utc": t.isoformat(), "_last": t, "game_ids": [str(r["game_id"])]})
+    for i, w in enumerate(waves):
+        w["index"] = i
+        del w["_last"]
+    return waves
+
+
+def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[set]):
+    """(ticket_filter, info). A ticket belongs to the wave of its earliest game. While later waves have yet to start, an earlier
+    wave may hold at most SLOT_COUNT minus (up to RESERVED_FOR_LATER) slots, so early prices cannot use up the whole day. This only
+    ever removes a qualifying ticket from this cycle; it never lets one through that the ticket rules reject."""
+    game_wave = {gid: w["index"] for w in waves for gid in w["game_ids"]}
+
+    def wave_of(game_ids) -> int | None:
+        idx = [game_wave[g] for g in game_ids if g in game_wave]
+        return min(idx) if idx else None
+
+    def later_waves_pending(i: int) -> int:
+        return sum(1 for w in waves if w["index"] > i and dt.datetime.fromisoformat(w["start_utc"]) > now)
+
+    def cap(i: int) -> int:
+        return SLOT_COUNT - min(RESERVED_FOR_LATER, later_waves_pending(i))
+
+    used: dict[int, int] = defaultdict(int)
+    for gs in recorded_game_sets:
+        w = wave_of(gs)
+        if w is not None:
+            used[w] += 1
+
+    def ticket_filter(combo, already) -> str | None:
+        w = wave_of({l.game_id for l in combo.legs})
+        if w is None:
+            return None
+        taken = used[w] + sum(1 for t in already if wave_of({l.game_id for l in t.legs}) == w)
+        if taken >= cap(w):
+            return f"wave {w} already holds {taken} of its {cap(w)} slots; the rest are held for later puck drops"
+        return None
+
+    info = {"waves": [{"index": w["index"], "first_puck_drop_utc": w["start_utc"], "games": len(w["game_ids"]), "slot_cap": cap(w["index"]),
+                       "recorded": used[w["index"]]} for w in waves], "reserved_for_later_waves": RESERVED_FOR_LATER,
+            "gap_minutes": WAVE_GAP_MIN}
+    return ticket_filter, info
 
 
 # --------------------------------------------------------------- recording ----
@@ -511,7 +576,12 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     collected = collected if collected is not None else collect_candidate_legs(nhl_conn, now)
     legs = collected["legs"]
     # Exposure limits count tickets already recorded today; they are never re-selected.
-    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left)
+    try:
+        waves = day_waves(nhl_conn, et_date) if nhl_conn is not None else []
+    except Exception:  # noqa: BLE001 - without a schedule there is no reservation, never a failed cycle
+        waves = []
+    ticket_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
+    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
     singles = rmp.select_singles(legs)
 
     account = pb.account_state(bankroll_conn, TRACK)
@@ -531,7 +601,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
-        "capture_plan": _capture_plan(nhl_conn, now),
+        "capture_plan": _capture_plan(nhl_conn, now), "recording_policy": wave_info,
     }
     from operational import player_options
     try:

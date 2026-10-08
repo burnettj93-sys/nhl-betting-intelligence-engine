@@ -64,3 +64,26 @@ st.caption(f"Content hash: {_snap.get('content_hash') or '—'}")
 st.markdown("**Loaded in this process**")
 st.caption(" · ".join(f"{name}: {'yes' if on else 'no'}" for name, on in d["libraries_loaded"].items())
            + f" · research modules: {d['research_modules_loaded']}")
+
+st.markdown("### Ticket and option diagnostics (admin)")
+try:
+    from dashboard import product_source as _ps
+    _tk = _ps.tickets()
+except Exception as _exc:  # noqa: BLE001 - diagnostics must never fail the page
+    _tk = None
+    st.caption(f"Ticket board unavailable: {_exc}")
+if _tk:
+    _diag = _tk.get("diagnostics") or {}
+    _fun = _diag.get("funnel") or {}
+    st.caption("Why tickets and options are or are not produced. These counts are for the operator and are not shown on product pages.")
+    st.json({"legs_considered": _diag.get("legs_considered"), "pool_after_edge_filter": _diag.get("pool_after_edge_filter"),
+             "qualifying_tickets": _diag.get("qualifying_tickets"), "funnel": {k: v for k, v in _fun.items() if k not in ("nearest_rejected_legs", "nearest_rejected_pairs")},
+             "sources": _diag.get("sources"), "option_diagnostics": (_tk.get("options") or {}).get("diagnostics")}, expanded=False)
+    if _fun.get("nearest_rejected_pairs"):
+        st.markdown("**Nearest rejected pairs**")
+        st.dataframe(_fun["nearest_rejected_pairs"], hide_index=True, width="stretch")
+    _persons = (_tk.get("options") or {}).get("persons") or {}
+    _none = [{"Person": p["name"], "Priced legs": p["priced_legs"], "Reason no option": p["reason_no_option"]} for p in _persons.values() if not p["option_id"]]
+    if _none:
+        st.markdown("**People with a fresh price but no qualifying option**")
+        st.dataframe(_none, hide_index=True, width="stretch")

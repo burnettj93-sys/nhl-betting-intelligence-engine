@@ -73,7 +73,7 @@ class TestCorpusCoversDate(unittest.TestCase):
         this same frozen corpus against its own disclosed SIMULATED_DATE
         on purpose -- it must never call corpus_covers_date()."""
         import inspect
-        from dashboard import demo_data as dd
+        from research.demo_board import demo_data as dd
         source = inspect.getsource(dd)
         self.assertNotIn("corpus_covers_date", source)
 

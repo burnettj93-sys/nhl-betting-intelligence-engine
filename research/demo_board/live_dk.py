@@ -23,15 +23,15 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from dashboard import cloud_snapshot
+from research.demo_board._no_snapshot import cloud_snapshot
 from dashboard import data_access as da
-from dashboard import game_detail_view as gdv
+from research.demo_board import game_detail_view as gdv
 from pricing import odds_math as pm
 from research.generic_prop_pricing.evaluator import decide, zone
 from research.generic_prop_pricing import provider_adapter as pa
 from research.live_sog_pricing import archive
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # ARCHIVE_DIR mirrors archive.ARCHIVE_DIR (the current runtime capture
 # location) -- kept as its own module attribute, as before, so existing
 # tests can mock.patch.object(dashboard.live_dk, "ARCHIVE_DIR", ...) to

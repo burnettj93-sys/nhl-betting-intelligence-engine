@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import unittest
 
-from dashboard import conviction as cv
-from dashboard import eligible_bets as eb
+from research.demo_board import conviction as cv
+from research.demo_board import eligible_bets as eb
 
 
 def _leg(player_id="P1", prop="sog", threshold="3+", market="PLAYER_SOG", conservative_p=0.5,

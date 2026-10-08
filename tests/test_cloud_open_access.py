@@ -84,26 +84,23 @@ class TestCloudNeedsNoAppLogin(unittest.TestCase):
         self.assertNotIn("Signed in as", _text(at))
 
 
-class TestTodayWithTheRealPublishedSnapshotShape(unittest.TestCase):
-    """Regression (found on the live app): the published snapshot's odds_status has no `last_updated_utc`, and Today
-    raised KeyError on it."""
+class TestTodayWithOptionalSectionsMissing(unittest.TestCase):
+    """Regression (found on the live app): a section absent from the published snapshot must not raise on Today."""
 
-    def test_today_renders_when_odds_status_omits_last_updated_utc(self):
-        from dashboard import cloud_snapshot
-        real = cloud_snapshot.health_section
-
-        def health():
-            h = dict(real())
-            h["odds_status"] = {"status": "OK", "credits_remaining": 365, "tracked_events": 33, "player_prop_quotes": 744}
-            return h
-        with mock.patch.object(cloud_snapshot, "health_section", health):
-            at = _run_app(rm.COMMUNITY_CLOUD_MODE)
+    def test_today_renders_when_the_snapshot_carries_only_tickets(self):
+        from streamlit.testing.v1 import AppTest
+        from dashboard import snapshot_source as ss
+        from tests.product_fixture import snapshot
+        doc = snapshot()
+        for key in ("health", "data_status", "product_games", "product_meta", "performance"):
+            doc.pop(key, None)
+        state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=doc, source="REMOTE", fetch_status="OK", freshness="CURRENT")
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+                mock.patch.object(ss, "current", return_value=state):
+            at = AppTest.from_file(str(REPO / "dashboard" / "pages" / "21_Today.py"), default_timeout=120)
+            at.run()
         self.assertEqual([str(e.value)[:80] for e in at.exception], [])
-        self.assertIn("Odds last updated", " ".join(m.label for m in at.metric))
-
-    def test_the_page_never_indexes_the_optional_odds_status_keys(self):
-        src = (REPO / "dashboard" / "pages" / "21_Today.py").read_text()
-        self.assertNotIn('_odds_status["last_updated_utc"]', src)
+        self.assertIn("Available cash", " ".join(m.label for m in at.metric))
 
 
 class TestCloudSurfaceHasNoRiskyControls(unittest.TestCase):
@@ -121,7 +118,7 @@ class TestCloudSurfaceHasNoRiskyControls(unittest.TestCase):
 
     def test_the_useful_product_pages_are_all_available_in_cloud_without_a_role(self):
         titles = {p.title for section in page_registry.pages_for("ADMIN", rm.COMMUNITY_CLOUD_MODE).values() for p in section}
-        for wanted in ("Today", "Games", "Game Detail", "Player Intelligence", "Team Intelligence", "Paper Performance", "Ledger",
+        for wanted in ("Today", "Games", "Game Detail", "Players", "Goalies", "Best Options", "Team Intelligence", "Paper Performance", "Ticket History",
                        "Morning Review", "Data Status", "Diagnostics", "Model Health"):
             self.assertIn(wanted, titles)
 

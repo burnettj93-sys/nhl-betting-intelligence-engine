@@ -10,10 +10,10 @@ player props in the prior sprint, never a new team model.
 from __future__ import annotations
 
 import config
-from dashboard import cloud_snapshot
+from research.demo_board._no_snapshot import cloud_snapshot
 from dashboard import data_access as da
-from dashboard import demo_data as dd
-from dashboard import player_intelligence_view as piv
+from research.demo_board import demo_data as dd
+from research.demo_board import player_intelligence_view as piv
 from research.joint_scoring_dependence.joint_models import (
     gaussian_copula_joint_upper_tail, logical_control_probability,
 )

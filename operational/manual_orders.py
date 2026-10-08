@@ -223,10 +223,10 @@ def _gh(args: list[str], *, input_text: str | None = None) -> str:
     return out.stdout
 
 
-def fetch_github_orders(repo: str = REPO, owner: str = OWNER_LOGIN) -> tuple[list[dict], list[dict]]:
-    """(orders, ignored). Only open issues carrying the order label AND opened by the repository owner are orders;
+def fetch_github_orders(repo: str = REPO, owner: str = OWNER_LOGIN, label: str = ORDER_LABEL) -> tuple[list[dict], list[dict]]:
+    """(orders, ignored). Only open issues carrying the label AND opened by the repository owner are orders;
     anything else (the repository is public) is ignored and reported, never processed."""
-    raw = _gh(["api", f"repos/{repo}/issues?labels={ORDER_LABEL}&state=open&per_page=50"])
+    raw = _gh(["api", f"repos/{repo}/issues?labels={label}&state=open&per_page=50"])
     orders, ignored = [], []
     for issue in json.loads(raw):
         if "pull_request" in issue:
@@ -240,6 +240,62 @@ def fetch_github_orders(repo: str = REPO, owner: str = OWNER_LOGIN) -> tuple[lis
         orders.append({"issue": issue["number"], "body": m.group(1) if m else body.strip(),
                        "created_at": issue.get("created_at")})
     return orders, ignored
+
+
+# ------------------------------------------------------------ Ontario spot checks ----
+
+ONTARIO_LABEL = "ontario-verification"
+VERIFICATION_MAX_AGE_MIN = 60.0
+
+
+def process_verification(conn, raw, *, now: dt.datetime, source: str) -> dict:
+    """Stores one manual Ontario price check. Returns {"status": "RECORDED"|"ALREADY_RECORDED"|"REJECTED", ...}."""
+    try:
+        doc = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+    except json.JSONDecodeError:
+        return {"status": "REJECTED", "reason": "not valid JSON"}
+    if not isinstance(doc, dict) or doc.get("type") != "ONTARIO_VERIFICATION" or doc.get("schema") != SCHEMA:
+        return {"status": "REJECTED", "reason": "not an ONTARIO_VERIFICATION document"}
+    vid, leg = doc.get("verification_id"), doc.get("leg") or {}
+    if not isinstance(vid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", vid):
+        return {"status": "REJECTED", "reason": "verification_id malformed"}
+    price = doc.get("ontario_price")
+    if isinstance(price, bool) or not isinstance(price, (int, float)) or abs(price) < 100:
+        return {"status": "REJECTED", "reason": "the price must be American odds (at least 100 in size)"}
+    if any(k not in leg for k in LEG_KEY):
+        return {"status": "REJECTED", "reason": "the selection is incomplete"}
+    seen = quote_freshness.parse_utc(doc.get("observed_at_utc"))
+    if seen is None:
+        return {"status": "REJECTED", "reason": "observed_at_utc missing or malformed"}
+    if (seen - now).total_seconds() > quote_freshness.FUTURE_TOLERANCE_S:
+        return {"status": "REJECTED", "reason": "the time seen is in the future"}
+    where = (doc.get("where_seen") or "").strip()
+    if not where:
+        return {"status": "REJECTED", "reason": "say where the price was seen (for example DraftKings Ontario app or website)"}
+    if conn.execute("SELECT 1 FROM ontario_verifications WHERE verification_id = ?", (vid,)).fetchone():
+        return {"status": "ALREADY_RECORDED", "verification_id": vid}
+    conn.execute(
+        "INSERT INTO ontario_verifications (verification_id, source, game_id, participant_id, participant_name, market_family, threshold, side, "
+        "ontario_price, us_price_shown, observed_at_utc, recorded_at_utc, where_seen, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (vid, source, str(leg["game_id"]), str(leg["participant_id"]), leg.get("participant_name"), leg["market_family"],
+         None if leg["threshold"] is None else int(leg["threshold"]), leg["side"], float(price), doc.get("us_price_shown"),
+         quote_freshness.iso_z(seen), quote_freshness.iso_z(now), where[:120], (doc.get("notes") or "")[:400]))
+    conn.commit()
+    return {"status": "RECORDED", "verification_id": vid}
+
+
+def recent_verifications(conn, limit: int = 100) -> list[dict]:
+    rows = conn.execute("SELECT * FROM ontario_verifications ORDER BY observed_at_utc DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _confirm(nhl_conn, body, now, source):
+    from operational import goalie_confirmations
+    try:
+        doc = json.loads(body) if isinstance(body, (str, bytes)) else body
+    except json.JSONDecodeError:
+        return {"status": "REJECTED", "reason": "not valid JSON"}
+    return goalie_confirmations.validate_and_record(nhl_conn, doc, now=now, source_ref=source)
 
 
 def _answer_text(row: dict) -> str:
@@ -281,4 +337,26 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                 _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
             except Exception as exc:  # noqa: BLE001 -- the answer is stored either way; a failed comment is reported
                 results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
-        return {"status": "OK", "processed": len(results), "results": results, "ignored": ignored}
+        v_results = []
+        if fetch is None:
+            from operational import goalie_confirmations
+            handlers = {ONTARIO_LABEL: lambda body, src: process_verification(conn, body, now=now, source=src),
+                        goalie_confirmations.LABEL: lambda body, src: _confirm(nhl_conn, body, now, src)}
+            v_ignored = []
+            for label, handler in handlers.items():
+                try:
+                    v_orders, ign = fetch_github_orders(repo, owner, label)
+                except Exception as exc:  # noqa: BLE001
+                    v_orders, ign = [], [{"error": f"{exc.__class__.__name__}: {exc}"}]
+                v_ignored += ign
+                for o in v_orders:
+                    res = handler(o["body"], f"github-issue:{o['issue']}")
+                    v_results.append({"issue": o["issue"], "label": label, **res})
+                    try:
+                        _gh(["api", f"repos/{repo}/issues/{o['issue']}/comments", "-f", f"body={label} -> **{res['status']}**" + (f": {res['reason']}" if res.get("reason") else ".")])
+                        _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
+                    except Exception as exc:  # noqa: BLE001
+                        v_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
+        else:
+            v_ignored = []
+        return {"status": "OK", "processed": len(results) + len(v_results), "results": results, "verifications": v_results, "ignored": ignored + v_ignored}

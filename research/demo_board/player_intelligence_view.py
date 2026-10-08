@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import statistics
 
-from dashboard import cloud_snapshot
-from dashboard import demo_data as dd
+from research.demo_board._no_snapshot import cloud_snapshot
+from research.demo_board import demo_data as dd
 
 NEXT5_OPPONENT_POOL = ["CGY", "SEA", "OTT", "PIT", "STL", "ANA", "NSH", "BUF"]
 

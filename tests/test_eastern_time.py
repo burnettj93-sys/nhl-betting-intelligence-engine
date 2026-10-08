@@ -29,33 +29,33 @@ class TestEasternToday(unittest.TestCase):
         self.assertEqual(et.eastern_today(now_utc), "2026-01-14")
 
 
-class TestRealTodaySlateUsesEasternDay(unittest.TestCase):
-    def test_a_game_scheduled_tonight_still_appears_at_8pm_eastern(self):
+class TestScheduleUsesEasternDay(unittest.TestCase):
+    def test_a_game_scheduled_tonight_is_on_todays_eastern_date_at_8pm_eastern(self):
         import tempfile
         from pathlib import Path
         import db
-        from dashboard import real_today_view as rtv
+        from operational import product_data
 
         tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
         tmp.close()
         conn = db.init_db(db_path=Path(tmp.name), wipe=True)
         for t in ("TOR", "MTL"):
             conn.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES (?, ?)", (t, t))
-        # A real game whose NHL-API game_date is "2026-09-29" (tonight, Eastern) --
-        # the real ingest pipeline always stores game_date this way (ingest/nhl_api.py
-        # reads it directly from the NHL API's own "gameDate" field).
         conn.execute(
             "INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, "
             "schedule_observed_at_utc, game_state, source) VALUES (?,?,?,?,?,?,?,?,?)",
-            (1, "20262027", "2026-09-29", "2026-09-30T00:00:00", "TOR", "MTL",
+            (2026020001, "20262027", "2026-09-29", "2026-09-30T01:30:00", "TOR", "MTL",
              "2026-09-29T12:00:00", "SCHEDULED", "test"))
         conn.commit()
 
         # 8:30 PM EDT -- UTC has already rolled to Sept 30, but it's still Sept 29 in Toronto.
         now_utc = dt.datetime(2026, 9, 30, 0, 30, tzinfo=dt.timezone.utc)
-        games = rtv._today_real_games(conn, now_utc)
-        self.assertEqual(len(games), 1, "the naive-UTC bug would return zero games here")
-        self.assertEqual((games[0]["home_team"], games[0]["away_team"]), ("TOR", "MTL"))
+        games = product_data.load_games(conn, now_utc)
+        today = et.eastern_today(now_utc)
+        todays = [g for g in games if g["date_et"] == today]
+        self.assertEqual(today, "2026-09-29")
+        self.assertEqual(len(todays), 1, "the naive-UTC bug would put this game on tomorrow")
+        self.assertEqual((todays[0]["home"], todays[0]["away"], todays[0]["state"]), ("TOR", "MTL", "SCHEDULED"))
 
 
 if __name__ == "__main__":

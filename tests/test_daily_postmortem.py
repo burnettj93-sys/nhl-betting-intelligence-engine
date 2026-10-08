@@ -181,7 +181,7 @@ class TestScoreboardAndParlayHealth(unittest.TestCase):
 
     def test_scoreboard_covers_every_track(self):
         scoreboard = dpm.build_daily_scoreboard(self.conn)
-        self.assertEqual(set(scoreboard["tracks"].keys()), set(pb.TRACKS))
+        self.assertEqual(set(scoreboard["tracks"].keys()), {"REAL_MARKET_PAPER"})   # simulated tracks are not part of the product
 
     def test_parlay_health_honest_when_nothing_settled(self):
         health = dpm.build_parlay_health(self.conn)

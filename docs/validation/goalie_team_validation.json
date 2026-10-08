@@ -1,4 +1,5 @@
 {
+ "alpha_ga": 0.0,
  "alpha_saves": 0.0259,
  "elapsed_seconds": 3.6,
  "expected_value_mae_final": {
@@ -8,6 +9,12 @@
   "saves_league_mean": 5.402,
   "saves_model": 5.1026,
   "shots_against_model": 5.1177
+ },
+ "ga_80pct_range_coverage": {
+  "alpha": 0.0,
+  "calibration_season": 0.8897,
+  "final_season": 0.9012,
+  "nominal": 0.8
  },
  "league_mean_saves_calibration": 24.916,
  "model_version": "goalie-team-v1",

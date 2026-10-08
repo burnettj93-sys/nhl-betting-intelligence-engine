@@ -40,22 +40,45 @@ def build_order(option: dict, *, order_id: str, page_generated_at: str | None, s
             "price_basis": option.get("price_basis")}}
 
 
+def build_verification(leg: dict, *, verification_id: str, ontario_price: float, observed_at_utc: str, where_seen: str,
+                       us_price_shown: float | None, notes: str = "") -> dict:
+    return {"schema": SCHEMA, "type": "ONTARIO_VERIFICATION", "verification_id": verification_id,
+            "leg": {k: leg.get(k) for k in ("game_id", "participant_id", "participant_name", "market_family", "threshold", "side")},
+            "ontario_price": ontario_price, "us_price_shown": us_price_shown, "observed_at_utc": observed_at_utc,
+            "where_seen": where_seen, "notes": notes}
+
+
+def build_confirmation(*, confirmation_id: str, game_id: str, team: str, goalie_id: str, where_seen: str, seen_at_utc: str) -> dict:
+    return {"schema": SCHEMA, "type": "GOALIE_CONFIRMATION", "confirmation_id": confirmation_id, "game_id": str(game_id), "team": team,
+            "goalie_id": str(goalie_id), "where_seen": where_seen, "seen_at_utc": seen_at_utc}
+
+
 def issue_title(order: dict) -> str:
+    if order.get("type") == "GOALIE_CONFIRMATION":
+        return f"goalie-confirmation {order['confirmation_id']}"
+    if order.get("type") == "ONTARIO_VERIFICATION":
+        return f"ontario-verification {order['verification_id']}"
     return f"paper-order {order['order_id']}"
 
 
+def issue_label(order: dict) -> str:
+    if order.get("type") == "GOALIE_CONFIRMATION":
+        return "goalie-confirmation"
+    return "ontario-verification" if order.get("type") == "ONTARIO_VERIFICATION" else LABEL
+
+
 def issue_body(order: dict) -> str:
-    return "Paper-book order from the dashboard. Do not edit.\n\n```json\n" + json.dumps(order, indent=1, sort_keys=True) + "\n```\n"
+    return "Request from the dashboard. Do not edit.\n\n```json\n" + json.dumps(order, indent=1, sort_keys=True) + "\n```\n"
 
 
 def prefilled_issue_url(order: dict) -> str:
-    q = urllib.parse.urlencode({"labels": LABEL, "title": issue_title(order), "body": issue_body(order)})
+    q = urllib.parse.urlencode({"labels": issue_label(order), "title": issue_title(order), "body": issue_body(order)})
     return f"https://github.com/{REPO}/issues/new?{q}"
 
 
 def submit_direct(order: dict, token: str, *, opener=urllib.request.urlopen) -> dict:
     """Creates the order issue as the token's owner. Returns {"ok": True, "issue": n} or {"ok": False, "error": text}."""
-    payload = json.dumps({"title": issue_title(order), "body": issue_body(order), "labels": [LABEL]}).encode()
+    payload = json.dumps({"title": issue_title(order), "body": issue_body(order), "labels": [issue_label(order)]}).encode()
     req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/issues", data=payload, method="POST", headers={
         "Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json", "Content-Type": "application/json",
         "User-Agent": "nhl-engine-dashboard", "X-GitHub-Api-Version": "2022-11-28"})

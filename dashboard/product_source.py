@@ -103,3 +103,18 @@ def performance() -> dict:
         return ppv.full_dashboard_state()
     except cloud_snapshot.SnapshotUnavailable as exc:
         raise Unavailable(str(exc)) from exc
+
+
+def ontario_verifications() -> list[dict]:
+    if _cloud():
+        try:
+            return _wrap(cloud_snapshot.manual_orders).get("ontario_verifications", [])
+        except Unavailable:
+            return []
+    from operational import manual_orders as mo
+    from operational import paper_bankroll as pb
+    conn = pb.init_db()
+    try:
+        return mo.recent_verifications(conn)
+    finally:
+        conn.close()

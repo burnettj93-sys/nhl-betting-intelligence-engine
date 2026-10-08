@@ -90,3 +90,19 @@ before they would be rejected. The newest capture of either job counts (the prop
 and points prices are taken from the newest capture of each market, and the existing 36-credit daily cap and the global
 quota guard are untouched. One game costs about four captures (8 credits); a three-game evening about 24. On a larger slate
 the cap stops the farthest-out refreshes first, and a price that is not refreshed simply drops out as stale.
+
+
+## Recording windows (reserved slots) — added 2026-10
+
+Prices appear within about five hours of each puck drop, so on a day with early and late games the first qualifying tickets could use all five slots
+before the later games are priced. The selector now groups the day's games into *waves* (puck drops within 90 minutes of each other). A ticket belongs
+to the wave of its earliest game. While later waves have yet to start, an earlier wave may hold at most 5 slots minus the number of later waves (up to 2) — so with one
+later wave, an earlier wave can record at most 4 tickets; with two or more, at most 3. On a single-wave day nothing changes. The reservation only removes a
+qualifying ticket from the current cycle; it never admits a ticket the ticket rules reject (+100 combined, estimated edge ≥ 5%, positive after the 3-point haircut,
+per-leg/per-game limits). If a later wave never produces a qualifying ticket its reserved slots stay empty and Today says why. The wave table is in the ticket
+board's diagnostics (`recording_policy`). Tests: `tests/test_daily_tickets.py::TestRecordingWaves`.
+
+## Origins
+
+Tickets carry `origin`: `AUTOMATIC` (selected and recorded by the engine) or `MANUALLY_ADDED` (docs/MANUAL_ORDERS.md). The five daily slots, the per-leg and per-game
+limits used by the selector, and the automatic performance record count AUTOMATIC tickets only. Exposure tables, the account and settlement cover both.

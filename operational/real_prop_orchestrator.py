@@ -87,7 +87,8 @@ LEGACY_ARCHIVE_DIR = REPO_ROOT / "data" / "raw" / "the_odds_api" / "live"
 SOG_MARKET_ID = "PLAYER_SOG"
 SAVES_MARKET_ID = "GOALIE_SAVES"
 SOG_VALIDATED_THRESHOLDS = (2, 3, 4, 5)     # PLAYER_SOG_FOUNDATION_REPORT.md Section AI
-SAVES_VALIDATED_THRESHOLDS = (20, 25)       # GOALIE_SAVES_VALIDATION_REPORT.md
+from research.generic_prop_pricing.line_mapping import SAVES_VALIDATED_THRESHOLDS as _SVT  # noqa: E402
+SAVES_VALIDATED_THRESHOLDS = tuple(sorted(_SVT))       # docs/validation/goalie_team_validation.json
 
 from operational import state_paths as _state_paths
 
@@ -626,12 +627,22 @@ def _real_external_starter_observations(*, game_id, team_id: str) -> list:
     reason -- caught here, not propagated, since "no source integrated"
     is the real, current, expected state, not an error condition for
     this orchestrator."""
+    from operational import goalie_confirmations
     from research.goalie_intelligence import source_schema
     try:
-        source_schema.record_observation()
+        source_schema.record_observation()          # automated sources: none licensed, always raises by design
     except source_schema.ExternalSourceUnavailableError:
         pass
-    return []
+    # The one confirmation channel that exists: a person's recorded sighting (operational/goalie_confirmations.py).
+    try:
+        import db
+        conn = db.get_conn()
+        try:
+            return goalie_confirmations.confirmed_observations(conn, game_id, team_id)
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - no database / no row means no confirmation, which keeps the gate closed
+        return []
 
 
 def _apply_starter_certainty_gate(priced: dict, *, matched_goalie_id: str, game_id,
@@ -783,7 +794,7 @@ def _price_and_record_saves_pair(pl_conn, bankroll_conn, event_payload, pair, sc
         return {"status": "INSUFFICIENT_HISTORY", "player_id": goalie_id, "recorded": False}
 
     threshold_probs = {t: proj[f"prob_{t}plus"] for t in (20, 25, 30, 35, 40)}
-    # Same conservative-shrinkage convention as SOG/dashboard.eligible_bets.py's
+    # Same conservative-shrinkage convention as SOG/research.demo_board.eligible_bets.py's
     # goalie rows -- reused, not re-derived (see dashboard/eligible_bets.py's
     # own `conservative_probability = raw_p * 0.9` for the identical pattern).
     conservative_probs = {t: p * 0.9 for t, p in threshold_probs.items()}

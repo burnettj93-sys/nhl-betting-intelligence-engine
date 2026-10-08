@@ -144,35 +144,26 @@ class TestUserManagement(unittest.TestCase):
 # ---------------------------------------------------------------------
 class TestYahooRouteEnforcement(unittest.TestCase):
     def test_fantasy_hq_stops_for_a_logged_out_session(self):
-        at = AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=60)
+        at = AppTest.from_file(_page("35_Fantasy_Settings.py"), default_timeout=60)
         at.run()
         self.assertEqual(len(at.exception), 0)
         markdown_text = " ".join(m.value for m in at.markdown)
         warning_text = " ".join(w.value for w in at.warning)
         # The real page content (Fantasy HQ header, demo mode banner)
         # must never appear -- the script stopped before reaching it.
-        self.assertNotIn("Fantasy HQ", markdown_text)
+        self.assertNotIn("Fantasy Settings", markdown_text)
         self.assertIn("sign in", warning_text.lower())
 
     def test_fantasy_hq_stops_for_a_user_role_session(self):
-        at = AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=60)
+        at = AppTest.from_file(_page("35_Fantasy_Settings.py"), default_timeout=60)
         at.session_state["_auth_username"] = "friend"
         at.session_state["_auth_role"] = "USER"
         at.run()
         self.assertEqual(len(at.exception), 0)
         markdown_text = " ".join(m.value for m in at.markdown)
         error_text = " ".join(e.value for e in at.error)
-        self.assertNotIn("Fantasy HQ", markdown_text)
+        self.assertNotIn("Fantasy Settings", markdown_text)
         self.assertIn("restricted to the administrator", error_text)
-
-    def test_fantasy_hq_renders_for_an_admin_role_session(self):
-        at = AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=60)
-        at.session_state["_auth_username"] = "owner"
-        at.session_state["_auth_role"] = "ADMIN"
-        at.run()
-        self.assertEqual(len(at.exception), 0)
-        titles = [t.value for t in at.title]
-        self.assertIn("Fantasy HQ", titles)
 
     def test_fantasy_settings_stops_for_a_user_role_session(self):
         at = AppTest.from_file(_page("35_Fantasy_Settings.py"), default_timeout=60)
@@ -227,11 +218,11 @@ class TestAppNavigationHidesFantasyForNonAdmins(unittest.TestCase):
         at.session_state["_auth_role"] = "USER"
         at.run()
         self.assertEqual(len(at.exception), 0)
-        at.switch_page("pages/34_Fantasy_HQ.py").run()
+        at.switch_page("pages/35_Fantasy_Settings.py").run()
         self.assertEqual(len(at.exception), 0)
         titles = [t.value for t in at.title]
         error_text = " ".join(e.value for e in at.error)
-        self.assertNotIn("Fantasy HQ", titles)
+        self.assertNotIn("Fantasy Settings", titles)
         self.assertIn("restricted to the administrator", error_text)
 
     def test_fantasy_section_present_in_nav_for_admin_role(self):
@@ -240,7 +231,7 @@ class TestAppNavigationHidesFantasyForNonAdmins(unittest.TestCase):
         at.session_state["_auth_role"] = "ADMIN"
         at.run()
         self.assertEqual(len(at.exception), 0)
-        at.switch_page("pages/34_Fantasy_HQ.py").run()
+        at.switch_page("pages/35_Fantasy_Settings.py").run()
         self.assertEqual(len(at.exception), 0)
 
     def test_app_shows_login_form_when_logged_out(self):

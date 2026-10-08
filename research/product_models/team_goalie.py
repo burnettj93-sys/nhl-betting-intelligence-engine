@@ -356,6 +356,7 @@ def run() -> dict:
     grec, gmrec, _ = walk(rows, seasons_all)
     train_g = [r for r in grec if r["season"] in TRAIN_SEASONS and r["prior_games"] >= 0]
     alpha = fit_alpha([(r["mean_saves"], r["actual_saves"]) for r in train_g])
+    alpha_ga = fit_alpha([(r["exp_ga"], r["actual_ga"]) for r in train_g])
     calib_g = [r for r in grec if r["season"] == CALIB_SEASON]
     final_g = [r for r in grec if r["season"] == FINAL_SEASON]
 
@@ -400,6 +401,14 @@ def run() -> dict:
                                              for r in final_g) / len(final_g), 4), "n": len(final_g)}
     range80 = {"nominal": 0.8, "calibration_season": coverage(cal_p), "final_season": coverage(fin_p)}
 
+    def coverage_ga(recs):
+        hit = 0
+        for r in recs:
+            lo, hi = saves_quantile_range(r["exp_ga"], alpha_ga)
+            hit += lo <= r["actual_ga"] <= hi
+        return round(hit / len(recs), 4)
+    ga_range80 = {"nominal": 0.8, "calibration_season": coverage_ga(cal_p), "final_season": coverage_ga(fin_p), "alpha": round(alpha_ga, 4)}
+
     # win probability: logistic on [1, strength_diff] and [1, strength_diff, goalie_diff]
     cal_games = [r for r in gmrec if r["season"] == CALIB_SEASON and r["home_win"] is not None]
     fin_games = [r for r in gmrec if r["season"] == FINAL_SEASON and r["home_win"] is not None]
@@ -432,7 +441,7 @@ def run() -> dict:
 
     report = {"model_version": MODEL_VERSION, "splits": {"train": list(TRAIN_SEASONS), "calibration": CALIB_SEASON, "final_evaluation": FINAL_SEASON},
               "alpha_saves": round(alpha, 4), "league_mean_saves_calibration": round(league_mean, 3),
-              "saves_markets": markets, "expected_value_mae_final": mae, "saves_80pct_range_coverage": range80,
+              "saves_markets": markets, "expected_value_mae_final": mae, "saves_80pct_range_coverage": range80, "ga_80pct_range_coverage": ga_range80, "alpha_ga": round(alpha_ga, 4),
               "win_probability": win, "start_likelihood": start_report, "rows": {"goalie_calibration": len(calib_g), "goalie_final": len(final_g)},
               "params": {"sv_prior_shots": SV_PRIOR_SHOTS, "sv_half_life_shots": SV_HALF_LIFE_SHOTS,
                          "strength_half_life_games": STRENGTH_HALF_LIFE_GAMES, "strength_k_games": STRENGTH_K_GAMES,

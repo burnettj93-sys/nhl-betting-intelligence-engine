@@ -81,7 +81,6 @@ PAGES: tuple[PageSpec, ...] = (
     PageSpec("4_Model_Performance.py", "Model Performance", "📈", "Research", HEAVY_RESEARCH, False, admin_only=True),
     PageSpec("5_Research_Lab.py", "Research Lab", "🔬", "Research", HEAVY_RESEARCH, False, admin_only=True),
     # ---- Fantasy (ADMIN only; Yahoo is unavailable on Community Cloud: no durable encrypted-token store)
-    PageSpec("34_Fantasy_HQ.py", "Fantasy HQ", "🏆", "Fantasy", DEMO, False, admin_only=True),
     PageSpec("35_Fantasy_Settings.py", "Fantasy Settings", "🔌", "Fantasy", LEGACY, False, admin_only=True),
     # ---- Diagnostics (ADMIN only, every mode)
     PageSpec("37_Diagnostics.py", "Diagnostics", "🩻", "Admin", LIGHTWEIGHT_ADMIN, True, admin_only=True),

@@ -420,17 +420,10 @@ class TestDashboardCannotWriteProductionTables(unittest.TestCase):
 
 
 class TestProvenanceLabelsCorrect(unittest.TestCase):
-    def test_provenance_panel_mentions_archival_research(self):
+    def test_provenance_panel_names_every_data_source_and_the_goalie_status_rule(self):
         source = _read(os.path.join(DASHBOARD_DIR, "components.py"))
-        self.assertIn("ARCHIVAL_RESEARCH", source)
-
-    def test_provenance_panel_mentions_xg_version_unknown(self):
-        source = _read(os.path.join(DASHBOARD_DIR, "components.py"))
-        self.assertIn("UNKNOWN", source)
-
-    def test_provenance_panel_mentions_odds_and_goalie_not_integrated(self):
-        source = _read(os.path.join(DASHBOARD_DIR, "components.py"))
-        self.assertIn("NOT YET INTEGRATED", source)
+        for phrase in ("NHL web API", "MoneyPuck", "NHL.com", "DraftKings via The Odds API", "no confirmation feed is connected"):
+            self.assertIn(phrase, source)
 
 
 if __name__ == "__main__":

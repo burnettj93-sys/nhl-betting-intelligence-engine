@@ -24,9 +24,9 @@ sprint:
 """
 from __future__ import annotations
 
-from dashboard import cloud_snapshot
-from dashboard import demo_data as dd
-from dashboard.live_dk import SIMULATED_SOURCE_LABEL
+from research.demo_board._no_snapshot import cloud_snapshot
+from research.demo_board import demo_data as dd
+from research.demo_board.live_dk import SIMULATED_SOURCE_LABEL
 from research.live_sog_pricing.pricing import decide, zone
 from research.player_props import decision_policy
 from pricing import odds_math as pm

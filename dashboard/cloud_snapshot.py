@@ -1,7 +1,7 @@
 """
 Reader for the published data snapshot (Community Cloud is a read-only presentation layer).
 
-The local engine publishes one validated document to the `cloud-data` branch (operational/publish_cloud_snapshot.py);
+The local engine publishes one validated document to the `cloud-data` branch (the engine's publisher job);
 dashboard/snapshot_source.py fetches it. This module hands the pages their sections. There is no bundled or simulated
 fallback: when no good snapshot has ever been fetched, a page says so, with the cause and the last successful update
 (`unavailable_reason()`), instead of showing stand-in content.

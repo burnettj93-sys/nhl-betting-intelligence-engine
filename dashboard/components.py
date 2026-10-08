@@ -424,54 +424,6 @@ def render_opportunity_card(card: dict) -> None:
     st.divider()
 
 
-def _route_to_search_result(r) -> None:
-    if r.entity_type == "PLAYER":
-        st.session_state["selected_player_id"] = r.entity_id
-        st.switch_page("pages/25_Player_Intelligence.py")
-    elif r.entity_type == "GOALIE":
-        # Goalies have no skater props (SOG/Goals/Assists/Points/Blocked
-        # Shots), so Player Intelligence can't represent one -- route to
-        # Team Intelligence, which already surfaces per-team goalie
-        # context, instead of a page that will always 404 on a goalie_id.
-        from dashboard import demo_data as dd
-        goalie = next((g for g in dd.build_demo_goalies() if g["goalie_id"] == r.entity_id), None)
-        if goalie is not None:
-            st.session_state["selected_team"] = goalie["team"]
-            st.switch_page("pages/31_Team_Intelligence.py")
-        else:
-            st.switch_page("pages/27_Goalies.py")
-    elif r.entity_type == "TEAM":
-        st.session_state["selected_team"] = r.entity_id
-        st.switch_page("pages/31_Team_Intelligence.py")
-    elif r.entity_type == "GAME":
-        st.session_state["selected_game_id"] = r.entity_id
-        st.switch_page("pages/2_Game_Detail.py")
-    elif r.entity_type == "MARKET":
-        st.session_state["selected_market_filter"] = r.entity_id
-        st.switch_page("pages/26_Player_Props.py")
-
-
-def render_global_search(key_prefix: str = "global") -> None:
-    """Part 25: a global smart search bar, callable from any page's
-    header. Real fuzzy matching (dashboard/search.py) over a real
-    canonical index (demo roster/goalies/games + market_registry
-    aliases) -- never a per-keystroke corpus scan (the index is built
-    once and cached)."""
-    from dashboard import search as search_mod
-
-    query = st.text_input("🔍 Search player, team, game or market...",
-                           key=f"{key_prefix}_search_query", placeholder='Try "Connor McDavid"')
-    if not query:
-        return
-    results = search_mod.search(query, limit=6)
-    if not results:
-        st.caption("No matches.")
-        return
-    for r in results:
-        if st.button(f"{r.display} — {r.subtitle}", key=f"{key_prefix}_result_{r.entity_type}_{r.entity_id}"):
-            _route_to_search_result(r)
-
-
 def render_odds_detail_panel(o: dict) -> None:
     """Preseason Closing sprint, Track 3 (Sections 41-46): a compact
     detail panel for one opportunity's full pricing breakdown. Demo

@@ -133,6 +133,9 @@ def header(title: str, subtitle: str | None = None, *, meta: dict | None = None)
         try:
             from dashboard import cloud_snapshot
             fr = cloud_snapshot.freshness()
+            if fr.get("state") in ("STALE", "VERY_STALE", "UNAVAILABLE"):
+                banner(f"<b>Data freshness: {fr['state'].replace('_', ' ')}.</b> The newest data in the published feed is from {et_time(fr.get('data_as_of'), True)}"
+                       f" ({age_text(fr.get('data_as_of'))}). Do not treat it as live.", "bad" if fr["state"] != "STALE" else "warn")
             if fr.get("source") == "REMOTE_LAST_KNOWN_GOOD":
                 banner(f"<b>The latest data update failed</b> ({esc(fr.get('last_error') or 'unknown cause')}). Showing the last good "
                        f"data, published {et_time(fr.get('last_updated'), True)}.", "warn")
@@ -216,7 +219,51 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
             names = ", ".join(p["name"] for p in opt["best_for"])
             st.caption(f"Best option for: {names}")
         st.caption(f"{opt['price_label']}. Prices are DraftKings US-feed quotes; they have not been verified against DraftKings Ontario.")
+        ontario_check(opt, key=key)
         add_control(opt, key=key, cash=cash, page_generated_at=page_generated_at)
+
+
+def ontario_check(opt: dict, *, key: str) -> None:
+    """Shows any recorded manual Ontario price check for each leg and offers a short form to record a new one."""
+    try:
+        checks = product_source.ontario_verifications()
+    except Exception:  # noqa: BLE001
+        checks = []
+    by_leg = {}
+    for c in checks:
+        by_leg.setdefault((c["game_id"], c["participant_id"], c["market_family"], c["threshold"], c["side"]), c)
+    lines = []
+    for l in opt["legs"]:
+        c = by_leg.get((str(l["game_id"]), str(l["participant_id"]), l["market_family"], l["threshold"], l["side"]))
+        if c:
+            lines.append(f"{l['label']}: Ontario {american(c['ontario_price'])} seen {et_time(c['observed_at_utc'], True)} ({c['where_seen']}) vs US feed {american(l['american_price'])}")
+    if lines:
+        st.caption("Ontario spot check — " + " · ".join(esc(x) for x in lines))
+    with st.expander("Check this on DraftKings Ontario"):
+        st.caption("Prices here come from the US feed. Open the same selection in DraftKings Ontario and record the price you see; it is stored as evidence "
+                   "with the time and where you saw it, and does not change any ticket.")
+        sess = st.session_state.setdefault("_verifications", {})
+        for i, l in enumerate(opt["legs"]):
+            with st.form(f"{key}_ont_{i}", clear_on_submit=False):
+                st.write(l["label"])
+                price = st.number_input("Ontario price (American, e.g. -135 or 120)", value=int(l["american_price"]), step=5, key=f"{key}_ont_p_{i}")
+                where = st.text_input("Where you saw it", value="DraftKings Ontario app", key=f"{key}_ont_w_{i}")
+                if st.form_submit_button("Record Ontario price"):
+                    if abs(price) < 100:
+                        st.error("American odds are at least 100 in size.")
+                    else:
+                        v = order_client.build_verification(l, verification_id=order_client.new_order_id().replace("ord_", "ver_"), ontario_price=float(price),
+                                                            observed_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                            where_seen=where, us_price_shown=l["american_price"])
+                        email = getattr(getattr(st, "user", None), "email", None)
+                        direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+                        if direct:
+                            res = order_client.submit_direct(v, token)
+                            st.success("Recorded — it appears after the engine's next pass.") if res["ok"] else st.error(res["error"])
+                        else:
+                            sess[f"{key}_{i}"] = order_client.prefilled_issue_url(v)
+            if sess.get(f"{key}_{i}"):
+                st.link_button("Open GitHub to file this check", sess[f"{key}_{i}"])
 
 
 def _engine_order(order_id: str) -> dict | None:

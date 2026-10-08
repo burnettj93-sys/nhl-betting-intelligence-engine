@@ -169,12 +169,13 @@ def build_goalie_projection(live_tg: dict, goalie: dict, team: str, opp: str, da
     pr = state.goalie_projection(goalie["player_id"], team, opp, alpha)
     mean_saves = pr["expected_saves"]
     lo, hi = tg.saves_quantile_range(mean_saves, alpha)
+    ga_lo, ga_hi = tg.saves_quantile_range(pr["expected_goals_against"], live_tg["validation"].get("alpha_ga", 0.0))
     ladder = {f"saves>={k}": round(tg.prob_saves_at_least(k, mean_saves, alpha), 4) for k in SAVE_LADDER}
     g = state.goalies.get(goalie["player_id"])
     shots_faced_total = g.shots if g else 0.0
     return {"opponent": opp, "expected_shots_against": round(pr["expected_shots_against"], 1), "save_pct_used": round(pr["save_pct"], 4),
             "expected_saves": round(mean_saves, 1), "expected_goals_against": round(pr["expected_goals_against"], 2),
-            "saves_range_80": [lo, hi], "saves_probabilities": ladder,
+            "goals_against_range_80": [ga_lo, ga_hi], "saves_range_80": [lo, hi], "saves_probabilities": ladder,
             "sample": {"games": g.games if g else 0, "starts": g.starts if g else 0, "shots_faced_weighted": round(shots_faced_total)},
             "model_version": tg.MODEL_VERSION}
 
@@ -246,7 +247,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                    "season_source": {"name": "NHL.com player page", "fetched_at_utc": land.get("fetched_at_utc"),
                                      "last_ok_utc": land.get("last_ok_utc"), "error": land.get("error")},
                    "recent_starts": goalie_recent(tg_state, pid), "games_in_log": g.games if g else 0,
-                   "next_game": ng, "start": None, "projection": None, "confirmation": _confirmation(pid, team, ng)}
+                   "next_game": ng, "start": None, "projection": None, "confirmation": _confirmation(pid, team, ng, nhl)}
             if ng:
                 sp = {s["goalie_id"]: s for s in expected_starters(team, ng["date_et"])}
                 s = sp.get(pid)
@@ -339,19 +340,19 @@ def _tickets_state() -> dict | None:
     return daily_tickets.read_state()
 
 
-def _confirmation(pid: str, team: str | None, ng: dict | None) -> dict:
+def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None) -> dict:
     """Starter confirmation: nothing publishes confirmed starters in a form this system may use, so every goalie is
     UNCONFIRMED unless a manual confirmation exists (operational/goalie_confirmations.py)."""
     try:
         from operational import goalie_confirmations
-        found = goalie_confirmations.lookup(ng["game_id"] if ng else None, team, pid) if ng else None
-    except Exception:  # noqa: BLE001 - the module is optional; absence means no manual confirmation
+        found = goalie_confirmations.lookup(nhl, ng["game_id"], team, pid) if (ng and nhl is not None) else None
+    except Exception:  # noqa: BLE001 - absence means no manual confirmation
         found = None
     if found:
         return found
     return {"status": "UNCONFIRMED", "source": None, "checked_at_utc": None,
-            "note": "No starting-goalie confirmation source is connected (no free feed exists). The chance shown is an estimate "
-                    "from recent usage. Saves props that depend on a named goalie stay blocked until a confirmation is recorded."}
+            "note": "No confirmation has been recorded. No automated starting-goalie feed can be used, so the chance shown is an estimate "
+                    "from recent usage. Saves props that depend on a named goalie stay blocked until a person records a confirmation."}
 
 
 def _team_win(live_tg: dict, team: str, ng: dict, pid: str) -> dict:

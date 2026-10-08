@@ -81,21 +81,15 @@ JUSTIFIED_EXCEPTIONS = {
     ("demo_setup.py", "roster_status_events"),
     ("demo_setup.py", "odds_snapshots"),
     ("validate.py", "team_membership_events"),
-    # Platform Recovery block (2026-09-29): Team Intelligence's real
-    # default view answers "who is on this team RIGHT NOW, for display" --
-    # a live/current-state question, never "what team was this player on
-    # AS OF some past prediction_time_utc" (the one thing this table must
-    # never be used to reconstruct outside point_in_time.py). It always
-    # reads the single latest real row per player, unconditionally, with
-    # no historical/as-of parameter -- structurally incapable of being
-    # used for point-in-time reconstruction.
-    ("dashboard/real_team_intelligence_view.py", "team_membership_events"),
-    # Same rationale as real_team_intelligence_view.py above: both always
-    # answer "who is on this team / what is this player's team RIGHT NOW,"
-    # never a historical as-of question, and take no as-of parameter that
-    # could make them capable of point-in-time reconstruction.
-    ("dashboard/real_player_view.py", "team_membership_events"),
-    ("dashboard/real_goalies_view.py", "team_membership_events"),
+    # Product data layer (2026-10): operational/product_data.py builds the pages' CURRENT view. It reads the newest MONEYLINE quote per
+    # game side (odds_snapshots) to show a price and its age, and the newest team membership event to list a team's goalies. Both are
+    # "what is true now" displays for games that have not started; neither feeds a model, a probability or a historical reconstruction.
+    ("operational/product_data.py", "odds_snapshots"),
+    ("operational/product_data.py", "team_membership_events"),
+    # Manual goalie confirmations (2026-10): a person-recorded sighting is appended to goalie_status_events, and the newest one for an
+    # upcoming game is read back to show its source/time and to open the saves gate. It is a "now" lookup for a game that has not
+    # started; it is never used to answer what was known at an earlier prediction time.
+    ("operational/goalie_confirmations.py", "goalie_status_events"),
     ("validate.py", "roster_status_events"),
     ("validate.py", "goalie_status_events"),
     ("validate.py", "lineup_snapshots"),

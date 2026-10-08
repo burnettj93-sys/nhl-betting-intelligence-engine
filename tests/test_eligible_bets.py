@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import unittest
 
-from dashboard import demo_data as dd
-from dashboard import eligible_bets as eb
+from research.demo_board import demo_data as dd
+from research.demo_board import eligible_bets as eb
 
 
 class TestThresholdRulesMatchPart7(unittest.TestCase):

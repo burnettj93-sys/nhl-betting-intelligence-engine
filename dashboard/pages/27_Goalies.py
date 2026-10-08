@@ -96,15 +96,37 @@ else:
     k[1].metric("Start status", cf["status"].title())
     k[2].metric("Status source / checked", cf["source"] or "none", cf.get("checked_at_utc") and ui.et_time(cf["checked_at_utc"], True) or "never", delta_color="off")
     st.caption(ui.esc(cf["note"]))
+    with st.expander("Record a confirmed start for this game"):
+        st.caption("Only record what you have actually seen from a published source (team or league announcement, broadcast, morning-skate report). "
+                   "The record keeps where you saw it and when; it is what unlocks saves props for this goalie. The model's estimate never confirms anything.")
+        with st.form(f"gl_confirm_{sel}"):
+            where = st.text_input("Where you saw it", placeholder="e.g. team announcement on X, 10:45 AM", key=f"gl_where_{sel}")
+            if st.form_submit_button("Record confirmed start"):
+                if not where.strip():
+                    st.error("Say where you saw it.")
+                else:
+                    from dashboard import order_client
+                    doc = order_client.build_confirmation(confirmation_id=order_client.new_order_id().replace("ord_", "cnf_"), game_id=ng["game_id"], team=g["team"],
+                                                          goalie_id=g["player_id"], where_seen=where.strip(),
+                                                          seen_at_utc=__import__("datetime").datetime.now(__import__("datetime").timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+                    email = getattr(getattr(st, "user", None), "email", None)
+                    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+                    if direct:
+                        res = order_client.submit_direct(doc, token)
+                        st.success("Filed — the status updates after the engine's next pass.") if res["ok"] else st.error(res["error"])
+                    else:
+                        st.session_state[f"gl_link_{sel}"] = order_client.prefilled_issue_url(doc)
+        if st.session_state.get(f"gl_link_{sel}"):
+            st.link_button("Open GitHub to file this confirmation", st.session_state[f"gl_link_{sel}"])
     if pr:
         p2 = st.columns(5)
         p2[0].metric("Expected shots against", f"{pr['expected_shots_against']:.1f}")
         p2[1].metric("Save % used", f"{pr['save_pct_used']:.3f}", help="This goalie's save percentage shrunk toward the league rate.")
         p2[2].metric("Expected saves", f"{pr['expected_saves']:.1f}", f"80% range {pr['saves_range_80'][0]}–{pr['saves_range_80'][1]}", delta_color="off")
-        p2[3].metric("Expected goals against", f"{pr['expected_goals_against']:.2f}")
+        p2[3].metric("Expected goals against", f"{pr['expected_goals_against']:.2f}", f"80% range {pr['goals_against_range_80'][0]}–{pr['goals_against_range_80'][1]}", delta_color="off")
         w = pr["win_probability"]
         p2[4].metric(f"{g['team']} win chance", ui.pct(w["team_win_probability"]), f"{ui.pct(w['if_this_goalie_starts'])} if he starts", delta_color="off")
-        st.caption("Saves range: the model's central 80% interval; in testing it contained the actual result 83% of the time. Goals against is a point estimate (no validated range is offered). "
+        st.caption("Saves range: the model's central 80% interval; in testing it contained the actual result 83% of the time. The goals-against range is conservative: it contained the result 90% of the time because goals come in whole numbers. "
                    + ui.esc(w["note"]))
         st.markdown("**Chance of at least N saves (raw model probability)**")
         st.dataframe([{"Saves": k.replace("saves>=", "") + "+", "Chance": ui.pct(v, 1)} for k, v in pr["saves_probabilities"].items()], hide_index=True, width="stretch")

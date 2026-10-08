@@ -197,8 +197,9 @@ def _manual_orders() -> dict:
     from operational import manual_orders
     conn = _bankroll_conn()
     try:
-        return {"orders": manual_orders.recent_orders(conn)} if conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE name = 'manual_orders'").fetchone() else {"orders": []}
+        have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        return {"orders": manual_orders.recent_orders(conn) if "manual_orders" in have else [],
+                "ontario_verifications": manual_orders.recent_verifications(conn) if "ontario_verifications" in have else []}
     finally:
         conn.close()
 

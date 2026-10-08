@@ -20,10 +20,11 @@ _ROWS = [
         "ontario_menu": "Market family listed on the DK Ontario menu (owner screenshots, 2026-09-29).",
         "prices": ("OK", "DraftKings player_shots_on_goal_alternate pulled by the prop sweeps and best_bets capture."),
         "identity_mapping": ("OK", "Name + team matched to the MoneyPuck/NHL player id."),
-        "projection": ("PARTIAL", "Rolling-form model (last 20/60 games, current season) works. The validated "
-                                   "research model is blocked: its corpus ends 2026-04-15 (CORPUS_STALE in the sweep logs)."),
+        "projection": ("OK", "player-rate-toi-v2 with a calibration fitted on a separate season: the calibrated probability beat both "
+                             "baselines for shots 1+ to 5+ on the held-out 2025-26 season (docs/validation/skater_projection_validation.json). "
+                             "Players with fewer than 20 prior games are not priced."),
         "context_confirmation": ("MISSING", "No lineup/injury feed. Proxy only: the player dressed in his team's last real "
-                                            "game with 20+ games of history and 12+ minutes of ice time."),
+                                            "game with 20+ games of history and 12+ expected minutes."),
         "eligibility": ("OK", "Contract verified; thresholds 2-5 validated."),
         "settlement": ("OK", "PLAYER_SOG_<k>PLUS via the outcome resolver; did-not-dress legs void under the documented rules."),
     },
@@ -32,21 +33,22 @@ _ROWS = [
         "ontario_menu": "Over/under shots listed on the DK Ontario menu.",
         "prices": ("PARTIAL", "Pulled occasionally (5 captures on 2026-10-06/07); not part of the regular capture."),
         "identity_mapping": ("OK", "Same mapping as the alternate ladder."),
-        "projection": ("PARTIAL", "Validated model only; stale corpus, so no legs are produced today."),
+        "projection": ("PARTIAL", "The standard-market leg builder still uses the retired research pipeline (corpus ends 2026-04-15), so it "
+                                  "produces no legs; the v2 probabilities could price Over/Under lines but are not wired to this builder."),
         "context_confirmation": ("MISSING", "Same as above."),
         "eligibility": ("OK", "Contract verified."),
         "settlement": ("OK", "Same resolver."),
     },
     {
         "market": "Goalie saves", "family": "GOALIE_SAVES",
-        "ontario_menu": "Saves ladders listed (observed 24+ to 34+). The model validates only 20+ and 25+, which are not "
-                        "DK Ontario's lines.",
+        "ontario_menu": "Saves ladders listed (observed 24+ to 34+). The goalie model is validated across 20+ to 35+, which covers that ladder.",
         "prices": ("OK", "player_total_saves pulled by the sweeps."),
         "identity_mapping": ("OK", "Goalie name + team."),
-        "projection": ("PARTIAL", "Validated for 20+/25+ only; the Ontario ladder (24+, 26+, 28+, ...) is untested."),
-        "context_confirmation": ("MISSING", "Starting goalie is never confirmed (no feed), so the starter gate blocks every "
-                                            "saves leg. This gate is not bypassed."),
-        "eligibility": ("MISSING", "Blocked by the starter gate."),
+        "projection": ("OK", "goalie-team-v1: raw probabilities beat both baselines at every threshold 20+ to 35+ on the held-out 2025-26 "
+                             "season; the fitted calibration did not help, so it is not used (docs/validation/goalie_team_validation.json)."),
+        "context_confirmation": ("PARTIAL", "No automated starting-goalie feed can be used. A person can record a confirmed start with "
+                                            "its source and time (operational/goalie_confirmations.py); until then every saves leg is blocked."),
+        "eligibility": ("PARTIAL", "The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded confirmation."),
         "settlement": ("OK", "GOALIE_SAVES_<k>PLUS; a goalie who does not play voids that leg."),
     },
     {
@@ -56,7 +58,8 @@ _ROWS = [
                               "evaluation time (about 35 minutes before puck drop); earlier it reports DATA_UNAVAILABLE "
                               "(no valid quote as of that time). That is today's actual exclusion reason."),
         "identity_mapping": ("OK", "Team abbreviations."),
-        "projection": ("PARTIAL", "T-35 Elo-based model; its uncertainty band is a heuristic, never calibrated."),
+        "projection": ("PARTIAL", "T-35 Elo-based model (its band is a heuristic) drives pricing. A separate strength model (goalie-team-v1) beats the "
+                                  "home-rate baseline on held-out games and is shown on Games, but it does not price moneyline legs."),
         "context_confirmation": ("PARTIAL", "Starting goalies are never confirmed (no feed). Moneyline is NOT blocked by that: "
                                             "config.REQUIRE_GOALIE_CONFIRMATION is False, and an unconfirmed starter widens the "
                                             "model's confidence band 1.4x (UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING, a "
@@ -70,7 +73,7 @@ _ROWS = [
         "ontario_menu": "Listed (verified), plus alternate lines.",
         "prices": ("MISSING", "The spreads market is never requested from the odds provider."),
         "identity_mapping": ("OK", "Team abbreviations would reuse the moneyline mapping."),
-        "projection": ("MISSING", "No goal-margin model."),
+        "projection": ("MISSING", "No goal-margin model: only win probability is validated. Building one needs its own chronological validation."),
         "context_confirmation": ("PARTIAL", "Same unconfirmed-starter situation as moneyline (widened band, no gate)."),
         "eligibility": ("MISSING", "Not in the contract allowlist; no certified contract."),
         "settlement": ("MISSING", "No resolver for margin lines."),
@@ -81,8 +84,7 @@ _ROWS = [
         "prices": ("OK", "player_points (two-sided Over/Under at 0.5, sometimes 1.5) captured by best_bets "
                          "(12 captures on 2026-10-06/07)."),
         "identity_mapping": ("OK", "Name + team to player id."),
-        "projection": ("PARTIAL", "Locked points model blended with the last-60 hit rate, current-season data. A research "
-                                  "model, not validated against live results."),
+        "projection": ("OK", "player-rate-toi-v2 with calibration: points 1+ and 2+ beat both baselines on the held-out 2025-26 season."),
         "context_confirmation": ("MISSING", "No lineup/injury feed; same dressed-last-game proxy as shots."),
         "eligibility": ("OK", "Contract certified against a real archived payload (tests/fixtures/"
                               "draftkings_player_points_real_payload.json); thresholds 1 and 2 in the engine allowlist."),
@@ -92,9 +94,10 @@ _ROWS = [
     {
         "market": "Goals (anytime scorer)", "family": "ANYTIME_GOALSCORER",
         "ontario_menu": "Listed (verified).",
-        "prices": ("MISSING", "player_goal_scorer_anytime is never requested."),
+        "prices": ("MISSING", "player_goal_scorer_anytime is never requested: each extra market costs one credit per game per capture on a "
+                              "metered plan, and no payload exists to certify its shape."),
         "identity_mapping": ("OK", "Same mapping."),
-        "projection": ("PARTIAL", "A goals research model exists but is not wired into pricing."),
+        "projection": ("OK", "player-rate-toi-v2: goals 1+ beat both baselines on the held-out 2025-26 season. The probability is already computed for ticket legs."),
         "context_confirmation": ("MISSING", "Same proxy only."),
         "eligibility": ("MISSING", "No contract certification."),
         "settlement": ("PARTIAL", "The resolver supports goals, but the ledger does not map the leg."),
@@ -145,12 +148,13 @@ def render_markdown() -> str:
         out += [f"* {m}" for m in r["missing"]] or ["* nothing"]
         out.append("")
     out += ["## Consequences", "",
-            "* Shots on goal and points (EXPERIMENTAL rolling-form model; the validated shots model joins when its corpus is",
-            "  fresh) and moneyline (from about 35 minutes before puck drop) can produce ticket legs.",
-            "* Saves are blocked by the starter-certainty gate (no starting-goalie confirmation exists). That gate is not",
-            "  bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic widened band instead.",
-            "* Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled",
-            "  to fill slots: they lack prices, models and/or settlement.",
+            "* Shots on goal and points (validated projection model with calibration) and moneyline (from about 35 minutes before",
+            "  puck drop) can produce ticket legs.",
+            "* Saves have a validated model but are blocked until a starting goalie is confirmed (a person records the source and",
+            "  time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic",
+            "  widened band instead.",
+            "* Puck line is blocked: no prices requested, no margin model, no settlement resolver. Anytime goals has a validated",
+            "  model but no prices or certified contract, so no leg can exist.",
             "* An empty board on a day with few priced shots legs is a correct result, not a bug.", ""]
     return "\n".join(out)
 

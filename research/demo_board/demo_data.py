@@ -31,7 +31,7 @@ import statistics
 from dataclasses import dataclass, field
 from functools import lru_cache
 
-from dashboard import cloud_snapshot
+from research.demo_board._no_snapshot import cloud_snapshot
 from operational import runtime_mode
 from pricing import odds_math as pm
 from research.live_sog_pricing.pricing import decide, zone

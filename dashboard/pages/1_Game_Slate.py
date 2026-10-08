@@ -18,17 +18,17 @@ from dashboard import ui
 
 ui.header("Games", "Games by Eastern-time date. Open a game for lineups, goalies and projections.")
 data = ui.load(ps.games, "The schedule")
-all_games = data["games"]
+schedule_rows = data["games"]
 
-seasons = sorted({g["season_label"] for g in all_games}, reverse=True)
-current = next((g["season_label"] for g in all_games if g["season"] == "20262027"), seasons[0])
+seasons = sorted({g["season_label"] for g in schedule_rows}, reverse=True)
+current = next((g["season_label"] for g in schedule_rows if g["season"] == "20262027"), seasons[0])
 f1, f2, f3 = st.columns([2, 2, 3])
 season = f1.selectbox("Season", seasons, index=seasons.index(current), key="games_season",
                       help="The current season is the default. Another season appears only if you pick it.")
-kinds = sorted({g["type"] for g in all_games if g["season_label"] == season})
+kinds = sorted({g["type"] for g in schedule_rows if g["season_label"] == season})
 kind = f2.selectbox("Game type", kinds, index=kinds.index("REGULAR") if "REGULAR" in kinds else 0, key="games_kind",
                     format_func=lambda k: {"REGULAR": "Regular season", "PRESEASON": "Preseason", "PLAYOFF": "Playoffs"}.get(k, k.title()))
-pool = [g for g in all_games if g["season_label"] == season and g["type"] == kind]
+pool = [g for g in schedule_rows if g["season_label"] == season and g["type"] == kind]
 dates = sorted({g["date_et"] for g in pool})
 if not dates:
     ui.unavailable(f"No {kind.lower()} games are on file for {season}.", "This list")

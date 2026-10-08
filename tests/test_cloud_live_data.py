@@ -48,24 +48,21 @@ def sample_doc(data_as_of_hours_ago: float | None = 1.0, **overrides) -> dict:
             "freshness": {"nhl_data": _iso(2), "odds": as_of, "recommendations": None,
                           "settlement": _iso(3), "postmortem": _iso(4)},
         },
-        "demo": {"games": [], "opportunities": []},
-        "live_moneyline_rows": [{"event_id": "e1", "status": "PRICED", "source": schema.PROVENANCE_LIVE}],
+        "tickets": {"account": {"available_cash": 500.0}, "tickets": [], "generated_at_utc": NOW.isoformat()},
     }
     doc.update(overrides)
     return doc
 
 
 def _bundled_backed_doc(data_as_of_hours_ago: float | None = 1.0) -> dict:
-    """A v2 doc carrying the REAL bundled demo board, so Cloud pages can render from it."""
-    bundled = json.loads((REPO / "dashboard" / "cloud_snapshot" / "board.json").read_text())
-    doc = sample_doc(data_as_of_hours_ago)
-    doc["demo"] = bundled["demo"]
-    doc["live_moneyline_rows"] = bundled["live_moneyline_rows"]
-    doc["metadata"]["generated_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
-    if data_as_of_hours_ago is not None:
-        real_now = dt.datetime.now(dt.timezone.utc)
-        doc["metadata"]["data_as_of"] = (real_now - dt.timedelta(hours=data_as_of_hours_ago)).isoformat()
-        doc["metadata"]["freshness"]["odds"] = doc["metadata"]["data_as_of"]
+    """A v2 doc carrying the product sections the pages read (hand-built test data), timestamped relative to the real now."""
+    from tests.product_fixture import snapshot
+    doc = snapshot()
+    real_now = dt.datetime.now(dt.timezone.utc)
+    doc["metadata"]["generated_at"] = real_now.isoformat()
+    as_of = (real_now - dt.timedelta(hours=data_as_of_hours_ago)).isoformat() if data_as_of_hours_ago is not None else None
+    doc["metadata"]["data_as_of"] = as_of
+    doc["metadata"]["freshness"] = {"nhl_data": as_of, "odds": as_of, "recommendations": None, "settlement": None, "postmortem": None}
     return doc
 
 
@@ -74,10 +71,10 @@ class TestValidation(unittest.TestCase):
     def test_a_well_formed_v2_snapshot_validates(self):
         schema.validate_snapshot(sample_doc(), for_publication=True)
 
-    def test_the_bundled_v1_board_is_still_a_valid_fallback(self):
-        v1 = json.loads((REPO / "dashboard" / "cloud_snapshot" / "board.json").read_text())
-        schema.validate_snapshot(v1)
-        self.assertEqual(schema.metadata_of(v1)["data_as_of"], v1["meta"]["newest_real_dk_capture_utc"])
+    def test_simulated_sections_are_refused_in_any_published_snapshot(self):
+        for key in ("demo", "live_moneyline_rows"):
+            with self.assertRaises(schema.SnapshotInvalid):
+                schema.validate_snapshot(sample_doc(**{key: {}}))
 
     def test_unsupported_schema_version_is_rejected(self):
         for version in (0, 3, 99, "2", None):
@@ -89,7 +86,7 @@ class TestValidation(unittest.TestCase):
         for bad in ([], "x", 5, None):
             with self.assertRaises(schema.SnapshotInvalid):
                 schema.validate_snapshot(bad)
-        for missing in ("metadata", "demo"):
+        for missing in ("metadata", "schema_version"):
             doc = sample_doc(); doc.pop(missing)
             with self.assertRaises(schema.SnapshotInvalid):
                 schema.validate_snapshot(doc)
@@ -108,7 +105,7 @@ class TestValidation(unittest.TestCase):
 
     def test_nan_and_infinity_are_rejected_everywhere(self):
         for bad in (float("nan"), float("inf"), -math.inf):
-            doc = sample_doc(); doc["demo"]["x"] = [1, {"deep": bad}]
+            doc = sample_doc(); doc["tickets"]["x"] = [1, {"deep": bad}]
             with self.assertRaises(schema.SnapshotInvalid):
                 schema.validate_snapshot(doc)
             with self.assertRaises(schema.SnapshotInvalid):
@@ -117,12 +114,12 @@ class TestValidation(unittest.TestCase):
     def test_secret_like_keys_are_stripped_at_publication(self):
         for key in ("api_key", "THE_ODDS_API_KEY", "password", "client_secret", "refresh_token", "Authorization",
                     "access_token", "credentials"):
-            doc = sample_doc(); doc["demo"][key] = "x"
+            doc = sample_doc(); doc["tickets"][key] = "x"
             with self.assertRaises(schema.SnapshotInvalid, msg=key):
                 schema.validate_snapshot(doc, for_publication=True)
 
     def test_a_known_secret_value_anywhere_in_the_snapshot_blocks_publication(self):
-        doc = sample_doc(); doc["demo"]["note"] = "prefix deadbeefdeadbeefdeadbeefdeadbeef suffix"
+        doc = sample_doc(); doc["tickets"]["note"] = "prefix deadbeefdeadbeefdeadbeefdeadbeef suffix"
         with self.assertRaises(schema.SnapshotInvalid):
             schema.validate_snapshot(doc, known_secrets=("deadbeefdeadbeefdeadbeefdeadbeef",), for_publication=True)
         schema.validate_snapshot(doc, for_publication=True)          # not a KNOWN secret -> allowed by value
@@ -131,7 +128,7 @@ class TestValidation(unittest.TestCase):
         for text in ("Bearer abcdefghijklmnopqrstuvwx", "ghp_abcdefghijklmnopqrstuvwxyz0123", "sk-abcdefghijklmnopqrstuvwx",
                      "-----BEGIN RSA PRIVATE KEY-----", "https://x/y?api_key=1", "/Users/johnburnett/Downloads/x",
                      "see /home/runner/secrets", "file at /private/tmp/x"):
-            doc = sample_doc(); doc["demo"]["note"] = text
+            doc = sample_doc(); doc["tickets"]["note"] = text
             with self.assertRaises(schema.SnapshotInvalid, msg=text):
                 schema.validate_snapshot(doc, for_publication=True)
 
@@ -139,13 +136,13 @@ class TestValidation(unittest.TestCase):
         for where in ("key", "value", "nested", "case"):
             doc = sample_doc()
             if where == "key":
-                doc["demo"]["yahoo_roster"] = []
+                doc["tickets"]["yahoo_roster"] = []
             elif where == "value":
-                doc["demo"]["note"] = "from Yahoo Fantasy"
+                doc["tickets"]["note"] = "from Yahoo Fantasy"
             elif where == "nested":
                 doc["health"] = {"items": [{"label": "YAHOO_AUTH", "status": "OWNER_AUTH_REQUIRED"}]}
             else:
-                doc["demo"]["YaHoO"] = 1
+                doc["tickets"]["YaHoO"] = 1
             with self.assertRaises(schema.SnapshotInvalid, msg=where):
                 schema.validate_snapshot(doc, for_publication=True)
 
@@ -183,7 +180,7 @@ class TestFreshnessAndHashing(unittest.TestCase):
 
     def test_content_hash_changes_when_substantive_content_changes(self):
         a, b = sample_doc(), sample_doc()
-        b["demo"]["opportunities"].append({"x": 1})
+        b["tickets"]["extra"] = [{"x": 1}]
         self.assertNotEqual(schema.content_hash(a), schema.content_hash(b))
         c = sample_doc(); c["metadata"]["data_as_of"] = _iso(0.5)
         self.assertNotEqual(schema.content_hash(a), schema.content_hash(c))
@@ -202,6 +199,9 @@ class TestBuilder(unittest.TestCase):
         for p in cls.patches:
             p.start()
         cls.builder = builder
+        from operational import product_data
+        from tests.product_fixture import product_state
+        product_data.write_state(product_state())
         cls.doc, cls.errors = builder.build_live_snapshot()
 
     @classmethod
@@ -212,9 +212,11 @@ class TestBuilder(unittest.TestCase):
 
     def test_every_section_builds_from_real_state_and_the_result_publishes_cleanly(self):
         self.assertEqual(self.errors, {})
-        for section in ("demo", "live_moneyline_rows", "real_recommendations", "performance", "morning_review",
-                        "model_learning", "ledger", "data_status", "health", "metadata"):
+        for section in ("tickets", "product_meta", "product_games", "product_game_details", "product_players", "product_goalies", "product_teams",
+                        "product_model_health", "manual_orders", "performance", "morning_review", "ledger", "data_status", "health", "metadata"):
             self.assertIn(section, self.doc)
+        for gone in ("demo", "live_moneyline_rows", "real_recommendations", "model_learning", "real_today", "real_goalies"):
+            self.assertNotIn(gone, self.doc)
         schema.validate_snapshot(self.doc, for_publication=True)
 
     def test_the_builder_is_strictly_read_only(self):
@@ -227,21 +229,14 @@ class TestBuilder(unittest.TestCase):
             self.assertIn(field, m)
         self.assertEqual(set(m["freshness"]), set(schema.FRESHNESS_KEYS))
         self.assertEqual(m["schema_version"], 2)
-        self.assertEqual(m["provenance"], {"demo": schema.PROVENANCE_DEMO,
-                                           "live_moneyline_rows": schema.PROVENANCE_LIVE,
-                                           "real_recommendations": schema.PROVENANCE_REAL_MARKET})
+        self.assertEqual(m["provenance"], {"product_games": "NHL API + DraftKings via The Odds API", "tickets": schema.PROVENANCE_REAL_MARKET})
 
-    def test_provenance_labels_are_preserved_and_never_flattened_together(self):
-        self.assertEqual(self.doc["real_recommendations"]["provenance"], schema.PROVENANCE_REAL_MARKET)
-        for row in self.doc["live_moneyline_rows"]:
-            self.assertEqual(row["source"], schema.PROVENANCE_LIVE)
-        for row in self.doc["demo"]["opportunities"]:
-            self.assertEqual(row["source"], schema.PROVENANCE_DEMO)
-            self.assertTrue(row["is_demo"])
-
-    def test_live_rows_now_include_the_scheduler_s_sport_level_captures(self):
-        newest = max(r["captured_at_utc"] for r in self.doc["live_moneyline_rows"])
-        self.assertGreater(newest, "2026-09-16", "list-shaped sport-level captures must be read")
+    def test_nothing_simulated_is_in_the_document_and_the_ledger_section_is_real_only(self):
+        blob = schema.strict_dumps(self.doc)
+        self.assertNotIn("SIMULATED", blob)
+        self.assertNotIn("DEMO_PAPER", blob)
+        self.assertNotIn("GAME_PARLAY_PAPER", blob)
+        self.assertEqual(list(self.doc["performance"]["breakdowns"]), ["ALL", "AUTOMATIC", "MANUALLY_ADDED"])
 
     def test_yahoo_and_user_specific_data_are_absent_structurally(self):
         blob = schema.strict_dumps(self.doc).lower()
@@ -328,7 +323,7 @@ class TestPublishToReaderEndToEnd(PublisherCase):
         first = self.publish()
         s1 = self._reader_state()
         self.assertEqual((s1.source, s1.fetch_status, s1.content_hash), ("REMOTE", "OK", first["content_hash"]))
-        doc = sample_doc(); doc["demo"]["opportunities"] = [{"x": 2}]
+        doc = sample_doc(); doc["tickets"]["opportunities"] = [{"x": 2}]
         second = self.publish(doc, force=True)
         self.assertEqual(second["status"], pub.SUCCESS)
         s2 = self._reader_state()
@@ -372,11 +367,11 @@ class TestPublisher(PublisherCase):
 
     def test_changed_content_publishes_a_new_commit_with_an_incremented_sequence(self):
         self.publish()
-        doc = sample_doc(); doc["demo"]["opportunities"] = [{"x": 1}]
+        doc = sample_doc(); doc["tickets"]["opportunities"] = [{"x": 1}]
         r = self.publish(doc, force=True)
         self.assertEqual((r["status"], r["publication_seq"]), (pub.SUCCESS, 2))
         self.assertEqual(self.commits(), 2)
-        self.assertEqual(self.remote_snapshot()["demo"]["opportunities"], [{"x": 1}])
+        self.assertEqual(self.remote_snapshot()["tickets"]["opportunities"], [{"x": 1}])
 
     def test_omitted_sections_make_the_publication_partial_success(self):
         r = self.publish(errors={"morning_review": "RuntimeError: x"})
@@ -385,10 +380,10 @@ class TestPublisher(PublisherCase):
         self.assertIn("morning_review", r["reason"])
 
     def test_validation_failure_publishes_nothing(self):
-        for label, mutate in (("secret key", lambda d: d["demo"].update(api_key="x")),
-                              ("yahoo", lambda d: d["demo"].update(note="Yahoo roster")),
-                              ("path", lambda d: d["demo"].update(note="/Users/x/y")),
-                              ("nan", lambda d: d["demo"].update(x=float("nan")))):
+        for label, mutate in (("secret key", lambda d: d["tickets"].update(api_key="x")),
+                              ("yahoo", lambda d: d["tickets"].update(note="Yahoo roster")),
+                              ("path", lambda d: d["tickets"].update(note="/Users/x/y")),
+                              ("nan", lambda d: d["tickets"].update(x=float("nan")))):
             doc = sample_doc(); mutate(doc)
             r = self.publish(doc)
             self.assertEqual(r["status"], pub.FAILED, label)
@@ -398,7 +393,7 @@ class TestPublisher(PublisherCase):
         self.assertNotEqual(proc.returncode, 0, "no branch may exist after only invalid attempts")
 
     def test_a_configured_secret_value_in_the_snapshot_blocks_publication(self):
-        doc = sample_doc(); doc["demo"]["note"] = "leak-SECRETVALUE-123456"
+        doc = sample_doc(); doc["tickets"]["note"] = "leak-SECRETVALUE-123456"
         with mock.patch.object(pub, "known_secret_values", return_value=("SECRETVALUE-123456",)):
             r = self.publish(doc)
         self.assertEqual(r["status"], pub.FAILED)
@@ -418,7 +413,7 @@ class TestPublisher(PublisherCase):
 
     def test_rate_limit_defers_and_force_overrides(self):
         self.publish()
-        doc = sample_doc(); doc["demo"]["opportunities"] = [{"y": 2}]
+        doc = sample_doc(); doc["tickets"]["opportunities"] = [{"y": 2}]
         self.assertEqual(self.publish(doc)["status"], pub.DEFERRED)
         self.assertEqual(self.publish(doc, force=True)["status"], pub.SUCCESS)
 
@@ -440,13 +435,13 @@ class TestPublisher(PublisherCase):
     def test_history_is_bounded_by_periodic_orphan_replacement(self):
         with mock.patch.object(pub, "HISTORY_RESET_EVERY", 3), mock.patch.object(pub, "MIN_PUSH_INTERVAL_S", 0):
             for i in range(1, 5):
-                doc = sample_doc(); doc["demo"]["opportunities"] = [{"n": i}]
+                doc = sample_doc(); doc["tickets"]["opportunities"] = [{"n": i}]
                 self.assertEqual(self.publish(doc)["status"], pub.SUCCESS)
                 if i == 2:
                     self.assertEqual(self.commits(), 2)
                 if i == 3:
                     self.assertEqual(self.commits(), 1, "seq 3 replaces the branch with a fresh orphan commit")
-        self.assertEqual(self.remote_snapshot()["demo"]["opportunities"], [{"n": 4}])
+        self.assertEqual(self.remote_snapshot()["tickets"]["opportunities"], [{"n": 4}])
         self.assertEqual(self.commits(), 2)
 
     def test_the_live_checkout_is_never_switched_or_modified_by_publishing(self):
@@ -476,7 +471,7 @@ class TestPublisher(PublisherCase):
         row = ingestion_health.load_health()[pub.COMPONENT]
         self.assertEqual(row["last_status"], "SUCCESS")
         self.assertIsNotNone(row["last_success_utc"])
-        bad = sample_doc(); bad["demo"]["api_key"] = "x"
+        bad = sample_doc(); bad["tickets"]["api_key"] = "x"
         self.publish(bad, force=True)
         row = ingestion_health.load_health()[pub.COMPONENT]
         self.assertEqual(row["last_status"], "FAILED")
@@ -762,7 +757,8 @@ class TestReader(ReaderCase):
         self.serve(delay=1.0)
         with mock.patch.object(snapshot_source, "HTTP_TIMEOUT_S", 0.2), mock.patch.object(snapshot_source, "_sleep", lambda s: None):
             st = snapshot_source.current()
-        self.assertEqual(st.source, snapshot_source.BUNDLED_FALLBACK)
+        self.assertEqual(st.source, snapshot_source.NONE)
+        self.assertIsNone(st.data)                       # no stand-in content is ever substituted
         self.assertEqual(st.fetch_status, "FAILED")
         self.assertIn("network error", st.last_error)
 
@@ -777,7 +773,7 @@ class TestReader(ReaderCase):
         self.serve(status=404, body=b"not found")
         st = snapshot_source.current()
         self.assertEqual(len(self.requests), 1)
-        self.assertEqual((st.source, st.last_error), (snapshot_source.BUNDLED_FALLBACK, "HTTP 404"))
+        self.assertEqual((st.source, st.last_error), (snapshot_source.NONE, "HTTP 404"))
         snapshot_source.current(); snapshot_source.current()
         self.assertEqual(len(self.requests), 1, "no refetch inside the failure back-off window")
         self.now[0] += snapshot_source.FAILURE_RETRY_S + 1
@@ -786,19 +782,19 @@ class TestReader(ReaderCase):
 
     def test_corrupt_json_and_unsupported_schema_and_missing_fields_are_rejected(self):
         bad = sample_doc(); bad["schema_version"] = 7
-        no_demo = sample_doc(); no_demo.pop("demo")
+        no_demo = sample_doc(); no_demo.pop("metadata")
         for label, kwargs in (("corrupt", {"body": b'{"schema_version": 2, "meta'}), ("schema", {"doc": bad}),
                               ("shape", {"doc": no_demo}), ("array", {"body": b"[1,2,3]"}), ("empty", {"body": b""})):
             snapshot_source.reset(); self.requests.clear()
             self.serve(**kwargs)
             st = snapshot_source.current()
-            self.assertEqual(st.source, snapshot_source.BUNDLED_FALLBACK, label)
+            self.assertEqual(st.source, snapshot_source.NONE, label)
             self.assertIsNotNone(st.last_error, label)
 
     def test_an_oversized_response_is_rejected(self):
         self.serve(body=b"x" * (snapshot_source.MAX_BYTES + 10))
         st = snapshot_source.current()
-        self.assertEqual(st.source, snapshot_source.BUNDLED_FALLBACK)
+        self.assertEqual(st.source, snapshot_source.NONE)
         self.assertIn("exceeds", st.last_error)
 
     def test_last_known_good_survives_an_outage_and_is_never_silently_treated_as_fresh(self):
@@ -918,15 +914,17 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
         self.assertIn("HTTP 503", " ".join(m["notices"]))
         self.assertNotEqual(m["tone"], "ok", "a failed refresh must not look like a healthy current snapshot")
 
-    def test_bundled_fallback_is_disclosed(self):
-        m = self.model(state="VERY_STALE", source="BUNDLED_FALLBACK", err="HTTP 404")
-        self.assertIn("BUNDLED", " ".join(m["notices"]))
-        self.assertIn("BUNDLED FALLBACK", m["headline"])
+    def test_there_is_no_bundled_or_simulated_fallback_to_disclose(self):
+        m = self.model(state="UNAVAILABLE", source="NONE", err="HTTP 404")
+        text = " ".join(m["notices"] + m["lines"] + [m["headline"]])
+        self.assertNotIn("BUNDLED", text)
+        self.assertNotIn("SIMULATED", text)
+        self.assertEqual(m["tone"], "bad")
 
-    def test_provenance_labels_are_explained(self):
+    def test_prices_are_described_as_draftkings_quotes_and_tickets_as_paper(self):
         text = " ".join(self.model()["lines"])
-        for label in ("SIMULATED — DEMO ONLY", "LIVE — DRAFTKINGS", "REAL MARKET"):
-            self.assertIn(label, text)
+        self.assertIn("DraftKings quotes", text)
+        self.assertIn("paper bets", text)
 
     def test_live_labels_are_downgraded_when_not_current(self):
         from dashboard import components as comp
@@ -945,64 +943,32 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
 
 
 class TestTodayPageStaleRendering(unittest.TestCase):
-    def _today(self, state, price_age_min=30):
-        from streamlit.testing.v1 import AppTest
-        from operational import cloud_snapshot_schema as schema
-        _orig = schema.recommendation_freshness
+    """Snapshot freshness and price age are shown separately, and stale data never looks live."""
 
-        def _aged(row, now=None, snapshot_generated_at=None):
-            # judge every price as if it were `price_age_min` old (the bundled rows are historical)
-            ts = schema.parse_utc(row.get("captured_at_utc") or row.get("odds_captured_at_utc")
-                                  or row.get("created_at_utc"))
-            at = ts + dt.timedelta(minutes=price_age_min) if ts else now
-            return _orig(row, now=at, snapshot_generated_at=None)
-        from operational import auth_store
-        from dashboard import components as comp
-        with tempfile.TemporaryDirectory() as tmp, \
-             mock.patch.dict(os.environ, {"NHL_ENGINE_SNAPSHOT_SOURCE": "BUNDLED"}), \
-             mock.patch.object(auth_store, "DEFAULT_DB_PATH", Path(tmp) / "a.db"), \
-             mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
-             mock.patch.object(schema, "recommendation_freshness", _aged), \
-             mock.patch.object(comp, "live_data_state", return_value=state):
+    def _today(self, freshness_state, snapshot_doc=None):
+        from streamlit.testing.v1 import AppTest
+        from tests.product_fixture import snapshot
+        doc = snapshot_doc or snapshot()
+        state = snapshot_source.SnapshotState(**{f: None for f in snapshot_source.SnapshotState._fields})._replace(
+            data=doc, source=snapshot_source.REMOTE, fetch_status="OK", freshness=freshness_state, data_as_of=doc["metadata"]["data_as_of"],
+            generated_at=doc["metadata"]["generated_at"], schema_version=2)
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(snapshot_source, "remote_enabled", return_value=True), \
+                mock.patch.object(snapshot_source, "current", return_value=state):
             at = AppTest.from_file(str(REPO / "dashboard" / "pages" / "21_Today.py"), default_timeout=120)
-            at.session_state["today_show_technical"] = True
-            at.session_state["_auth_username"] = "t"; at.session_state["_auth_role"] = "USER"
             at.run()
         self.assertEqual(list(at.exception), [])
         return " ".join([m.value for m in at.markdown] + [c.value for c in at.caption])
 
-    def test_a_stale_snapshot_shows_data_stale(self):
-        """Real bug fix (2026-10-01): the dynamic '## Live Model Edges' / '##
-        Model Edges — ODDS STALE' heading was replaced with one static,
-        collapsed expander label (see dashboard/pages/21_Today.py) -- the
-        section is permanently stale by construction (a frozen research Elo
-        snapshot), so the heading never needs to say so dynamically anymore;
-        the per-price MARKET/SNAPSHOT FRESHNESS captions inside still do."""
+    def test_a_stale_snapshot_says_so_and_is_not_presented_as_live(self):
         text = self._today("STALE")
-        self.assertIn("NOT CURRENT", text)
+        self.assertIn("Data freshness: STALE", text)
+        self.assertIn("Do not treat it as live", text)
 
-    def test_a_current_snapshot_shows_current_market_freshness(self):
-        text = self._today("CURRENT")
-        self.assertIn("MARKET FRESHNESS: CURRENT", text)
+    def test_a_very_stale_snapshot_is_flagged_more_strongly(self):
+        self.assertIn("Data freshness: VERY STALE", self._today("VERY_STALE"))
 
-    def test_a_current_snapshot_with_an_old_price_is_not_live(self):
-        """SNAPSHOT freshness must not launder a stale sportsbook price into a live one."""
-        text = self._today("CURRENT", price_age_min=6 * 60)
-        self.assertIn("MARKET FRESHNESS: STALE", text)
-        self.assertIn("SNAPSHOT FRESHNESS: CURRENT", text)
-
-    def test_recorded_recommendations_carry_their_own_real_market_label_apart_from_the_demo(self):
-        # Real Product Bridge block (2026-09-29): the page's global banner
-        # changed from "SIMULATED MARKET (DEMO ONLY)" to a real-data-first
-        # "LIVE — REAL NHL SCHEDULE" banner (the Demo/Model Showcase now
-        # lives in its own collapsed section) -- this test's real point,
-        # that Recorded Recommendations carries its own REAL MARKET label
-        # distinct from the demo content elsewhere, still holds; the demo
-        # section's own caption now says "SIMULATED slate" instead.
-        text = self._today("CURRENT")
-        self.assertIn("Recorded Recommendations", text)
-        self.assertIn("REAL MARKET", text)
-        self.assertIn("SIMULATED", text)
+    def test_a_current_snapshot_has_no_staleness_banner(self):
+        self.assertNotIn("Data freshness:", self._today("CURRENT"))
 
 
 class TestOwnerDailyCheck(unittest.TestCase):
@@ -1225,8 +1191,7 @@ from dashboard import page_registry, diagnostics_view
 def rss():
     out = subprocess.run(["ps", "-o", "rss=", "-p", str(os.getpid())], capture_output=True, text=True).stdout
     return round(int(out.strip()) / 1024, 1)
-state = {"2_Game_Detail.py": {"selected_game_id": "demo-EDM-COL"}, "25_Player_Intelligence.py": {"selected_player_id": "8478402"},
-         "31_Team_Intelligence.py": {"selected_team": "EDM"}}
+state = {"2_Game_Detail.py": {"selected_game_id": "2026020900"}, "31_Team_Intelligence.py": {"selected_team": "AAA"}}
 exceptions, per_page = {}, {}
 base = rss()
 for f in [p.file for specs in page_registry.pages_for("ADMIN").values() for p in specs]:
@@ -1242,7 +1207,7 @@ print("RESULT " + json.dumps({
     "exceptions": exceptions, "writes": writes, "urls": sorted(set(urls)), "procs": procs, "base_rss": base,
     "today_rss": today_rss, "max_rss": max(per_page.values()),
     "forbidden_present": [m for m in FORBIDDEN if m in sys.modules],
-    "banner": 'data-testid="cloud-snapshot-banner"' in today_html, "banner_headline_current": "SNAPSHOT CURRENT" in today_html,
+    "stale_banner": "Data freshness:" in today_html,
     "diag": diagnostics_view.process_diagnostics()["snapshot"]}))
 '''
 
@@ -1268,7 +1233,7 @@ class TestRemoteRenderAndMemoryRegression(ReaderCase):
         self.assertEqual(r["writes"], [])
         self.assertEqual(r["procs"], [])
         self.assertEqual(r["forbidden_present"], [])
-        self.assertTrue(r["banner"] and r["banner_headline_current"])
+        self.assertFalse(r["stale_banner"])
         self.assertEqual(r["diag"]["snapshot_source"], "REMOTE")
         self.assertEqual(r["diag"]["freshness"], "CURRENT")
 
@@ -1284,9 +1249,9 @@ class TestRemoteRenderAndMemoryRegression(ReaderCase):
         r = self._probe(_bundled_backed_doc(30.0))
         self.assertEqual(r["exceptions"], {})
         self.assertEqual(r["diag"]["freshness"], "STALE")
-        self.assertFalse(r["banner_headline_current"])
+        self.assertTrue(r["stale_banner"])
 
-    def test_a_remote_outage_still_renders_from_the_bundled_fallback_and_says_so(self):
+    def test_a_remote_outage_with_no_prior_data_shows_unavailable_pages_never_stand_in_content(self):
         self.serve(status=404, body=b"nope")
         from tests.test_streamlit_cloud_mode import FORBIDDEN_MODULES
         env = {k: v for k, v in os.environ.items() if k != rm.ENV_VAR}
@@ -1294,10 +1259,9 @@ class TestRemoteRenderAndMemoryRegression(ReaderCase):
                               capture_output=True, text=True, timeout=600, env=env, cwd=str(REPO))
         r = json.loads(next(l for l in proc.stdout.splitlines() if l.startswith("RESULT "))[7:])
         self.assertEqual(r["exceptions"], {})
-        self.assertEqual(r["diag"]["snapshot_source"], "BUNDLED_FALLBACK")
+        self.assertEqual(r["diag"]["snapshot_source"], "NONE")
         self.assertEqual(r["diag"]["remote_fetch_status"], "FAILED")
         self.assertEqual(r["diag"]["last_error"], "HTTP 404")
-        self.assertFalse(r["banner_headline_current"])
 
 
 class TestCloudDoesNotRunTheEngine(unittest.TestCase):

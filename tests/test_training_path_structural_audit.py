@@ -238,6 +238,16 @@ JUSTIFIED_EXCEPTIONS = [
         ),
     },
     {
+        "file": "operational/player_options.py",
+        "kind": "sorted_by_game_id",
+        "marker": 'sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}:{l.side}" for l in legs)',
+        "reason": (
+            "False-positive trigger: this sorts the (at most two) legs of ONE displayed option into a deterministic string so the "
+            "same legs always produce the same option id. It is display/bookkeeping after the options were already decided, and "
+            "gates nothing about what any model may learn."
+        ),
+    },
+    {
         "file": "operational/paper_bankroll.py",
         "kind": "sorted_by_game_id",
         "marker": 'sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}"',

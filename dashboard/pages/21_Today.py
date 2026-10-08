@@ -16,7 +16,11 @@ from dashboard import ui
 
 ui.header("Today", "Games, the automatic tickets, and the paper account — all from observed data and DraftKings quotes.")
 tk = ui.load(ps.tickets, "The ticket board")
-games = ui.load(ps.games, "The schedule")
+try:
+    games = ps.games()
+except ps.Unavailable as _exc:
+    games = None
+    _games_error = str(_exc)
 if "account" not in tk:
     ui.unavailable("The ticket board has not been built yet; it is written by the 15-minute paper-trader job.", "The ticket board")
     st.stop()
@@ -32,15 +36,20 @@ cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
 cols[5].metric("Tickets", acct["tickets"], help="All tickets ever recorded in this account.")
 st.caption(f"Paper account · $500 start, $10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
+_gen = ui.parse_utc(tk["generated_at_utc"])
+if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
+    ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
 if tk.get("notice"):
     ui.banner(ui.esc(tk["notice"]), "warn")
 if tk.get("label"):
     st.caption(ui.esc(tk["label"]))
 
-today = games["et_today"]
-todays = [g for g in games["games"] if g["date_et"] == today and g["type"] == "REGULAR" and g["season"] == "20262027"]
+today = games["et_today"] if games else tk["date_et"]
+todays = [g for g in games["games"] if g["date_et"] == today and g["type"] == "REGULAR" and g["season"] == "20262027"] if games else []
 st.subheader(f"Today's games — {today}")
-if not todays:
+if games is None:
+    ui.unavailable(_games_error, "The schedule")
+elif not todays:
     nxt = games["default_date"]
     st.info(f"No regular-season games are scheduled for {today}. Next game day: {nxt}. Open Games to browse.")
 else:

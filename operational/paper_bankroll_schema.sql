@@ -131,3 +131,22 @@ CREATE TABLE IF NOT EXISTS manual_orders (
     received_at_utc    TEXT NOT NULL,
     processed_at_utc   TEXT NOT NULL
 );
+
+-- v4: manual Ontario spot checks. A person looks at the exact selection in DraftKings Ontario and records the price they saw. This is
+-- evidence about one selection at one moment; it never changes a stored ticket and does not make the US-feed price an Ontario price.
+CREATE TABLE IF NOT EXISTS ontario_verifications (
+    verification_id    TEXT PRIMARY KEY,
+    source             TEXT NOT NULL,
+    game_id            TEXT NOT NULL,
+    participant_id     TEXT NOT NULL,
+    participant_name   TEXT,
+    market_family      TEXT NOT NULL,
+    threshold          INTEGER,
+    side               TEXT,
+    ontario_price      REAL NOT NULL CHECK (ABS(ontario_price) >= 100),
+    us_price_shown     REAL,
+    observed_at_utc    TEXT NOT NULL,
+    recorded_at_utc    TEXT NOT NULL,
+    where_seen         TEXT NOT NULL,
+    notes              TEXT
+);

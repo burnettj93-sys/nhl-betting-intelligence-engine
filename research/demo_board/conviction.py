@@ -49,7 +49,7 @@ from research import model_registry
 from research.joint_scoring_dependence import joint_models as jm
 from research.joint_scoring_dependence.logical_implication_registry import detect_redundant_leg
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _RHO_PATH = REPO_ROOT / "research" / "joint_scoring_dependence_results.json"
 
 CONFIDENCE_WEIGHT = {"HIGH": 1.0, "MEDIUM": 0.6, "LOW": 0.0}

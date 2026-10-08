@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Literal
 
-from dashboard import conviction as conv
+from research.demo_board import conviction as conv
 from pricing import odds_math as pm
 from research.joint_scoring_dependence import joint_models as jm
 

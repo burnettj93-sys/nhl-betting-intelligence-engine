@@ -222,7 +222,7 @@ def build_daily_scoreboard(conn) -> dict:
     real, already-tested aggregation functions rather than
     re-implementing bankroll math here."""
     tracks = {}
-    for track in pb.TRACKS:
+    for track in ("REAL_MARKET_PAPER",):          # simulated tracks are not part of the product
         tracks[track] = {
             "bankroll_summary": pb.bankroll_summary(conn, track),
             "windowed_performance": pb.windowed_performance(conn, track),
@@ -485,8 +485,13 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
         for t in scoreboard["tracks"].values()
     )
 
+    daily_review = None
+    if nhl_conn is not None:
+        from operational import daily_review as _dr
+        daily_review = _dr.build_review(conn, nhl_conn)
     report = {
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "daily_review": daily_review,
         "what_worked": _summarize_what_worked(scoreboard) if any_bets_settled else "WAITING_FOR_SETTLED_DATA",
         "what_didnt": _summarize_what_didnt(issues) if issues else (
             "WAITING_FOR_SETTLED_DATA" if not any_bets_settled else "nothing flagged"),
