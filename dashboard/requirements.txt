@@ -11,3 +11,6 @@
 # Local development / VPS use the root requirements.txt.
 streamlit==1.62.0
 requests>=2.31
+
+# st.login() (OIDC sign-in for the one-click paper-order path) needs Authlib; see docs/MANUAL_ORDERS.md
+Authlib>=1.3.2

@@ -9,7 +9,7 @@ opening a page never write anything (tests: `tests/test_product_pages.py`, `test
 
 1. **Click.** The page builds an *order*: the legs, prices, quote times and hit chance the person saw, a fixed $10 stake, a random order id.
 2. **File.** The hosted app cannot write the ledger (no durable disk), so the order goes to a durable, authenticated queue — a GitHub issue labelled `paper-order`:
-   * *direct (one click)* when the app has the secrets `PAPER_ORDER_TOKEN` (a fine-grained token limited to Issues on this repository) and an allow-list entry (`ORDER_ALLOWED_VIEWER_IDS` or `ORDER_ALLOWED_EMAILS`), and the signed-in
+   * *direct (one click)* when the app has the secrets `PAPER_ORDER_TOKEN` (a fine-grained token limited to Issues on this repository) and an allow-list entry (`ORDER_ALLOWED_EMAILS`, matched to a verified `st.login()` identity), and the signed-in
      viewer's email is on the list;
    * *link* otherwise: a pre-filled GitHub issue opens; pressing "Submit new issue" while signed in as the repository owner files it.
 3. **Answer.** `operational/manual_order_job.py` (every 2 minutes) and the 15-minute trader read the queue. Only issues opened by the repository owner are orders (the repository is public;
@@ -39,28 +39,37 @@ wrong account shows itself. The result appears on the same Diagnostics panel aft
 
 ## One-time setup for the one-click path
 
-The one-click path needs two Streamlit secrets: `PAPER_ORDER_TOKEN` (a fine-grained GitHub token for this repository, Issues read/write) and an allow-list of who may use it — `ORDER_ALLOWED_VIEWER_IDS`
-(the viewer's fingerprint; this is what the hosted app can actually identify) or `ORDER_ALLOWED_EMAILS` (works only if the app later gains Streamlit login). The exact steps are below. Without them the link path still works end to end.
+The one-click path needs two Streamlit secrets: `PAPER_ORDER_TOKEN` (a fine-grained GitHub token for this repository, Issues read/write) and an allow-list of who may use it — `ORDER_ALLOWED_EMAILS` plus an `[auth]` OIDC sign-in. The exact steps are below. Without them the link path still works end to end.
 
-### What the hosted app's authentication actually supplies (measured 2026-10-08)
+### Why writes use a supported sign-in, not the platform header (decided 2026-10-08)
 
-Diagnostics → "Order path" shows it, names only: Streamlit 1.62.0; the app is private ("Only specific people can view this app"); `st.user.is_logged_in` is `None` and `st.user` has **no fields** (no email);
-the platform's request headers include `X-Streamlit-User`, an **opaque 76-character value** (not an email, not a signed token with claims). So an email allow-list cannot work as first designed
-(`ORDER_ALLOWED_EMAILS` would never match). The workable identity is that opaque viewer id, matched by a one-way fingerprint: Diagnostics shows the signed-in viewer's 12-character fingerprint,
-and `ORDER_ALLOWED_VIEWER_IDS` lists the fingerprints allowed to use the one-click path. An email allow-list still works if you later add Streamlit's own login (`st.login`, an OIDC provider), which needs a
-provider client id/secret you would create — not done. Trust model: the header is added by the platform's gateway after viewer authentication, outsiders cannot reach the app, and the id is never displayed to anyone but its owner;
-an invited viewer who learned another viewer's raw id could replay it, so keep the invite list to people you trust. The worst case is a $10 paper order.
+Measured on the hosted app (Diagnostics → Order path): Streamlit 1.62.0, the app is private, `st.user` is empty (no email), and the request headers include `X-Streamlit-User`, an opaque 76-character value.
+Trust in that header could not be established. Streamlit's own staff, asked whether it is a supported fallback, answered that it "is not a documented or stable public API ... an internal implementation detail
+and should not be relied upon for authentication or user identification ... may change or remove this header at any time without notice, and there are no guarantees about its format or presence", and that "the only supported and
+stable approach is to configure your own OIDC provider and use `st.login`/`st.user`" (https://discuss.streamlit.io/t/community-cloud-authentication-is-x-streamlit-user-a-supported-fallback/121998, accessed 2026-10-08;
+also: since Streamlit 1.42 `st.user` no longer exposes the Community Cloud account email). Whether a client can supply or override the header could not be verified from outside (reaching the app requires the platform's own viewer login, and no
+documentation states that the gateway overwrites it), so it is **never used for authorisation**: the earlier viewer-id fingerprint allow-list was removed. Writes are authorised only by `st.login()` (OIDC) → `st.user.email`
+(must be verified) → `ORDER_ALLOWED_EMAILS`, plus the `PAPER_ORDER_TOKEN` secret. Reading the app stays governed by the platform's private-sharing list.
 
-Exact steps (nothing secret is ever pasted into a chat):
+Exact steps (the owner does these; no secret goes through a chat):
 
-1. On GitHub, signed in as the repository owner (`burnettj93-sys`): Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Resource owner: yourself. Repository access: *Only select repositories* →
-   `nhl-betting-intelligence-engine`. Repository permissions: **Issues: Read and write** (nothing else). Expiration: your choice (note the date). Generate and copy the token once.
-2. Open the hosted app → Diagnostics → "Order path". Read your **fingerprint** (12 characters) from the table row "App supplies an opaque platform viewer id".
-3. On share.streamlit.io, open the app's menu → Settings → Secrets and paste (with your token and fingerprint), then Save; the app restarts:
+1. **Google OAuth client** — console.cloud.google.com → select or create a project → *APIs & Services* → *OAuth consent screen* (User type External; app name; your email; add your own Google account under *Test users*; leaving it in "Testing" is fine for one user)
+   → *Credentials* → *Create credentials* → *OAuth client ID* → Application type **Web application** → *Authorized redirect URIs*: `https://<your-app-subdomain>.streamlit.app/oauth2callback` (the same host you open the app on, plus `/oauth2callback`) → Create → copy the **Client ID** and **Client secret**.
+2. **GitHub token** — GitHub (signed in as the repository owner) → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate: Resource owner yourself; Repository access *Only select repositories* → `nhl-betting-intelligence-engine`; Repository permissions **Issues: Read and write** only; set an expiry; copy the token once.
+3. **Streamlit secrets** — share.streamlit.io → the app's menu → Settings → Secrets → paste, filling in your values (generate the cookie secret with `python3 -c "import secrets; print(secrets.token_urlsafe(48))"`), then Save (the app restarts and installs Authlib, which `dashboard/requirements.txt` now lists):
 
    ```
-   PAPER_ORDER_TOKEN = "<the token from step 1>"
-   ORDER_ALLOWED_VIEWER_IDS = "<your fingerprint from step 2>"
+   PAPER_ORDER_TOKEN = "<fine-grained GitHub token from step 2>"
+   ORDER_ALLOWED_EMAILS = "<the Google account email you will sign in with>"
+
+   [auth]
+   redirect_uri = "https://<your-app-subdomain>.streamlit.app/oauth2callback"
+   cookie_secret = "<random string from the command above>"
+   client_id = "<from step 1>"
+   client_secret = "<from step 1>"
+   server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
    ```
-4. Diagnostics → "Order path": all rows should read yes and "This viewer is on an allow-list" should say "(by viewer id)". Press "Run non-staking order-path check": within about two minutes plus a snapshot refresh the panel shows ACCEPTED. Nothing is staked.
-5. Only then is the real one-click stake test meaningful; it will be made only after you select an option explicitly.
+4. Open Diagnostics → *Order path*: press **Sign in to enable one-click adding**, sign in with that Google account. The table should read: token yes, sign-in configured yes, signed in yes, on the allow-list yes, one-click ready yes. Press **Run non-staking order-path check**: it files directly, the engine answers ACCEPTED within about two minutes plus a snapshot refresh, and nothing is staked.
+5. Only after that is a real one-click stake test meaningful; it is made only when the owner explicitly selects an option.
+
+Without these the link path (a pre-filled GitHub issue that GitHub itself authenticates) keeps working.

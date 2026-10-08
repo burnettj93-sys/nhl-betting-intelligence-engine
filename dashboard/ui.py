@@ -255,8 +255,7 @@ def ontario_check(opt: dict, *, key: str) -> None:
                         v = order_client.build_verification(l, verification_id=order_client.new_order_id().replace("ord_", "ver_"), ontario_price=float(price),
                                                             observed_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                                             where_seen=where, us_price_shown=l["american_price"])
-                        email = viewer_email()
-                        direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
+                        direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), signed_in_email())
                         if direct:
                             res = order_client.submit_direct(v, token)
                             st.success("Recorded — it appears after the engine's next pass.") if res["ok"] else st.error(res["error"])
@@ -333,8 +332,7 @@ def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supe
     if opt["option_id"] in sess and not supersedes:
         return                                                  # a repeated click while an order is outstanding
     order = order_client.build_order(opt, order_id=order_client.new_order_id(), page_generated_at=page_generated_at, supersedes=supersedes)
-    email = viewer_email()
-    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
+    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), signed_in_email())
     record = {"order_id": order["order_id"], "via": "direct" if direct else "link"}
     if direct:
         res = order_client.submit_direct(order, token)
@@ -377,59 +375,19 @@ def reported_pp(p: dict) -> str:
 
 # ---- order-path check: proves the click-to-queue path end to end without staking anything ----
 
-def _email_from_header(value: str | None) -> tuple[str | None, dict]:
-    """Reads a viewer identity out of the platform's `X-Streamlit-User` request header: a plain email, a JSON object or a signed token (JWT) whose
-    payload carries an email. Returns (email or None, shape) where shape holds names and sizes only, never the value."""
-    import base64
-    import json as _json
-    import re as _re
-    shape = {"present": bool(value), "length": len(value or ""), "has_at": "@" in (value or ""), "jwt_like": (value or "").count(".") == 2, "claims": []}
-    if not value:
-        return None, shape
-    value = value.strip()
-    email_re = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    if email_re.match(value):
-        return value.lower(), shape
-    doc = None
-    if shape["jwt_like"]:
-        try:
-            part = value.split(".")[1]
-            doc = _json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
-        except Exception:  # noqa: BLE001
-            doc = None
-    else:
-        try:
-            doc = _json.loads(value)
-        except Exception:  # noqa: BLE001
-            doc = None
-    if isinstance(doc, dict):
-        shape["claims"] = sorted(doc.keys())
-        for k in ("email", "mail", "user", "sub", "username"):
-            v = doc.get(k)
-            if isinstance(v, str) and email_re.match(v.strip()):
-                return v.strip().lower(), shape
-    return None, shape
-
-
-def viewer_email() -> str | None:
-    """The signed-in viewer's email as the hosted platform supplies it: `st.user.email` when the app uses Streamlit login, otherwise the platform's
-    `X-Streamlit-User` header (Community Cloud viewer authentication). None when neither identifies the viewer."""
-    direct = getattr(getattr(st, "user", None), "email", None)
-    if direct:
-        return str(direct).strip().lower()
+def signed_in_email() -> str | None:
+    """The viewer's email from the SUPPORTED sign-in only: `st.login()` (OIDC) sets `st.user`; None when nobody has signed in. The platform's
+    `X-Streamlit-User` header is deliberately not consulted (undocumented, no stability or trust guarantee)."""
     try:
-        return _email_from_header(st.context.headers.get("X-Streamlit-User"))[0]
+        user = st.user
+        if not getattr(user, "is_logged_in", False):
+            return None
+        if getattr(user, "email_verified", True) is False:
+            return None
+        email = getattr(user, "email", None)
+        return str(email).strip().lower() if email else None
     except Exception:  # noqa: BLE001
         return None
-
-
-def viewer_id() -> str | None:
-    """The platform's opaque viewer id (`X-Streamlit-User`) when it is NOT an email; None otherwise. Used only as a one-way fingerprint."""
-    try:
-        value = st.context.headers.get("X-Streamlit-User")
-    except Exception:  # noqa: BLE001
-        return None
-    return value if value and _email_from_header(value)[0] is None else None
 
 
 def identity_probe() -> dict:
@@ -442,7 +400,8 @@ def identity_probe() -> dict:
     except Exception:  # noqa: BLE001 - diagnostic only
         pass
     try:
-        out["user_header"] = _email_from_header(st.context.headers.get("X-Streamlit-User"))[1]
+        v = st.context.headers.get("X-Streamlit-User")
+        out["user_header"] = {"present": bool(v), "length": len(v or ""), "has_at": "@" in (v or "")}
     except Exception:  # noqa: BLE001
         pass
     try:
@@ -453,31 +412,36 @@ def identity_probe() -> dict:
 
 
 def order_path_panel() -> None:
-    email = viewer_email()
-    stat = order_client.path_status(getattr(st, "secrets", {}), email, viewer_id())
+    email = signed_in_email()
+    stat = order_client.path_status(getattr(st, "secrets", {}), email)
     st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["write_path_configured"] else "no"},
-                  {"Check": "Allow-listed viewers configured (emails / viewer ids)", "Result": f"{stat['allowed_email_count']} / {stat['allowed_viewer_id_count']}"},
-                  {"Check": "App supplies a viewer email (st.user.email or platform header)", "Result": f"yes ({stat['viewer_email_masked']})" if stat["viewer_email_present"] else "no"},
-                  {"Check": "App supplies an opaque platform viewer id", "Result": f"yes — fingerprint {stat['viewer_fingerprint']}" if stat["viewer_id_present"] else "no"},
-                  {"Check": "This viewer is on an allow-list", "Result": f"yes (by {stat['allowed_by']})" if stat["viewer_allowed"] else "no"},
+                  {"Check": "Supported sign-in (OIDC) configured", "Result": "yes" if stat["login_configured"] else "no"},
+                  {"Check": "You are signed in", "Result": f"yes ({stat['signed_in_masked']})" if stat["signed_in"] else "no"},
+                  {"Check": "Allowed emails configured", "Result": str(stat["allowed_email_count"])},
+                  {"Check": "You are on the allow-list", "Result": "yes" if stat["viewer_allowed"] else "no"},
                   {"Check": "One-click (direct) path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
                  hide_index=True, width="stretch")
-    if stat["viewer_id_present"] and not stat["viewer_allowed"]:
-        st.info(f"To allow this viewer, add `ORDER_ALLOWED_VIEWER_IDS = \"{stat['viewer_fingerprint']}\"` to the app's Secrets (with the `PAPER_ORDER_TOKEN`). "
-                "The fingerprint is a one-way tag of the platform's viewer id; the id itself is never stored or shown.")
+    if stat["login_configured"] and not stat["signed_in"]:
+        if st.button("Sign in to enable one-click adding", key="order_signin"):
+            st.login()
+    elif stat["signed_in"]:
+        if st.button("Sign out", key="order_signout"):
+            st.logout()
+    elif not stat["login_configured"]:
+        st.info("One-click adding needs a supported sign-in. Streamlit states that the platform's own viewer header is not a supported identity, so writes use `st.login()` "
+                "(OIDC): the owner's setup steps are in docs/MANUAL_ORDERS.md. Until then the click opens a pre-filled GitHub issue (the link path), which GitHub authenticates.")
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
     probe = identity_probe()
-    st.caption(f"What the hosted app's authentication exposes (names only, no values): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
-               f"`st.user` fields = {probe['user_fields'] or 'none'}; request headers present = {probe['header_names'] or 'unavailable'}; "
-               f"`X-Streamlit-User` shape = {probe['user_header'] or 'absent'}.")
+    st.caption(f"What the platform exposes (names only, no values; none of it is used for authorisation): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
+               f"`X-Streamlit-User` header = {probe['user_header'] or 'absent'} (an opaque value that Streamlit says is not a supported identity).")
     sess = st.session_state.setdefault("_path_checks", {})
     if st.button("Run non-staking order-path check", key="path_check_run"):
         cid = order_client.new_order_id().replace("ord_", "chk_")
         doc = order_client.build_path_check(check_id=cid, sent_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                            via="direct" if stat["direct_ready"] else "link", viewer_email_present=stat["viewer_email_present"],
+                                            via="direct" if stat["direct_ready"] else "link", signed_in=stat["signed_in"],
                                             viewer_allowed=stat["viewer_allowed"], write_path_configured=stat["write_path_configured"])
         if stat["direct_ready"]:
-            _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
+            _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
             res = order_client.submit_direct(doc, token)
             if res["ok"]:
                 sess[cid] = {"via": "direct", "issue": res["issue"]}

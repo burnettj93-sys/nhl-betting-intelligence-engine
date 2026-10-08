@@ -254,7 +254,7 @@ class TestOrderClient(unittest.TestCase):
 class TestOrderPathCheck(unittest.TestCase):
     def doc(self, **kw):
         return order_client.build_path_check(check_id=kw.pop("check_id", "chk_" + "a" * 12), sent_at_utc="2026-10-08T20:00:00Z", via="direct",
-                                             viewer_email_present=True, viewer_allowed=True, write_path_configured=True) | kw
+                                             signed_in=True, viewer_allowed=True, write_path_configured=True) | kw
 
     def test_check_is_accepted_once_and_touches_no_ledger(self):
         res = mo.process_path_check(self.doc(), now=NOW, source="github-issue:7", author=mo.OWNER_LOGIN)
@@ -293,11 +293,11 @@ class TestOrderPathCheck(unittest.TestCase):
         class S(dict):
             pass
         st = order_client.path_status(S(PAPER_ORDER_TOKEN="ghp_SECRETVALUE9", ORDER_ALLOWED_EMAILS="me@x.com"), "Me@X.com")
-        self.assertTrue(st["direct_ready"] and st["viewer_allowed"])
-        self.assertEqual(st["viewer_email_masked"], "m*@x.com")
+        self.assertTrue(st["direct_ready"] and st["viewer_allowed"] and st["signed_in"])
+        self.assertEqual(st["signed_in_masked"], "m*@x.com")
         self.assertNotIn("SECRETVALUE9", json.dumps(st))
         none = order_client.path_status(S(), None)
-        self.assertFalse(none["direct_ready"] or none["viewer_email_present"] or none["write_path_configured"])
+        self.assertFalse(none["direct_ready"] or none["signed_in"] or none["write_path_configured"] or none["login_configured"])
         self.assertFalse(order_client.path_status(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), None)["direct_ready"])
 
     def test_path_check_uses_its_own_label_and_title(self):
@@ -306,59 +306,51 @@ class TestOrderPathCheck(unittest.TestCase):
         self.assertTrue(order_client.issue_title(d).startswith("order-path-check chk_"))
 
 
-class TestViewerIdAllowList(unittest.TestCase):
-    RAW = "a-76-character-opaque-platform-viewer-id-0123456789abcdef0123456789abcdef01234"
+class TestSupportedSignInOnly(unittest.TestCase):
+    """Writes are authorised only by a supported sign-in (st.login / OIDC). Streamlit staff: the platform's X-Streamlit-User header is "not a documented or
+    stable public API ... should not be relied upon for authentication or user identification"."""
 
-    def test_an_opaque_viewer_id_is_matched_by_fingerprint_only(self):
-        class S(dict):
-            pass
-        fp = order_client.fingerprint(self.RAW)
-        self.assertEqual(len(fp), 12)
-        ok = order_client.path_status(S(PAPER_ORDER_TOKEN="ghp_SECRET", ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW)
-        self.assertTrue(ok["direct_ready"] and ok["allowed_by"] == "viewer id")
-        self.assertNotIn(self.RAW, json.dumps(ok))
-        self.assertNotIn("ghp_SECRET", json.dumps(ok))
-        no = order_client.path_status(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_VIEWER_IDS="000000000000"), None, self.RAW)
-        self.assertFalse(no["direct_ready"])
-        self.assertFalse(order_client.path_status(S(ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW)["direct_ready"])      # no token, no one-click
-
-    def test_write_access_accepts_either_identity(self):
-        class S(dict):
-            pass
-        fp = order_client.fingerprint(self.RAW)
-        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW), (True, "t"))
-        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), "a@x.com", None), (True, "t"))
-        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t"), None, self.RAW), (False, None))
-
-    def test_a_platform_viewer_id_is_not_mistaken_for_an_email(self):
+    def test_the_platform_header_never_authorises_a_write(self):
         from unittest import mock
         from dashboard import ui
         headers = mock.Mock()
-        headers.get.return_value = self.RAW
-        with mock.patch.object(ui.st, "context", mock.Mock(headers=headers)):
-            self.assertEqual(ui.viewer_id(), self.RAW)
-            self.assertIsNone(ui.viewer_email())
+        headers.get.return_value = "an-opaque-platform-viewer-id"
+        user = mock.Mock(is_logged_in=False, email=None)
+        with mock.patch.object(ui.st, "context", mock.Mock(headers=headers)), mock.patch.object(ui.st, "user", user):
+            self.assertIsNone(ui.signed_in_email())
+        self.assertFalse(hasattr(order_client, "fingerprint"))
+        self.assertFalse(hasattr(ui, "viewer_id"))
+        import inspect
+        self.assertNotIn("X-Streamlit-User", inspect.getsource(ui.signed_in_email).split('"""')[2])      # the function body never reads the header
 
-
-class TestViewerIdentity(unittest.TestCase):
-    def test_header_formats_yield_an_email_and_a_names_only_shape(self):
-        import base64
-        from dashboard import ui
-        tok = lambda d: "h." + base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip("=") + ".s"   # noqa: E731
-        cases = [("Me@Example.com", "me@example.com", []), (json.dumps({"email": "me@example.com", "id": 1}), "me@example.com", ["email", "id"]),
-                 (tok({"email": "me@example.com", "exp": 5}), "me@example.com", ["email", "exp"]), (tok({"sub": "123"}), None, ["sub"]),
-                 ("opaque-value", None, []), (None, None, [])]
-        for value, want, claims in cases:
-            email, shape = ui._email_from_header(value)
-            self.assertEqual(email, want, value)
-            self.assertEqual(shape["claims"], claims)
-            self.assertNotIn("me@example.com", json.dumps(shape))                # the shape never carries the value
-
-    def test_streamlit_user_email_wins_over_the_header(self):
+    def test_a_signed_in_viewer_is_identified_by_the_verified_oidc_email(self):
         from unittest import mock
         from dashboard import ui
-        with mock.patch.object(ui.st, "user", mock.Mock(email="Direct@X.com")):
-            self.assertEqual(ui.viewer_email(), "direct@x.com")
+        with mock.patch.object(ui.st, "user", mock.Mock(is_logged_in=True, email="Me@X.com", email_verified=True)):
+            self.assertEqual(ui.signed_in_email(), "me@x.com")
+        with mock.patch.object(ui.st, "user", mock.Mock(is_logged_in=True, email="me@x.com", email_verified=False)):
+            self.assertIsNone(ui.signed_in_email())
+        with mock.patch.object(ui.st, "user", mock.Mock(is_logged_in=True, email=None)):
+            self.assertIsNone(ui.signed_in_email())
+
+    def test_login_configuration_is_detected_without_reading_values_out(self):
+        full = {"auth": {"redirect_uri": "u", "cookie_secret": "c", "client_id": "i", "client_secret": "s", "server_metadata_url": "m"}}
+        self.assertTrue(order_client.login_configured(full))
+        self.assertFalse(order_client.login_configured({"auth": {"client_id": "i"}}))
+        self.assertFalse(order_client.login_configured({}))
+        st = order_client.path_status({**full, "PAPER_ORDER_TOKEN": "ghp_X", "ORDER_ALLOWED_EMAILS": "me@x.com"}, "me@x.com")
+        self.assertTrue(st["login_configured"] and st["direct_ready"])
+        self.assertNotIn("ghp_X", json.dumps(st))
+        self.assertNotIn('"s"', json.dumps(st))
+
+    def test_write_access_needs_both_the_token_and_an_allow_listed_signed_in_email(self):
+        class S(dict):
+            pass
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), "a@x.com"), (True, "t"))
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), "b@x.com"), (False, None))
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), None), (False, None))
+        self.assertEqual(order_client.configured_write_access(S(ORDER_ALLOWED_EMAILS="a@x.com"), "a@x.com"), (False, None))
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_VIEWER_IDS="abc"), None), (False, None))   # the retired viewer-id list is ignored
 
 
 class TestMigration(unittest.TestCase):
