@@ -124,6 +124,11 @@ def rank_games(starts: dict[str, dt.datetime]) -> list[str]:
     return order
 
 
+def _take(items: list, n: int) -> list:
+    """The first n of a priority-ordered list (a budget cut-off for today's price purchases; nothing here decides what any model learns)."""
+    return [x for i, x in enumerate(items) if i < n]
+
+
 def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str] | None = None, spent_by_class: dict | None = None) -> dict:
     """The waterfall. `starts` = today's games {game_id: puck drop}; returns what each class may spend and which games are priced."""
     spent_by_class = spent_by_class or {}
@@ -135,14 +140,14 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     ui = take(UI_FIRST); left -= ui
     order = rank_games(starts)
     k_base = min(n, int(max(left, 0.0) // BASE_COST))
-    props_games = order[:k_base]
+    props_games = _take(order, k_base)
     props = k_base * BASE_COST; left -= props
-    saves_games = [g for g in order if g in confirmed_games][:SAVES_MAX_PER_DAY]
+    saves_games = _take([g for g in order if g in confirmed_games], SAVES_MAX_PER_DAY)
     k_saves = min(len(saves_games), int(max(left, 0.0) // SAVES_COST))
-    saves_games = saves_games[:k_saves]; left -= k_saves * SAVES_COST
+    saves_games = _take(saves_games, k_saves); left -= k_saves * SAVES_COST
     ui_extra = take(UI_SECOND) if k_base == n else 0.0; left -= ui_extra
     k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))
-    goals_games = props_games[:k_goals]; left -= k_goals * GOALS_COST
+    goals_games = _take(props_games, k_goals); left -= k_goals * GOALS_COST
     refresh = max(left, 0.0)
     full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + n * (BASE_COST + GOALS_COST) + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
     base_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST
