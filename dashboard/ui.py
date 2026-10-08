@@ -500,6 +500,12 @@ def order_path_panel() -> None:
         from dashboard import snapshot_source
         snapshot_source.current(force_refresh=True)
         st.rerun()
+    recent = [r for r in product_source.path_checks() if r.get("check_id")]
+    if recent:
+        st.markdown("**Checks the engine has answered**")
+        st.dataframe([{"Check": r["check_id"], "Result": r["status"], "Answered (UTC)": r.get("processed_at_utc"), "Sent via": r.get("via"),
+                       "Filed by": r.get("author"), "Viewer on allow-list when sent": "yes" if r.get("viewer_allowed") else "no"} for r in reversed(recent[-8:])],
+                     hide_index=True, width="stretch")
     ign = [r for r in product_source.path_checks() if r["status"] == "IGNORED_AUTHOR"]
     for r in ign[-3:]:
         banner(esc(r["note"]), "bad")
