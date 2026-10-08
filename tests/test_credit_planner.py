@@ -99,7 +99,7 @@ class TestAuthorize(unittest.TestCase):
 
 
 PLAN = {"day": "2026-10-08", "games_priced": ["1"], "games_not_priced": ["2"], "goals_games": ["1"],
-        "allowance": {cp.PROPS: 4.0, cp.REFRESH: 0.0}, "budget": {"D": 11.5}}
+        "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}, "budget": {"D": 11.5}}
 
 
 class TestCaptureDecisions(unittest.TestCase):
@@ -140,9 +140,16 @@ class TestCaptureDecisions(unittest.TestCase):
                 mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
             out = bb.capture_prices(NOW, client=client, archive_mod=archive, games=games, plan=PLAN)
         self.assertEqual(client.calls, [f"{bb.MARKETS},{bb.GOALS_MARKET_KEY}"])
-        rec.assert_called_once()
-        self.assertEqual(rec.call_args.args[0], cp.PROPS)
+        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 2), (cp.GOALS, 1)])      # goals are accounted in their own class
         self.assertEqual(out["events_captured"], 1)
+
+    def test_a_goals_capture_does_not_eat_the_next_games_base_allowance(self):
+        """2026-10-08: BOS's 3-credit capture was recorded as PROPS, so the third planned game (2 more credits) was denied against an allowance of 6."""
+        plan = {**PLAN, "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}}
+        spent = {cp.PROPS: 2.0, cp.GOALS: 1.0}
+        with mock.patch.object(cp, "spent_today", return_value=spent), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=200):
+            self.assertTrue(cp.authorize(cp.PROPS, 2, NOW, plan=plan)["allow"])                      # the second planned game is still allowed
+            self.assertFalse(cp.authorize(cp.GOALS, 1, NOW, plan=plan)["allow"])                     # goals allowance is used up, separately
 
     def test_an_unplanned_game_is_skipped_with_its_reason(self):
         class Client:

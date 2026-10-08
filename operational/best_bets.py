@@ -491,7 +491,13 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         if plan is None and spent_today + est_cost > DAILY_CREDIT_CAP:
             summary["skipped"].append({"event_id": e["id"], "reason": "BEST_BETS_DAILY_CREDIT_CAP"})
             continue
-        gate = guard(est_cost) if plan is None else cp.authorize(klass, est_cost, now, plan=plan)
+        if plan is None:
+            gate = guard(est_cost)
+        else:
+            # the goals market is its own class in the plan (its own allowance); a denied goals credit drops the goals market, not the game
+            gate = cp.authorize(klass, cp.base_cost(), now, plan=plan)
+            if gate.get("allow") and markets.endswith(GOALS_MARKET_KEY) and not cp.authorize(cp.GOALS, cp.GOALS_COST, now, plan=plan).get("allow"):
+                markets, est_cost = ",".join(cp.prop_markets()), cp.base_cost()
         if not gate.get("allow"):
             summary["skipped"].append({"event_id": e["id"], "reason": gate.get("reason")})
             break
@@ -502,7 +508,10 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         archive_mod.archive_result(r, event_id=e["id"], market_filter=markets, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
         if plan is not None:
-            cp.record(klass, cost, now, event=e["id"], game_id=gid, markets=markets)
+            goals_part = cp.GOALS_COST if markets.endswith(GOALS_MARKET_KEY) and cost > cp.base_cost() else 0
+            cp.record(klass, cost - goals_part, now, event=e["id"], game_id=gid, markets=markets)
+            if goals_part:
+                cp.record(cp.GOALS, goals_part, now, event=e["id"], game_id=gid, markets=markets)
         spent_today += cost
         summary["credits_spent"] += cost
         summary["events_captured"] += 1
