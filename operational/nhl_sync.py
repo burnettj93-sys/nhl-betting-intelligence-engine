@@ -304,8 +304,16 @@ def run_targeted_pregame_refresh(conn=None, today: dt.date | None = None, sessio
     actually needs) is unaffected by it."""
     owns_conn = conn is None
     conn = conn or db.get_conn()
-    today = today or dt.datetime.utcnow().date()
     now = now or dt.datetime.now(dt.timezone.utc)
+    # The league's game dates are Eastern. A UTC "today" rolls over at 8 PM ET, hours before an evening game ends,
+    # so from then on the refresh would stop looking at that evening's games and their results (and the paper
+    # tickets that depend on them) would wait for the 7 AM daily sync. With no explicit date, look at the Eastern
+    # day and the Eastern day before it; an explicit `today` keeps its single-day meaning.
+    first_day = today
+    if today is None:
+        from operational import eastern_time as _et
+        today = dt.date.fromisoformat(_et.eastern_today(now))
+        first_day = today - dt.timedelta(days=1)
     summary = {
         "component": "nhl_pregame_targeted_refresh", "date": today.isoformat(),
         "status": "SUCCESS", "error": None, "games_seen": 0, "games_finalized": 0,
@@ -314,7 +322,7 @@ def run_targeted_pregame_refresh(conn=None, today: dt.date | None = None, sessio
         "roster_status": "SKIPPED", "roster_failed_teams": [],
     }
     try:
-        result = nhl_api.ingest_range(conn, today, today, session=session)
+        result = nhl_api.ingest_range(conn, first_day, today, session=session)
         summary["games_seen"] = result["games_seen"]
         summary["games_finalized"] = result["games_finalized"]
 

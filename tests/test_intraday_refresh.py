@@ -190,6 +190,25 @@ class TestPregameTargetedRefresh(unittest.TestCase):
         self.assertTrue(all("/roster/" not in url for url in session.calls))
         self.assertEqual(result["status"], "SUCCESS")
 
+    def test_after_8pm_eastern_the_default_window_still_covers_that_evenings_games(self):
+        """Reproduces a live latency defect: the default window was the UTC date, which rolls over at 8 PM ET, so an
+        evening game's result (and the paper tickets waiting on it) was not looked at again until the 7 AM sync."""
+        conn = _fresh_conn()
+        empty = {"games_seen": 0, "games_finalized": 0}
+        with mock.patch("ingest.nhl_api.ingest_range", return_value=empty) as ingest:
+            nhl_sync.run_targeted_pregame_refresh(conn=conn, session=_EmptyScheduleSession(),
+                                                  now=dt.datetime(2026, 10, 8, 2, 30, tzinfo=dt.timezone.utc))  # 10:30 PM ET Oct 7
+        first, last = ingest.call_args.args[1], ingest.call_args.args[2]
+        self.assertEqual((first, last), (dt.date(2026, 10, 6), dt.date(2026, 10, 7)))   # Eastern day and the one before
+
+    def test_an_explicit_date_keeps_its_single_day_meaning(self):
+        conn = _fresh_conn()
+        empty = {"games_seen": 0, "games_finalized": 0}
+        with mock.patch("ingest.nhl_api.ingest_range", return_value=empty) as ingest:
+            nhl_sync.run_targeted_pregame_refresh(conn=conn, today=dt.date(2026, 9, 24), session=_EmptyScheduleSession(),
+                                                  now=dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual((ingest.call_args.args[1], ingest.call_args.args[2]), (dt.date(2026, 9, 24), dt.date(2026, 9, 24)))
+
     def test_game_in_window_triggers_a_targeted_roster_call(self):
         conn = _fresh_conn()
         _insert_game(conn, 1, "EDM", "CGY", "2026-09-24T15:30:00Z")
