@@ -39,7 +39,7 @@ def rec(g):
 
 table = [{"Goalie": g["name"], "Team": g["team"], "Next game": (f"{'vs' if g['next_game']['home'] else '@'} {g['next_game']['opp']} · {g['next_game']['date_et']} {g['next_game']['start_et']}"
                                                               if g.get("next_game") else "none scheduled"),
-          "Start chance (est.)": ui.pct((g.get("start") or {}).get("probability")) if g.get("start") else "—", "Status": g["confirmation"]["status"].title(),
+          "Start chance (est.)": ui.pct((g.get("start") or {}).get("probability")) if g.get("start") else "—", "Status": g["confirmation"]["status"].replace("_", " ").title(),
           "W-L-OTL": rec(g), "SV%": f"{g['season']['save_pct']:.3f}" if (g.get("season") or {}).get("save_pct") is not None else "—",
           "GAA": f"{g['season']['gaa']:.2f}" if (g.get("season") or {}).get("gaa") is not None else "—",
           "SO": str((g.get("season") or {}).get("shutouts")) if (g.get("season") or {}).get("games") else "—"} for g in rows]
@@ -93,7 +93,7 @@ else:
     st.write(f"**{'vs' if ng['home'] else '@'} {ng['opp']}** · {ui.et_time(ng['start_utc'], True)} · game {ng['game_id']}")
     k = st.columns(3)
     k[0].metric("Start chance (estimate)", ui.pct(st_["probability"]) if st_ else "—", help="Share of the team's recent starts and rest, from a model validated on 2025-26.")
-    k[1].metric("Start status", cf["status"].title())
+    k[1].metric("Start status", cf["status"].replace("_", " ").title())
     k[2].metric("Status source / checked", cf["source"] or "none", cf.get("checked_at_utc") and ui.et_time(cf["checked_at_utc"], True) or "never", delta_color="off")
     st.caption(ui.esc(cf["note"]))
     with st.expander("Record a confirmed start for this game"):

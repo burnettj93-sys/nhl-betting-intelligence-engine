@@ -52,7 +52,7 @@ else:
     st.caption("No skater logs yet this season.")
 st.markdown("#### Goalies")
 if t["goalies"]:
-    st.dataframe([{"Goalie": g["name"], "Start chance (est.)": ui.pct((g.get("start") or {}).get("probability")) if g.get("start") else "—", "Status": g["confirmation"]["status"].title(),
+    st.dataframe([{"Goalie": g["name"], "Start chance (est.)": ui.pct((g.get("start") or {}).get("probability")) if g.get("start") else "—", "Status": g["confirmation"]["status"].replace("_", " ").title(),
                    "W-L-OTL": (f"{g['season']['wins']}-{g['season']['losses']}-{g['season']['ot_losses']}" if (g.get("season") or {}).get("games") else "—"),
                    "SV%": f"{g['season']['save_pct']:.3f}" if (g.get("season") or {}).get("save_pct") is not None else "—"} for g in t["goalies"]], hide_index=True, width="stretch")
 else:
