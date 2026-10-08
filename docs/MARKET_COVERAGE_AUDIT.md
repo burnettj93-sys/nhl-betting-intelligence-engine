@@ -49,7 +49,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 ### Puck line
 * Ontario menu: Listed (verified), plus alternate lines.
 * prices: The spreads market is never requested from the odds provider.
-* projection: No goal-margin model: only win probability is validated. Building one needs its own chronological validation.
+* projection: A goal-margin model (Poisson goals around the validated strength rating) was built and validated chronologically; it did NOT beat the base-rate baseline on held-out 2025-26 games, so it is not usable (docs/validation/goalie_team_validation.json, puck_line).
 * context confirmation: Same unconfirmed-starter situation as moneyline (widened band, no gate).
 * eligibility: Not in the contract allowlist; no certified contract.
 * settlement: No resolver for margin lines.

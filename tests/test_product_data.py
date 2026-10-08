@@ -118,6 +118,16 @@ class TestGoalieModelPieces(unittest.TestCase):
         verdicts = tg.saves_verdicts(v)
         self.assertTrue(verdicts and all(x["verdict"] in ("BEATS_BASELINES", "DOES_NOT_BEAT_BASELINES") for x in verdicts.values()))
 
+    def test_puck_line_model_is_scored_against_the_base_rate_and_its_verdict_is_what_the_product_says(self):
+        pl = tg.load_validation()["puck_line"]
+        self.assertGreater(pl["games_scored"], 1000)
+        beats = pl["model"]["log_loss"] < pl["base_rate_baseline"]["log_loss"]
+        from operational import product_data
+        text = " ".join(product_data._model_health.__code__.co_consts[i] for i in range(len(product_data._model_health.__code__.co_consts))
+                        if isinstance(product_data._model_health.__code__.co_consts[i], str))
+        if not beats:
+            self.assertIn("did NOT beat the base-rate baseline", text)        # the page may not present an unvalidated margin model as usable
+
     def test_skater_validation_report_scores_every_market_against_baselines(self):
         verdicts = live.market_verdicts(live.load_validation())
         self.assertIn("shots>=2", verdicts)

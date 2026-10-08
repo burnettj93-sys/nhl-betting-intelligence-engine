@@ -66,6 +66,11 @@ def render() -> str:
             "| Variant | Log loss | Brier |", "|---|---|---|"]
     for k in ("home_rate_baseline", "strength_only", "strength_and_named_goalies", "strength_and_goalies_tied"):
         out.append(f"| {k.replace('_', ' ')} | {wp[k]['log_loss']:.4f} | {wp[k]['brier']:.4f} |")
+    pl = gv["puck_line"]
+    out += ["", "### Puck line (home −1.5 covers)", "",
+            f"A margin model (least squares on the strength rating, Poisson goals with the calibration-season mean total of {pl['margin_model']['total']:.2f}) was scored on {pl['games_scored']} held-out games: "
+            f"log loss {pl['model']['log_loss']:.4f} against {pl['base_rate_baseline']['log_loss']:.4f} for the base rate (lower is better). **It does not beat the base rate** "
+            f"(it over-predicts home −1.5 covers: mean prediction {pl['model']['mean_pred']:.3f} against an observed {pl['model']['base_rate']:.3f}), so puck-line probabilities are not shown or priced."]
     st = gv["start_likelihood"]
     out += ["", "The strength-only model beats the home-rate baseline. Adding each named goalie's expected goals saved per game **did not improve** held-out forecasts "
             "(either fitted or tied to the strength coefficient), so a goalie-specific win probability is shown only as a labelled scenario, never as the model's probability.", "",

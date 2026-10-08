@@ -87,6 +87,10 @@ Scored on 1178 held-out games (133 shootout games excluded: this source has no w
 | strength and named goalies | 0.6899 | 0.2481 |
 | strength and goalies tied | 0.6913 | 0.2487 |
 
+### Puck line (home −1.5 covers)
+
+A margin model (least squares on the strength rating, Poisson goals with the calibration-season mean total of 5.62) was scored on 1311 held-out games: log loss 0.5293 against 0.5275 for the base rate (lower is better). **It does not beat the base rate** (it over-predicts home −1.5 covers: mean prediction 0.297 against an observed 0.217), so puck-line probabilities are not shown or priced.
+
 The strength-only model beats the home-rate baseline. Adding each named goalie's expected goals saved per game **did not improve** held-out forecasts (either fitted or tied to the strength coefficient), so a goalie-specific win probability is shown only as a labelled scenario, never as the model's probability.
 
 ### Start likelihood (an estimate, not a confirmation)

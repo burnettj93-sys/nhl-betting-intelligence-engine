@@ -51,6 +51,10 @@ for m in mh["models"]:
             r = v["result"]
             st.dataframe([{"Win-probability variant": k.replace("_", " ").title(), "Log loss": r[k]["log_loss"], "Brier": r[k]["brier"]} for k in
                           ("home_rate_baseline", "strength_only", "strength_and_named_goalies", "strength_and_goalies_tied")], hide_index=True, width="stretch")
+            if "puck_line" in v:
+                pl = v["puck_line"]
+                st.write(f"Puck line (home −1.5 covers): model log loss {pl['model']['log_loss']:.4f} vs {pl['base_rate_baseline']['log_loss']:.4f} for the base rate on {pl['games_scored']} held-out games — "
+                         "it does not beat the base rate, so it is neither shown nor priced.")
             st.caption(f"{r['games_scored']} held-out games scored; {r['shootouts_excluded']} shootout games excluded (no winner in the source). Lower is better.")
         st.markdown("**Markets and ticket status**")
         st.markdown(" ".join(ui.chip(f"{k}: {val.replace('_', ' ').title()}", MARKET_TONE.get(val, "bad" if "BLOCKED" in val else "muted")) for k, val in m["markets"].items()),

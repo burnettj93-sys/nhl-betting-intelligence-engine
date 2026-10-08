@@ -73,7 +73,8 @@ _ROWS = [
         "ontario_menu": "Listed (verified), plus alternate lines.",
         "prices": ("MISSING", "The spreads market is never requested from the odds provider."),
         "identity_mapping": ("OK", "Team abbreviations would reuse the moneyline mapping."),
-        "projection": ("MISSING", "No goal-margin model: only win probability is validated. Building one needs its own chronological validation."),
+        "projection": ("MISSING", "A goal-margin model (Poisson goals around the validated strength rating) was built and validated chronologically; it did NOT beat the "
+                                  "base-rate baseline on held-out 2025-26 games, so it is not usable (docs/validation/goalie_team_validation.json, puck_line)."),
         "context_confirmation": ("PARTIAL", "Same unconfirmed-starter situation as moneyline (widened band, no gate)."),
         "eligibility": ("MISSING", "Not in the contract allowlist; no certified contract."),
         "settlement": ("MISSING", "No resolver for margin lines."),

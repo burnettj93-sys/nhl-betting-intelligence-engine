@@ -504,11 +504,13 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
          "validation": {"split": g_val["splits"], "result": {k: g_val["win_probability"][k] for k in
                                                               ("games_scored", "shootouts_excluded", "home_rate_baseline", "strength_only", "strength_and_named_goalies",
                                                                "strength_and_goalies_tied")},
+                        "puck_line": {k: g_val["puck_line"][k] for k in ("event", "games_scored", "model", "base_rate_baseline", "mae_margin")},
                         "report": "docs/validation/goalie_team_validation.json"},
          "limits": ["The named-goalie adjustment did not improve held-out forecasts; it is a scenario, not the probability.",
-                    "Moneyline and puck-line pricing are not driven by this model yet: the existing moneyline path (Elo with a conservative bound) "
-                    "stays the only source for MONEYLINE legs and is unvalidated on this corpus."],
-         "markets": {"MONEYLINE": "BLOCKED_NO_FRESH_PRICES_OR_UNVALIDATED_MODEL", "PUCK LINE": "BLOCKED_SPREAD_PRICES_NOT_CAPTURED_NO_MARGIN_MODEL"}},
+                    "Puck line: a margin model built on this strength rating (Poisson goals) did NOT beat the base-rate baseline on held-out games "
+                    "(over-predicts home -1.5 covers), so it is not shown or priced. Moneyline pricing is not driven by this model: the existing "
+                    "Elo path (heuristic band) stays the only source for MONEYLINE legs and is unvalidated on this corpus."],
+         "markets": {"MONEYLINE": "BLOCKED_NO_FRESH_PRICES_OR_UNVALIDATED_MODEL", "PUCK LINE": "BLOCKED_MODEL_NOT_VALIDATED_NO_PRICES"}},
     ]
     pipelines = [{"name": "NHL schedule and results", "through": data_through["schedule_results"], "source": "NHL API → nhl.db"},
                  {"name": "Skater logs", "through": data_through["skaters"], "source": "MoneyPuck daily download"},

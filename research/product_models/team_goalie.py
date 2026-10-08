@@ -343,10 +343,45 @@ def walk(rows: list[dict], seasons: tuple[int, ...]) -> tuple[list[dict], list[d
             winner = None if totals[home] == totals[away] else (home if totals[away] > totals[home] else away)   # totals = goals AGAINST
             game_recs.append({"game_id": gid, "date": date, "season": grs[0]["season"], "home": home, "away": away,
                               "strength_diff": diff, "goalie_diff": sg_h - sg_a,
+                              "home_goals": totals[away], "away_goals": totals[home],     # totals are goals AGAINST
                               "home_win": None if winner is None else int(winner == home),
                               "shootout": winner is None})
         state.consume_day(day)
     return goalie_recs, game_recs, state
+
+
+def skellam_tail(mean_margin: float, total: float, at_least: int) -> float:
+    """P(home goals - away goals >= at_least) with independent Poisson goals whose means are (total +/- mean_margin) / 2."""
+    lam_h, lam_a = max(0.3, (total + mean_margin) / 2.0), max(0.3, (total - mean_margin) / 2.0)
+    ph = [math.exp(-lam_h + k * math.log(lam_h) - math.lgamma(k + 1)) for k in range(0, 21)]
+    pa = [math.exp(-lam_a + k * math.log(lam_a) - math.lgamma(k + 1)) for k in range(0, 21)]
+    return sum(ph[h] * pa[a] for h in range(21) for a in range(21) if h - a >= at_least)
+
+
+def fit_margin(games: list[dict]) -> dict:
+    """Least squares margin = b0 + b1 * strength_diff over regulation+overtime goals; and the mean total goals."""
+    n = len(games)
+    xs = [g["strength_diff"] for g in games]
+    ys = [g["home_goals"] - g["away_goals"] for g in games]
+    mx, my = sum(xs) / n, sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    b1 = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx if sxx else 0.0
+    return {"b0": my - b1 * mx, "b1": b1, "total": sum(g["home_goals"] + g["away_goals"] for g in games) / n}
+
+
+def puck_line_report(gmrec: list[dict]) -> dict:
+    """Standard +/-1.5 puck line: home -1.5 covers when the home team wins by two or more goals. A shootout game's official margin is one
+    goal, so it never covers -1.5; here its regulation/overtime goals are level, which gives the same answer."""
+    cal = [g for g in gmrec if g["season"] == CALIB_SEASON]
+    fin = [g for g in gmrec if g["season"] == FINAL_SEASON]
+    fit = fit_margin(cal)
+    base_rate = sum(1 for g in cal if g["home_goals"] - g["away_goals"] >= 2) / len(cal)
+    pairs = [(skellam_tail(fit["b0"] + fit["b1"] * g["strength_diff"], fit["total"], 2), int(g["home_goals"] - g["away_goals"] >= 2)) for g in fin]
+    base = [(base_rate, y) for _, y in pairs]
+    away = [(1 - p, 1 - y) for p, y in pairs]
+    return {"event": "home -1.5 covers (wins by 2+); away +1.5 is its complement", "fit_on": CALIB_SEASON, "margin_model": {k: round(v, 4) for k, v in fit.items()},
+            "games_scored": len(fin), "model": metrics(pairs), "base_rate_baseline": metrics(base), "away_plus_1_5": metrics(away),
+            "calibration": calibration_table(pairs, bins=5), "mae_margin": round(sum(abs((fit["b0"] + fit["b1"] * g["strength_diff"]) - (g["home_goals"] - g["away_goals"])) for g in fin) / len(fin), 4)}
 
 
 def run() -> dict:
@@ -439,7 +474,8 @@ def run() -> dict:
     # positive examples are starters; negatives are team-games where that goalie was on the team's recent list but did not start
     start_report = _start_validation(rows)
 
-    report = {"model_version": MODEL_VERSION, "splits": {"train": list(TRAIN_SEASONS), "calibration": CALIB_SEASON, "final_evaluation": FINAL_SEASON},
+    puck = puck_line_report(gmrec)
+    report = {"model_version": MODEL_VERSION, "puck_line": puck, "splits": {"train": list(TRAIN_SEASONS), "calibration": CALIB_SEASON, "final_evaluation": FINAL_SEASON},
               "alpha_saves": round(alpha, 4), "league_mean_saves_calibration": round(league_mean, 3),
               "saves_markets": markets, "expected_value_mae_final": mae, "saves_80pct_range_coverage": range80, "ga_80pct_range_coverage": ga_range80, "alpha_ga": round(alpha_ga, 4),
               "win_probability": win, "start_likelihood": start_report, "rows": {"goalie_calibration": len(calib_g), "goalie_final": len(final_g)},
