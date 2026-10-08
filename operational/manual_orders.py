@@ -216,8 +216,14 @@ def process_order(conn, raw_order, *, current_legs: list[rmp.ParlayLeg], now: dt
 
 # ------------------------------------------------------------------ GitHub queue ----
 
+def _gh_binary() -> str:
+    """launchd jobs run with a minimal PATH, so look in the usual Homebrew locations as well."""
+    import shutil
+    return shutil.which("gh") or next((p for p in ("/opt/homebrew/bin/gh", "/usr/local/bin/gh") if Path(p).exists()), "gh")
+
+
 def _gh(args: list[str], *, input_text: str | None = None) -> str:
-    out = subprocess.run(["gh", *args], capture_output=True, text=True, input=input_text, timeout=60)
+    out = subprocess.run([_gh_binary(), *args], capture_output=True, text=True, input=input_text, timeout=60)
     if out.returncode != 0:
         raise RuntimeError(f"gh {' '.join(args[:3])} failed: {out.stderr.strip()[:300]}")
     return out.stdout

@@ -225,3 +225,16 @@ def write_report(review: dict, out_dir: Path = REPORTS_DIR) -> list[Path]:
         p.write_text(ticket_postmortem_markdown(t))
         paths.append(p)
     return paths
+
+
+def write_loss_postmortems(bankroll_conn, nhl_conn, out_dir: Path = REPORTS_DIR) -> list[Path]:
+    """A postmortem file for every settled losing ticket, whatever day it settled (idempotent: rewritten from the ledger each run)."""
+    account = pb.account_state(bankroll_conn, "REAL_MARKET_PAPER")
+    paths = []
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for bet in pb.query_paper_bets(bankroll_conn, track="REAL_MARKET_PAPER", result_status="LOSS"):
+        t = ticket_review(bet, nhl_conn, account)
+        p = out_dir / f"ticket_postmortem_{t['ticket_id']}.md"
+        p.write_text(ticket_postmortem_markdown(t))
+        paths.append(p)
+    return paths
