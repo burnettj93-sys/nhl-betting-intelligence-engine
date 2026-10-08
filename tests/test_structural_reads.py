@@ -96,6 +96,8 @@ JUSTIFIED_EXCEPTIONS = {
     # ... and source_record() scores a cited reporter's past confirmations against the goalie who actually started (a settled game): a post-hoc audit of
     # a source's accuracy, never an input to a prediction.
     ("operational/dailyfaceoff.py", "goalie_game_stats"),
+    # Data Status (2026-10-08): counts the manual starter confirmations recorded in the last 30 hours for a status display; never a model input.
+    ("operational/source_status.py", "goalie_status_events"),
     ("validate.py", "roster_status_events"),
     ("validate.py", "goalie_status_events"),
     ("validate.py", "lineup_snapshots"),

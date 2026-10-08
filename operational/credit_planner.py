@@ -35,7 +35,10 @@ MONEYLINE_DECISION, MONEYLINE_UI, PROPS, SAVES, GOALS, REFRESH = ("MONEYLINE_DEC
                                                                    "GOALS", "REFRESH")
 DECISION_RESERVE = 3          # T-35 pulls per day the plan always funds (typical day: 2-3 start clusters)
 UI_FIRST, UI_SECOND = 1, 1
-BASE_COST = 2                 # shots (alternate) + points
+SHOTS_KEY, POINTS_KEY, GOALS_KEY, SAVES_KEY = "player_shots_on_goal_alternate", "player_points", "player_goal_scorer_anytime", "player_total_saves"
+DEFAULT_PROP_MARKETS = (SHOTS_KEY, POINTS_KEY)
+PROP_MARKETS_ENV = "NHL_ENGINE_PROP_MARKETS"
+BASE_COST = 2                 # shots (alternate) + points (the default pair); see base_cost() for an owner override
 SAVES_COST, GOALS_COST = 1, 1
 SAVES_MAX_PER_DAY = 3
 FIRST_CAPTURE_HOURS = 1.75    # one capture per game at or inside this many hours before puck drop; fresh through puck drop
@@ -129,11 +132,33 @@ def _take(items: list, n: int) -> list:
     return [x for i, x in enumerate(items) if i < n]
 
 
-def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str] | None = None, spent_by_class: dict | None = None) -> dict:
+def prop_markets() -> tuple[str, ...]:
+    """The per-game markets bought in step 3. Default: shots (alternate) + points. The owner may trade market depth for game coverage by listing fewer
+    (`NHL_ENGINE_PROP_MARKETS=player_points` prices every game with one credit instead of three games with two)."""
+    import os
+    raw = os.environ.get(PROP_MARKETS_ENV) or ""
+    if not raw:
+        env = state_paths.REPO_ROOT / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                k, sep, v = line.strip().partition("=")
+                if sep and k.strip() == PROP_MARKETS_ENV:
+                    raw = v.strip().strip("\"'")
+    chosen = tuple(m for m in (x.strip() for x in raw.split(",")) if m in DEFAULT_PROP_MARKETS)
+    return chosen or DEFAULT_PROP_MARKETS
+
+
+def base_cost() -> int:
+    return len(prop_markets())
+
+
+def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str] | None = None, spent_by_class: dict | None = None,
+             base: int | None = None) -> dict:
     """The waterfall. `starts` = today's games {game_id: puck drop}; returns what each class may spend and which games are priced."""
     spent_by_class = spent_by_class or {}
     confirmed_games = confirmed_games or set()
     n = len(starts)
+    BASE_COST = base if base is not None else base_cost()      # noqa: N806 - shadows the module default for this call only
     left = D
     take = lambda want: min(max(left, 0.0), want)  # noqa: E731
     decision = take(DECISION_RESERVE); left -= decision

@@ -337,7 +337,7 @@ def process_path_check(raw, *, now: dt.datetime, source: str, author: str | None
     if any(r["check_id"] == cid and r["status"] == "ACCEPTED" for r in rows):
         return {"status": "ALREADY_RECORDED", "check_id": cid}
     row = {"check_id": cid, "status": "ACCEPTED", "source": source, "author": author, "processed_at_utc": quote_freshness.iso_z(now),
-           "sent_at_utc": doc.get("sent_at_utc"), "via": doc.get("via"), "viewer_email_present": bool(doc.get("viewer_email_present")),
+           "sent_at_utc": doc.get("sent_at_utc"), "via": doc.get("via"), "signed_in": bool(doc.get("signed_in", doc.get("viewer_email_present"))),
            "viewer_allowed": bool(doc.get("viewer_allowed")), "write_path_configured": bool(doc.get("write_path_configured", doc.get("token_configured"))),   # key names must pass the snapshot secret-name guard (no "token")
            "note": "Accepted by the queue processor. No order, ticket or stake was created."}
     _save_path_checks(rows + [row])

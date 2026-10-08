@@ -382,10 +382,10 @@ POINTS_MARKET_KEY = "player_points"
 GOALS_MARKET_KEY = "player_goal_scorer_anytime"       # optional: captured only when the month balances (operational/credit_allocation.py)
 
 
-def decision_age_min(event_id: str, now: dt.datetime) -> float | None:
-    """Age of the OLDER of the newest shots and newest points captures (by any job); None if either is missing."""
+def decision_age_min(event_id: str, now: dt.datetime, markets: tuple[str, ...] = (SOG_MARKET_KEY, POINTS_MARKET_KEY)) -> float | None:
+    """Age of the OLDER of the newest captures of the markets that are being bought (shots and points by default; by any job); None if any is missing."""
     ages = []
-    for market in (SOG_MARKET_KEY, POINTS_MARKET_KEY):
+    for market in markets:
         cap = latest_capture(event_id, market=market)
         if cap is None:
             return None
@@ -468,7 +468,8 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
     upcoming = sorted((e for e in events.data if start_of(e) > now), key=start_of)
     for e in upcoming:
         hours = (start_of(e) - now).total_seconds() / 3600.0
-        age_min = decision_age_min(e["id"], now)
+        from operational import credit_planner as _cp
+        age_min = decision_age_min(e["id"], now, _cp.prop_markets() if plan is not None else (SOG_MARKET_KEY, POINTS_MARKET_KEY))
         matched = match_game(e, games)
         gid = matched[0] if matched else None
         if plan is None:
@@ -479,8 +480,9 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
             decision, why = planned_decision(plan, gid, hours, age_min, now)
             klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
             with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
-            markets = f"{MARKETS},{GOALS_MARKET_KEY}" if with_goals else MARKETS
-            est_cost = cp.BASE_COST + (cp.GOALS_COST if with_goals else 0)
+            base_markets = ",".join(cp.prop_markets())
+            markets = f"{base_markets},{GOALS_MARKET_KEY}" if with_goals else base_markets
+            est_cost = cp.base_cost() + (cp.GOALS_COST if with_goals else 0)
         if decision is None:
             if why == "NOT_IN_CREDIT_PLAN":
                 summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})

@@ -13,3 +13,6 @@ streamlit==1.62.0
 # securely, but never Yahoo Fantasy Information itself; "securely" means
 # encrypted at rest, not a plaintext SQL column (the previous state).
 cryptography>=42.0
+
+# st.login() (OIDC sign-in for the one-click paper-order path) needs Authlib; see docs/MANUAL_ORDERS.md
+Authlib>=1.3.2

@@ -93,3 +93,35 @@ class TestShapeCheckAndNonEnablement(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLegBuilderCannotSelectAnything(unittest.TestCase):
+    def test_legs_are_built_from_quotes_but_are_never_eligible(self):
+        legs = plc.legs_from_event(EVENT, game_id="7", home_abbrev="TOR", away_abbrev="MTL", probability_for=lambda t, p: 0.4, captured_at_utc="2026-10-08T20:01:00Z")
+        self.assertEqual([(l.participant_id, l.threshold, l.american_price) for l in legs], [("TOR", -1.5, 150.0), ("MTL", 1.5, -180.0)])
+        self.assertEqual(rmp.leg_label(legs[0]), "TOR -1.5")
+        for leg in legs:
+            self.assertFalse(leg.provider_contract_verified)                       # no real payload has certified the shape
+            self.assertFalse(leg.model_threshold_eligible)                         # the prediction is unvalidated
+            self.assertFalse(rmp.leg_is_eligible(leg))                             # and the family is not in the engine's allowlist
+
+    def test_even_a_verified_contract_and_a_supplier_do_not_enable_selection_while_the_model_is_unvalidated(self):
+        from unittest import mock
+        with mock.patch.object(pa, "is_contract_verified", return_value=True):
+            legs = plc.legs_from_event(EVENT, game_id="7", home_abbrev="TOR", away_abbrev="MTL", probability_for=lambda t, p: 0.9)
+        self.assertTrue(all(l.provider_contract_verified for l in legs))
+        self.assertFalse(plc.PUCK_LINE_MODEL_VALIDATED)
+        self.assertFalse(any(l.model_threshold_eligible or rmp.leg_is_eligible(l) for l in legs))
+
+    def test_malformed_events_yield_no_legs(self):
+        self.assertEqual(plc.legs_from_event({**EVENT, "away_team": "X"}, game_id="7", home_abbrev="TOR", away_abbrev="MTL"), [])
+
+    FIXTURE = Path(__file__).parent / "fixtures" / "draftkings_puck_line_real_payload.json"
+
+    @unittest.skipUnless(FIXTURE.exists(), "certification awaits one real spreads payload (python3 deploy/capture_puck_line_contract.py --confirm-spend-1-credit)")
+    def test_real_payload_matches_the_expected_shape_when_it_exists(self):
+        import json
+        doc = json.loads(self.FIXTURE.read_text())
+        results = [plc.validate_spreads_event(e) for e in doc["events"]]
+        self.assertTrue(all(r["status"] == "SHAPE_OK" for r in results), results)
+        self.assertTrue(any(row["standard_line"] for r in results for row in r["rows"]))

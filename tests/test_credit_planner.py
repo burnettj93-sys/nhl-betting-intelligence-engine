@@ -168,6 +168,45 @@ class TestSweeps(unittest.TestCase):
         self.assertEqual(lop.PLANNED_SWEEP_MARKETS, "player_total_saves")
 
 
+class TestOwnerMarketChoice(unittest.TestCase):
+    def test_default_pair_and_an_owner_override_that_trades_depth_for_coverage(self):
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os
+            os.environ.pop(cp.PROP_MARKETS_ENV, None)
+            self.assertEqual((cp.prop_markets(), cp.base_cost()), (cp.DEFAULT_PROP_MARKETS, 2))
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points"}):
+            self.assertEqual((cp.prop_markets(), cp.base_cost()), (("player_points",), 1))
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points,not_a_market"}):
+            self.assertEqual(cp.prop_markets(), ("player_points",))                  # unknown names are ignored
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "not_a_market"}):
+            self.assertEqual(cp.prop_markets(), cp.DEFAULT_PROP_MARKETS)             # nothing valid: back to the default
+
+    def test_one_market_prices_twice_the_games_for_the_same_credits(self):
+        two = cp.allocate(11.5, SEVEN, base=2)
+        one = cp.allocate(11.5, SEVEN, base=1)
+        self.assertEqual((len(two["games_priced"]), len(one["games_priced"])), (3, 7))
+
+    def test_the_age_check_follows_the_markets_actually_bought(self):
+        calls = []
+
+        def fake(event_id, market=None, **kw):
+            calls.append(market)
+            return (NOW - dt.timedelta(minutes=10), {}) if market == bb.POINTS_MARKET_KEY else None
+        with mock.patch.object(bb, "latest_capture", side_effect=fake):
+            self.assertEqual(round(bb.decision_age_min("e", NOW, (bb.POINTS_MARKET_KEY,))), 10)   # points only: no shots capture is needed
+            self.assertIsNone(bb.decision_age_min("e", NOW))                                       # the default pair still needs both
+
+
+class TestScenarioCoverageArithmetic(unittest.TestCase):
+    def test_budget_scaling_reproduces_the_documented_configurations(self):
+        """docs/ODDS_BUDGET_CONFIGURATIONS.md: with a large allowance the same waterfall prices every game and funds goals, saves and refreshes."""
+        rich = cp.allocate(800.0, SEVEN, confirmed_games={"a", "b", "c"})
+        self.assertEqual(len(rich["games_priced"]), 7)
+        self.assertEqual(len(rich["goals_games"]), 7)
+        self.assertEqual(len(rich["saves_games"]), 3)
+        self.assertGreater(rich["allowance"][cp.REFRESH], 100)
+
+
 class TestDecisionPullGuard(unittest.TestCase):
     def test_the_t35_pull_ignores_the_soft_daily_budget_and_obeys_the_hard_reserve(self):
         from operational import moneyline_pregame as mp
