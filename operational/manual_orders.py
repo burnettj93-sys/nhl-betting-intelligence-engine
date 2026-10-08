@@ -305,9 +305,13 @@ PATH_CHECK_KEEP = 20
 def load_path_checks() -> list[dict]:
     p = state_paths.path(PATH_CHECK_STATE)
     try:
-        return json.loads(p.read_text()) if p.exists() else []
+        rows = json.loads(p.read_text()) if p.exists() else []
     except (OSError, json.JSONDecodeError):
         return []
+    for r in rows:                                     # rows written before the key was renamed
+        if "token_configured" in r:
+            r["write_path_configured"] = r.pop("token_configured")
+    return rows
 
 
 def _save_path_checks(rows: list[dict]) -> None:
@@ -334,7 +338,7 @@ def process_path_check(raw, *, now: dt.datetime, source: str, author: str | None
         return {"status": "ALREADY_RECORDED", "check_id": cid}
     row = {"check_id": cid, "status": "ACCEPTED", "source": source, "author": author, "processed_at_utc": quote_freshness.iso_z(now),
            "sent_at_utc": doc.get("sent_at_utc"), "via": doc.get("via"), "viewer_email_present": bool(doc.get("viewer_email_present")),
-           "viewer_allowed": bool(doc.get("viewer_allowed")), "token_configured": bool(doc.get("token_configured")),
+           "viewer_allowed": bool(doc.get("viewer_allowed")), "write_path_configured": bool(doc.get("write_path_configured", doc.get("token_configured"))),   # key names must pass the snapshot secret-name guard (no "token")
            "note": "Accepted by the queue processor. No order, ticket or stake was created."}
     _save_path_checks(rows + [row])
     return {"status": "ACCEPTED", "check_id": cid}

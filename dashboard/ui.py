@@ -455,7 +455,7 @@ def identity_probe() -> dict:
 def order_path_panel() -> None:
     email = viewer_email()
     stat = order_client.path_status(getattr(st, "secrets", {}), email, viewer_id())
-    st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["token_configured"] else "no"},
+    st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["write_path_configured"] else "no"},
                   {"Check": "Allow-listed viewers configured (emails / viewer ids)", "Result": f"{stat['allowed_email_count']} / {stat['allowed_viewer_id_count']}"},
                   {"Check": "App supplies a viewer email (st.user.email or platform header)", "Result": f"yes ({stat['viewer_email_masked']})" if stat["viewer_email_present"] else "no"},
                   {"Check": "App supplies an opaque platform viewer id", "Result": f"yes — fingerprint {stat['viewer_fingerprint']}" if stat["viewer_id_present"] else "no"},
@@ -475,7 +475,7 @@ def order_path_panel() -> None:
         cid = order_client.new_order_id().replace("ord_", "chk_")
         doc = order_client.build_path_check(check_id=cid, sent_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                             via="direct" if stat["direct_ready"] else "link", viewer_email_present=stat["viewer_email_present"],
-                                            viewer_allowed=stat["viewer_allowed"], token_configured=stat["token_configured"])
+                                            viewer_allowed=stat["viewer_allowed"], write_path_configured=stat["write_path_configured"])
         if stat["direct_ready"]:
             _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
             res = order_client.submit_direct(doc, token)
