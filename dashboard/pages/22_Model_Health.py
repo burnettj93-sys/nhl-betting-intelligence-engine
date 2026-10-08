@@ -27,13 +27,11 @@ for m in mh["models"]:
         st.write(m["purpose"])
         d = m["data"]
         age = d.get("age_days")
-        cols = st.columns(3)
-        cols[0].metric("Data source", d["source"].split(" +")[0][:28])
-        cols[1].metric("Data through", d["through"] or "n/a", f"{age} day(s) old" if age is not None else None, delta_color="off")
+        cols = st.columns(2)
+        cols[0].metric("Data through", d["through"] or "n/a", f"{age} day(s) old" if age is not None else None, delta_color="off")
         extra = {k: v for k, v in d.items() if k not in ("source", "through", "age_days")}
-        cols[2].metric(next(iter(extra), "Coverage").replace("_", " ").title(), next(iter(extra.values()), "—"))
-        if len(extra) > 1:
-            st.caption(" · ".join(f"{k.replace('_', ' ')}: {v}" for k, v in list(extra.items())[1:]))
+        cols[1].metric("Season coverage", " · ".join(f"{v} {k.replace('_', ' ')}" for k, v in extra.items()) or "—")
+        st.caption(f"Source: {d['source']}")
         v = m["validation"]
         st.markdown("**Validation evidence**")
         sp = v["split"]

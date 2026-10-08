@@ -136,7 +136,7 @@ def build(rows: list[dict] | None = None, season: int = history.CURRENT_SEASON, 
             "position_group": st.pos, "last_game_date": last["date"], "games_total": st.games,
             "season_totals": season_totals(in_season, season),
             "last_season_games": len([r for r in all_by_player.get(pid, []) if r["season"] == season - 1]),
-            "recent_games": [{"date": r["date"], "opp": r["opp"], "home": r["home"], "toi": round(r["toi"], 1),
+            "recent_games": [{"date": r["date"], "season": f"{r['season']}-{(r['season'] + 1) % 100:02d}", "opp": r["opp"], "home": r["home"], "toi": round(r["toi"], 1),
                               "toi_pp": round(r["toi_pp"], 1), "shots": r["shots"], "goals": r["goals"],
                               "assists": r["assists"], "hits": r["hits"], "blocks": r["blocks"]}
                              for r in recent[pid][-5:][::-1]],

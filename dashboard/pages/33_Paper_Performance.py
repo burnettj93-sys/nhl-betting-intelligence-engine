@@ -23,7 +23,7 @@ a[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_tickets'
 a[2].metric("Equity", ui.money(acct["equity"]))
 a[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 a[4].metric("ROI on settled", ui.pct(summ["roi"], 1) if summ.get("roi") is not None else "—")
-st.caption("One account: $500 start, $10 per ticket, no top-ups. Cash returns as tickets settle. Hit rates and ROI on a handful of tickets say almost nothing about skill.")
+st.caption("One account: \\$500 start, \\$10 per ticket, no top-ups. Cash returns as tickets settle. Hit rates and ROI on a handful of tickets say almost nothing about skill.")
 
 st.subheader("By origin")
 rows = []
