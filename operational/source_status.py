@@ -300,7 +300,8 @@ def evaluate(doc: dict, now: dt.datetime | None = None) -> dict:
             if s.get("limiter") == "BUDGET":
                 state, why = BUDGET_LIMITED, s.get("reason") or "past its freshness limit and the credit allowance does not allow a refresh now"
             else:
-                state, why = STALE, f"{_fmt_age(age)} old; the limit is {_fmt_age(limit)}" + ("; its refresh is overdue" if overdue else "")
+                state, why = STALE, (f"{_fmt_age(age)} old; the limit is {_fmt_age(limit)}" + ("; its refresh is overdue" if overdue else "")
+                                     + (f". {s['reason']}" if s.get("reason") else ""))
         else:
             state, why = CURRENT, s.get("reason", "")
         rows.append({"key": s["key"], "label": s["label"], "state": state, "reason": why, "age_min": age, "limit_min": limit, "data_through": s.get("data_through"),

@@ -202,6 +202,15 @@ def main(argv=None) -> int:
             "generated_at_utc": d.get("generated_at_utc"), "data_through": d.get("data_through"), "et_today": d.get("et_today"),
             "games": len(d["games"]["games"]), "players": len(d["players"]), "goalies": len(d["goalies"]), "teams": len(d["teams"]),
             "model_health": d.get("model_health"), "board_sample": [g for g in d["games"]["games"] if g["date_et"] == d.get("default_date")][:12]}, indent=1).encode()
+    try:                                       # the Data Status evidence as built now, evaluated now, and the evidence files it derives from
+        sys.path.insert(0, str(REPO))
+        from operational import source_status
+        built = source_status.build()
+        extras["audit_evidence/data_status_evidence.json"] = json.dumps({"built": built, "evaluated_now": source_status.evaluate(built),
+                                                                          "evidence_files": ["operational/moneyline_snapshot_cache.json", "operational/ingestion_health_cache.json",
+                                                                                             "operational/runtime/credit_plan_ledger.jsonl"]}, indent=1, default=str).encode()
+    except Exception as exc:  # noqa: BLE001
+        extras["audit_evidence/data_status_evidence.json"] = json.dumps({"error": f"{type(exc).__name__}: {exc}"}).encode()
     df_state = REPO / "operational" / "runtime" / "dailyfaceoff_state.json"
     if df_state.exists():                       # public data fetched from the starter/lineup source, with fetch times and any error
         extras["audit_evidence/dailyfaceoff_state.json"] = df_state.read_bytes()
