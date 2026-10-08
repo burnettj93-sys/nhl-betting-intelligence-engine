@@ -459,7 +459,7 @@ class Test41NhlWinModelUnchanged(unittest.TestCase):
         self.assertEqual(_file_sha256("config.py"),
                           "6a8090d0225f8982933da8213334aedb7b6b114d7dde87c0b3e5fed8499fbdc9")
         self.assertEqual(_file_sha256("db.py"),
-                          "e30ecffb2673cfa209913aa4db6c365c104fdcd23b2d508d088f418bba881d09")
+                          "50070318e7e3d31f8633d1335e18dd400a1f11d1449fad169d67a368ad8d9cbd")
         self.assertEqual(_file_sha256("schema.sql"),
                           "eb1ba2e3c3b305514189a46f4e1529acbfb98611b43c07c9d361bab97879488d")
 

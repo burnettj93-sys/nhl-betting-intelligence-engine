@@ -199,7 +199,8 @@ def _manual_orders() -> dict:
     try:
         have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         return {"orders": manual_orders.recent_orders(conn) if "manual_orders" in have else [],
-                "ontario_verifications": manual_orders.recent_verifications(conn) if "ontario_verifications" in have else []}
+                "ontario_verifications": manual_orders.recent_verifications(conn) if "ontario_verifications" in have else [],
+                "path_checks": manual_orders.load_path_checks()}
     finally:
         conn.close()
 

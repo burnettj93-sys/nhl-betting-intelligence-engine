@@ -48,10 +48,10 @@ class TestAllowlist(unittest.TestCase):
         GOALIE_SAVES structurally produces zero real legs today regardless of
         being allowlisted here (the real starter-certainty gate upstream)."""
         self.assertEqual(rmp.ALLOWED_MARKET_FAMILIES,
-                          frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES", "PLAYER_POINTS"}))
+                          frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES", "PLAYER_POINTS", "PLAYER_GOALS"}))
 
     def test_an_unlisted_market_family_is_never_eligible(self):
-        for family in ("PLAYER_GOALS", "PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
+        for family in ("PLAYER_ASSISTS", "ALTERNATE_TEAM_TOTAL",
                        "PLAYER_HITS", "PLAYER_BLOCKS"):
             leg = _leg(market_family=family)
             self.assertFalse(rmp.leg_is_eligible(leg), f"{family} must never be parlay-eligible in V1")

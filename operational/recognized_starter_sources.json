@@ -1,0 +1,150 @@
+{
+ "x_handles": {
+  "andrewwilimek": {
+   "name": "Andrew Wilmek",
+   "covers": "Ottawa Senators",
+   "seen_on": "starting-goalies page"
+  },
+  "ansarkhanmlive": {
+   "name": "Ansar Khan",
+   "covers": "Detroit Red Wings",
+   "seen_on": "line-combinations page"
+  },
+  "bagleykslsports": {
+   "name": "Cole Bagley",
+   "covers": "Utah Mammoth",
+   "seen_on": "starting-goalies page"
+  },
+  "davidalter": {
+   "name": "David Alter",
+   "covers": "Toronto Maple Leafs",
+   "seen_on": "starting-goalies page"
+  },
+  "dylantyrer": {
+   "name": "Dylan Tyrer",
+   "covers": "Columbus Blue Jackets",
+   "seen_on": "line-combinations page"
+  },
+  "engelheather": {
+   "name": "Heather Engel",
+   "covers": "Dallas Stars",
+   "seen_on": "starting-goalies page"
+  },
+  "gabby_shirley_": {
+   "name": "Gabby Shirley",
+   "covers": "Tampa Bay Lightning",
+   "seen_on": "line-combinations page"
+  },
+  "gablcarroll": {
+   "name": "Gabriela Carroll",
+   "covers": "Philadelphia Flyers",
+   "seen_on": "line-combinations page"
+  },
+  "jackstudley13": {
+   "name": "Jack Studley",
+   "covers": "Boston Bruins",
+   "seen_on": "starting-goalies page"
+  },
+  "jessegranger_": {
+   "name": "Jesse Granger",
+   "covers": "Vegas Golden Knights",
+   "seen_on": "starting-goalies page"
+  },
+  "kalenalumpkins": {
+   "name": "Kalen Lumpkins",
+   "covers": "Chicago Blackhawks",
+   "seen_on": "line-combinations page"
+  },
+  "lkorac10": {
+   "name": "Lou Korac",
+   "covers": "St Louis Blues",
+   "seen_on": "starting-goalies page"
+  },
+  "maxherztalks": {
+   "name": "Max Herz",
+   "covers": "Nashville Predators",
+   "seen_on": "starting-goalies page"
+  },
+  "mdefranks": {
+   "name": "Matthew DeFranks",
+   "covers": "St Louis Blues",
+   "seen_on": "line-combinations page"
+  },
+  "pfrioletrds": {
+   "name": "Patrick Friolet",
+   "covers": "Montreal Canadiens",
+   "seen_on": "starting-goalies page"
+  },
+  "rachelmlenzi": {
+   "name": "Rachel Lenzi",
+   "covers": "Buffalo Sabres",
+   "seen_on": "starting-goalies page"
+  },
+  "roberttiffin": {
+   "name": "Robert Tiffin",
+   "covers": "Dallas Stars",
+   "seen_on": "line-combinations page"
+  },
+  "runwriteaarif": {
+   "name": "Aarif Deen",
+   "covers": "Colorado Avalanche",
+   "seen_on": "starting-goalies page"
+  },
+  "russohockey": {
+   "name": "Michael Russo",
+   "covers": "Minnesota Wild",
+   "seen_on": "starting-goalies page"
+  },
+  "sheng_peng": {
+   "name": "Sheng Peng",
+   "covers": "San Jose Sharks",
+   "seen_on": "starting-goalies page"
+  },
+  "stefen_rosner": {
+   "name": "Stefen Rosner",
+   "covers": "New York Islanders",
+   "seen_on": "line-combinations page"
+  },
+  "steinbergyyc": {
+   "name": "Pat Steinberg",
+   "covers": "Calgary Flames",
+   "seen_on": "starting-goalies page"
+  },
+  "swhyno": {
+   "name": "Stephen Whyno",
+   "covers": "New York Islanders",
+   "seen_on": "starting-goalies page"
+  },
+  "thomasdrance": {
+   "name": "Thomas Drance",
+   "covers": "Vancouver Canucks",
+   "seen_on": "starting-goalies page"
+  },
+  "vzmercogliano": {
+   "name": "Vince Mercogliano",
+   "covers": "New York Rangers",
+   "seen_on": "line-combinations page"
+  },
+  "waltruff": {
+   "name": "Walt Ruff",
+   "covers": "Carolina Hurricanes",
+   "seen_on": "starting-goalies page"
+  }
+ },
+ "suspended": {},
+ "how_to_read": "A source is RECOGNIZED when Daily Faceoff cites it with a name and a link whose account handle is listed here. The list is a judgment seeded on 2026-10-08 from the reporters Daily Faceoff itself cited that day on the starting-goalies and line-combinations pages whose name matches the account handle; it is owner-editable. A handle whose past confirmations were wrong 2 or more times in its last 10 resolved ones is suspended automatically (operational/dailyfaceoff.py::source_record).",
+ "excluded_at_seeding": {
+  "ericengels": {
+   "name": "Eric Erlendsson",
+   "covers": "Tampa Bay Lightning",
+   "seen_on": "starting-goalies page",
+   "why": "account handle does not match the name Daily Faceoff displays (identity not established)"
+  },
+  "instilettos_nhl": {
+   "name": "Kristy Flannery",
+   "covers": "New Jersey Devils",
+   "seen_on": "line-combinations page",
+   "why": "account handle does not match the name Daily Faceoff displays (identity not established)"
+  }
+ }
+}

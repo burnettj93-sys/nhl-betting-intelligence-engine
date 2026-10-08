@@ -89,6 +89,8 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("Test Goalie One", cells)
         self.assertIn("Unconfirmed", cells)
         self.assertIn("inferred from recent ice time", t)
+        self.assertIn("Est. usage tier", cells)
+        self.assertIn("Reported line", cells)
 
     def test_goalies_page_shows_the_required_fields(self):
         at = run_page("27_Goalies.py", snapshot(), setup=lambda a: a.query_params.__setitem__("goalie", "G1"))
@@ -103,11 +105,22 @@ class TestPagesRender(unittest.TestCase):
     def test_players_page_shows_usage_role_source_and_projection(self):
         at = run_page("30_Players.py", snapshot(), setup=lambda a: a.query_params.__setitem__("player", "P1"))
         t = text(at)
-        self.assertIn("Role (inferred)", t)
-        self.assertIn("not an official line chart", t)
+        self.assertIn("Estimated usage (inferred from ice time", t)
+        self.assertIn("not an assigned line or power-play unit", t)
+        self.assertIn("Reported lineup (from a lineup source)", t)
+        self.assertIn("Test Reporter", t)
+        self.assertNotIn("Role (inferred)", t)
         self.assertIn("Next game (projection)", t)
         self.assertIn("Expected shots", " ".join(m.label for m in at.metric))
         self.assertIn("Best qualifying +100 option", t)
+
+    def test_diagnostics_order_path_panel_shows_booleans_and_a_check_button(self):
+        at = run_page("37_Diagnostics.py", snapshot())
+        t = text(at) + " " + " ".join(str(d.value.to_dict()) for d in at.dataframe)
+        self.assertIn("Order path (one-click add) check", t)
+        self.assertIn("One-click (direct) path ready", t)
+        self.assertIn("never displayed", t)
+        self.assertIn("Run non-staking order-path check", [b.label for b in at.button])
 
     def test_best_options_page_labels_quotes_and_estimates_and_offers_add(self):
         at = run_page("26_Player_Props.py", snapshot())

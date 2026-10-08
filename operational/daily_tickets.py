@@ -93,7 +93,8 @@ def _adapter_legs(nhl_conn, now: dt.datetime) -> tuple[list[rmp.ParlayLeg], dict
             reasons[key] = reasons.get(key, 0) + 1
         report[name] = {"legs": len(got), "excluded": len(excluded), "exclusion_reasons": reasons}
 
-    add("MONEYLINE", "moneyline-t35-v1", adapter.moneyline_candidate_legs(nhl_conn, now=now))
+    from operational import moneyline_model_path
+    add("MONEYLINE", moneyline_model_path.version(), adapter.moneyline_candidate_legs(nhl_conn, now=now))
     sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
     add("PLAYER_SOG_ALTERNATE", "sog-alternate-validated-v1",
         adapter.sog_alternate_candidate_legs(nhl_conn, sog_alt, now=now))

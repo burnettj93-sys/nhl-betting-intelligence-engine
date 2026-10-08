@@ -10,14 +10,15 @@ from tests.test_daily_tickets import board
 GEN = "2026-10-08T12:00:00Z"
 
 
-def player(pid, name, team, pos="C", line=1, pp=1, opp="MTL", gid="2026020900", with_projection=True):
+def player(pid, name, team, pos="C", line=1, pp=1, opp="MTL", gid="2026020900", with_projection=True, reported=None):
     proj = None
     if with_projection:
         proj = {"opponent": opp, "expected": {"shots": 2.4, "goals": 0.3, "assists": 0.4, "points": 0.7, "hits": 1.0, "blocks": 0.5, "toi": 19.5, "toi_pp": 2.9},
                 "games_observed": 120, "limited_history": False, "pricing_eligible": True, "model_version": "player-rate-toi-v2",
                 "probabilities": {k: 0.5 for k in ("shots>=1", "shots>=2", "shots>=3", "shots>=4", "shots>=5", "points>=1", "points>=2", "goals>=1", "assists>=1",
                                                    "hits>=1", "hits>=2", "hits>=3", "blocks>=1", "blocks>=2")}}
-    return {"player_id": pid, "name": name, "team": team, "position": pos, "line": line, "pp_unit": pp, "role_source": "Inferred from time on ice in each player's last 4 game(s), ranked within " + team + "; not an official line chart.",
+    return {"player_id": pid, "name": name, "team": team, "position": pos, "usage_tier": line, "pp_usage": pp, "reported": reported,
+            "usage_source": "Inferred from time on ice in each player's last 4 game(s), ranked within " + team + ". An estimate of usage, not an assigned line or power-play unit.",
             "role_games": 4, "season": {"games": 4, "goals": 2.0, "assists": 3.0, "points": 5.0, "shots": 14.0, "hits": 6.0, "blocks": 2.0, "toi_avg": 19.0, "toi_pp_avg": 2.5},
             "recent_games": [{"date": "2026-10-06", "opp": opp, "home": True, "toi": 19.0, "toi_pp": 2.5, "shots": 3.0, "goals": 1.0, "assists": 0.0, "hits": 1.0, "blocks": 0.0}],
             "recent_avg": {"toi": 19.0, "toi_pp": 2.5, "shots": 3.0, "goals": 0.5, "assists": 0.5, "hits": 1.0, "blocks": 0.3}, "last_game_date": "2026-10-06", "games_total": 120,
@@ -64,14 +65,17 @@ def snapshot(with_options=True) -> dict:
         {"game_id": "2025020001", "season": "20252026", "season_label": "2025-26", "type": "REGULAR", "date_et": "2025-11-25", "date_in_db": "2025-11-25", "start_utc": "2025-11-25T23:00:00Z",
          "start_et": "6:00 PM ET", "state": "FINAL", "home": "AAA", "away": "BBB", "home_score": 1, "away_score": 0, "period_type": "REG", "result_observed_at_utc": "2025-11-26T01:00:00Z", "tickets": []}]
     rec = {"gp": 1, "w": 1, "l": 0, "otl": 0, "gf": 3, "ga": 2, "last5": [{"game_id": "2026020899", "date_et": "2026-10-07", "opp": "BBB", "home": False, "gf": 2, "ga": 3, "result": "OTL", "period_type": "OT"}]}
-    p = {"P1": player("P1", "Test Skater One", "AAA"), "P2": player("P2", "Test Skater Two", "BBB", pos="D", opp="AAA", line=1, pp=None),
+    REPORTED = {"line": "F2", "pp": "PP1", "pk": None, "injury_status": None, "game_time_decision": False, "reported_by": "Test Reporter",
+            "source_url": "https://example.test/report", "updated_at_utc": "2026-10-08T10:00:00Z", "fetched_at_utc": "2026-10-08T11:00:00Z",
+            "source": "Daily Faceoff line combinations"}
+    p = {"P1": player("P1", "Test Skater One", "AAA", reported=REPORTED), "P2": player("P2", "Test Skater Two", "BBB", pos="D", opp="AAA", line=1, pp=None),
          "P3": player("P3", "Test Skater Three", "AAA", with_projection=False)}
     g = {"G1": goalie("G1", "Test Goalie One", "AAA", opp="BBB"), "G2": goalie("G2", "Test Goalie Two", "BBB", opp="AAA")}
     sides = lambda team, sk, gl: {"team": team, "record": rec, "strength_rating": 0.1, "skater_ids": sk, "goalie_ids": gl}  # noqa: E731
     details = {"2026020900": {**games[0], "sides": {"home": sides("AAA", ["P1", "P3"], ["G1"]), "away": sides("BBB", ["P2"], ["G2"])}}}
     teams = {t: {"team": t, "record": {k: v for k, v in rec.items() if k != "last5"}, "last5": rec["last5"], "strength_rating": 0.1,
                  "upcoming": [{"game_id": "2026020900", "date_et": "2026-10-08", "start_et": "7:00 PM ET", "opp": "BBB" if t == "AAA" else "AAA", "home": t == "AAA", "state": "SCHEDULED"}],
-                 "skaters": [{"player_id": "P1", "name": "Test Skater One", "position": "C", "line": 1, "pp_unit": 1, "toi_recent": 19.0, "season": p["P1"]["season"]}],
+                 "skaters": [{"player_id": "P1", "name": "Test Skater One", "position": "C", "usage_tier": 1, "pp_usage": 1, "reported": None, "toi_recent": 19.0, "season": p["P1"]["season"]}],
                  "goalies": [{"player_id": "G1", "name": "Test Goalie One", "season": g["G1"]["season"], "start": g["G1"]["start"], "confirmation": g["G1"]["confirmation"]}]} for t in ("AAA", "BBB")}
     tickets = {"account": account(), "slots": {"total": 5, "used": 0, "empty": 5}, "tickets": [], "manual_tickets": [], "earlier_open_tickets": [], "recent_settled": [],
                "empty_slot_reason": "Nothing qualifies yet.", "notice": None, "label": "US-feed paper experiment.", "generated_at_utc": GEN, "date_et": "2026-10-08",

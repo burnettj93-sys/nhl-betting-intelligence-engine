@@ -204,7 +204,7 @@ class TestMoneylineContractParity(unittest.TestCase):
         with open(path) as f:
             return json.load(f)
 
-    def test_verified_contracts_is_exactly_these_six_real_observed_payloads(self):
+    def test_verified_contracts_is_exactly_these_seven_real_observed_payloads(self):
         """SOG Contract Certification block (2026-09-29): two more real, archived payloads
         certified (PLAYER_SOG_ALTERNATE via player_shots_on_goal_alternate, ALTERNATE_TEAM_TOTAL
         via alternate_team_totals) -- see TestPlayerSogAlternateContractParity /
@@ -225,6 +225,7 @@ class TestMoneylineContractParity(unittest.TestCase):
             ("draftkings", "PLAYER_SOG"),
             ("draftkings", "GOALIE_SAVES"),
             ("draftkings", "PLAYER_POINTS"),
+            ("draftkings", "PLAYER_GOALS"),
         }))
 
     def test_parses_the_real_payload_correctly(self):
@@ -280,7 +281,7 @@ class TestMoneylineContractParity(unittest.TestCase):
         # TestPlayerSogStandardContractParity / TestGoalieSavesStandardContractParity
         # below). Everything else here still has zero observed payload evidence and
         # must stay unverified.
-        for market_id in ("PLAYER_GOALS", "PLAYER_ASSISTS", "SPREADS", "TOTALS"):
+        for market_id in ("PLAYER_ASSISTS", "SPREADS", "TOTALS"):      # PLAYER_GOALS certified 2026-10-08 (tests/test_goals_market.py)
             self.assertFalse(pa.is_contract_verified("draftkings", market_id),
                               f"{market_id} must remain CONTRACT_NOT_VERIFIED")
 

@@ -71,6 +71,33 @@ def render() -> str:
             f"A margin model (least squares on the strength rating, Poisson goals with the calibration-season mean total of {pl['margin_model']['total']:.2f}) was scored on {pl['games_scored']} held-out games: "
             f"log loss {pl['model']['log_loss']:.4f} against {pl['base_rate_baseline']['log_loss']:.4f} for the base rate (lower is better). **It does not beat the base rate** "
             f"(it over-predicts home −1.5 covers: mean prediction {pl['model']['mean_pred']:.3f} against an observed {pl['model']['base_rate']:.3f}), so puck-line probabilities are not shown or priced."]
+    import json as _json
+    from . import moneyline_comparison as _mc, puck_line_alternative as _pa
+    if _pa.OUT_PATH.exists():
+        pa = _json.loads(_pa.OUT_PATH.read_text())
+        out += ["", f"**Alternative, `{pa['version']}` (a direct logistic on the strength difference).** The failed result above stays on record. 2025-26 was already looked at once, so it is not used again; "
+                "the alternative was judged on two earlier folds only (fit on one season, scored once on the next), then its parameters were frozen.", "",
+                "| Scored season | Base rate (log loss) | Skellam (log loss) | Direct logistic (log loss) | Direct − base rate, 95% interval |", "|---|---|---|---|---|"]
+        for f in pa["development"]["folds"]:
+            d = f["direct_vs_base_rate_log_loss_delta"]
+            out.append(f"| {f['scored_season']}-{str(f['scored_season'] + 1)[2:]} | {f['scores']['base_rate']['log_loss']:.4f} | {f['scores']['skellam']['log_loss']:.4f} | "
+                       f"{f['scores']['direct_logistic']['log_loss']:.4f} | {d['point_delta']:+.4f} [{d['ci_low']:+.4f}, {d['ci_high']:+.4f}] |")
+        out += ["", f"Development verdict: **{pa['development_verdict'].replace('_', ' ').lower()}**. It is not enabled: there are no puck-line prices, no settlement mapping, and the untouched evaluation set "
+                "(2026-27 games, logged before they start and scored when finished) has not accumulated enough games."]
+    if _mc.OUT_PATH.exists():
+        mc = _json.loads(_mc.OUT_PATH.read_text())
+        out += ["", "### Moneyline: strength model against the Elo that prices tickets", "",
+                "Two rolling-origin folds on the same games, paired bootstrap on per-game log loss (`research/product_models/moneyline_comparison.py`, version "
+                f"`{mc['version']}`). Lower log loss is better.", "",
+                "| Scored season | Games | Home-rate | Elo (tickets) | Strength model | Strength − Elo, 95% interval |", "|---|---|---|---|---|---|"]
+        for f in mc["folds"]:
+            for key, label in (("decided_in_play_only", "decided in play"), ("all_games_incl_shootouts", "all games incl. shootouts")):
+                sc, d = f[key]["scores"], f[key]["strength_vs_elo_log_loss_delta"]
+                out.append(f"| {f['scored_season']}-{str(f['scored_season'] + 1)[2:]} ({label}) | {sc['elo_production']['n']} | {sc['home_rate_baseline']['log_loss']:.4f} | "
+                           f"{sc['elo_production']['log_loss']:.4f} | {sc['strength_model']['log_loss']:.4f} | {d['point_delta']:+.4f} [{d['ci_low']:+.4f}, {d['ci_high']:+.4f}] |")
+        out += ["", "The strength model is nominally ahead in every row but every interval reaches zero, and neither model is shown to beat a sportsbook price (no historical prices exist). "
+                "Elo therefore keeps pricing tickets; `operational/moneyline_model_path.py` records both models and the market's no-vig probability on every priced candidate "
+                "(the shadow scoreboard on Model Health) and offers an opt-in `NHL_ENGINE_MONEYLINE_MODEL=strength-v1` switch for the owner to use once that evidence exists."]
     st = gv["start_likelihood"]
     out += ["", "The strength-only model beats the home-rate baseline. Adding each named goalie's expected goals saved per game **did not improve** held-out forecasts "
             "(either fitted or tied to the strength coefficient), so a goalie-specific win probability is shown only as a labelled scenario, never as the model's probability.", "",

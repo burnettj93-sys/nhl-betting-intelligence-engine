@@ -67,7 +67,7 @@ class Test04ContractStatus(unittest.TestCase):
         # payload -- verified_contracts is now 6.
         result = ese.check_contract_status()
         self.assertEqual(result["status"], ese.WATCH)
-        self.assertEqual(result["verified_contracts"], 6)
+        self.assertEqual(result["verified_contracts"], 7)
 
 
 class Test05InputDrift(unittest.TestCase):

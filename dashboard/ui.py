@@ -346,3 +346,77 @@ def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supe
         record["url"] = order_client.prefilled_issue_url(order)
     sess[opt["option_id"]] = record
     st.rerun()
+
+
+# ---- player roles: estimated usage versus reported assignments (never shown under one "Line 1 / PP1" heading) ----
+_PP_USAGE = {1: "High", 2: "Some"}
+
+
+def est_tier(p: dict) -> str:
+    return f"Tier {p['usage_tier']}" if p.get("usage_tier") else "—"
+
+
+def est_pp(p: dict) -> str:
+    return _PP_USAGE.get(p.get("pp_usage"), "—")
+
+
+def _shown(p: dict):
+    r = p.get("reported")
+    return r if r and r.get("status", "REPORTED") == "REPORTED" else None
+
+
+def reported_line(p: dict) -> str:
+    r = _shown(p)
+    return (r.get("line") or "—") if r else "—"
+
+
+def reported_pp(p: dict) -> str:
+    r = _shown(p)
+    return (r.get("pp") or "—") if r else "—"
+
+
+# ---- order-path check: proves the click-to-queue path end to end without staking anything ----
+
+def order_path_panel() -> None:
+    email = getattr(getattr(st, "user", None), "email", None)
+    stat = order_client.path_status(getattr(st, "secrets", {}), email)
+    st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["token_configured"] else "no"},
+                  {"Check": "Allowed-viewer emails configured", "Result": str(stat["allowed_email_count"])},
+                  {"Check": "App supplies a viewer email (st.user.email)", "Result": f"yes ({stat['viewer_email_masked']})" if stat["viewer_email_present"] else "no"},
+                  {"Check": "Viewer email is on the allow-list", "Result": "yes" if stat["viewer_allowed"] else "no"},
+                  {"Check": "One-click (direct) path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
+                 hide_index=True, width="stretch")
+    st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
+    sess = st.session_state.setdefault("_path_checks", {})
+    if st.button("Run non-staking order-path check", key="path_check_run"):
+        cid = order_client.new_order_id().replace("ord_", "chk_")
+        doc = order_client.build_path_check(check_id=cid, sent_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                            via="direct" if stat["direct_ready"] else "link", viewer_email_present=stat["viewer_email_present"],
+                                            viewer_allowed=stat["viewer_allowed"], token_configured=stat["token_configured"])
+        if stat["direct_ready"]:
+            _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+            res = order_client.submit_direct(doc, token)
+            if res["ok"]:
+                sess[cid] = {"via": "direct", "issue": res["issue"]}
+            else:
+                st.error(res["error"])
+        else:
+            sess[cid] = {"via": "link", "url": order_client.prefilled_issue_url(doc)}
+        st.rerun()
+    results = {r.get("check_id"): r for r in product_source.path_checks() if r.get("check_id")}
+    for cid, rec in sess.items():
+        got = results.get(cid)
+        if got:
+            banner(f"Check <b>{cid}</b>: <b>{got['status']}</b> at {got['processed_at_utc']} (sent {rec['via']}). {got['note']}", "good")
+        elif rec["via"] == "link":
+            banner(f"Check <b>{cid}</b> is not filed yet: the direct path is not ready, so it needs the GitHub page.", "warn")
+            st.link_button("Open GitHub to file this check", rec["url"])
+        else:
+            banner(f"Check <b>{cid}</b> sent (issue {rec['issue']}). Waiting for the engine's next queue pass (about 2 minutes, then a snapshot refresh).", "info")
+    if sess and st.button("Refresh result", key="path_check_refresh"):
+        from dashboard import snapshot_source
+        snapshot_source.current(force_refresh=True)
+        st.rerun()
+    ign = [r for r in product_source.path_checks() if r["status"] == "IGNORED_AUTHOR"]
+    for r in ign[-3:]:
+        banner(esc(r["note"]), "bad")

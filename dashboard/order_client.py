@@ -53,7 +53,31 @@ def build_confirmation(*, confirmation_id: str, game_id: str, team: str, goalie_
             "goalie_id": str(goalie_id), "where_seen": where_seen, "seen_at_utc": seen_at_utc}
 
 
+def build_path_check(*, check_id: str, sent_at_utc: str, via: str, viewer_email_present: bool, viewer_allowed: bool, token_configured: bool) -> dict:
+    """A document that proves the click-to-queue path without staking anything. It carries only booleans, never the email or the token."""
+    return {"schema": SCHEMA, "type": "ORDER_PATH_CHECK", "check_id": check_id, "sent_at_utc": sent_at_utc, "via": via,
+            "viewer_email_present": viewer_email_present, "viewer_allowed": viewer_allowed, "token_configured": token_configured}
+
+
+def path_status(secrets_obj, user_email: str | None) -> dict:
+    """What the direct one-click path can see, as booleans plus a masked address. Never returns the token or the allow-list."""
+    try:
+        token = bool((secrets_obj.get("PAPER_ORDER_TOKEN") or "").strip())
+        allowed = [e.strip().lower() for e in str(secrets_obj.get("ORDER_ALLOWED_EMAILS") or "").split(",") if e.strip()]
+    except Exception:  # noqa: BLE001 - no secrets at all
+        token, allowed = False, []
+    email = (user_email or "").strip().lower()
+    masked = None
+    if email and "@" in email:
+        name, domain = email.split("@", 1)
+        masked = f"{name[:1]}{'*' * max(len(name) - 1, 1)}@{domain}"
+    return {"token_configured": token, "allowed_email_count": len(allowed), "viewer_email_present": bool(email), "viewer_email_masked": masked,
+            "viewer_allowed": bool(email) and email in allowed, "direct_ready": token and bool(email) and email in allowed}
+
+
 def issue_title(order: dict) -> str:
+    if order.get("type") == "ORDER_PATH_CHECK":
+        return f"order-path-check {order['check_id']}"
     if order.get("type") == "GOALIE_CONFIRMATION":
         return f"goalie-confirmation {order['confirmation_id']}"
     if order.get("type") == "ONTARIO_VERIFICATION":
@@ -62,6 +86,8 @@ def issue_title(order: dict) -> str:
 
 
 def issue_label(order: dict) -> str:
+    if order.get("type") == "ORDER_PATH_CHECK":
+        return "order-path-check"
     if order.get("type") == "GOALIE_CONFIRMATION":
         return "goalie-confirmation"
     return "ontario-verification" if order.get("type") == "ONTARIO_VERIFICATION" else LABEL

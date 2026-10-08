@@ -99,6 +99,11 @@ def _leg_settlement_market_id(leg: dict) -> str | None:
     if family == "PLAYER_POINTS":
         threshold = leg.get("threshold")
         return f"PLAYER_POINTS_{threshold}PLUS" if threshold is not None else None
+    if family == "PUCK_LINE":
+        return "PUCK_LINE"
+    if family == "PLAYER_GOALS":
+        threshold = leg.get("threshold")
+        return f"PLAYER_GOALS_{threshold}PLUS" if threshold is not None else None
     return None
 
 
@@ -157,8 +162,9 @@ def resolve_combo_bet(nhl_conn, bet: dict) -> dict:
             leg_results.append({"status": resolver.UNSUPPORTED_SETTLEMENT_MARKET, "leg": leg,
                                 "outcome": "UNRESOLVED"})
             continue
-        player_id = leg.get("participant_id") if leg.get("market_family") != "MONEYLINE" else None
-        team = leg.get("participant_id") if leg.get("market_family") == "MONEYLINE" else None
+        team_leg = leg.get("market_family") in ("MONEYLINE", "PUCK_LINE")
+        player_id = leg.get("participant_id") if not team_leg else None
+        team = leg.get("participant_id") if team_leg else None
         prediction = _prediction_dict(market_id=market_id, threshold=leg.get("threshold"),
                                        side=leg.get("side"), game_id=leg.get("game_id"),
                                        player_id=player_id, team=team)

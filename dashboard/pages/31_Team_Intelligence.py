@@ -44,10 +44,10 @@ else:
     st.caption("No upcoming regular-season games on file.")
 st.markdown("#### Skaters (by recent ice time)")
 if t["skaters"]:
-    st.dataframe([{"Player": p["name"], "Pos": p["position"], "Line": str(p["line"]) if p["line"] else "—", "PP": f"PP{p['pp_unit']}" if p["pp_unit"] else "—", "GP": p["season"].get("games", 0),
+    st.dataframe([{"Player": p["name"], "Pos": p["position"], "Est. usage tier": ui.est_tier(p), "Est. PP usage": ui.est_pp(p), "Reported line": ui.reported_line(p), "Reported PP": ui.reported_pp(p), "GP": p["season"].get("games", 0),
                    "G": int(p["season"].get("goals") or 0), "A": int(p["season"].get("assists") or 0), "SOG": int(p["season"].get("shots") or 0),
                    "Recent TOI": round(p["toi_recent"], 1)} for p in t["skaters"]], hide_index=True, width="stretch")
-    st.caption("Lines and power-play units are inferred from recent ice time; open Players for the source and games used.")
+    st.caption("Est. usage tier and Est. PP usage are inferred from recent ice time (not assigned lines). Reported line / PP come from a lineup source when it lists the player; open Players for each source and time.")
 else:
     st.caption("No skater logs yet this season.")
 st.markdown("#### Goalies")

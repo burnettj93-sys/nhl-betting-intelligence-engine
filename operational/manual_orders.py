@@ -295,6 +295,63 @@ def recent_verifications(conn, limit: int = 100) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ------------------------------------------------------------ order-path check (never touches the ledger) ----
+
+PATH_CHECK_LABEL = "order-path-check"
+PATH_CHECK_STATE = "order_path_checks.json"
+PATH_CHECK_KEEP = 20
+
+
+def load_path_checks() -> list[dict]:
+    p = state_paths.path(PATH_CHECK_STATE)
+    try:
+        return json.loads(p.read_text()) if p.exists() else []
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def _save_path_checks(rows: list[dict]) -> None:
+    p = state_paths.path(PATH_CHECK_STATE)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(rows[-PATH_CHECK_KEEP:], sort_keys=True))
+    tmp.replace(p)
+
+
+def process_path_check(raw, *, now: dt.datetime, source: str, author: str | None = None) -> dict:
+    """Records that a click in the hosted app reached the queue and was accepted. No order, no ticket, no stake, no ledger write."""
+    try:
+        doc = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
+    except json.JSONDecodeError:
+        return {"status": "REJECTED", "reason": "not valid JSON"}
+    if not isinstance(doc, dict) or doc.get("type") != "ORDER_PATH_CHECK" or doc.get("schema") != SCHEMA:
+        return {"status": "REJECTED", "reason": "not an ORDER_PATH_CHECK document"}
+    cid = doc.get("check_id")
+    if not isinstance(cid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", cid):
+        return {"status": "REJECTED", "reason": "check_id malformed"}
+    rows = load_path_checks()
+    if any(r["check_id"] == cid and r["status"] == "ACCEPTED" for r in rows):
+        return {"status": "ALREADY_RECORDED", "check_id": cid}
+    row = {"check_id": cid, "status": "ACCEPTED", "source": source, "author": author, "processed_at_utc": quote_freshness.iso_z(now),
+           "sent_at_utc": doc.get("sent_at_utc"), "via": doc.get("via"), "viewer_email_present": bool(doc.get("viewer_email_present")),
+           "viewer_allowed": bool(doc.get("viewer_allowed")), "token_configured": bool(doc.get("token_configured")),
+           "note": "Accepted by the queue processor. No order, ticket or stake was created."}
+    _save_path_checks(rows + [row])
+    return {"status": "ACCEPTED", "check_id": cid}
+
+
+def note_ignored_path_checks(ignored: list[dict], now: dt.datetime) -> None:
+    """A check opened by anyone but the repository owner is not processed; it is listed so the app can explain why nothing came back."""
+    rows = load_path_checks()
+    seen = {r.get("source") for r in rows}
+    add = [{"check_id": None, "status": "IGNORED_AUTHOR", "source": f"github-issue:{i['issue']}", "author": i.get("author"),
+            "processed_at_utc": quote_freshness.iso_z(now), "note": f"Issue {i['issue']} was opened by {i.get('author')}, not the repository owner, so the "
+                                                                     "queue ignored it. A token that belongs to another account cannot place orders."}
+           for i in ignored if i.get("issue") and f"github-issue:{i['issue']}" not in seen]
+    if add:
+        _save_path_checks(rows + add)
+
+
 def _confirm(nhl_conn, body, now, source):
     from operational import goalie_confirmations
     try:
@@ -347,7 +404,8 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
         if fetch is None:
             from operational import goalie_confirmations
             handlers = {ONTARIO_LABEL: lambda body, src: process_verification(conn, body, now=now, source=src),
-                        goalie_confirmations.LABEL: lambda body, src: _confirm(nhl_conn, body, now, src)}
+                        goalie_confirmations.LABEL: lambda body, src: _confirm(nhl_conn, body, now, src),
+                        PATH_CHECK_LABEL: lambda body, src: process_path_check(body, now=now, source=src, author=owner)}
             v_ignored = []
             for label, handler in handlers.items():
                 try:
@@ -355,6 +413,8 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                 except Exception as exc:  # noqa: BLE001
                     v_orders, ign = [], [{"error": f"{exc.__class__.__name__}: {exc}"}]
                 v_ignored += ign
+                if label == PATH_CHECK_LABEL:
+                    note_ignored_path_checks([i for i in ign if "issue" in i], now)
                 for o in v_orders:
                     res = handler(o["body"], f"github-issue:{o['issue']}")
                     v_results.append({"issue": o["issue"], "label": label, **res})

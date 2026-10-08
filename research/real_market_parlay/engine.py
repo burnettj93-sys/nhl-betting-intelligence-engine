@@ -74,8 +74,11 @@ from research.generic_prop_pricing.line_mapping import SAVES_VALIDATED_THRESHOLD
 # provider_adapter.VERIFIED_CONTRACTS) and a settlement mapping. Lines on the DK Ontario
 # menu are the 1+/2+ milestones (Over 0.5 / 1.5); 3+ is not modeled.
 POINTS_ACTIONABLE_THRESHOLDS = frozenset({1, 2})
+# Anytime goals (PLAYER_GOALS, threshold 1): contract certified against a real archived DraftKings payload
+# (tests/fixtures/draftkings_player_goal_scorer_real_payload.json); the model (goals 1+) beats both baselines on held-out 2025-26.
+GOALS_ACTIONABLE_THRESHOLDS = frozenset({1})
 ALLOWED_MARKET_FAMILIES = frozenset({"MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "GOALIE_SAVES",
-                                     "PLAYER_POINTS"})
+                                     "PLAYER_POINTS", "PLAYER_GOALS"})
 
 MIN_LEGS = 2
 MAX_LEGS = 4
@@ -147,6 +150,8 @@ def leg_is_eligible(leg: ParlayLeg) -> bool:
     if leg.market_family == "GOALIE_SAVES" and leg.threshold not in SAVES_VALIDATED_THRESHOLDS:
         return False
     if leg.market_family == "PLAYER_POINTS" and leg.threshold not in POINTS_ACTIONABLE_THRESHOLDS:
+        return False
+    if leg.market_family == "PLAYER_GOALS" and leg.threshold not in GOALS_ACTIONABLE_THRESHOLDS:
         return False
     if not (0.0 < leg.conservative_probability < 1.0):
         return False
@@ -220,6 +225,8 @@ def leg_label(leg: ParlayLeg) -> str:
         return f"{leg.participant_name} {leg.threshold}+ saves"
     if leg.market_family == "PLAYER_POINTS":
         return f"{leg.participant_name} {leg.threshold}+ point{'s' if leg.threshold != 1 else ''}"
+    if leg.market_family == "PLAYER_GOALS":
+        return f"{leg.participant_name} to score a goal (anytime)"
     return f"{leg.participant_name} {leg.market_family} {leg.threshold}"
 
 

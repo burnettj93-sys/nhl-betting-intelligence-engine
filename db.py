@@ -47,9 +47,32 @@ def resolve_db_path() -> Path:
 DB_PATH = resolve_db_path()
 
 
+class WrongDatabaseError(RuntimeError):
+    """The resolved database path does not point at a usable NHL database. Raised instead of letting sqlite3 silently create an empty file
+    there (which is how a stray empty database and a job running against nothing both happen)."""
+
+
+def _require_usable(path: Path) -> None:
+    if not path.exists():
+        raise WrongDatabaseError(f"database not found at {path} (resolved by db.resolve_db_path(); NHL_DB_PATH={_env_value()!r}). "
+                                 "Refusing to create an empty one; use db.init_db() to create a database on purpose.")
+    if path.stat().st_size == 0:
+        raise WrongDatabaseError(f"database at {path} is an empty file (0 bytes) -- not a usable NHL database. Check NHL_DB_PATH.")
+    probe = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        if probe.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'games'").fetchone() is None:
+            raise WrongDatabaseError(f"database at {path} has no `games` table -- not an NHL database. Check NHL_DB_PATH.")
+    finally:
+        probe.close()
+
+
 def get_conn(db_path: Path | None = None) -> sqlite3.Connection:
     # Looked up at call time (never bound as a default) so tests that patch
     # db.DB_PATH actually take effect.
+    # The RESOLVED path (no explicit argument) must already be a usable database; an explicit path is the caller's deliberate choice
+    # (init_db and tests create theirs) and is opened as given.
+    if db_path is None:
+        _require_usable(Path(DB_PATH))
     conn = sqlite3.connect(db_path if db_path is not None else DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

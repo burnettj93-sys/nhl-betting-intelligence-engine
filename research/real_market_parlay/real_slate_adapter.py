@@ -175,12 +175,26 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
                                      (report.odds_snapshot_id_selection,)).fetchone()
             captured_at_utc = snap_row["captured_at_utc"] if snap_row else None
 
+            # Which model prices this leg is operational/moneyline_model_path.py (default: this Elo path, unchanged). Every priced
+            # candidate also lands in the shadow log with both models' probabilities and the market's no-vig probability.
+            conservative = report.model_conservative_probability
+            try:
+                from operational import moneyline_model_path as mmp
+                is_home = report.selection == pred.home_team
+                p_home = mmp.strength_probability(pred.home_team, pred.away_team)
+                mmp.record_shadow(now, str(game_id), today_et, pred.home_team, pred.away_team, report.selection, report.model_true_probability,
+                                  None if p_home is None else (p_home if is_home else 1.0 - p_home), report.market_no_vig_probability,
+                                  report.current_draftkings_price)
+                _true, conservative = mmp.apply_switch(report, is_home, pred.home_team, pred.away_team)
+            except Exception:  # noqa: BLE001 - the shadow record and the switch must never remove a leg
+                conservative = report.model_conservative_probability
+
             legs.append(ParlayLeg(
                 game_id=str(game_id), event_id=None, market_family="MONEYLINE",
                 participant_id=report.selection, participant_name=report.selection,
                 side="HOME" if report.selection == pred.home_team else "AWAY", threshold=None,
                 american_price=report.current_draftkings_price,
-                conservative_probability=report.model_conservative_probability,
+                conservative_probability=conservative,
                 sportsbook="draftkings", captured_at_utc=captured_at_utc,
                 quote_updated_utc=captured_at_utc, freshness_status="FRESH",
                 quote_age_min=_age_minutes(captured_at_utc, now),

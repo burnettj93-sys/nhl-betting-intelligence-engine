@@ -467,6 +467,8 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
     summary["credits_spent_this_run"] = cost
     summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
     summary["captured_at_utc"] = r_odds.retrieved_at_utc
+    from operational import credit_planner as _cp                       # the plan's ledger: T-35 decision pulls vs display refreshes
+    _cp.record(_cp.MONEYLINE_DECISION if snapshot_label == "pregame" else _cp.MONEYLINE_UI, cost, now, label=snapshot_label)
 
     future_event_ids = {e["id"] for e in future_events}
     rows = []
@@ -520,6 +522,10 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
 # ---------------------------------------------------------------------
 
 FIRST_SWEEP_MARKETS = "player_shots_on_goal_alternate,player_total_saves"
+# Credit plan (operational/credit_planner.py, 2026-10-08): in production the shots price is bought once per game by the trader (so the sweeps no
+# longer re-buy it), the 3-4.5 h first sweep is retired (no starter is confirmed that early and nothing it bought was needed), and the 45-75 minute
+# second sweep buys ONLY saves, ONLY for a game with a confirmed starter, within the day's saves allowance.
+PLANNED_SWEEP_MARKETS = "player_total_saves"
 FIRST_SWEEP_WINDOW_HOURS = (3.0, 4.5)
 SECOND_SWEEP_WINDOW_HOURS = (0.75, 1.25)
 # Generic "whichever sweep ran most recently" cache -- read only by
@@ -564,6 +570,36 @@ def _load_json_cache(path: Path) -> dict | None:
         return None
 
 
+def _et_today(now: dt.datetime) -> str:
+    from operational import eastern_time as et
+    return et.eastern_today(now)
+
+
+def _planned_saves_candidates(candidates: list[dict], now: dt.datetime, summary: dict) -> tuple[list[dict], dict]:
+    """Under the credit plan: only events whose game has a confirmed starter and is in today's saves allocation."""
+    import db
+    from operational import best_bets, credit_planner as cp, goalie_confirmations
+    conn = db.get_conn()
+    try:
+        confirmed = set(goalie_confirmations.confirmed_games(conn, now))
+        rows = conn.execute("SELECT game_id, home_team, away_team, scheduled_start_utc FROM games WHERE game_date = ? AND game_state = 'SCHEDULED'",
+                            (_et_today(now),)).fetchall()
+    finally:
+        conn.close()
+    games = {str(r["game_id"]): {"home": r["home_team"], "away": r["away_team"], "start_utc": r["scheduled_start_utc"]} for r in rows}
+    plan = cp.load_plan(_et_today(now)) or {}
+    allowed = set(plan.get("saves_games", [])) if plan else set()
+    keep, event_game = [], {}
+    for e in candidates:
+        m = best_bets.match_game(e, games)
+        gid = m[0] if m else None
+        if gid is not None and str(gid) in confirmed and str(gid) in allowed:
+            keep.append(e)
+            event_game[e["id"]] = str(gid)
+    summary["saves_candidates_confirmed_and_planned"] = len(keep)
+    return keep, event_game
+
+
 def run_targeted_prop_sweep(sweep: str) -> dict:
     """`sweep` is `"first"` or `"second"`. First sweep: every event
     currently 3-4.5h from puck drop, SOG+Saves only. Second sweep: every
@@ -584,6 +620,11 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         "events_in_window": 0, "events_queried": 0, "quotes_captured": 0,
         "credits_spent_this_run": 0, "remaining_quota_last_seen": None, "api_error": None,
     }
+    from operational import credit_planner as cp
+    planned = cp.enforced()
+    if planned and sweep == "first":
+        summary["reason"] = "RETIRED_BY_CREDIT_PLAN: nothing is bought 3-4.5 hours out; see docs/ODDS_CREDIT_AUDIT.md"
+        return summary
 
     r_events = client.get_nhl_events()
     if not r_events.ok:
@@ -597,7 +638,10 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
     candidates = _events_in_window(r_events.data, now, window)
     summary["events_in_window"] = len(candidates)
 
-    if sweep == "second":
+    event_game: dict[str, str] = {}
+    if planned:
+        candidates, event_game = _planned_saves_candidates(candidates, now, summary)
+    elif sweep == "second":
         first_cache = _load_json_cache(FIRST_SWEEP_RESULT_CACHE_PATH) or {}
         events_with_quotes = {r["event_id"] for r in first_cache.get("rows", [])}
         candidates = [e for e in candidates if e["id"] in events_with_quotes]
@@ -631,18 +675,24 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         # Still bounded by VERIFIED_PRODUCTION_DAILY_BUDGET and the hard
         # reserve inside may_spend() either way.
         from operational import odds_quota
-        spend_check = pd.may_spend(now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
+        markets = PLANNED_SWEEP_MARKETS if planned else FIRST_SWEEP_MARKETS
+        if planned:
+            spend_check = cp.authorize(cp.SAVES, cp.SAVES_COST, now, plan=cp.load_plan(_et_today(now)))
+        else:
+            spend_check = pd.may_spend(now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
         if not spend_check.get("allow"):
             summary["reason"] = f"{spend_check.get('reason')} reached"
             break
-        r_odds = client.get_event_odds(event["id"], markets=FIRST_SWEEP_MARKETS)
+        r_odds = client.get_event_odds(event["id"], markets=markets)
         summary["events_queried"] += 1
         if not r_odds.ok:
             continue
         pd.mark_swept(sweep, event["id"], now)
-        archive.archive_result(r_odds, event_id=event["id"], market_filter=FIRST_SWEEP_MARKETS,
+        archive.archive_result(r_odds, event_id=event["id"], market_filter=markets,
                                 bookmaker_filter="draftkings")
         cost = int(r_odds.requests_last or 0)
+        if planned:
+            cp.record(cp.SAVES, cost, now, event=event["id"], game_id=event_game.get(event["id"]), markets=markets)
         summary["credits_spent_this_run"] += cost
         summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
         # Recorded in every mode now (previously DISCOVERY-only) -- the shared,

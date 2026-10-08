@@ -91,7 +91,7 @@ def _current_team_for_player(player_index: dict[str, list[dict]], player_id: str
     return None
 
 
-_PLAYER_LEG_FAMILIES = frozenset({"PLAYER_SOG", "PLAYER_SOG_ALTERNATE", "GOALIE_SAVES", "PLAYER_POINTS"})
+_PLAYER_LEG_FAMILIES = frozenset({"PLAYER_SOG", "PLAYER_SOG_ALTERNATE", "GOALIE_SAVES", "PLAYER_POINTS", "PLAYER_GOALS"})
 
 
 def _invalidation_reasons_for_leg(nhl_conn, leg: dict, since_utc: str, now_iso: str,

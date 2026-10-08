@@ -65,6 +65,43 @@ st.markdown("**Loaded in this process**")
 st.caption(" · ".join(f"{name}: {'yes' if on else 'no'}" for name, on in d["libraries_loaded"].items())
            + f" · research modules: {d['research_modules_loaded']}")
 
+st.markdown("### Odds API credit position")
+try:
+    from dashboard import product_source as _ps2
+    _cb = (_ps2.model_health() or {}).get("credit_budget")
+except Exception:  # noqa: BLE001
+    _cb = None
+if _cb:
+    _c1, _c2, _c3, _c4 = st.columns(4)
+    _c1.metric("Credits remaining", _cb["remaining"], f"{_cb['usable']} usable after the {_cb['reserve']} reserve", delta_color="off")
+    _c2.metric("Even daily pace", _cb["even_daily_pace"], f"{_cb['days_left_in_cycle']} days left", delta_color="off")
+    _c3.metric("Trailing daily burn", _cb["trailing_daily_burn"], f"over {_cb['window_days']} days", delta_color="off")
+    _c4.metric("Projected exhaustion", _cb["projected_exhaustion_utc"] or "—", f"short {_cb['month_shortfall_at_current_burn']} for the month", delta_color="off")
+    _g = _cb["goals_decision"]
+    st.caption(f"Anytime-goal prices would add about {_g['extra_credits_per_day']} credits/day (one per captured game). Decision: "
+               f"{'capture' if _g['allow'] else 'do not capture'} — {_g['reason'].replace('_', ' ').lower()}"
+               + (f" (month would need {_g['month_need']} against {_g['month_usable']} usable; short {_g['shortfall']})." if not _g["allow"] else "."))
+    st.dataframe([{"Call class": k, "Calls (trailing window)": v["calls"], "Credits": v["credits"], "Share": f"{v['share']:.0%}"} for k, v in _cb["spend_by_class"].items()],
+                 hide_index=True, width="stretch")
+    st.caption("Computed from the provider's own response headers on every archived call (docs/ODDS_CREDIT_AUDIT.md).")
+    _pl, _mv = _cb.get("plan"), _cb.get("month_view")
+    if _pl:
+        st.markdown(f"**Today's credit plan ({_pl['day']}).** Day budget {_pl['D']} credits for {_pl['games_today']} game(s): "
+                    f"{_pl['games_priced']} priced (shots + points), {_pl['games_not_priced']} not priced, goals for {_pl['goals_games']}, saves for {_pl['saves_games']} (confirmed starters only). "
+                    f"Short {_pl['shortfall_per_day_required_only']} credits today to price every game with the required markets.")
+        st.dataframe([{"Class": k.replace("_", " ").title(), "Allowance": v, "Spent today": _cb["spent_today_by_class"].get(k, 0.0)} for k, v in _pl["allowance"].items()],
+                     hide_index=True, width="stretch")
+    if _mv:
+        st.caption(f"Month view at {_mv['typical_games_per_day']} games a day: {_mv['games_priced_per_day']} priced each day; pricing every game with the required markets needs "
+                   f"{_mv['need_required_only_per_day']} credits/day against a budget of {_mv['D']} — short about {_mv['shortfall_month_required_only']} credits through the cycle "
+                   f"({_mv['shortfall_month_everything']} with saves, goals and a second display refresh).")
+else:
+    st.caption("Credit position is not in the published snapshot yet.")
+
+st.markdown("### Order path (one-click add) check")
+from dashboard import ui as _ui
+_ui.order_path_panel()
+
 st.markdown("### Ticket and option diagnostics (admin)")
 try:
     from dashboard import product_source as _ps

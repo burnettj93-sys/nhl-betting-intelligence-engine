@@ -1,0 +1,77 @@
+{
+ "id": "d400aaff4870fbb91e584f1c8a8f05bf",
+ "sport_key": "icehockey_nhl",
+ "commence_time": "2026-10-05T23:10:00Z",
+ "home_team": "Tampa Bay Lightning",
+ "away_team": "Philadelphia Flyers",
+ "bookmakers": [
+  {
+   "key": "draftkings",
+   "title": "DraftKings",
+   "markets": [
+    {
+     "key": "player_goal_scorer_anytime",
+     "last_update": "2026-10-05T16:04:08Z",
+     "outcomes": [
+      {
+       "description": "Brandon Hagel",
+       "name": "Yes",
+       "price": 160
+      },
+      {
+       "description": "Brayden Point",
+       "name": "Yes",
+       "price": 165
+      },
+      {
+       "description": "Anthony Cirelli",
+       "name": "Yes",
+       "price": 330
+      },
+      {
+       "description": "Alex Bump",
+       "name": "Yes",
+       "price": 425
+      },
+      {
+       "description": "Christian Dvorak",
+       "name": "Yes",
+       "price": 500
+      },
+      {
+       "description": "Conor Geekie",
+       "name": "Yes",
+       "price": 600
+      },
+      {
+       "description": "Carl Grundstrom",
+       "name": "Yes",
+       "price": 750
+      },
+      {
+       "description": "Charle-Edouard D'Astous",
+       "name": "Yes",
+       "price": 850
+      },
+      {
+       "description": "David Jiricek",
+       "name": "Yes",
+       "price": 1400
+      },
+      {
+       "description": "Cam York",
+       "name": "Yes",
+       "price": 1700
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "_provenance": {
+  "archived_file": "20261005T160511Z_sports-icehockey_nhl-events-d400aaff4870fbb91e584f1c8a8f05bf-odds_d400aaff4870fbb91e584f1c8a8f05bf_player_shots_on_goal_alternate+player_total_saves+player_blo-192b636d.json",
+  "retrieved_at_utc": "2026-10-05T16:05:11Z",
+  "requests_last": "3",
+  "note": "Real DraftKings payload via The Odds API, goal-scorer market only, trimmed to 10 players; nothing altered."
+ }
+}

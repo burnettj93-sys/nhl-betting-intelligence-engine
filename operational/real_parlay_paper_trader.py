@@ -81,6 +81,16 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             price_refresh = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
 
+        # Starting-goalie reports and reported lineups (Daily Faceoff, rate-limited inside the module). A failure never blocks the cycle.
+        try:
+            from operational import dailyfaceoff
+            df_state = dailyfaceoff.refresh(now)
+            df_summary = {"status": df_state.get("status"), "last_error": df_state.get("last_error"),
+                          **dailyfaceoff.ingest_goalie_status(nhl_conn, df_state, now)} if df_state.get("goalies") else \
+                         {"status": df_state.get("status"), "last_error": df_state.get("last_error"), "written": 0}
+        except Exception as exc:  # noqa: BLE001
+            df_summary = {"status": "ERROR", "last_error": f"{exc.__class__.__name__}: {exc}", "written": 0}
+
         # One candidate-leg pool serves manual orders (revalidated against current prices) and the automatic selector.
         collected = daily_tickets.collect_candidate_legs(nhl_conn, now)
         try:
@@ -105,7 +115,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "manual_orders": manual_summary, "product_state": product_summary}
+              "manual_orders": manual_summary, "product_state": product_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],
@@ -113,7 +123,7 @@ def run(now: dt.datetime | None = None) -> dict:
         "insufficient_funds": stake_summary["insufficient_funds"], "status": "SUCCESS"})
     settled_count = (settlement_summary or {}).get("settled", 0)
     if (stake_summary["newly_recorded"] > 0 or settled_count > 0 or stake_summary["state_changed"]
-            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or _publish_heartbeat_due(now)):
+            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or df_summary.get("written") or _publish_heartbeat_due(now)):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result

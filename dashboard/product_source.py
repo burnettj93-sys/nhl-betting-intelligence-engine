@@ -118,3 +118,14 @@ def ontario_verifications() -> list[dict]:
         return mo.recent_verifications(conn)
     finally:
         conn.close()
+
+
+def path_checks() -> list[dict]:
+    """Results of non-staking order-path checks (engine side: operational/manual_orders.process_path_check)."""
+    if _cloud():
+        try:
+            return _wrap(cloud_snapshot.manual_orders).get("path_checks", [])
+        except Unavailable:
+            return []
+    from operational import manual_orders as mo
+    return mo.load_path_checks()

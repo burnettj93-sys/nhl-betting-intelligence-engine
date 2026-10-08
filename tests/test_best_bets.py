@@ -325,6 +325,20 @@ class TestCapturePrices(unittest.TestCase):
         self.assertEqual(archive.written[0]["market_filter"], bb.MARKETS)
         self.assertEqual(out["credits_spent"], 2)
 
+    def test_goals_market_is_added_only_when_the_credit_rule_allows_it(self):
+        allow_goals = {"allow": True, "reason": "OK", "shortfall": 0, "extra_credits_per_day": 4.0}
+        client, archive = _FakeClient([self._event(1, 3.0)]), _FakeArchive()
+        with mock.patch("operational.credit_allocation.goals_decision", return_value=allow_goals):
+            out = bb.capture_prices(NOW, client=client, archive_mod=archive, guard=self.allow)
+        want = f"{bb.MARKETS},{bb.GOALS_MARKET_KEY}"
+        self.assertEqual(client.odds_calls, [(f"{1:032x}", want)])
+        self.assertEqual(archive.written[0]["market_filter"], want)
+        self.assertTrue(out["goals_market"]["allow"])
+        denied = _FakeClient([self._event(1, 3.0)])
+        out = bb.capture_prices(NOW, client=denied, archive_mod=_FakeArchive(), guard=self.allow)
+        self.assertEqual(denied.odds_calls, [(f"{1:032x}", bb.MARKETS)])
+        self.assertFalse(out["goals_market"]["allow"])
+
     def test_the_global_quota_guard_stops_the_run(self):
         client = _FakeClient([self._event(1, 3.0), self._event(2, 3.5)])
         out = bb.capture_prices(NOW, client=client, archive_mod=_FakeArchive(),
