@@ -1,71 +1,78 @@
-# Product completion checklist (gap-closure revision)
+# Product completion checklist (deployed revision)
 
 Status words, used strictly:
 
-* **VERIFIED** — built, tested, and checked on the hosted app (or, where a requirement is a record of evidence, the evidence file is named).
-* **INCOMPLETE** — a requirement that does not work end to end yet, with exactly what is missing. "Built but waiting for an input" is **not** VERIFIED.
-* **EXTERNAL BLOCKER** — needs an action only the owner (or a third party) can take; the exact action is stated.
+* **VERIFIED** — built, tested, and checked on the hosted app (or, for a record of evidence, the evidence file is named).
+* **INCOMPLETE** — does not work end to end yet; the exact missing piece is stated. "Built but waiting for an input" is never VERIFIED.
+* **EXTERNAL BLOCKER** — needs an action only the owner or a third party can take; the exact action is stated.
 
-The previous revision's "DONE (blocked input)" is retired: each such item is restated below as INCOMPLETE or EXTERNAL BLOCKER.
-Items marked **(branch)** are implemented and tested on `feature/gap-closure` (PR 56, full suite 3,618 tests OK) but are **not yet deployed**: the merge of that PR was not
-permitted in this session, so nothing in this revision has been checked on the hosted app yet. Everything not marked (branch) was verified remotely on release `bd24a9b10f` and is unchanged.
+Code on `master`; the scheduled jobs run the pinned release checkout at the same commit (see "Release" at the end). Hosted checks below were made on the private Community Cloud app after
+a reboot on the final code. Suite on the deployed code: **3,680 tests, OK (1 skipped)**.
 
-## 1. Remote manual-add flow — INCOMPLETE (+ EXTERNAL BLOCKER for the secrets)
-
-| Piece | Status | Evidence / what is missing |
-|---|---|---|
-| Link path (owner-authored pre-filled issue → engine → ledger) | VERIFIED | order `ME3D7C508EBFDD3` recorded 2026-10-08 via an owner-authored issue; ledger 8 → 9 tickets, cash $475.76 → $465.76. **This was filed with `gh`, so it is evidence for the queue, the revalidation, the ledger and the page feedback — not for the button.** |
-| Pressing the button in the authenticated hosted app files the order itself (one click) | INCOMPLETE | Never demonstrated. Needs the Streamlit secrets `PAPER_ORDER_TOKEN` and `ORDER_ALLOWED_EMAILS` (EXTERNAL BLOCKER: only the owner can create the token; exact steps in `docs/MANUAL_ORDERS.md`, no secret goes through chat) and the hosted app must supply `st.user.email`. |
-| A way to prove the above without staking | (branch) | Diagnostics → "Order path (one-click add) check": yes/no rows (token configured, allowed emails, viewer email present/allowed, direct ready) and a "Run non-staking order-path check" button → `order-path-check` issue → owner-author check → result recorded, **no order, ticket or stake, ledger untouched** (`tests/test_manual_orders.py::TestOrderPathCheck`, `tests/test_product_pages.py`). Not deployed, so `st.user.email` availability on the hosted app is still unknown. |
-| Token issue author accepted by the queue processor | (branch) | The processor accepts only `burnettj93-sys`; a check opened by anyone else is listed as `IGNORED_AUTHOR` with the login. A fine-grained token created by the owner authors issues as the owner. |
-| Duplicate prevention, durable recording, status feedback, shared-account reconciliation | VERIFIED | order-id and bet-identity idempotency, concurrency test, `NEEDS_ACCEPTANCE` flow, reconciliation (`tests/test_manual_orders.py`, `audit_evidence/ledger_board_reconciliation.json`) |
-| No additional test stake | — | None created. A real one-click stake will be made only after the owner selects an option explicitly. |
-
-## 2. Player roles — VERIFIED (branch: remote check pending)
-
-* Inferred fields renamed everywhere: **Est. usage tier** (forwards/defense ranked by recent ice time) and **Est. PP usage** (High/Some by recent power-play minutes). No page says "Line 1" or "PP1" for an inferred value (`research/product_models/live.py::infer_roles`, `tests/test_product_pages.py`, `tests/test_product_data.py::TestRoles`).
-* **Reported lineup** is a separate block: forward line / defense pair, PP unit, PK unit, injury status, the reporter, link, report time and our fetch time, from Daily Faceoff line combinations for all 32 teams (HTTP 200 on 2026-10-08; `operational/dailyfaceoff.py`; fixtures and tests in `tests/test_dailyfaceoff.py`). It is a reporter's published expectation for the next game, not a confirmed lineup. Players the source does not list show "—", never an inferred substitute.
-
-## 3. Starting goalies — INCOMPLETE (automation partial)
+## 1. Remote manual-add flow
 
 | Piece | Status | Evidence |
 |---|---|---|
-| Automated source exists and is reachable | (branch) VERIFIED in tests and by live fetch | Daily Faceoff starting-goalies page, HTTP 200, 10 games / 20 slots on 2026-10-08; robots allow; no terms page found (owner to read); rate-limited; kill switch. `docs/STARTING_GOALIE_SOURCE_AUDIT.md` addendum. Ingest into `goalie_status_events` was run against a copy of the real DB: 15 rows written, repeat run 0. |
-| Automated confirmations are usable for gating | INCOMPLETE | Only **1 of 11** "Confirmed" labels on 2026-10-08 cited the team's own post; 10 cited beat reporters. The reader records CONFIRMED only for team-sourced posts; reporter-sourced ones stay EXPECTED. So saves/moneyline confirmations still mostly need a person. Accepting reporter-sourced confirmations is the owner's decision (`NHL_ENGINE_ACCEPT_REPORTER_CONFIRMATIONS=ON`). |
-| Manual fallback and the gate | VERIFIED | unchanged; `tests/test_product_data.py`, `tests/test_dailyfaceoff.py::TestIngestAndGate` (an expectation never walks back a confirmation). |
+| Queue → revalidation → ledger → page feedback (link path) | VERIFIED | order `ME3D7C508EBFDD3` (2026-10-08): ledger 8 → 9 tickets, cash $475.76 → $465.76; shown on hosted Today and Paper Performance. This order was filed with `gh`, so it proves the queue, not the button. |
+| Duplicate prevention, durable record, shared-account reconciliation | VERIFIED | `tests/test_manual_orders.py`; `audit_evidence/ledger_board_reconciliation.json` |
+| **What identity the hosted authentication supplies** | VERIFIED (measured on the hosted app, Diagnostics → Order path) | Streamlit 1.62.0, app private ("Only specific people can view"). `st.user.is_logged_in` = None and `st.user` has **no fields — no email**. The platform's request headers include `X-Streamlit-User`: an **opaque 76-character value** (not an email, not a signed token with claims). The viewer's one-way fingerprint is **`748a81cd1777`** and was identical across separate sessions and two reboots. Consequence: `ORDER_ALLOWED_EMAILS` can never match; the allow-list is `ORDER_ALLOWED_VIEWER_IDS` (fingerprints). |
+| Non-staking check, engine side | VERIFIED | The hosted button produced check `chk_31ae716bb25fc4bf` (link path, because the direct path is not configured); the identical document filed as owner-authored issue #60 was **ACCEPTED by the queue processor 12 seconds later** (author check passed, comment posted, issue closed, row recorded; **no order, ticket or stake; ledger untouched**) and appears in Diagnostics → "Checks the engine has answered". |
+| Token's issue author accepted by the processor | VERIFIED for the owner account; not yet exercised with the real token | The processor accepts only `burnettj93-sys`; a check by anyone else is listed as `IGNORED_AUTHOR`. A fine-grained token created by the owner authors as the owner. |
+| Pressing the button files the order itself (one click), recorded and shown in the hosted app | **EXTERNAL BLOCKER** | The app has no `PAPER_ORDER_TOKEN` and no allow-list. Owner steps (exact, no secret in chat) are in `docs/MANUAL_ORDERS.md`: (1) create a fine-grained GitHub token for this repository, **Issues: read and write** only; (2) read your fingerprint from Diagnostics → Order path; (3) in Streamlit → Settings → Secrets set `PAPER_ORDER_TOKEN` and `ORDER_ALLOWED_VIEWER_IDS = "748a81cd1777"`; (4) re-open Diagnostics: all rows `yes`, then "Run non-staking order-path check". |
+| Real one-click stake | not done, by instruction | **No new test stake was created.** It will be made only after the owner explicitly selects an option and the secrets above exist. |
 
-## 4. Moneyline — INCOMPLETE (no promotion; evidence collecting)
+Trust model for the viewer id (stated, not hidden): the platform gateway adds the header after viewer authentication; outsiders cannot reach the app; an invited viewer who learned another viewer's raw id could replay it, so keep the invite list to trusted people. Worst case: a $10 paper order.
 
-* Why the displayed model differs from the pricing model: the strength model (`goalie-team-v1`) was validated for the product pages; the ticket path predates it and uses the unmodified Elo path (`moneyline-t35-v1`) with a heuristic band (`operational/moneyline_model_path.py` docstring).
-* Chronological comparison on the same games, two rolling-origin folds, paired bootstrap (`docs/validation/moneyline_model_comparison.json`, `docs/MODEL_VALIDATION.md`): the strength model is nominally ahead in all four rows (−0.0014 to −0.0058 log loss) but every 95% interval reaches zero; in 2025-26 Elo is itself within 0.0002 of the home-rate baseline when shootouts are included. Neither is shown to beat a sportsbook price (no historical prices exist). **Not promoted.**
-* Delivered: versioned opt-in switch `NHL_ENGINE_MONEYLINE_MODEL=strength-v1` (default Elo, same conservative band, version tag on legs) and a shadow log scoring Elo, the strength model and the market's no-vig probability on live games; Model Health shows the scoreboard (needs 150 finished game-sides before any statement). `tests/test_model_paths.py`. (branch)
+## 2. Player roles — VERIFIED
 
-## 5. Anytime goals and credit quota — INCOMPLETE (built; capture gated by the budget)
+Hosted Players detail (Erik Karlsson, tested after reboot): "Estimated usage tier: Defense 1 · Estimated PP usage: high", labelled "inferred from ice time — not an assigned line or power-play unit"; a separate "Reported lineup" block (none shown: the lineup source is off, see 8). Columns "Est. usage tier / Est. PP usage / Reported line / Reported PP" on Players, Game Detail and Team Intelligence. A reported lineup is displayed only if its source is identifiable (team or recognized beat reporter, with name and link) and under 48 hours old; on 2026-10-08, 14 of 32 teams' reports had no identifiable source (the site's automatic "Last Game" lineup, or "Projected") and are never shown as lines or units. (`tests/test_dailyfaceoff.py::TestLineupStandard`.)
 
-* **Credit audit** (`docs/ODDS_CREDIT_AUDIT.md`, all numbers from the provider's own headers, 0 credits unaccounted): trailing burn 27.0 credits/day against an even pace of 11.9; 297 credits remain on 2026-10-08, so paid pulls stop around **2026-10-19** with about **350 credits missing** for the month. Shots (alternate) is bought by two jobs for the same game.
-* **Marginal cost of goals**: exactly one credit per captured game (4 real calls: 3, 3, 4, 3 credits for 3–4 returned markets). DraftKings quotes 36–37 players a game, one-sided "Yes" prices.
-* **Built (branch)**: contract certified against a real archived payload (`tests/fixtures/draftkings_player_goal_scorer_real_payload.json`), `PLAYER_GOALS` family in the allowlist (threshold 1), leg builder, settlement mapping to the existing resolver, revalidation, labels, coverage rows (`tests/test_goals_market.py`).
-* **Bounded allocation (branch)**: goals are added to the per-game call only when `(trailing burn + goals cost) × days left ≤ usable credits`. Today it **denies** (needs 729, has 277, short 452), so goals prices are not being captured. Options and trade-offs, with no plan or limit changed: `docs/ODDS_CREDIT_AUDIT.md` §5. This is not externally blocked; it needs the owner's choice of trade-off.
+## 3. Starting goalies — policy built; automation INCOMPLETE; source needs an owner decision
 
-## 6. Puck line — INCOMPLETE (unmet requirement)
+| Piece | Status | Evidence |
+|---|---|---|
+| Revised policy (accept Daily Faceoff "Confirmed" backed by an identifiable team source or a recognized beat reporter; store source, link, time, basis; keep Expected/Likely/unsupported distinct; freshness; conflicts; not team-post-only) | VERIFIED in tests, not exercisable live | `operational/dailyfaceoff.py`, `operational/goalie_confirmations.py`, `operational/recognized_starter_sources.json` (26 handles seeded from the sources Daily Faceoff itself cited on 2026-10-08, 2 excluded for handle/name mismatch; owner-editable). 31 tests in `tests/test_dailyfaceoff.py`: team post and recognized reporter confirm; Likely, blank, unrecognized, suspended, stale (>30 h), future-dated, "text does not name the goalie" do not; a later report naming another goalie is a CONFLICT and the gate stays closed; a dead feed (>90 min) withdraws automated confirmations; an expectation never walks back a confirmation; per-reporter accuracy record suspends a reporter after 2 misses in 10. On the 2026-10-08 sample all 11 "Confirmed" items qualify (1 team, 10 recognized reporters). |
+| Failure handling, caching, timestamps, off switch | VERIFIED in tests | failed fetch keeps the last good copy with its own fetch time and records the cause; fetch intervals 20 min / 3 h; each row carries the item's own timestamp and the fetch time; `NHL_ENGINE_DAILYFACEOFF` unset ⇒ **zero requests** (default). |
+| **Access terms** | **EXTERNAL BLOCKER (owner decision)** | Concrete restriction found: Daily Faceoff belongs to The Nation Network, whose Terms of Service (https://oilersnation.com/terms-of-service; they state they govern "any and all of its subsidiaries, affiliates, brands") prohibit using "any robot, spider, rover, scraper or any other data-mining technology or automatic or manual process to monitor, cache, frame, mask, extract data from, copy or distribute any data from the Services" and any commercial use beyond keeping information "for your own non-commercial purposes". Daily Faceoff's own `/terms-of-use` redirects to a 404 and its footer links only a privacy policy. `robots.txt` allows the pages, but robots permission and a low request rate do not establish permission. About 150 requests were made on 2026-10-08 during development, before this finding. **The reader is therefore OFF by default**; to use it, set `NHL_ENGINE_DAILYFACEOFF=ON` in `.env` (your acknowledgment that you have read the terms and accept the use), or obtain a licence (Nation Network data access, or RotoWire's API). Until then the hosted Goalies and Game Detail pages correctly show every goalie Unconfirmed unless a person records a confirmation. |
+| Manual fallback and the gate | VERIFIED | unchanged; hosted Goalies page shows the updated status text. |
 
-* The failed Skellam model stays on record (log loss 0.52926 vs base rate 0.52751 on 2025-26).
-* Alternative `puck-line-direct-v1` (direct logistic on the strength difference): judged only on two earlier folds (2023, 2024), where it beats the base rate with 95% intervals below zero and also beats Skellam; parameters then frozen; 2025-26 not used again. The untouched evaluation set is 2026-27, logged before each game and scored when final (needs 300 games). (`docs/validation/puck_line_alternative.json`, branch)
-* **Not enabled**: no puck-line prices are requested, no settlement mapping exists, and the prospective evidence has not accumulated. The requirement is unmet.
+## 4. Moneyline — VERIFIED as evidence-based; promotion not made
 
-## 7. QA on the hosted app — INCOMPLETE
+Chronological comparison (`docs/validation/moneyline_model_comparison.json`, `docs/MODEL_VALIDATION.md`): the strength model is nominally ahead of Elo in all four rows (−0.0014 to −0.0058 log loss) but every paired 95% interval reaches zero. **Not promoted.** The opt-in switch (`NHL_ENGINE_MONEYLINE_MODEL=strength-v1`) is now **inert unless the prospective evidence also supports it**: it takes effect only after 150 finished game-sides are scored and the paired interval of (strength − Elo) lies wholly below zero, and only if the owner asks (`tests/test_model_paths.py`). The shadow scoreboard (Elo, strength model, market no-vig) is live on the hosted Model Health page: 0 of 0 scored so far.
 
-Pages, navigation paths, mobile width and the no-demo / current-game / freshness / account / provenance / settlement safeguards were verified remotely on `bd24a9b10f` and their tests still pass. The changed pages (Players, Goalies, Game Detail, Team Intelligence, Model Health, Diagnostics) and every navigation path need a fresh remote pass **after the branch is merged and deployed**. Not done.
+## 5. Credits and anytime goals — plan VERIFIED; coverage INCOMPLETE within the existing allowance
 
-## 8. Credential rotation — EXTERNAL BLOCKER
+* **Audit** (`docs/ODDS_CREDIT_AUDIT.md`, provider headers, 0 credits unaccounted): trailing burn 27.0 vs an even pace of 11.9; duplicate shots purchases; first sweep and 3–4 captures per game; 3× per-job borrowing; month short ≈ 350 at the old cadence (pricing would have stopped ≈ Oct 19).
+* **Implemented and running** (`operational/credit_planner.py`): day budget from the provider's remaining header; waterfall (T-35 decision pulls → display refresh → shots + points once per game in its actionable window → saves for confirmed starters → goals → refresh); wave-fair choice of priced games saved for the day; every paid job asks the planner and writes a ledger; sweeps no longer re-buy shots and the early sweep is retired. **Production evidence (2026-10-08):** the plan priced 3 of 10 games on a D = 11.46-credit day; the trader bought BOS (shots + points + **goals**, 3 credits) and DAL (2 credits) at ≈ 1.5 h before puck drop; the hosted Diagnostics page shows the credit position, the plan and the month view.
+* **Anytime goals**: built end to end (certified against a real archived payload, legs, settlement, coverage) and **live**: the production option board now contains 6 `PLAYER_GOALS` legs. Goals are bought only for games the plan has credits for (1 on 2026-10-08).
+* **What does not fit** (exact): pricing every game with the required markets at 7 games a night needs 18 credits/day against 11.5 → **short 6.5/day (≈ 156 credits through the cycle)**; everything incl. goals for all games and saves: 29/day, **short ≈ 420**. Trade-offs, with nothing purchased or changed: `docs/ODDS_CREDIT_AUDIT.md` §5 (A. run as built; B. price more games with fewer markets; C. a larger provider allowance — a purchase, not made; D. accept running dry).
+* An action I attempted and was denied: a one-credit capture of a real `spreads` payload ("Real-World Transactions"); not bypassed (see 6).
 
-The exposed Odds API key must be rotated by the owner (`docs/CREDENTIAL_ROTATION.md`). After rotation: `python3 deploy/verify_odds_key.py`, then confirm the credit counter and the Diagnostics credit panel on the new key.
+## 6. Puck line — unmet requirement; components separated
 
-## Unchanged and VERIFIED (release `bd24a9b10f`)
+* **Built and tested**: settlement (`resolve_puck_line` on the official final score; an extra-time margin is one goal; mapped from the ledger leg `PUCK_LINE`, team, signed line); a shape validator for the provider's `spreads` market; an owner-run capture script that spends **one** credit only with `--confirm-spend-1-credit` and archives and trims a real payload for certification.
+* **Not built — needs your approval**: the price **contract is uncertified** because no real `spreads` payload exists; the one-credit capture was denied by the approval layer and not bypassed. Run `python3 deploy/capture_puck_line_contract.py --confirm-spend-1-credit` (or tell me to) to unblock it.
+* **Unvalidated**: the prediction. The Skellam result stays on record (log loss 0.52926 vs base rate 0.52751). `puck-line-direct-v1` beats the base rate on two earlier development folds (95% intervals below zero) but is untouched by any evaluation: its parameters are frozen, 2025-26 is not reused, and it is scored only on 2026-27 games as they finish (0 of 14 logged so far, visible on hosted Model Health; a review needs 300). It is **not enabled**, not in the ticket allowlist, and no puck-line ticket can exist.
 
-Today / ET dates / current-game defaults / exact Game Detail; best +100 option per person; shared account and exposure; automatic recording and settlement; no demo content anywhere; freshness and provenance rules; settlement safeguards; postmortems; Ontario verification flow (price spot-checks; settlement void rules are not guessed); automatic and manual evaluation kept separate.
+## 7. Stray database — VERIFIED
+
+`data/nhl.db`: 0 bytes, no tables, untracked, not referenced by `db.py` (which resolves `operational/runtime/nhl.db`), `.env`, or any launchd job; created by a connection to a missing path. Removed after verifying that (my first removal attempt was denied by the approval layer; your instruction authorized the second, which succeeded). `db.get_conn()` with no explicit path now raises `WrongDatabaseError` unless the resolved database exists, is non-empty and has a `games` table; `db.init_db()` is the only way to create one (`tests/test_runtime_db_hygiene.py`, `docs/RUNTIME_DB_HYGIENE.md`).
+
+## 8. Hosted QA — VERIFIED
+
+After merging and rebooting on the final code, every navigation item loaded without an exception on the hosted app by in-app navigation (Today, Games, Game Detail, Best Options, Players, Goalies, Team Intelligence, Model Health, Paper Performance, Ticket History, Morning Review, Data Status, Diagnostics) and by direct URL; changed pages verified visually (Players detail, Goalies detail, Model Health incl. "Evidence collecting on live games", Diagnostics credit position/plan/Order path/answered checks); mobile width (500 px minimum in this browser): no horizontal overflow on Players detail and Diagnostics. Safeguards unchanged: no demo content, current games, freshness labels, the account ($500 start, $465.76 cash, 9 tickets, history intact), provenance, settlement rules; automatic and manual evaluation reported separately. A new app build needs a reboot (a stale module cache caused a transient error until the first reboot) and a cold start briefly shows the legacy page list.
+
+Incidents during deployment, all fixed: (1) a path-check row carried a key (`token_configured`) the snapshot secret-name guard forbids, so one 15-minute cloud publish failed (21:22–21:24 UTC; the previous snapshot stayed up); renamed, old rows migrated, test added; (2) the plan's first capture never fired for games that already had an older capture from the previous cadence; fixed and verified (captures at 21:30 UTC).
+
+## 9. Credential rotation — EXTERNAL BLOCKER
+
+The exposed Odds API key must be rotated by the owner (`docs/CREDENTIAL_ROTATION.md`). Afterwards: `python3 deploy/verify_odds_key.py`, then confirm the credit counter on Diagnostics.
+
+## Release
+
+Merged PRs: 56 (gap closure), 57–59 (identity probe and viewer-id allow-list), 61 (publish key fix), 62 (answered-checks list), 63 (plan first-capture fix), plus the final documentation change. `~/nhl_engine_release` is pinned to the final `master` commit shown in the delivery message.
 
 ## What is and is not demonstrated
 
-* **A functioning product**: yes, for what is VERIFIED above — observed data only, automatic paper tickets with timestamps and provenance, settlement, a shared $500 account, manual add through the verified link path.
-* **A demonstrated betting edge**: **no**. The probabilities are better calibrated than simple baselines on held-out games; there are no historical sportsbook prices, so profitability cannot be tested on past data, and the paper record is too short to say anything. The 3-point probability haircut is a policy margin, not evidence of an edge.
+* **A functioning product**: yes for what is VERIFIED above — observed data only, automatic paper tickets with timestamps and provenance, settlement, a shared $500 account, manual add through the verified link path, anytime-goal legs, a self-limiting credit plan.
+* **A demonstrated betting edge**: **no**. Probabilities are better calibrated than simple baselines on held-out games; there are no historical sportsbook prices, so profitability cannot be tested on past data, and the paper record is too short to say anything. The 3-point haircut is a policy margin, not evidence of an edge.
