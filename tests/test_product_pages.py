@@ -114,6 +114,14 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("Expected shots", " ".join(m.label for m in at.metric))
         self.assertIn("Best qualifying +100 option", t)
 
+    def test_diagnostics_order_path_panel_shows_booleans_and_a_check_button(self):
+        at = run_page("37_Diagnostics.py", snapshot())
+        t = text(at) + " " + " ".join(str(d.value.to_dict()) for d in at.dataframe)
+        self.assertIn("Order path (one-click add) check", t)
+        self.assertIn("One-click (direct) path ready", t)
+        self.assertIn("never displayed", t)
+        self.assertIn("Run non-staking order-path check", [b.label for b in at.button])
+
     def test_best_options_page_labels_quotes_and_estimates_and_offers_add(self):
         at = run_page("26_Player_Props.py", snapshot())
         t = text(at)

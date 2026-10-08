@@ -65,6 +65,10 @@ st.markdown("**Loaded in this process**")
 st.caption(" · ".join(f"{name}: {'yes' if on else 'no'}" for name, on in d["libraries_loaded"].items())
            + f" · research modules: {d['research_modules_loaded']}")
 
+st.markdown("### Order path (one-click add) check")
+from dashboard import ui as _ui
+_ui.order_path_panel()
+
 st.markdown("### Ticket and option diagnostics (admin)")
 try:
     from dashboard import product_source as _ps

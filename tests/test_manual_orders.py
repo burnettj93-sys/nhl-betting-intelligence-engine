@@ -251,6 +251,47 @@ class TestOrderClient(unittest.TestCase):
         self.assertFalse(order_client.configured_write_access(S(), None)[0])
 
 
+class TestOrderPathCheck(unittest.TestCase):
+    def doc(self, **kw):
+        return order_client.build_path_check(check_id=kw.pop("check_id", "chk_" + "a" * 12), sent_at_utc="2026-10-08T20:00:00Z", via="direct",
+                                             viewer_email_present=True, viewer_allowed=True, token_configured=True) | kw
+
+    def test_check_is_accepted_once_and_touches_no_ledger(self):
+        res = mo.process_path_check(self.doc(), now=NOW, source="github-issue:7", author=mo.OWNER_LOGIN)
+        self.assertEqual(res["status"], "ACCEPTED")
+        self.assertEqual(mo.process_path_check(self.doc(), now=NOW, source="github-issue:7")["status"], "ALREADY_RECORDED")
+        rows = mo.load_path_checks()
+        self.assertEqual([r["check_id"] for r in rows], ["chk_" + "a" * 12])
+        self.assertTrue(rows[0]["viewer_allowed"] and "No order, ticket or stake" in rows[0]["note"])
+
+    def test_malformed_or_foreign_documents_are_rejected(self):
+        for bad in ("{", json.dumps({"type": "PAPER_ORDER", "schema": 1}), json.dumps(self.doc(check_id="x")), json.dumps(self.doc(schema=9))):
+            self.assertEqual(mo.process_path_check(bad, now=NOW, source="s")["status"], "REJECTED", bad)
+
+    def test_other_authors_are_listed_not_processed(self):
+        mo.note_ignored_path_checks([{"issue": 41, "author": "stranger"}], NOW)
+        mo.note_ignored_path_checks([{"issue": 41, "author": "stranger"}], NOW)
+        ign = [r for r in mo.load_path_checks() if r["status"] == "IGNORED_AUTHOR"]
+        self.assertEqual(len(ign), 1)
+        self.assertEqual(ign[0]["author"], "stranger")
+
+    def test_path_status_reports_booleans_and_masks_the_address(self):
+        class S(dict):
+            pass
+        st = order_client.path_status(S(PAPER_ORDER_TOKEN="ghp_SECRETVALUE9", ORDER_ALLOWED_EMAILS="me@x.com"), "Me@X.com")
+        self.assertTrue(st["direct_ready"] and st["viewer_allowed"])
+        self.assertEqual(st["viewer_email_masked"], "m*@x.com")
+        self.assertNotIn("SECRETVALUE9", json.dumps(st))
+        none = order_client.path_status(S(), None)
+        self.assertFalse(none["direct_ready"] or none["viewer_email_present"] or none["token_configured"])
+        self.assertFalse(order_client.path_status(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), None)["direct_ready"])
+
+    def test_path_check_uses_its_own_label_and_title(self):
+        d = self.doc()
+        self.assertEqual(order_client.issue_label(d), "order-path-check")
+        self.assertTrue(order_client.issue_title(d).startswith("order-path-check chk_"))
+
+
 class TestMigration(unittest.TestCase):
     def test_v3_ledger_migrates_without_rewriting_tickets(self):
         tmp = Path(tempfile.mkdtemp()) / "old.db"
