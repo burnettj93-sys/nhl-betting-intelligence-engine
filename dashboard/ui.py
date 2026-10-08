@@ -255,7 +255,7 @@ def ontario_check(opt: dict, *, key: str) -> None:
                         v = order_client.build_verification(l, verification_id=order_client.new_order_id().replace("ord_", "ver_"), ontario_price=float(price),
                                                             observed_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                                             where_seen=where, us_price_shown=l["american_price"])
-                        email = getattr(getattr(st, "user", None), "email", None)
+                        email = viewer_email()
                         direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
                         if direct:
                             res = order_client.submit_direct(v, token)
@@ -333,7 +333,7 @@ def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supe
     if opt["option_id"] in sess and not supersedes:
         return                                                  # a repeated click while an order is outstanding
     order = order_client.build_order(opt, order_id=order_client.new_order_id(), page_generated_at=page_generated_at, supersedes=supersedes)
-    email = getattr(getattr(st, "user", None), "email", None)
+    email = viewer_email()
     direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
     record = {"order_id": order["order_id"], "via": "direct" if direct else "link"}
     if direct:
@@ -377,14 +377,64 @@ def reported_pp(p: dict) -> str:
 
 # ---- order-path check: proves the click-to-queue path end to end without staking anything ----
 
+def _email_from_header(value: str | None) -> tuple[str | None, dict]:
+    """Reads a viewer identity out of the platform's `X-Streamlit-User` request header: a plain email, a JSON object or a signed token (JWT) whose
+    payload carries an email. Returns (email or None, shape) where shape holds names and sizes only, never the value."""
+    import base64
+    import json as _json
+    import re as _re
+    shape = {"present": bool(value), "length": len(value or ""), "has_at": "@" in (value or ""), "jwt_like": (value or "").count(".") == 2, "claims": []}
+    if not value:
+        return None, shape
+    value = value.strip()
+    email_re = _re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    if email_re.match(value):
+        return value.lower(), shape
+    doc = None
+    if shape["jwt_like"]:
+        try:
+            part = value.split(".")[1]
+            doc = _json.loads(base64.urlsafe_b64decode(part + "=" * (-len(part) % 4)))
+        except Exception:  # noqa: BLE001
+            doc = None
+    else:
+        try:
+            doc = _json.loads(value)
+        except Exception:  # noqa: BLE001
+            doc = None
+    if isinstance(doc, dict):
+        shape["claims"] = sorted(doc.keys())
+        for k in ("email", "mail", "user", "sub", "username"):
+            v = doc.get(k)
+            if isinstance(v, str) and email_re.match(v.strip()):
+                return v.strip().lower(), shape
+    return None, shape
+
+
+def viewer_email() -> str | None:
+    """The signed-in viewer's email as the hosted platform supplies it: `st.user.email` when the app uses Streamlit login, otherwise the platform's
+    `X-Streamlit-User` header (Community Cloud viewer authentication). None when neither identifies the viewer."""
+    direct = getattr(getattr(st, "user", None), "email", None)
+    if direct:
+        return str(direct).strip().lower()
+    try:
+        return _email_from_header(st.context.headers.get("X-Streamlit-User"))[0]
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def identity_probe() -> dict:
     """Names only (never values): what identity the running app can actually see, so a missing email is explained rather than guessed."""
-    out = {"streamlit": getattr(st, "__version__", "?"), "is_logged_in": None, "user_fields": [], "header_names": []}
+    out = {"streamlit": getattr(st, "__version__", "?"), "is_logged_in": None, "user_fields": [], "header_names": [], "user_header": {}}
     try:
         user = st.user
         out["is_logged_in"] = getattr(user, "is_logged_in", None)
         out["user_fields"] = sorted(k for k, v in user.to_dict().items() if v not in (None, "", False))
     except Exception:  # noqa: BLE001 - diagnostic only
+        pass
+    try:
+        out["user_header"] = _email_from_header(st.context.headers.get("X-Streamlit-User"))[1]
+    except Exception:  # noqa: BLE001
         pass
     try:
         out["header_names"] = sorted(h for h in st.context.headers.keys() if h.lower().startswith(("x-", "cf-")) and "cookie" not in h.lower() and "auth" not in h.lower())
@@ -394,7 +444,7 @@ def identity_probe() -> dict:
 
 
 def order_path_panel() -> None:
-    email = getattr(getattr(st, "user", None), "email", None)
+    email = viewer_email()
     stat = order_client.path_status(getattr(st, "secrets", {}), email)
     st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["token_configured"] else "no"},
                   {"Check": "Allowed-viewer emails configured", "Result": str(stat["allowed_email_count"])},
@@ -405,7 +455,8 @@ def order_path_panel() -> None:
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
     probe = identity_probe()
     st.caption(f"What the hosted app's authentication exposes (names only, no values): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
-               f"`st.user` fields = {probe['user_fields'] or 'none'}; request headers present = {probe['header_names'] or 'unavailable'}.")
+               f"`st.user` fields = {probe['user_fields'] or 'none'}; request headers present = {probe['header_names'] or 'unavailable'}; "
+               f"`X-Streamlit-User` shape = {probe['user_header'] or 'absent'}.")
     sess = st.session_state.setdefault("_path_checks", {})
     if st.button("Run non-staking order-path check", key="path_check_run"):
         cid = order_client.new_order_id().replace("ord_", "chk_")

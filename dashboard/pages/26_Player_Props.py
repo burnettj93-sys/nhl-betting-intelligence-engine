@@ -30,7 +30,7 @@ st.caption(f"Options built {ui.et_time(opts_doc.get('generated_at_utc') or tk['g
            "Prices are US-feed quotes, not verified for Ontario.")
 if not options:
     ui.banner(ui.esc(tk.get("empty_slot_reason") or "No person has a fresh price that qualifies right now."), "muted")
-    st.caption("DraftKings player prices are captured within about five hours of puck drop, so options appear in the afternoon. Nothing is recorded by looking at this page.")
+    st.caption("DraftKings player prices are captured once per priced game, about 100 minutes before puck drop, for the games the daily credit plan covers (Diagnostics shows the plan), so options appear late in the afternoon and only for those games. Nothing is recorded by looking at this page.")
     st.stop()
 
 f = st.columns([3, 2, 2])
