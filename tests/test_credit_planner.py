@@ -109,11 +109,17 @@ class TestCaptureDecisions(unittest.TestCase):
         self.assertEqual(bb.planned_decision(PLAN, "2", 1.0, None, NOW), (None, "NOT_IN_CREDIT_PLAN"))
         self.assertEqual(bb.planned_decision(PLAN, "1", 6.0, None, NOW), (None, "OUTSIDE_HORIZON"))
 
+    def test_an_earlier_capture_before_the_window_does_not_count_as_the_planned_capture(self):
+        # captured 3.5 hours ago when the game was 5.1 hours away; now 1.6 hours out: that price will be stale at puck drop
+        self.assertEqual(bb.planned_decision(PLAN, "1", 1.6, 210.0, NOW), ("FIRST", "OK"))
+        # captured 20 minutes ago inside the window: it is the planned capture, so no second purchase
+        self.assertEqual(bb.planned_decision(PLAN, "1", 1.2, 20.0, NOW)[0], None)
+
     def test_a_captured_game_is_not_refreshed_without_leftover_credits(self):
         with mock.patch.object(cp, "spent_today", return_value={}):
-            self.assertEqual(bb.planned_decision(PLAN, "1", 1.0, 99.0, NOW)[0], None)
+            self.assertEqual(bb.planned_decision(PLAN, "1", 0.5, 70.0, NOW)[0], None)
             richer = {**PLAN, "allowance": {**PLAN["allowance"], cp.REFRESH: 4.0}}
-            self.assertEqual(bb.planned_decision(richer, "1", 1.0, 99.0, NOW)[0], "REFRESH")
+            self.assertEqual(bb.planned_decision(richer, "1", 0.5, 70.0, NOW)[0], "REFRESH")
 
     def test_capture_prices_buys_goals_only_for_planned_games_and_records_the_spend(self):
         class Client:

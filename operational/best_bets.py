@@ -425,7 +425,9 @@ def planned_decision(plan: dict, game_id: str | None, hours: float, age_min: flo
         return None, "OUTSIDE_HORIZON"
     if game_id is None or str(game_id) not in set(plan["games_priced"]):
         return None, "NOT_IN_CREDIT_PLAN"
-    if age_min is None:
+    # A capture taken BEFORE the actionable window (an older cadence, a manual pull) is not this game's planned capture: it will be stale at puck drop.
+    in_window_capture = age_min is not None and (hours + age_min / 60.0) <= cp.FIRST_CAPTURE_HOURS + 0.05
+    if not in_window_capture:
         return ("FIRST", "OK") if hours <= cp.FIRST_CAPTURE_HOURS else (None, "BEFORE_ACTIONABLE_WINDOW")
     if capture_decision(hours, age_min) != "REFRESH":
         return None, "FRESH_ENOUGH"
