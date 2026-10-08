@@ -1,7 +1,7 @@
 # Product completion checklist
 
 Each line says what the requirement is, its status, and where the evidence is. "Verified remotely" means checked on the hosted app
-(https://nhl-betting-intelligence-engine.streamlit.app) after deployment. Status words: **DONE**, **DONE (blocked input)** — built, waiting for an
+(the private Streamlit Community Cloud app, URL in `.env` as NHL_ENGINE_STREAMLIT_URL) after deployment. Status words: **DONE**, **DONE (blocked input)** — built, waiting for an
 input only a person can supply, **BLOCKED** — cannot be completed from here, with the exact cause.
 
 ## A. Today
@@ -18,7 +18,7 @@ input only a person can supply, **BLOCKED** — cannot be completed from here, w
 |---|---|---|
 | Root cause of stale and last-season games | DONE | Simulated seasons were inside the production `nhl.db` and the published snapshot's `demo` section fed the pages. Production DB rebuilt real-only (`operational/isolate_demo_history.py`, archive kept); snapshot schema now rejects `demo`/`live_moneyline_rows`; no bundled fallback (`tests/test_product_data.py::TestSnapshotRules`) |
 | Defaults = current upcoming/live games; completed games by dated history; last season never default | DONE | `_default_date`; Games page season/type/date pickers; `tests/test_product_pages.py` (`defaults_to_the_current_date_and_season`, `date_picker_reaches_a_past_final`) |
-| Game Detail opens the exact game; direct links; dropdowns; session state | DONE | `?game=<id>`; `test_game_detail_opens_exactly_the_requested_game`, `..._unknown_game_does_not_substitute_another`; verified remotely (URL `/Game_Detail?game=2026020056`) |
+| Game Detail opens the exact game; direct links; dropdowns; session state | DONE | `?game=<id>`; `test_game_detail_opens_exactly_the_requested_game`, `..._unknown_game_does_not_substitute_another`; verified remotely (page path `/Game_Detail?game=2026020056`) |
 | After-midnight-UTC, Eastern dates | DONE | `tests/test_product_data.py::test_eastern_date_follows_the_start_instant_not_the_utc_date`, `tests/test_eastern_time.py` |
 
 ## C. Goalies / D. Players
