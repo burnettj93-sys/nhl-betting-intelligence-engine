@@ -13,7 +13,9 @@ from pathlib import Path
 from operational import moneypuck_daily as mpd
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ODDS_CACHE_PATH = REPO_ROOT / "research" / "live_sog_board_cache.json"
+# The odds evidence is the newest real moneyline pull (and its provider quote times), NOT research/live_sog_board_cache.json: that research file was last
+# touched 2026-08-27 and made Odds read "STALE, 1000 hours" all day while real quotes were minutes old (defect fixed 2026-10-08).
+ODDS_CACHE_PATH = REPO_ROOT / "operational" / "moneyline_snapshot_cache.json"
 STARTER_RESULTS_PATH = REPO_ROOT / "research" / "goalie_intelligence_results.json"
 
 MONEYPUCK_STALE_AFTER_HOURS = 36.0
@@ -47,7 +49,7 @@ def odds_status(now: dt.datetime | None = None) -> dict:
     summary = cache.get("summary", {})
     if summary.get("api_error"):
         return {"status": "UNAVAILABLE", "reason": summary["api_error"]}
-    refreshed_at = summary.get("refreshed_at_utc")
+    refreshed_at = cache.get("generated_at_utc") or summary.get("refreshed_at_utc")
     if not refreshed_at:
         return {"status": "NOT_REFRESHED", "reason": "cache present but has no refresh timestamp"}
     age_hours = _hours_since(refreshed_at, now)

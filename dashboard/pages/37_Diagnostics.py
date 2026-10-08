@@ -98,6 +98,28 @@ if _cb:
 else:
     st.caption("Credit position is not in the published snapshot yet.")
 
+st.markdown("### Data status evidence (technical)")
+try:
+    from dashboard import cloud_snapshot as _cs
+    from operational import runtime_mode as _rm
+    from operational import source_status as _ss
+    _dsec = _cs.data_status_section() if _rm.is_community_cloud() else {"sources": _ss.build()}
+except Exception as _exc:  # noqa: BLE001 - diagnostics must never fail the page
+    _dsec = {}
+    st.caption(f"Data status evidence unavailable: {_exc}")
+if _dsec.get("sources"):
+    _doc = _dsec["sources"]
+    st.caption(f"The Data Status page is derived from the timestamps below (document built {_doc.get('generated_at_utc')}), re-aged when the page is opened. "
+               "Ages are never stored; each source carries its own freshness policy.")
+    st.dataframe([{"Source": s["label"], "Age basis (UTC)": s.get("age_basis_utc"), "Last attempt (UTC)": s.get("last_attempt_utc"), "Policy (min)": s.get("max_age_min"),
+                   "Fixed state": s.get("fixed_state"), "Limiter": s.get("limiter"), "Next refresh (UTC)": s.get("next_refresh_utc")} for s in _doc["sources"]],
+                 hide_index=True, width="stretch")
+    with st.expander("Per-source detail, the once-a-day readiness cache and job health (raw)"):
+        st.json({"sources": _doc["sources"]}, expanded=False)
+        st.caption("The readiness cache below is written once a day by the 07:00 ET sync and is NOT the page's evidence: it freezes at that moment (this is why the page "
+                   "used to show 07:01 ET badges all evening, and its odds entry once read a retired research file). It is kept for comparison only.")
+        st.json({"readiness_cache": _dsec.get("readiness_cache"), "ingestion_health": _dsec.get("ingestion_health")}, expanded=False)
+
 st.markdown("### Order path (one-click add) check")
 from dashboard import ui as _ui
 _ui.order_path_panel()

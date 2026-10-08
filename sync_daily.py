@@ -79,6 +79,11 @@ def run(cache_path: Path = READINESS_CACHE_PATH) -> int:
 
     print(report.format_sync_report(nhl_result, moneypuck_result, crosscheck_result, readiness_report))
 
+    try:                       # the status the hosted Data Status page reads is rebuilt from this run's evidence at publication
+        from operational import cloud_publish_hook
+        cloud_publish_hook.publish_after("sync_daily")
+    except Exception:  # noqa: BLE001 - publication problems never fail the sync
+        pass
     if nhl_result.get("status") == "FAILED":
         print(f"\nCRITICAL FAILURE: NHL sync failed — {nhl_result.get('error')}")
         return 1

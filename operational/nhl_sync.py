@@ -386,6 +386,12 @@ def _main() -> None:
         if catchup and catchup.get("reason") != "NOTHING_DUE":
             result["morning_catchup"] = catchup
 
+    if args.mode in ("full", "midday"):         # refresh the published status after the daily and midday syncs (the 30-minute pregame run rides the trader's heartbeat)
+        try:
+            from operational import cloud_publish_hook
+            result["cloud_publish"] = cloud_publish_hook.publish_after(f"nhl_sync:{args.mode}")
+        except Exception:  # noqa: BLE001
+            pass
     print(json.dumps(result, indent=2, sort_keys=True, default=str))
 
 

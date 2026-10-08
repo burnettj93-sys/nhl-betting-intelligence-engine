@@ -132,8 +132,11 @@ def _ledger() -> dict:
 def _data_status() -> dict:
     from dashboard import data_status_view as dv
     from operational import ingestion_health
+    from operational import source_status
     cache = dv.load_readiness_cache()
-    return {"readiness_cache": cache, "ingestion_health": ingestion_health.load_health()}
+    # `sources` is the page's evidence (timestamps, rebuilt at every publication from the sources themselves and re-aged where it is shown);
+    # the once-a-day readiness cache and the job health stay for Diagnostics only.
+    return {"sources": source_status.build(), "readiness_cache": cache, "ingestion_health": ingestion_health.load_health()}
 
 
 def _health() -> dict:
@@ -242,7 +245,7 @@ def _freshness(sections: dict) -> dict:
     tickets = sections.get("tickets") or {}
     prop_quotes = [l.get("quote_updated_utc") for t in (tickets.get("tickets") or []) + (tickets.get("manual_tickets") or []) for l in t.get("legs", [])]
     return {
-        "nhl_data": last_success("nhl_sync_full"),
+        "nhl_data": _max_ts([last_success(c) for c in ("nhl_sync_full", "nhl_midday_schedule_refresh", "nhl_pregame_targeted_refresh")]),
         "odds": _max_ts(quotes + prop_quotes),
         "recommendations": (sections.get("product_meta") or {}).get("generated_at_utc"),
         "settlement": last_success("settlement"),
