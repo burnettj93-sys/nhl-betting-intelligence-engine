@@ -53,10 +53,10 @@ def build_confirmation(*, confirmation_id: str, game_id: str, team: str, goalie_
             "goalie_id": str(goalie_id), "where_seen": where_seen, "seen_at_utc": seen_at_utc}
 
 
-def build_path_check(*, check_id: str, sent_at_utc: str, via: str, viewer_email_present: bool, viewer_allowed: bool, token_configured: bool) -> dict:
+def build_path_check(*, check_id: str, sent_at_utc: str, via: str, viewer_email_present: bool, viewer_allowed: bool, write_path_configured: bool) -> dict:
     """A document that proves the click-to-queue path without staking anything. It carries only booleans, never the email or the token."""
     return {"schema": SCHEMA, "type": "ORDER_PATH_CHECK", "check_id": check_id, "sent_at_utc": sent_at_utc, "via": via,
-            "viewer_email_present": viewer_email_present, "viewer_allowed": viewer_allowed, "token_configured": token_configured}
+            "viewer_email_present": viewer_email_present, "viewer_allowed": viewer_allowed, "write_path_configured": write_path_configured}
 
 
 def fingerprint(viewer_value: str | None) -> str | None:
@@ -86,7 +86,7 @@ def path_status(secrets_obj, user_email: str | None, viewer_id: str | None = Non
     fp = fingerprint(viewer_id)
     by_email = bool(email) and email in emails
     by_id = bool(fp) and fp in ids
-    return {"token_configured": token, "allowed_email_count": len(emails), "allowed_viewer_id_count": len(ids), "viewer_email_present": bool(email),
+    return {"write_path_configured": token, "allowed_email_count": len(emails), "allowed_viewer_id_count": len(ids), "viewer_email_present": bool(email),
             "viewer_email_masked": masked, "viewer_id_present": bool(fp), "viewer_fingerprint": fp, "viewer_allowed": by_email or by_id,
             "allowed_by": "email" if by_email else ("viewer id" if by_id else None), "direct_ready": token and (by_email or by_id)}
 

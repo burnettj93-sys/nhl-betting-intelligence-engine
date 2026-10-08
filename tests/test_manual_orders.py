@@ -254,7 +254,7 @@ class TestOrderClient(unittest.TestCase):
 class TestOrderPathCheck(unittest.TestCase):
     def doc(self, **kw):
         return order_client.build_path_check(check_id=kw.pop("check_id", "chk_" + "a" * 12), sent_at_utc="2026-10-08T20:00:00Z", via="direct",
-                                             viewer_email_present=True, viewer_allowed=True, token_configured=True) | kw
+                                             viewer_email_present=True, viewer_allowed=True, write_path_configured=True) | kw
 
     def test_check_is_accepted_once_and_touches_no_ledger(self):
         res = mo.process_path_check(self.doc(), now=NOW, source="github-issue:7", author=mo.OWNER_LOGIN)
@@ -267,6 +267,20 @@ class TestOrderPathCheck(unittest.TestCase):
     def test_malformed_or_foreign_documents_are_rejected(self):
         for bad in ("{", json.dumps({"type": "PAPER_ORDER", "schema": 1}), json.dumps(self.doc(check_id="x")), json.dumps(self.doc(schema=9))):
             self.assertEqual(mo.process_path_check(bad, now=NOW, source="s")["status"], "REJECTED", bad)
+
+    def test_published_rows_pass_the_snapshot_secret_name_guard(self):
+        """A key containing 'token' made the cloud publish fail on 2026-10-08; every key of every stored row must pass the publication validator."""
+        from operational import cloud_snapshot_schema as sch
+        mo.process_path_check(self.doc(check_id="chk_" + "b" * 12), now=NOW, source="github-issue:9", author=mo.OWNER_LOGIN)
+        mo.note_ignored_path_checks([{"issue": 41, "author": "stranger"}], NOW)
+        for row in mo.load_path_checks():
+            for key in row:
+                self.assertIsNone(sch._FORBIDDEN_KEY_RE.search(key), key)
+
+    def test_rows_written_with_the_old_key_are_migrated_on_read(self):
+        mo._save_path_checks([{"check_id": "chk_old", "status": "ACCEPTED", "token_configured": True}])
+        self.assertEqual(mo.load_path_checks()[0]["write_path_configured"], True)
+        self.assertNotIn("token_configured", mo.load_path_checks()[0])
 
     def test_other_authors_are_listed_not_processed(self):
         mo.note_ignored_path_checks([{"issue": 41, "author": "stranger"}], NOW)
@@ -283,7 +297,7 @@ class TestOrderPathCheck(unittest.TestCase):
         self.assertEqual(st["viewer_email_masked"], "m*@x.com")
         self.assertNotIn("SECRETVALUE9", json.dumps(st))
         none = order_client.path_status(S(), None)
-        self.assertFalse(none["direct_ready"] or none["viewer_email_present"] or none["token_configured"])
+        self.assertFalse(none["direct_ready"] or none["viewer_email_present"] or none["write_path_configured"])
         self.assertFalse(order_client.path_status(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), None)["direct_ready"])
 
     def test_path_check_uses_its_own_label_and_title(self):
