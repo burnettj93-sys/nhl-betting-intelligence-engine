@@ -79,6 +79,21 @@ for origin in ("AUTOMATIC", "MANUALLY_ADDED"):
             if not t["defects"]:
                 st.caption("No system defect found in this ticket: prices were timestamped and fresh at entry, it was recorded before puck drop, and its outcome agrees with its legs.")
 
+st.subheader("Postmortems for losing tickets")
+losses = rv.get("loss_postmortems") or []
+if not losses:
+    st.caption("No ticket has lost yet.")
+for t in losses:
+    with st.expander(f"{t['ticket_id']} — lost {ui.signed_money(t['profit_loss'])} on {ui.et_time(t['settled_at_utc'], True)} · reading: {t['reading'].title()}"):
+        st.dataframe([{"Leg": l["label"], "Recorded price": ui.american(l["recorded_price"]), "Model chance": ui.pct(l["model_probability"]), "Actual": l["actual_value"],
+                       "Result": l["outcome"].title(), "Closing price": ui.american(l["closing"]["american"]) if l["closing"].get("american") is not None else "n/a",
+                       "Vs close": l["price_vs_close"] or "—"} for l in t["legs"]], hide_index=True, width="stretch")
+        st.write(ui.esc(t.get("variance_note") or ""))
+        for d in t["defects"]:
+            (st.error if d["severity"] == "DEFECT" else st.caption)(ui.esc(f"{d['kind']}: {d['detail']}"))
+        if not [d for d in t["defects"] if d["severity"] == "DEFECT"]:
+            st.caption("No system defect found: the ticket was priced from a timestamped, fresh quote, recorded before puck drop, and its outcome agrees with its legs.")
+
 st.subheader("Defects and variance")
 if rv["defects"]:
     for d in rv["defects"]:

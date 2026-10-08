@@ -48,6 +48,8 @@ for b in rows:
         if b.get("provenance_json"):
             pv = json.loads(b["provenance_json"])
             st.caption(f"Manually added: order {pv.get('order_id')} from {pv.get('source')}, revalidated {ui.et_time(pv.get('revalidated_at_utc'), True)}. {pv.get('jurisdiction_note', '')}")
+        if b["result_status"] == "LOSS":
+            st.caption("The postmortem for this loss (what each leg did against its price and probability, closing prices, defect checks) is on Morning Review.")
         if b.get("settlement_json"):
             sj = json.loads(b["settlement_json"])
             st.json(sj, expanded=False)

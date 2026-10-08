@@ -56,11 +56,11 @@ def odds_status(now: dt.datetime | None = None) -> dict:
 
 
 def starter_intelligence_status() -> dict:
-    if not STARTER_RESULTS_PATH.exists():
-        return {"status": "UNAVAILABLE", "reason": "Stage 1 starter-projection results not found"}
+    # The product's own start-chance estimate (research/product_models/team_goalie.py) needs only the goalie logs; a start is CONFIRMED
+    # only when a person records one with its source and time (operational/goalie_confirmations.py). No automated feed exists.
     return {"status": "PROJECTED",
-            "reason": "internal historical-rotation projection available; no live lineup "
-                      "confirmation source is integrated, so this is never CONFIRMED"}
+            "reason": "start chances are estimates from recent usage and rest; no automated lineup confirmation feed is integrated, "
+                      "so a start is CONFIRMED only when a person records it (source and time)"}
 
 
 def build_readiness_report(nhl_sync_result: dict, moneypuck_sync_result: dict | None,

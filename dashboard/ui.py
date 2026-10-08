@@ -289,7 +289,7 @@ def add_control(opt: dict, *, key: str, cash: float | None, page_generated_at: s
     if order is not None:
         status = order["status"]
         if status == "RECORDED":
-            banner(f"Added to the paper book as <b>{order['ticket_id']}</b> ($10, manually added).", "good")
+            banner(f"Added to the paper book as <b>{order['ticket_id']}</b> (\\$10, manually added).", "good")
             return
         if status == "ALREADY_RECORDED":
             banner(f"Not added again: {esc(order['reason'])} ({order['ticket_id']}).", "info")

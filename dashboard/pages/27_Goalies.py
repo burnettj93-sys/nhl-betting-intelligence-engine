@@ -42,7 +42,7 @@ table = [{"Goalie": g["name"], "Team": g["team"], "Next game": (f"{'vs' if g['ne
           "Start chance (est.)": ui.pct((g.get("start") or {}).get("probability")) if g.get("start") else "—", "Status": g["confirmation"]["status"].title(),
           "W-L-OTL": rec(g), "SV%": f"{g['season']['save_pct']:.3f}" if (g.get("season") or {}).get("save_pct") is not None else "—",
           "GAA": f"{g['season']['gaa']:.2f}" if (g.get("season") or {}).get("gaa") is not None else "—",
-          "SO": (g.get("season") or {}).get("shutouts") if (g.get("season") or {}).get("games") else "—"} for g in rows]
+          "SO": str((g.get("season") or {}).get("shutouts")) if (g.get("season") or {}).get("games") else "—"} for g in rows]
 st.caption(f"{len(rows)} goalie(s). Status is Unconfirmed everywhere until a confirmation is recorded — no starting-goalie feed is connected, so the start chance is an estimate from recent usage and rest.")
 ev = st.dataframe(table, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row", key="gl_table", height=360)
 ids = [g["player_id"] for g in rows]

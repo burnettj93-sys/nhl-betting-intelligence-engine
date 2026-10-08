@@ -29,13 +29,13 @@ acct, origins = tk["account"], tk.get("origins") or {}
 settled_stake = (origins.get("ALL") or {}).get("settled_stake") or 0
 roi = (origins.get("ALL") or {}).get("roi")
 cols = st.columns(6)
-cols[0].metric("Available cash", ui.money(acct["available_cash"]), help="Starting $500 plus settled results, minus open stakes. No top-ups.")
+cols[0].metric("Available cash", ui.money(acct["available_cash"]), help="Starting \\$500 plus settled results, minus open stakes. No top-ups.")
 cols[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_tickets']} open ticket(s)", delta_color="off")
 cols[2].metric("Equity", ui.money(acct["equity"]), help="Cash plus open stakes at cost.")
 cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
 cols[5].metric("Tickets", acct["tickets"], help="All tickets ever recorded in this account.")
-st.caption(f"Paper account · $500 start, $10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
+st.caption(f"Paper account · \\$500 start, \\$10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
@@ -97,7 +97,7 @@ if ex.get("tickets_counted"):
 
 manual = tk.get("manual_tickets") or []
 st.subheader("Added by hand today")
-st.caption("Tickets added with “Add to paper book — $10” on Best Options or Players. They share the account and exposure above, never take one of the five automatic slots, and are reported separately in Paper Performance.")
+st.caption("Tickets added with “Add to paper book — \\$10” on Best Options or Players. They share the account and exposure above, never take one of the five automatic slots, and are reported separately in Paper Performance.")
 if manual:
     for t in manual:
         ui.ticket_card(t)

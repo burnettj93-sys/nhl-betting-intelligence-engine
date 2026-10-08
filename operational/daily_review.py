@@ -30,6 +30,7 @@ from operational import paper_bankroll as pb
 MIN_LEGS = 30
 Z_BAR = 2.0
 ENTRY_QUOTE_LIMIT_MIN = 150.0
+LOSS_POSTMORTEMS_SHOWN = 10
 MARKET_KEYS = {"PLAYER_SOG_ALTERNATE": "player_shots_on_goal_alternate", "PLAYER_POINTS": "player_points"}
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports" / "daily"
 
@@ -191,7 +192,9 @@ def build_review(bankroll_conn, nhl_conn, now: dt.datetime | None = None, *, rev
     cal = calibration(bets)
     by_origin = {o: [t for t in tickets if t["origin"] == o] for o in pb.ORIGINS}
     open_now = [b for b in bets if b["result_status"] in ("PENDING", "UNRESOLVED")]
-    return {"review_date_et": review_date, "generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "account": account,
+    losses = [b for b in bets if b["result_status"] == "LOSS"][-LOSS_POSTMORTEMS_SHOWN:]
+    return {"loss_postmortems": [ticket_review(b, nhl_conn, account) for b in reversed(losses)],
+            **{"review_date_et": review_date, "generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "account": account,
             "origins": pb.origin_performance(bankroll_conn, "REAL_MARKET_PAPER"),
             "tickets": tickets, "tickets_by_origin": {o: [t["ticket_id"] for t in ts] for o, ts in by_origin.items()},
             "defects": [dict(d, ticket_id=t["ticket_id"]) for t in tickets for d in t["defects"] if d["severity"] == "DEFECT"],
@@ -199,7 +202,7 @@ def build_review(bankroll_conn, nhl_conn, now: dt.datetime | None = None, *, rev
             "variance": [{"ticket_id": t["ticket_id"], "note": t["variance_note"]} for t in tickets if t["reading"] == "VARIANCE" and t["variance_note"]],
             "calibration": cal, "proposals": proposals(cal),
             "open_tickets": [{"ticket_id": b["paper_bet_id"], "origin": b.get("origin") or "AUTOMATIC", "status": b["result_status"]} for b in open_now],
-            "policy": {"min_legs_for_a_conclusion": MIN_LEGS, "z_bar": Z_BAR, "auto_retune": False}}
+            "policy": {"min_legs_for_a_conclusion": MIN_LEGS, "z_bar": Z_BAR, "auto_retune": False}}}
 
 
 def ticket_postmortem_markdown(t: dict) -> str:

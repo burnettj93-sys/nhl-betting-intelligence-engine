@@ -86,7 +86,7 @@ else:
     st.caption("Not enough recent games to infer a role (needs at least 2 this season).")
 
 st.markdown("#### Recent games (history)")
-st.dataframe([{"Date": r["date"], "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": r["toi_pp"], "SOG": int(r["shots"]),
+st.dataframe([{"Date": r["date"], "Season": r.get("season", ""), "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": r["toi_pp"], "SOG": int(r["shots"]),
                "G": int(r["goals"]), "A": int(r["assists"]), "Hits": int(r["hits"]), "Blk": int(r["blocks"])} for r in p["recent_games"]],
              hide_index=True, width="stretch")
 
