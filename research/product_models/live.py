@@ -76,7 +76,11 @@ def walk_history(rows: list[dict] | None = None, config: P.ModelConfig | None = 
 
 
 def infer_roles(players: dict[str, dict]) -> None:
-    """Adds line / power-play unit to every player dict in place, per team, from the ROLE_WINDOW most recent games."""
+    """Adds an ESTIMATED usage tier and power-play usage to every player dict in place, per team, from the ROLE_WINDOW most recent games.
+
+    Ranking forwards by ice time does not establish which line a player was assigned to, and ranking power-play minutes does not
+    establish a power-play unit, so these are named for what they are (usage_tier, pp_usage) and never presented as Line 1 / PP1. Reported
+    assignments come from a lineup source (operational/dailyfaceoff.py) and are carried separately."""
     by_team: dict[str, list[dict]] = defaultdict(list)
     for p in players.values():
         by_team[p["team"]].append(p)
@@ -85,19 +89,19 @@ def infer_roles(players: dict[str, dict]) -> None:
         forwards = sorted([p for p in usable if p["position_group"] == "F"], key=lambda p: -p["recent_toi"])
         defense = sorted([p for p in usable if p["position_group"] == "D"], key=lambda p: -p["recent_toi"])
         for i, p in enumerate(forwards):
-            p["line"] = min(i // 3 + 1, 4)
+            p["usage_tier"] = min(i // 3 + 1, 4)
         for i, p in enumerate(defense):
-            p["line"] = min(i // 2 + 1, 3)
+            p["usage_tier"] = min(i // 2 + 1, 3)
         pp_ranked = sorted(usable, key=lambda p: -p["recent_toi_pp"])
         for i, p in enumerate(pp_ranked):
-            p["pp_unit"] = 1 if i < 5 else 2 if i < 10 else None
+            p["pp_usage"] = 1 if i < 5 else 2 if i < 10 else None
             if p["recent_toi_pp"] < 0.25:
-                p["pp_unit"] = None
+                p["pp_usage"] = None
         for p in plist:
-            p.setdefault("line", None)
-            p.setdefault("pp_unit", None)
-            p["role_source"] = (f"Inferred from time on ice in each player's last {p['role_games']} game(s), ranked within "
-                                f"{team}; not an official line chart.") if p["role_games"] >= 2 else None
+            p.setdefault("usage_tier", None)
+            p.setdefault("pp_usage", None)
+            p["usage_source"] = (f"Inferred from time on ice in each player's last {p['role_games']} game(s), ranked within "
+                                f"{team}. An estimate of usage, not an assigned line or power-play unit.") if p["role_games"] >= 2 else None
 
 
 def season_totals(recent_all: list[dict], season: int) -> dict:

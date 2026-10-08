@@ -130,7 +130,7 @@ for side in ("away", "home"):
         if not p:
             continue
         pr = p.get("projection") if p.get("next_game") and p["next_game"]["game_id"] == gid else None
-        rows.append({"Player": p["name"], "Pos": p["position"], "Line": str(p["line"]) if p["line"] else "—", "PP": f"PP{p['pp_unit']}" if p["pp_unit"] else "—",
+        rows.append({"Player": p["name"], "Pos": p["position"], "Est. usage tier": ui.est_tier(p), "Est. PP usage": ui.est_pp(p), "Reported line": ui.reported_line(p), "Reported PP": ui.reported_pp(p),
                      "TOI": f"{p['recent_avg']['toi']:.1f}", "PP min": f"{p['recent_avg']['toi_pp']:.1f}",
                      "Exp. shots": f"{pr['expected']['shots']:.2f}" if pr else "—",
                      "Shots 2+": ui.pct(pr["probabilities"]["shots>=2"]) if pr else "—",
@@ -140,6 +140,6 @@ for side in ("away", "home"):
                      "Best option": "yes" if p.get("option_id") in opts else "—"})
     if rows:
         st.dataframe(rows, hide_index=True, width="stretch")
-        st.caption("Lines and power-play units are inferred from recent ice time (not an official lineup) — see each player's page for the games used. Probabilities are calibrated; players with fewer than 20 prior games are flagged limited and are not priced.")
+        st.caption("Est. usage tier and Est. PP usage are inferred from recent ice time (they are not assigned lines or power-play units). Reported line / PP appear only where a lineup source lists the player; each player's page shows the source and time. Probabilities are calibrated; players with fewer than 20 prior games are flagged limited and are not priced.")
     else:
         st.caption("No skater logs on file for this team yet this season.")

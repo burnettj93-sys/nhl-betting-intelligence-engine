@@ -67,7 +67,7 @@ class TestSchedule(unittest.TestCase):
 
 
 class TestRoles(unittest.TestCase):
-    def test_lines_pairs_and_power_play_units_come_from_recent_usage(self):
+    def test_usage_tiers_and_pp_usage_are_estimates_from_recent_usage(self):
         players = {}
         for i in range(12):
             players[f"F{i}"] = {"team": "TOR", "position_group": "F", "recent_toi": 20 - i, "recent_toi_pp": 3.0 if i < 5 else (1.0 if i < 10 else 0.0), "role_games": 4}
@@ -75,13 +75,14 @@ class TestRoles(unittest.TestCase):
             players[f"D{i}"] = {"team": "TOR", "position_group": "D", "recent_toi": 24 - i, "recent_toi_pp": 2.0 if i < 2 else 0.0, "role_games": 4}
         players["X"] = {"team": "TOR", "position_group": "F", "recent_toi": 18, "recent_toi_pp": 1.0, "role_games": 1}
         live.infer_roles(players)
-        self.assertEqual([players[f"F{i}"]["line"] for i in (0, 2, 3, 11)], [1, 1, 2, 4])
-        self.assertEqual([players[f"D{i}"]["line"] for i in (0, 1, 2, 5)], [1, 1, 2, 3])
-        self.assertEqual(players["F0"]["pp_unit"], 1)
-        self.assertEqual(players["F7"]["pp_unit"], 2)
-        self.assertIsNone(players["F11"]["pp_unit"])
-        self.assertIsNone(players["X"]["line"])                                    # not enough games to infer a role
-        self.assertIn("not an official line chart", players["F0"]["role_source"])
+        self.assertEqual([players[f"F{i}"]["usage_tier"] for i in (0, 2, 3, 11)], [1, 1, 2, 4])
+        self.assertEqual([players[f"D{i}"]["usage_tier"] for i in (0, 1, 2, 5)], [1, 1, 2, 3])
+        self.assertEqual(players["F0"]["pp_usage"], 1)
+        self.assertEqual(players["F7"]["pp_usage"], 2)
+        self.assertIsNone(players["F11"]["pp_usage"])
+        self.assertIsNone(players["X"]["usage_tier"])                                    # not enough games to infer a role
+        self.assertIn("not an assigned line or power-play unit", players["F0"]["usage_source"])
+        self.assertNotIn("line", [k for k in players["F0"] if k in ("line", "pp_unit")])
 
 
 class TestGoalieModelPieces(unittest.TestCase):

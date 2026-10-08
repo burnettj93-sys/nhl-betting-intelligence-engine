@@ -183,7 +183,7 @@ def build_goalie_projection(live_tg: dict, goalie: dict, team: str, opp: str, da
 # ------------------------------------------------------------------ build ----
 
 def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict | None = None, fetch_goalie_stats: bool = True,
-                skater_rows: list | None = None, goalie_rows: list | None = None) -> dict:
+                skater_rows: list | None = None, goalie_rows: list | None = None, lineup_state: dict | None = None) -> dict:
     from research.product_models import history, live as skater_live, team_goalie as tg
     from operational import nhl_goalie_stats
     import db
@@ -263,6 +263,9 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
             goalies_out[pid] = rec
 
         # ---- skaters
+        from operational import dailyfaceoff
+        lineup_state = lineup_state if lineup_state is not None else dailyfaceoff.load_state()
+        reported = reported_lineups(lineup_state, sk["players"])
         players_out, by_team = {}, defaultdict(list)
         for pid, p in sk["players"].items():
             team = p["team"]
@@ -275,8 +278,8 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                             "limited_history": m["limited_history"], "pricing_eligible": m["pricing_eligible"],
                             "probabilities": {k: m["probabilities"][k]["calibrated"] for k in SHOW_KEYS},
                             "model_version": m["model_version"]}
-            rec = {"player_id": pid, "name": p["name"], "team": team, "position": p["position"], "line": p["line"], "pp_unit": p["pp_unit"],
-                   "role_source": p["role_source"], "role_games": p["role_games"], "season": p["season_totals"],
+            rec = {"player_id": pid, "name": p["name"], "team": team, "position": p["position"], "usage_tier": p["usage_tier"], "pp_usage": p["pp_usage"],
+                   "usage_source": p["usage_source"], "role_games": p["role_games"], "reported": reported.get(pid), "season": p["season_totals"],
                    "recent_games": p["recent_games"], "recent_avg": {k.replace("recent_", ""): round(p[k], 2) for k in
                                                                     ("recent_toi", "recent_toi_pp", "recent_shots", "recent_goals", "recent_assists", "recent_hits", "recent_blocks")},
                    "last_game_date": p["last_game_date"], "games_total": p["games_total"], "next_game": ng, "projection": proj,
@@ -322,6 +325,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         data_through = {"skaters": sk["newest_game_date"], "goalies": date_of_last_obs,
                         "schedule_results": max((g["start_utc"] for g in games_out if g["state"] == "FINAL"), default=None)}
         model_health = _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through, goalies_out, players_out, games_out)
+        model_health["pipelines"].extend(_lineup_pipelines(lineup_state))
         return {
             "schema_version": SCHEMA_VERSION, "generated_at_utc": _iso(now), "et_today": today,
             "default_date": default_date, "data_through": data_through, "current_season": CURRENT_SEASON_ID,
@@ -333,6 +337,40 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
     finally:
         if owns:
             nhl.close()
+
+
+def reported_lineups(state: dict, skaters: dict[str, dict]) -> dict[str, dict]:
+    """{player_id: reported assignment} from the lineup source, kept apart from the estimated usage tiers.
+
+    A reported assignment is what a beat reporter published for the team's next game (forward line, defense pair, power-play and
+    penalty-kill unit), with the reporter, link and the time the report was updated; it is not what the player did last night and not
+    a guarantee of who will dress. Players the source does not list are simply absent, never filled in."""
+    from operational import dailyfaceoff
+    teams = ((state.get("lines") or {}).get("teams")) or {}
+    fetched = (state.get("lines") or {}).get("fetched_at_utc")
+    out: dict[str, dict] = {}
+    for team, t in teams.items():
+        matched = dailyfaceoff.observed_lineup(state, team, {pid: p for pid, p in skaters.items()})
+        for pid, r in matched.items():
+            out[pid] = {"line": r["line"], "pp": r["pp"], "pk": r["pk"], "injury_status": r["injury_status"],
+                        "game_time_decision": r["game_time_decision"], "reported_by": t.get("reported_by"), "source_url": t.get("source_url"),
+                        "updated_at_utc": t.get("updated_at_utc"), "fetched_at_utc": fetched, "source": "Daily Faceoff line combinations"}
+    return out
+
+
+def _lineup_pipelines(state: dict) -> list[dict]:
+    status = state.get("status") or "NOT_RUN"
+    goalies = (state.get("goalies") or {})
+    sides = [sd for g in goalies.get("games", []) for sd in g["sides"].values()]
+    team_confirmed = sum(1 for sd in sides if sd["status"] == "CONFIRMED")
+    reporter_confirmed = sum(1 for sd in sides if sd["status_word"].lower() == "confirmed" and sd["status"] != "CONFIRMED")
+    lines = (state.get("lines") or {})
+    note = f"status {status}" + (f"; last error: {state['last_error']}" if state.get("last_error") else "")
+    return [{"name": "Starting goalie reports", "through": goalies.get("fetched_at_utc"), "source": "Daily Faceoff public page (" + note + ")",
+             "detail": f"{len(sides)} goalie slots read; {team_confirmed} confirmed by the team's own post (accepted), "
+                       f"{reporter_confirmed} labelled Confirmed but sourced from a reporter (kept as an expectation)."},
+            {"name": "Reported lineups", "through": lines.get("fetched_at_utc"), "source": "Daily Faceoff line combinations (" + note + ")",
+             "detail": f"{len(lines.get('teams') or {})} teams read."}]
 
 
 def _tickets_state() -> dict | None:
@@ -429,8 +467,8 @@ def _teams(games_out, records, players, by_team, goalies, tg_state, today) -> di
         gl = [g for g in goalies.values() if g["team"] == t]
         out[t] = {"team": t, "record": {k: v for k, v in records.get(t, {}).items() if k != "last5"} or None, "last5": recent,
                   "upcoming": upcoming, "strength_rating": round(tg_state.team_strength(t), 3),
-                  "skaters": [{"player_id": p["player_id"], "name": p["name"], "position": p["position"], "line": p["line"],
-                               "pp_unit": p["pp_unit"], "toi_recent": p["recent_avg"]["toi"], "season": p["season"]} for p in skaters[:26]],
+                  "skaters": [{"player_id": p["player_id"], "name": p["name"], "position": p["position"], "usage_tier": p["usage_tier"],
+                               "pp_usage": p["pp_usage"], "reported": p.get("reported"), "toi_recent": p["recent_avg"]["toi"], "season": p["season"]} for p in skaters[:26]],
                   "goalies": [{"player_id": g["player_id"], "name": g["name"], "season": g["season"],
                                "start": g["start"], "confirmation": g["confirmation"]} for g in gl]}
     return out

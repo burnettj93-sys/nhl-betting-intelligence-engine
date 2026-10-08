@@ -19,7 +19,7 @@ mh = ui.load(ps.model_health, "Model health")
 
 MARKET_TONE = {"PRICING_ACTIVE": "good", "DISPLAY_ONLY": "muted", "MODEL_READY_PRICES_NOT_CAPTURED": "warn"}
 st.subheader("Data pipelines")
-st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " ")} for p in mh["pipelines"]], hide_index=True, width="stretch")
+st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " "), "Detail": p.get("detail") or ""} for p in mh["pipelines"]], hide_index=True, width="stretch")
 
 st.subheader("Models in use")
 for m in mh["models"]:

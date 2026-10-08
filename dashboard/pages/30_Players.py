@@ -46,7 +46,7 @@ key = {"Recent ice time": lambda p: -p["recent_avg"]["toi"], "Season points": la
 rows.sort(key=key)
 st.caption(f"{len(rows)} of {len(players)} skaters. Season = {meta['current_season'][:4]}-{meta['current_season'][6:]} regular season to date; recent = last up to 6 games.")
 
-table = [{"Player": p["name"], "Team": p["team"], "Pos": p["position"], "Line": str(p["line"]) if p["line"] else "—", "PP": f"PP{p['pp_unit']}" if p["pp_unit"] else "—",
+table = [{"Player": p["name"], "Team": p["team"], "Pos": p["position"], "Est. usage tier": ui.est_tier(p), "Est. PP usage": ui.est_pp(p), "Reported line": ui.reported_line(p), "Reported PP": ui.reported_pp(p),
           "GP": p["season"].get("games", 0), "G": int(p["season"].get("goals") or 0), "A": int(p["season"].get("assists") or 0),
           "Pts": int(p["season"].get("points") or 0), "SOG": int(p["season"].get("shots") or 0),
           "TOI": round(p["recent_avg"]["toi"], 1), "Option": "yes" if p.get("option_id") in opts else ""} for p in rows[:400]]
@@ -77,13 +77,29 @@ a[3].metric("Shots on goal", int(s.get("shots") or 0), f"{(s.get('shots') or 0) 
 a[4].metric("Hits / Blocks", f"{int(s.get('hits') or 0)} / {int(s.get('blocks') or 0)}")
 a[5].metric("Avg ice time", f"{s.get('toi_avg', 0):.1f} min", f"PP {s.get('toi_pp_avg', 0):.1f} min", delta_color="off")
 
-st.markdown("#### Role (inferred)")
-if p["line"]:
-    kind = "defense pair" if p["position"] == "D" else "forward line"
-    st.write(f"**{kind.title()} {p['line']}**" + (f" · **power-play unit {p['pp_unit']}**" if p["pp_unit"] else " · no regular power-play unit"))
-    st.caption(f"{p['role_source']} Newest game used: {p['last_game_date']}. Recent averages — ice time {p['recent_avg']['toi']:.1f} min, power play {p['recent_avg']['toi_pp']:.1f} min.")
+st.markdown("#### Reported lineup (from a lineup source)")
+rep = p.get("reported")
+if rep:
+    bits = [f"Line/pair **{rep['line']}**" if rep.get("line") else "no forward line or pair listed",
+            f"power play **{rep['pp']}**" if rep.get("pp") else "no power-play unit listed"]
+    if rep.get("pk"):
+        bits.append(f"penalty kill **{rep['pk']}**")
+    st.write(" · ".join(bits))
+    if rep.get("injury_status") or rep.get("game_time_decision"):
+        st.warning(f"Injury status on the report: {rep.get('injury_status') or 'game-time decision'}.")
+    link = f" — [{rep['reported_by']}]({rep['source_url']})" if rep.get("source_url") else f" — {rep.get('reported_by') or 'reporter not named'}"
+    st.caption(f"{rep['source']}{link}. Report updated {ui.age_text(rep['updated_at_utc'])}; fetched {rep['fetched_at_utc']}. "
+               "This is the lineup a reporter published for the next game, not a confirmed lineup and not what the player did last game.")
 else:
-    st.caption("Not enough recent games to infer a role (needs at least 2 this season).")
+    st.caption("No reported line or power-play unit is available for this player (the lineup source did not list them or has not been read yet).")
+
+st.markdown("#### Estimated usage (inferred from ice time — not an assigned line)")
+if p.get("usage_tier"):
+    kind = "Defense usage tier" if p["position"] == "D" else "Forward usage tier"
+    st.write(f"**Estimated usage tier: {kind.split()[0]} {p['usage_tier']}**" + (f" · **Estimated PP usage: {ui.est_pp(p).lower()}**" if p.get("pp_usage") else " · Estimated PP usage: none regular"))
+    st.caption(f"{p['usage_source']} Newest game used: {p['last_game_date']}. Recent averages — ice time {p['recent_avg']['toi']:.1f} min, power play {p['recent_avg']['toi_pp']:.1f} min.")
+else:
+    st.caption("Not enough recent games to estimate usage (needs at least 2 this season).")
 
 st.markdown("#### Recent games (history)")
 st.dataframe([{"Date": r["date"], "Season": r.get("season", ""), "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": r["toi_pp"], "SOG": int(r["shots"]),

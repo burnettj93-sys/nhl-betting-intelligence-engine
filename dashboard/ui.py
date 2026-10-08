@@ -346,3 +346,25 @@ def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supe
         record["url"] = order_client.prefilled_issue_url(order)
     sess[opt["option_id"]] = record
     st.rerun()
+
+
+# ---- player roles: estimated usage versus reported assignments (never shown under one "Line 1 / PP1" heading) ----
+_PP_USAGE = {1: "High", 2: "Some"}
+
+
+def est_tier(p: dict) -> str:
+    return f"Tier {p['usage_tier']}" if p.get("usage_tier") else "—"
+
+
+def est_pp(p: dict) -> str:
+    return _PP_USAGE.get(p.get("pp_usage"), "—")
+
+
+def reported_line(p: dict) -> str:
+    r = p.get("reported")
+    return (r.get("line") or "—") if r else "—"
+
+
+def reported_pp(p: dict) -> str:
+    r = p.get("reported")
+    return (r.get("pp") or "—") if r else "—"

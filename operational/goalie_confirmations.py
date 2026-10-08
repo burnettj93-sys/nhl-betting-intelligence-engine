@@ -1,8 +1,8 @@
 """
 Manual starting-goalie confirmations.
 
-No starting-goalie feed can be used automatically (see docs/STARTING_GOALIE_SOURCE_AUDIT.md), so a CONFIRMED status exists only when a
-person looks at a published source (the team's or league's announcement, a broadcast, a morning-skate report) and records:
+A CONFIRMED status comes from one of two places (see docs/STARTING_GOALIE_SOURCE_AUDIT.md): the automated Daily Faceoff reader
+(operational/dailyfaceoff.py, only when the cited source is the team's own post), or, as the fallback, a person who looks at a published source (the team's or league's announcement, a broadcast, a morning-skate report) and records:
 which goalie, for which game, where they saw it and when. That record is stored where the engine already reads goalie status
 (`goalie_status_events`, source `manual:<where seen>`), so every consumer sees one truth:
   * the moneyline gate (features/point_in_time.goalie_status) reads it;
@@ -19,6 +19,7 @@ import re
 from operational import quote_freshness
 
 SOURCE_PREFIX = "manual:"
+AUTO_PREFIX = "dailyfaceoff:"
 SCHEMA = 1
 LABEL = "goalie-confirmation"
 
@@ -60,23 +61,34 @@ def lookup(conn, game_id, team: str | None, goalie_id: str) -> dict | None:
     if game_id is None or team is None:
         return None
     row = conn.execute("SELECT player_id, status, effective_at_utc, observed_at_utc, source FROM goalie_status_events WHERE game_id = ? AND team_id = ? "
-                       "AND source LIKE 'manual:%' ORDER BY observed_at_utc DESC, id DESC LIMIT 1", (int(game_id), team)).fetchone()
+                       "AND (source LIKE 'manual:%' OR (source LIKE 'dailyfaceoff:%' AND status = 'CONFIRMED')) "
+                       "ORDER BY observed_at_utc DESC, id DESC LIMIT 1", (int(game_id), team)).fetchone()
     if row is None:
         return None
-    where = row["source"][len(SOURCE_PREFIX):].split("|")[0]
     z = lambda t: t if t.endswith("Z") else t + "Z"      # the status table stores UTC without a zone suffix  # noqa: E731
-    base = {"source": f"Manual entry — {where}", "checked_at_utc": z(row["effective_at_utc"]), "recorded_at_utc": z(row["observed_at_utc"])}
+    if row["source"].startswith(AUTO_PREFIX):
+        word, kind, url, name = (row["source"][len(AUTO_PREFIX):].split("|") + ["", "", "", ""])[:4]
+        what = "team post" if kind == "TEAM" else "beat-reporter post"
+        where, label, how = f"Daily Faceoff, {what} ({url})", f"Daily Faceoff — {what} by {name}", "Read automatically from"
+        base = {"source": label, "source_url": url or None, "automated": True}
+    else:
+        where = row["source"][len(SOURCE_PREFIX):].split("|")[0]
+        base = {"source": f"Manual entry — {where}", "automated": False}
+        how = "Recorded by hand: seen at"
+    base.update({"checked_at_utc": z(row["effective_at_utc"]), "recorded_at_utc": z(row["observed_at_utc"])})
     if str(row["player_id"]) == str(goalie_id):
-        return {**base, "status": "CONFIRMED", "note": f"Recorded by hand: seen at {where} at {base['checked_at_utc']}."}
-    return {**base, "status": "NOT_STARTING", "note": f"Another goalie ({row['player_id']}) was confirmed for this game (seen at {where})."}
+        return {**base, "status": "CONFIRMED", "note": f"{how} {where} at {base['checked_at_utc']}."}
+    return {**base, "status": "NOT_STARTING", "note": f"Another goalie ({row['player_id']}) was confirmed for this game ({where})."}
 
 
 def confirmed_observations(conn, game_id, team_id: str) -> list:
     """SourceObservation objects for the saves gate's consensus (CONFIRMED only)."""
     from research.goalie_intelligence import source_schema
     rows = conn.execute("SELECT player_id, effective_at_utc, observed_at_utc, source FROM goalie_status_events WHERE game_id = ? AND team_id = ? "
-                        "AND status = 'CONFIRMED' AND source LIKE 'manual:%' ORDER BY observed_at_utc DESC, id DESC LIMIT 1", (int(game_id), team_id)).fetchall()
+                        "AND status = 'CONFIRMED' AND (source LIKE 'manual:%' OR source LIKE 'dailyfaceoff:%') ORDER BY observed_at_utc DESC, id DESC LIMIT 1",
+                        (int(game_id), team_id)).fetchall()
     return [source_schema.SourceObservation(game_id=int(game_id), team_id=team_id, goalie_id=str(r["player_id"]), source=r["source"].split("|")[0],
-                                            source_status=source_schema.CONFIRMED, raw_status="confirmed (manual entry)",
+                                            source_status=source_schema.CONFIRMED,
+                                            raw_status=("confirmed (%s via Daily Faceoff)" % ("team post" if "|TEAM|" in r["source"] else "beat-reporter post")) if r["source"].startswith(AUTO_PREFIX) else "confirmed (manual entry)",
                                             source_observed_at_utc=r["effective_at_utc"], ingested_at_utc=r["observed_at_utc"],
                                             source_reference=r["source"]) for r in rows]

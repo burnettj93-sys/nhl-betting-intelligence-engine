@@ -90,6 +90,9 @@ JUSTIFIED_EXCEPTIONS = {
     # upcoming game is read back to show its source/time and to open the saves gate. It is a "now" lookup for a game that has not
     # started; it is never used to answer what was known at an earlier prediction time.
     ("operational/goalie_confirmations.py", "goalie_status_events"),
+    # Daily Faceoff reader (2026-10): appends a changed starter report to goalie_status_events and reads the newest row for the same upcoming
+    # game only to avoid writing a duplicate or walking back a confirmation. Same "now" scope as above; never a historical reconstruction.
+    ("operational/dailyfaceoff.py", "goalie_status_events"),
     ("validate.py", "roster_status_events"),
     ("validate.py", "goalie_status_events"),
     ("validate.py", "lineup_snapshots"),
