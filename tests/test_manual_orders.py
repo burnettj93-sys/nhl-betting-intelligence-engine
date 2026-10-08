@@ -292,6 +292,27 @@ class TestOrderPathCheck(unittest.TestCase):
         self.assertTrue(order_client.issue_title(d).startswith("order-path-check chk_"))
 
 
+class TestViewerIdentity(unittest.TestCase):
+    def test_header_formats_yield_an_email_and_a_names_only_shape(self):
+        import base64
+        from dashboard import ui
+        tok = lambda d: "h." + base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip("=") + ".s"   # noqa: E731
+        cases = [("Me@Example.com", "me@example.com", []), (json.dumps({"email": "me@example.com", "id": 1}), "me@example.com", ["email", "id"]),
+                 (tok({"email": "me@example.com", "exp": 5}), "me@example.com", ["email", "exp"]), (tok({"sub": "123"}), None, ["sub"]),
+                 ("opaque-value", None, []), (None, None, [])]
+        for value, want, claims in cases:
+            email, shape = ui._email_from_header(value)
+            self.assertEqual(email, want, value)
+            self.assertEqual(shape["claims"], claims)
+            self.assertNotIn("me@example.com", json.dumps(shape))                # the shape never carries the value
+
+    def test_streamlit_user_email_wins_over_the_header(self):
+        from unittest import mock
+        from dashboard import ui
+        with mock.patch.object(ui.st, "user", mock.Mock(email="Direct@X.com")):
+            self.assertEqual(ui.viewer_email(), "direct@x.com")
+
+
 class TestMigration(unittest.TestCase):
     def test_v3_ledger_migrates_without_rewriting_tickets(self):
         tmp = Path(tempfile.mkdtemp()) / "old.db"

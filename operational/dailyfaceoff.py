@@ -263,6 +263,8 @@ def refresh(now: dt.datetime | None = None, *, session=None, force: bool = False
     if not enabled():
         state["status"] = "DISABLED"
         state["disabled_reason"] = "Owner has not opted in (NHL_ENGINE_DAILYFACEOFF=ON): the site's terms restrict automated access."
+        if not state_paths.under_test():
+            _save(state)                                   # so the product shows WHY nothing was read, not "never run"
         return state
     if fetch is None and session is None and state_paths.under_test():
         state["status"] = "DISABLED"                    # a test run never reaches the public site

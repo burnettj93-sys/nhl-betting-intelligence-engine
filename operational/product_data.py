@@ -452,8 +452,8 @@ def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None, now: dt
     if found:
         return found
     return {"status": "UNCONFIRMED", "source": None, "checked_at_utc": None,
-            "note": "No confirmation has been recorded: the team has not posted this start on the page that is read automatically (or the page cites a "
-                    "reporter, which is kept as an expectation), and nobody has recorded one by hand. The chance shown is an estimate from recent usage. "
+            "note": "No usable confirmation is on record: none was recorded by hand, and the automatic reader (when the owner has switched it on) has found no fresh, "
+                    "sourced confirmation naming this goalie. The chance shown is an estimate from recent usage. "
                     "Saves props that depend on a named goalie stay blocked until a confirmation exists."}
 
 
