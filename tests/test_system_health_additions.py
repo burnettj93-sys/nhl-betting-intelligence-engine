@@ -65,7 +65,7 @@ class Test03ContractStatusIsHonestlyZero(unittest.TestCase):
 
     def test_reports_the_real_verified_contract_count(self):
         item = sh.contract_status_health()
-        self.assertIn("VERIFIED LIVE CONTRACTS: 6", item["message"])
+        self.assertIn("VERIFIED LIVE CONTRACTS: 7", item["message"])
 
     def test_a_certified_but_unwired_contract_is_reported_waiting_not_silently_ok(self):
         item = sh.contract_status_health()
