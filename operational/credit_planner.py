@@ -86,7 +86,11 @@ def spent_today(now: dt.datetime) -> dict[str, float]:
     out: dict[str, float] = {}
     from operational import eastern_time as et
     for r in read_ledger(et.eastern_today(now)):
-        out[r["class"]] = out.get(r["class"], 0.0) + r["credits"]
+        klass, credits = r["class"], r["credits"]
+        if klass == PROPS and GOALS_KEY in str(r.get("markets") or "") and credits >= 1:
+            out[GOALS] = out.get(GOALS, 0.0) + GOALS_COST          # rows written before goals had their own class: the goals market's one credit
+            credits -= GOALS_COST
+        out[klass] = out.get(klass, 0.0) + credits
     return out
 
 

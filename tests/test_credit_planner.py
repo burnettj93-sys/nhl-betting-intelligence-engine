@@ -223,6 +223,15 @@ class TestDecisionPullGuard(unittest.TestCase):
             self.assertEqual(mp._default_guard()["reason"], "HARD_RESERVE")
 
 
+class TestLegacyLedgerRows(unittest.TestCase):
+    def test_a_three_credit_props_row_with_goals_is_split_into_base_and_goals(self):
+        cp.record(cp.PROPS, 3, NOW, game_id="1", markets="player_shots_on_goal_alternate,player_points,player_goal_scorer_anytime")
+        cp.record(cp.PROPS, 2, NOW, game_id="2", markets="player_shots_on_goal_alternate,player_points")
+        spent = cp.spent_today(NOW)
+        self.assertEqual((spent[cp.PROPS], spent[cp.GOALS]), (4.0, 1.0))
+        cp._ledger().unlink()
+
+
 class TestLedger(unittest.TestCase):
     def test_record_and_read_back_by_et_day(self):
         cp.record(cp.PROPS, 3, NOW, event="e")
