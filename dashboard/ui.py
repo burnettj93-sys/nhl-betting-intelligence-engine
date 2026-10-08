@@ -256,7 +256,7 @@ def ontario_check(opt: dict, *, key: str) -> None:
                                                             observed_at_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                                             where_seen=where, us_price_shown=l["american_price"])
                         email = viewer_email()
-                        direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+                        direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
                         if direct:
                             res = order_client.submit_direct(v, token)
                             st.success("Recorded — it appears after the engine's next pass.") if res["ok"] else st.error(res["error"])
@@ -334,7 +334,7 @@ def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supe
         return                                                  # a repeated click while an order is outstanding
     order = order_client.build_order(opt, order_id=order_client.new_order_id(), page_generated_at=page_generated_at, supersedes=supersedes)
     email = viewer_email()
-    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
     record = {"order_id": order["order_id"], "via": "direct" if direct else "link"}
     if direct:
         res = order_client.submit_direct(order, token)
@@ -423,6 +423,15 @@ def viewer_email() -> str | None:
         return None
 
 
+def viewer_id() -> str | None:
+    """The platform's opaque viewer id (`X-Streamlit-User`) when it is NOT an email; None otherwise. Used only as a one-way fingerprint."""
+    try:
+        value = st.context.headers.get("X-Streamlit-User")
+    except Exception:  # noqa: BLE001
+        return None
+    return value if value and _email_from_header(value)[0] is None else None
+
+
 def identity_probe() -> dict:
     """Names only (never values): what identity the running app can actually see, so a missing email is explained rather than guessed."""
     out = {"streamlit": getattr(st, "__version__", "?"), "is_logged_in": None, "user_fields": [], "header_names": [], "user_header": {}}
@@ -445,13 +454,17 @@ def identity_probe() -> dict:
 
 def order_path_panel() -> None:
     email = viewer_email()
-    stat = order_client.path_status(getattr(st, "secrets", {}), email)
+    stat = order_client.path_status(getattr(st, "secrets", {}), email, viewer_id())
     st.dataframe([{"Check": "Order token secret configured", "Result": "yes" if stat["token_configured"] else "no"},
-                  {"Check": "Allowed-viewer emails configured", "Result": str(stat["allowed_email_count"])},
-                  {"Check": "App supplies a viewer email (st.user.email)", "Result": f"yes ({stat['viewer_email_masked']})" if stat["viewer_email_present"] else "no"},
-                  {"Check": "Viewer email is on the allow-list", "Result": "yes" if stat["viewer_allowed"] else "no"},
+                  {"Check": "Allow-listed viewers configured (emails / viewer ids)", "Result": f"{stat['allowed_email_count']} / {stat['allowed_viewer_id_count']}"},
+                  {"Check": "App supplies a viewer email (st.user.email or platform header)", "Result": f"yes ({stat['viewer_email_masked']})" if stat["viewer_email_present"] else "no"},
+                  {"Check": "App supplies an opaque platform viewer id", "Result": f"yes — fingerprint {stat['viewer_fingerprint']}" if stat["viewer_id_present"] else "no"},
+                  {"Check": "This viewer is on an allow-list", "Result": f"yes (by {stat['allowed_by']})" if stat["viewer_allowed"] else "no"},
                   {"Check": "One-click (direct) path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
                  hide_index=True, width="stretch")
+    if stat["viewer_id_present"] and not stat["viewer_allowed"]:
+        st.info(f"To allow this viewer, add `ORDER_ALLOWED_VIEWER_IDS = \"{stat['viewer_fingerprint']}\"` to the app's Secrets (with the `PAPER_ORDER_TOKEN`). "
+                "The fingerprint is a one-way tag of the platform's viewer id; the id itself is never stored or shown.")
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
     probe = identity_probe()
     st.caption(f"What the hosted app's authentication exposes (names only, no values): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
@@ -464,7 +477,7 @@ def order_path_panel() -> None:
                                             via="direct" if stat["direct_ready"] else "link", viewer_email_present=stat["viewer_email_present"],
                                             viewer_allowed=stat["viewer_allowed"], token_configured=stat["token_configured"])
         if stat["direct_ready"]:
-            _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email)
+            _, token = order_client.configured_write_access(getattr(st, "secrets", {}), email, viewer_id())
             res = order_client.submit_direct(doc, token)
             if res["ok"]:
                 sess[cid] = {"via": "direct", "issue": res["issue"]}

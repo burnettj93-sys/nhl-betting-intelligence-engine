@@ -59,20 +59,36 @@ def build_path_check(*, check_id: str, sent_at_utc: str, via: str, viewer_email_
             "viewer_email_present": viewer_email_present, "viewer_allowed": viewer_allowed, "token_configured": token_configured}
 
 
-def path_status(secrets_obj, user_email: str | None) -> dict:
-    """What the direct one-click path can see, as booleans plus a masked address. Never returns the token or the allow-list."""
+def fingerprint(viewer_value: str | None) -> str | None:
+    """A short, one-way tag of an opaque platform viewer id (first 12 hex characters of its SHA-256) -- what goes in the allow-list, so the raw id is never stored or shown."""
+    import hashlib
+    return hashlib.sha256(viewer_value.encode()).hexdigest()[:12] if viewer_value else None
+
+
+def _allowed(secrets_obj, key: str) -> list[str]:
+    return [e.strip().lower() for e in str(secrets_obj.get(key) or "").split(",") if e.strip()]
+
+
+def path_status(secrets_obj, user_email: str | None, viewer_id: str | None = None) -> dict:
+    """What the direct one-click path can see, as booleans plus masked identifiers. Never returns the token or an allow-list.
+    The viewer is recognised by email (`ORDER_ALLOWED_EMAILS`) or, where the platform supplies only an opaque viewer id, by that id's fingerprint
+    (`ORDER_ALLOWED_VIEWER_IDS`)."""
     try:
         token = bool((secrets_obj.get("PAPER_ORDER_TOKEN") or "").strip())
-        allowed = [e.strip().lower() for e in str(secrets_obj.get("ORDER_ALLOWED_EMAILS") or "").split(",") if e.strip()]
+        emails, ids = _allowed(secrets_obj, "ORDER_ALLOWED_EMAILS"), _allowed(secrets_obj, "ORDER_ALLOWED_VIEWER_IDS")
     except Exception:  # noqa: BLE001 - no secrets at all
-        token, allowed = False, []
+        token, emails, ids = False, [], []
     email = (user_email or "").strip().lower()
     masked = None
     if email and "@" in email:
         name, domain = email.split("@", 1)
         masked = f"{name[:1]}{'*' * max(len(name) - 1, 1)}@{domain}"
-    return {"token_configured": token, "allowed_email_count": len(allowed), "viewer_email_present": bool(email), "viewer_email_masked": masked,
-            "viewer_allowed": bool(email) and email in allowed, "direct_ready": token and bool(email) and email in allowed}
+    fp = fingerprint(viewer_id)
+    by_email = bool(email) and email in emails
+    by_id = bool(fp) and fp in ids
+    return {"token_configured": token, "allowed_email_count": len(emails), "allowed_viewer_id_count": len(ids), "viewer_email_present": bool(email),
+            "viewer_email_masked": masked, "viewer_id_present": bool(fp), "viewer_fingerprint": fp, "viewer_allowed": by_email or by_id,
+            "allowed_by": "email" if by_email else ("viewer id" if by_id else None), "direct_ready": token and (by_email or by_id)}
 
 
 def issue_title(order: dict) -> str:
@@ -118,13 +134,13 @@ def submit_direct(order: dict, token: str, *, opener=urllib.request.urlopen) -> 
         return {"ok": False, "error": f"The order could not be filed ({type(exc).__name__})."}
 
 
-def configured_write_access(secrets_obj, user_email: str | None) -> tuple[bool, str | None]:
-    """(direct_allowed, token). Direct writes need the token secret AND a viewer email on the allow-list."""
+def configured_write_access(secrets_obj, user_email: str | None, viewer_id: str | None = None) -> tuple[bool, str | None]:
+    """(direct_allowed, token). Direct writes need the token secret AND a viewer on an allow-list (by email or by viewer-id fingerprint)."""
     try:
         token = (secrets_obj.get("PAPER_ORDER_TOKEN") or "").strip()
-        allowed = [e.strip().lower() for e in str(secrets_obj.get("ORDER_ALLOWED_EMAILS") or "").split(",") if e.strip()]
     except Exception:  # noqa: BLE001 - no secrets file at all
         return False, None
-    if token and allowed and user_email and user_email.strip().lower() in allowed:
+    st_ = path_status(secrets_obj, user_email, viewer_id)
+    if token and st_["viewer_allowed"]:
         return True, token
     return False, None
