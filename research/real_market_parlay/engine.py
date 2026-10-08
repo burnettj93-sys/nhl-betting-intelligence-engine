@@ -227,6 +227,8 @@ def leg_label(leg: ParlayLeg) -> str:
         return f"{leg.participant_name} {leg.threshold}+ point{'s' if leg.threshold != 1 else ''}"
     if leg.market_family == "PLAYER_GOALS":
         return f"{leg.participant_name} to score a goal (anytime)"
+    if leg.market_family == "PUCK_LINE":
+        return f"{leg.participant_name} {leg.threshold:+.1f}"
     return f"{leg.participant_name} {leg.market_family} {leg.threshold}"
 
 
