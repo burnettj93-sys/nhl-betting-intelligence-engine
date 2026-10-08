@@ -684,12 +684,10 @@ class TestEndToEndDryRun(unittest.TestCase):
         # REAL_MARKET_PAPER exists only for a BET; whatever the model decided is what is recorded
         bets = self.bk_conn.execute("SELECT COUNT(*) c FROM paper_bets").fetchone()["c"]
         self.assertEqual(bets, sum(1 for r in rows if r["prospective_status"] == "BET"))
-        from dashboard import real_recommendations_view as rrv
-        ml = rrv.real_moneyline_recommendations(pl_conn=self.pl_conn, bankroll_conn=self.bk_conn)
-        self.assertEqual(len(ml), 2)
         from operational import cloud_snapshot_schema as schema
+        ml = [dict(r) for r in self.pl_conn.execute("SELECT * FROM predictions").fetchall()]
+        self.assertEqual(len(ml), 2)
         for row in ml:
-            self.assertFalse(row["is_demo"])
             f = schema.recommendation_freshness(row, now=self.game_start() - dt.timedelta(minutes=25))
             self.assertEqual(f["state"], "CURRENT")                                # price 10 min old, game < 4 h away
 

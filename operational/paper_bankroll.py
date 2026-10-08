@@ -42,7 +42,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "operational" / "paper_bankroll.db"
 SCHEMA_PATH = REPO_ROOT / "operational" / "paper_bankroll_schema.sql"
-SCHEMA_VERSION = 3  # v3: settlement_json column + ticket_alerts table (alerts-only revalidation).
+SCHEMA_VERSION = 4  # v4: origin (AUTOMATIC / MANUALLY_ADDED) + provenance_json; additive, no row rewritten.
+                    # v3: settlement_json column + ticket_alerts table (alerts-only revalidation).
                     # v2: Live Odds/Parlay/Post-Mortem activation sprint,
                     # Part 49 -- added the GAME_PARLAY_PAPER track.
 
@@ -51,6 +52,7 @@ PAPER_BET_STAKE = 10.00  # 2% of the default starting bankroll -- fixed, never d
 
 TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER", "GAME_PARLAY_PAPER")
 PRICE_SOURCES = ("LIVE_DRAFTKINGS", "SIMULATED_DEMO")
+ORIGINS = ("AUTOMATIC", "MANUALLY_ADDED")
 RESULT_STATES = ("PENDING", "WIN", "LOSS", "VOID", "UNRESOLVED")
 
 ODDS_RANGE_BUCKETS_ORDER = (
@@ -173,6 +175,11 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     conn = get_conn(db_path)
     with open(SCHEMA_PATH) as f:
         conn.executescript(f.read())
+    if "origin" not in {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}:
+        # An older table: the schema file's trigger names columns it does not have yet, which breaks the table
+        # rebuilds below. It is dropped here and re-created by the schema file once the columns exist.
+        conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+        conn.commit()
     row = conn.execute("SELECT version FROM schema_version").fetchone()
     if row is None:
         conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
@@ -181,6 +188,7 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
         _migrate_v1_to_v2(conn)
     if row is not None and row["version"] < SCHEMA_VERSION:
         _migrate_to_v3(conn)
+        _migrate_to_v4(conn)
         with open(SCHEMA_PATH) as f:     # re-create any trigger that a table rebuild dropped (all are IF NOT EXISTS)
             conn.executescript(f.read())
         conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
@@ -194,6 +202,19 @@ def _migrate_to_v3(conn: sqlite3.Connection) -> None:
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
     if "settlement_json" not in columns:
         conn.execute("ALTER TABLE paper_bets ADD COLUMN settlement_json TEXT")
+
+
+def _migrate_to_v4(conn: sqlite3.Connection) -> None:
+    """Additive only: every existing ticket becomes AUTOMATIC through the column default (SQLite does not rewrite
+    the rows). The immutability trigger is dropped here and re-created by the schema file with the new columns."""
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
+    if "origin" not in columns:
+        conn.execute("ALTER TABLE paper_bets ADD COLUMN origin TEXT NOT NULL DEFAULT 'AUTOMATIC' "
+                     "CHECK (origin IN ('AUTOMATIC', 'MANUALLY_ADDED'))")
+    if "provenance_json" not in columns:
+        conn.execute("ALTER TABLE paper_bets ADD COLUMN provenance_json TEXT")
+    conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+    conn.commit()
 
 
 def _utcnow_iso() -> str:
@@ -248,7 +269,7 @@ _COLUMNS = [
     "market_id", "market_family", "threshold", "side", "price_source", "legs_json",
     "entry_odds", "model_probability", "conservative_probability", "market_no_vig_probability",
     "edge", "ev", "confidence", "model_version", "prediction_checkpoint",
-    "stake", "created_at_utc", "event_start_utc",
+    "stake", "created_at_utc", "event_start_utc", "origin", "provenance_json",
 ]
 
 
@@ -296,7 +317,8 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
                       market_no_vig_probability=None, edge=None, ev=None, confidence=None,
                       model_version=None, prediction_checkpoint=None, stake: float = PAPER_BET_STAKE,
                       created_at_utc: str | None = None, event_start_utc=None,
-                      idempotency_key: str | None = None, paper_bet_id: str | None = None) -> dict:
+                      idempotency_key: str | None = None, paper_bet_id: str | None = None,
+                      origin: str = "AUTOMATIC", provenance_json: str | None = None) -> dict:
     """Part 28-30: FIRST ACTIONABLE BET CHECKPOINT entry only -- returns
     {"status": "DUPLICATE", "paper_bet_id": ...} on any later re-call
     with the same idempotency key, never a second $10 stake (Part 29).
@@ -318,6 +340,8 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         raise InvalidPaperBetError("DEMO_PAPER bets must be priced with SIMULATED_DEMO -- "
                                     "never mix a real price into the demo track")
     _validate_stake_and_odds(track, stake, entry_odds)
+    if origin not in ORIGINS:
+        raise InvalidPaperBetError(f"unknown origin {origin!r}")
 
     idempotency_key = idempotency_key or compute_paper_idempotency_key(
         track=track, event_id=event_id, participant_id=player_id or team, market_id=market_id,
@@ -336,6 +360,7 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         "confidence": confidence, "model_version": model_version,
         "prediction_checkpoint": prediction_checkpoint, "stake": stake,
         "created_at_utc": created_at_utc or _utcnow_iso(), "event_start_utc": event_start_utc,
+        "origin": origin, "provenance_json": provenance_json,
     }
     if conn.in_transaction:
         conn.commit()
@@ -544,6 +569,49 @@ def create_real_market_combo_paper_bet(conn: sqlite3.Connection, parlay_result: 
         created_at_utc=created_at_utc, idempotency_key=ticket_id, paper_bet_id=ticket_id)
 
 
+def compute_manual_ticket_id(stake_date: str, legs) -> str:
+    """Identity of a manually added ticket. The leg identity is the same one the automatic ticket id uses, behind a
+    different prefix, so the two origins are told apart on sight while the underlying bet is still recognisable."""
+    return "M" + compute_ticket_id(stake_date, legs)[1:]
+
+
+def create_manual_paper_bet(conn: sqlite3.Connection, combo, *, provenance: dict, event_start_utc: str | None,
+                             created_at_utc: str | None = None, code_version: str | None = None) -> dict:
+    """The one writer for MANUALLY_ADDED tickets. Same $10 stake, same REAL_MARKET_PAPER account and the same atomic
+    funds/duplicate transaction as automatic tickets; the ticket id carries an M prefix and the exact details the user
+    accepted are frozen in provenance_json. Refuses a bet the automatic tickets already hold (same legs, same day):
+    that would stake one bet twice."""
+    from operational import eastern_time as et
+    _as_of = dt.datetime.fromisoformat(created_at_utc) if created_at_utc else None
+    stake_date = et.eastern_today(_as_of)
+    legs = combo.legs
+    automatic_id = compute_ticket_id(stake_date, legs)
+    existing = conn.execute("SELECT paper_bet_id, origin FROM paper_bets WHERE paper_bet_id = ? OR idempotency_key = ?",
+                            (automatic_id, automatic_id)).fetchone()
+    if existing:
+        return {"status": "DUPLICATE", "paper_bet_id": existing["paper_bet_id"], "duplicate_of_origin": existing["origin"]}
+    ticket_id = compute_manual_ticket_id(stake_date, legs)
+    market_id = f"REAL_MARKET_PARLAY:{stake_date}:" + "+".join(
+        sorted(f"{l.game_id}:{l.participant_id}:{l.market_family}:{l.threshold}" for l in legs))
+    frozen = []
+    for l in legs:
+        f = _freeze_leg(l)
+        f["code_version"] = code_version
+        f["haircut_margin"] = getattr(combo, "leg_probability_margin", None)
+        frozen.append(f)
+    model_versions = sorted({l.model_version for l in legs if getattr(l, "model_version", "")})
+    if code_version:
+        model_versions.append(f"code:{code_version}")
+    return record_paper_bet(
+        conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id=market_id,
+        entry_odds=combo.estimated_combo_price, is_combo=True, top_conviction=False, legs_json=json.dumps(frozen),
+        model_probability=combo.joint_probability, conservative_probability=combo.joint_probability,
+        edge=combo.combo_edge, ev=getattr(combo, "ev_estimated", None), model_version=",".join(model_versions) or None,
+        prediction_checkpoint="MANUAL_ADD", event_start_utc=event_start_utc, created_at_utc=created_at_utc,
+        idempotency_key=ticket_id, paper_bet_id=ticket_id, origin="MANUALLY_ADDED",
+        provenance_json=json.dumps(provenance, sort_keys=True))
+
+
 def compute_ticket_id(stake_date: str, legs) -> str:
     """Deterministic ticket identity: Eastern date + the sorted economic
     identity (game, participant, market, line, side) of every leg. A price
@@ -705,8 +773,10 @@ def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None =
 
 
 def query_paper_bets(conn: sqlite3.Connection, track: str | None = None, is_combo: bool | None = None,
-                      result_status: str | None = None) -> list[dict]:
+                      result_status: str | None = None, origin: str | None = None) -> list[dict]:
     clauses, params = [], []
+    if origin is not None:
+        clauses.append("origin = ?"); params.append(origin)
     if track is not None:
         clauses.append("track = ?"); params.append(track)
     if is_combo is not None:
@@ -836,10 +906,10 @@ def _breakdown(rows: list[dict], key_fn) -> dict:
     return out
 
 
-def performance_breakdowns(conn: sqlite3.Connection, track: str) -> dict:
+def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | None = None) -> dict:
     """Part 38: results by market family, confidence, edge bucket, odds
-    range, Top Conviction status, straight vs combo."""
-    rows = query_paper_bets(conn, track=track)
+    range, Top Conviction status, straight vs combo (optionally for one origin)."""
+    rows = query_paper_bets(conn, track=track, origin=origin)
 
     def edge_bucket(r):
         e = r.get("edge")
@@ -861,6 +931,33 @@ def performance_breakdowns(conn: sqlite3.Connection, track: str) -> dict:
         "by_top_conviction": _breakdown(rows, lambda r: "TOP_CONVICTION" if r["top_conviction"] else "OTHER"),
         "by_straight_vs_combo": _breakdown(rows, lambda r: "COMBO" if r["is_combo"] else "STRAIGHT"),
     }
+
+
+def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -> dict:
+    """The same account, split by where each ticket came from. AUTOMATIC and MANUALLY_ADDED tickets share one cash
+    balance, but their results are reported separately (and together under ALL) so a manual click can never be
+    folded into the engine's own record."""
+    rows = query_paper_bets(conn, track=track)
+
+    def block(subset: list[dict]) -> dict:
+        settled = [r for r in subset if r["result_status"] in ("WIN", "LOSS", "VOID")]
+        wins = sum(1 for r in settled if r["result_status"] == "WIN")
+        losses = sum(1 for r in settled if r["result_status"] == "LOSS")
+        voids = sum(1 for r in settled if r["result_status"] == "VOID")
+        staked = sum(r["stake"] for r in settled)
+        pnl = sum(r["profit_loss"] or 0.0 for r in settled)
+        open_rows = [r for r in subset if r["result_status"] in ("PENDING", "UNRESOLVED")]
+        decided = wins + losses
+        return {"tickets": len(subset), "settled": len(settled), "wins": wins, "losses": losses, "voids": voids,
+                "pending": sum(1 for r in subset if r["result_status"] == "PENDING"),
+                "unresolved": sum(1 for r in subset if r["result_status"] == "UNRESOLVED"),
+                "open_stake": round(sum(r["stake"] for r in open_rows), 2), "settled_stake": round(staked, 2),
+                "settled_pnl": round(pnl, 2), "roi": (pnl / staked) if staked > 0 else None,
+                "hit_rate": (wins / decided) if decided else None}
+
+    out = {origin: block([r for r in rows if (r.get("origin") or "AUTOMATIC") == origin]) for origin in ORIGINS}
+    out["ALL"] = block(rows)
+    return out
 
 
 def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str) -> str:

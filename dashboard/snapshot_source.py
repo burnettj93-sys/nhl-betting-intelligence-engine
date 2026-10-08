@@ -19,13 +19,13 @@ Behavior
     memory is kept and the state says so (REMOTE-refresh-failed label); it is never
     silently treated as fresh, and its factual data_as_of still drives the
     CURRENT / STALE / VERY_STALE classification.
-  * Fallback: if there has never been a good remote snapshot, the git-bundled
-    board.json (schema 1, frozen) is used and labeled BUNDLED_FALLBACK.
+  * No fallback content: if there has never been a good remote snapshot the state is NONE and pages say so
+    (cause + last successful update). Nothing simulated or bundled is ever substituted.
   * Freshness is computed only from timestamps in the snapshot
     (cloud_snapshot_schema.classify_freshness) -- never invented.
 
 Configuration (env, then st.secrets; none are required)
-  NHL_ENGINE_SNAPSHOT_SOURCE   REMOTE (default in Community Cloud) | BUNDLED
+  NHL_ENGINE_SNAPSHOT_SOURCE   REMOTE (default in Community Cloud) | OFF
   NHL_ENGINE_SNAPSHOT_URL      raw URL of current/snapshot.json (default below)
   NHL_ENGINE_SNAPSHOT_TOKEN    optional read-only token, only if the data source
                                is later moved somewhere private; sent as an
@@ -56,12 +56,12 @@ MAX_ATTEMPTS = 2
 BACKOFF_S = (0.5,)
 MAX_BYTES = 8 * 1024 * 1024
 
-REMOTE, REMOTE_LKG, BUNDLED_FALLBACK, NONE = "REMOTE", "REMOTE_LAST_KNOWN_GOOD", "BUNDLED_FALLBACK", "NONE"
+REMOTE, REMOTE_LKG, NONE = "REMOTE", "REMOTE_LAST_KNOWN_GOOD", "NONE"
 
 
 class SnapshotState(NamedTuple):
     data: dict | None
-    source: str                    # REMOTE | REMOTE_LAST_KNOWN_GOOD | BUNDLED_FALLBACK | NONE
+    source: str                    # REMOTE | REMOTE_LAST_KNOWN_GOOD | NONE
     fetch_status: str              # OK | FAILED | NOT_ATTEMPTED
     last_error: str | None
     last_attempt_utc: str | None
@@ -109,10 +109,10 @@ def _setting(name: str) -> str | None:
 
 def remote_enabled() -> bool:
     """Remote fetching applies only in COMMUNITY_CLOUD_MODE, and can be forced off with
-    NHL_ENGINE_SNAPSHOT_SOURCE=BUNDLED (tests, air-gapped runs)."""
+    NHL_ENGINE_SNAPSHOT_SOURCE=OFF (tests, air-gapped runs)."""
     if not runtime_mode.is_community_cloud():
         return False
-    return (_setting(SOURCE_ENV) or REMOTE).upper() != "BUNDLED"
+    return (_setting(SOURCE_ENV) or REMOTE).upper() not in ("OFF", "BUNDLED")
 
 
 def snapshot_url() -> str:
@@ -190,14 +190,6 @@ def _utcnow() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
 
 
-def _bundled() -> dict | None:
-    from dashboard import cloud_snapshot
-    try:
-        return cloud_snapshot._load_bundled()
-    except cloud_snapshot.SnapshotUnavailable:
-        return None
-
-
 def _state_from(source: str, data: dict | None, fetch_status: str) -> SnapshotState:
     meta = schema.metadata_of(data) if data else {}
     as_of = meta.get("data_as_of")
@@ -215,9 +207,6 @@ def _view() -> SnapshotState:
     if _cache["good"] is not None:
         return _state_from(REMOTE if _cache["ok"] else REMOTE_LKG, _cache["good"],
                            "OK" if _cache["ok"] else "FAILED")
-    bundled = _bundled()
-    if bundled is not None:
-        return _state_from(BUNDLED_FALLBACK, bundled, "FAILED" if _cache["last_attempt_utc"] else "NOT_ATTEMPTED")
     return _state_from(NONE, None, "FAILED" if _cache["last_attempt_utc"] else "NOT_ATTEMPTED")
 
 
@@ -254,8 +243,8 @@ def current(*, force_refresh: bool = False) -> SnapshotState:
 def diagnostics() -> dict:
     """ADMIN-only facts about the snapshot source. Never includes the token or a query string."""
     if not remote_enabled():
-        state = _state_from(BUNDLED_FALLBACK, _bundled(), "NOT_ATTEMPTED")
-        source_kind = "BUNDLED (remote disabled)"
+        state = _state_from(NONE, None, "NOT_ATTEMPTED")
+        source_kind = "NONE (remote disabled)"
     else:
         state = current()
         source_kind = state.source

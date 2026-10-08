@@ -5,7 +5,7 @@ project's dashboard/conviction.py -- never real player/game data (no
 import unittest
 from unittest import mock
 
-from dashboard import conviction as conv
+from research.demo_board import conviction as conv
 from research.game_edge_parlay import engine
 
 

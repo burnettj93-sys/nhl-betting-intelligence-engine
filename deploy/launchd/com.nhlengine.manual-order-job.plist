@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.manual-order-job</string>
+
+    <!-- Answers manual "Add to paper book" orders and goalie confirmations / Ontario spot checks filed through the authenticated
+         queue (operational/manual_order_job.py). Every 2 minutes; asks the queue first and only builds the price pool when there is
+         an order. Install with WorkingDirectory pointing at the pinned release checkout (~/nhl_engine_release). -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.manual_order_job</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/nhl_engine_release</string>
+
+    <key>StartInterval</key>
+    <integer>120</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/manual_order_job.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/manual_order_job.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

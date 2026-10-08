@@ -281,15 +281,15 @@ class TestTodayScreen(unittest.TestCase):
         self.assertEqual(metrics["Open stakes"], "$50.00")
         self.assertEqual(metrics["Equity"], "$500.00")
         self.assertEqual(metrics["Settled P&L"], "+$0.00".replace("+", ""))
-        text = " ".join(m.value for m in at.markdown)
+        text = " ".join([m.value for m in at.markdown] + [c.value for c in at.caption])
         for ticket in state["tickets"]:
             self.assertIn(ticket["ticket_id"], text)
+        text = " ".join(m.value for m in at.markdown)
         self.assertEqual(text.count("Recorded</span>"), 5)
         self.assertGreaterEqual(len(at.dataframe), 5)                   # one leg table per ticket (+ exposure tables)
-        self.assertTrue(any('Shared exposure' in m.value for m in at.markdown))
-        self.assertTrue(any('EXPERIMENTAL model probabilities' in c.value for c in at.caption))
-        self.assertTrue(any('estimated combined price' in c.value for c in at.caption))
-        self.assertFalse(any("Market coverage" in m.value for m in at.markdown))   # technical stays collapsed
+        self.assertTrue(any('Shared exposure' in e.label for e in at.expander))
+        self.assertTrue(any(m.label == "Estimated combined price" for m in at.metric))
+        self.assertFalse(any("Market coverage" in m.value for m in at.markdown))
 
     def test_recommended_tickets_are_badged_and_the_cash_notice_is_shown(self):
         now = dt.datetime.now(dt.timezone.utc)
@@ -297,14 +297,15 @@ class TestTodayScreen(unittest.TestCase):
         at = self._page(state)
         text = " ".join(m.value for m in at.markdown)
         self.assertIn("Recommended</span>", text)
-        self.assertTrue(any("below the" in i.value for i in at.info))
+        self.assertTrue(any("below the" in (m.value if hasattr(m, "value") else "") for m in at.markdown))
 
     def test_empty_slots_are_explained_and_a_stale_board_warns(self):
         old = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=2)
         state = self._state([], now=old)
         at = self._page(state)
-        self.assertTrue(any("5 of 5 ticket slots empty" in i.value for i in at.info))
-        self.assertTrue(any("minutes old" in w.value for w in at.warning))
+        text = " ".join(m.value for m in at.markdown)
+        self.assertIn("5 slot(s) empty", text)
+        self.assertIn("old", text)
 
 
 class TestQuoteTimestampsAreFrozenAndShown(unittest.TestCase):
@@ -576,3 +577,41 @@ class TestSettlementReconciliation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRecordingWaves(unittest.TestCase):
+    """Early puck drops cannot use up the whole day's slots while later puck drops are still to come."""
+
+    def _games(self, early, late):
+        conn = _fresh_nhl_conn()
+        for gid, start in [(g, "2026-10-15T19:00:00") for g in early] + [(g, "2026-10-16T00:30:00") for g in late]:
+            conn.execute("INSERT INTO games (game_id, season, game_date, scheduled_start_utc, home_team, away_team, game_state, source) "
+                         "VALUES (?,?,?,?,?,?,?,?)", (gid, "20262027", "2026-10-15", start, "TOR", "MTL", "SCHEDULED", "test"))
+        conn.commit()
+        return conn
+
+    def test_waves_are_clusters_of_puck_drops(self):
+        nhl = self._games([1, 2, 3, 4], [5, 6, 7, 8])
+        waves = dtk.day_waves(nhl, "2026-10-15")
+        self.assertEqual([len(w["game_ids"]) for w in waves], [4, 4])
+
+    def test_the_early_wave_is_capped_while_a_later_wave_is_pending(self):
+        nhl = self._games([1, 2, 3, 4, 5, 6], [7, 8])
+        path, conn = fresh_ledger()
+        early = [leg(g, f"P{g}", price=-105, p=0.64, start="2026-10-15T19:00:00Z") for g in (1, 2, 3, 4, 5, 6)]
+        out = dtk.run_cycle(nhl, conn, NOW, collected=collected(early))
+        self.assertEqual(out["newly_recorded"], 4)                                  # 5 slots - 1 held for the one later wave
+        state = dtk.read_state()
+        self.assertEqual(state["slots"]["used"], 4)
+        self.assertEqual(state["diagnostics"]["recording_policy"]["waves"][0]["slot_cap"], 4)
+        late = [leg(g, f"P{g}", price=-105, p=0.64, start="2026-10-16T00:30:00Z") for g in (7, 8)]
+        out2 = dtk.run_cycle(nhl, conn, NOW, collected=collected(early + late))
+        self.assertEqual(out2["newly_recorded"], 1)                                 # the held slot goes to the later wave
+        self.assertEqual(len(dtk.recorded_today(conn, "2026-10-15")), 5)
+
+    def test_a_single_wave_day_is_not_restricted(self):
+        nhl = self._games([1, 2, 3, 4, 5, 6, 7, 8], [])
+        path, conn = fresh_ledger()
+        legs = board(8, start="2026-10-15T19:00:00Z")
+        out = dtk.run_cycle(nhl, conn, NOW, collected=collected(legs))
+        self.assertEqual(out["newly_recorded"], 5)

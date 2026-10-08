@@ -35,7 +35,7 @@ def setUpModule():
     force the bundled source (the remote reader has its own tests in test_cloud_live_data.py)."""
     global _saved_source
     _saved_source = os.environ.get("NHL_ENGINE_SNAPSHOT_SOURCE")
-    os.environ["NHL_ENGINE_SNAPSHOT_SOURCE"] = "BUNDLED"
+    os.environ["NHL_ENGINE_SNAPSHOT_SOURCE"] = "OFF"
     from dashboard import snapshot_source
     snapshot_source.reset()
 
@@ -46,18 +46,17 @@ def tearDownModule():
     else:
         os.environ["NHL_ENGINE_SNAPSHOT_SOURCE"] = _saved_source
 
-# Titles that existed in the nav BEFORE this sprint (36 pages) -- LOCAL_MODE
-# must keep registering every one of them.
-ORIGINAL_36 = {
-    "Today", "Live SOG Markets", "Player Props", "Goalies", "Combinations", "Games", "Game Detail",
-    "Market Movement", "Players", "Team Intelligence", "Player Intelligence", "Model Health",
-    "Model Learning", "Paper Performance", "Morning Review", "Ledger", "Data Status",
-    "Play-by-Play Status", "Team Ratings", "Research Hub", "Prop Registry", "Player SOG Research",
+# Research pages that stay registered for an ADMIN in LOCAL/PRODUCTION modes (never in the hosted app). The simulated pages
+# (Combinations, Market Movement, Model Learning, Player Intelligence) are gone entirely.
+ADMIN_RESEARCH = {
+    "Live SOG Markets", "Play-by-Play Status", "Team Ratings", "Research Hub", "Prop Registry", "Player SOG Research",
     "Player SOG by Period", "Player Goals Research", "Player Points Research", "Team SOG Research",
-    "Goalie Saves Research", "Goalie Intelligence", "Joint Shot/Workload Research",
-    "Joint Scoring Dependence", "Team Goals by Period", "Player Context State", "Model Performance",
-    "Research Lab", "Fantasy HQ", "Fantasy Settings",
+    "Goalie Saves Research", "Goalie Intelligence", "Joint Shot/Workload Research", "Joint Scoring Dependence",
+    "Team Goals by Period", "Player Context State", "Model Performance", "Research Lab", "Fantasy Settings",
 }
+PRODUCT_PAGES = {"Today", "Games", "Game Detail", "Best Options", "Players", "Goalies", "Team Intelligence", "Model Health",
+                 "Paper Performance", "Ticket History"}
+LIGHTWEIGHT = {"Morning Review", "Data Status"}
 
 # Things that must NEVER be constructed/imported by the Community Cloud path.
 FORBIDDEN_MODULES = (
@@ -146,15 +145,23 @@ class TestPageRegistry(unittest.TestCase):
         defaults = [p for p in page_registry.PAGES if p.default]
         self.assertEqual([p.title for p in defaults], ["Today"])
 
-    def test_local_and_production_modes_register_every_original_page_for_admin(self):
+    def test_local_and_production_modes_register_every_product_and_research_page_for_admin(self):
         for mode in (rm.LOCAL_MODE, rm.PRODUCTION_MODE):
             titles = {p.title for specs in page_registry.pages_for("ADMIN", mode).values() for p in specs}
-            self.assertTrue(ORIGINAL_36 <= titles, f"{mode} lost pages: {ORIGINAL_36 - titles}")
+            self.assertTrue((PRODUCT_PAGES | LIGHTWEIGHT | ADMIN_RESEARCH) <= titles, f"{mode} lost pages: {(PRODUCT_PAGES | LIGHTWEIGHT | ADMIN_RESEARCH) - titles}")
             self.assertIn("Diagnostics", titles)
 
-    def test_local_mode_registers_no_more_than_before_for_a_user_plus_nothing_admin_only(self):
+    def test_a_plain_user_sees_the_product_pages_and_no_research_or_admin_page(self):
         user_titles = {p.title for specs in page_registry.pages_for("USER", rm.LOCAL_MODE).values() for p in specs}
-        self.assertEqual(user_titles, ORIGINAL_36 - {"Fantasy HQ", "Fantasy Settings"})
+        self.assertEqual(user_titles, PRODUCT_PAGES | LIGHTWEIGHT)
+
+    def test_no_simulated_page_exists_in_the_registry_or_on_disk(self):
+        titles = {p.title for p in page_registry.PAGES}
+        for gone in ("Combinations", "Market Movement", "Model Learning", "Player Intelligence"):
+            self.assertNotIn(gone, titles)
+        names = {Path(p).name for p in glob.glob(str(REPO / "dashboard" / "pages" / "*.py"))}
+        for gone in ("28_Combinations.py", "29_Market_Movement.py", "32_Model_Learning.py", "25_Player_Intelligence.py"):
+            self.assertNotIn(gone, names)
 
     def test_heavy_and_legacy_pages_are_not_registered_in_community_cloud(self):
         for role in ("ADMIN", "USER"):
@@ -165,9 +172,7 @@ class TestPageRegistry(unittest.TestCase):
     def test_every_core_user_page_stays_available_in_community_cloud(self):
         cloud_user = {p.title for specs in page_registry.pages_for("USER", rm.COMMUNITY_CLOUD_MODE).values()
                       for p in specs}
-        for title in ("Today", "Games", "Game Detail", "Player Props", "Goalies", "Combinations",
-                      "Market Movement", "Team Intelligence", "Player Intelligence", "Players",
-                      "Paper Performance", "Ledger", "Model Health", "Model Learning"):
+        for title in PRODUCT_PAGES:
             self.assertIn(title, cloud_user)
 
     def test_admin_lightweight_pages_survive_in_community_cloud(self):
@@ -177,7 +182,7 @@ class TestPageRegistry(unittest.TestCase):
             self.assertIn(title, admin)
 
     def test_yahoo_pages_are_admin_only_and_absent_from_community_cloud(self):
-        for name in ("34_Fantasy_HQ.py", "35_Fantasy_Settings.py"):
+        for name in ("35_Fantasy_Settings.py",):
             spec = page_registry.spec_for_file(name)
             self.assertTrue(spec.admin_only)
             self.assertFalse(page_registry.is_registered(name, "USER", rm.LOCAL_MODE))
@@ -202,61 +207,48 @@ class TestPageRegistry(unittest.TestCase):
 
 
 class TestSnapshot(unittest.TestCase):
-    def test_shipped_snapshot_equals_a_fresh_live_computation(self):
-        """The guard against silent staleness (also `python3 -m dashboard.cloud_snapshot --check`)."""
-        with mock.patch.object(rm, "current_mode", return_value=rm.LOCAL_MODE):
-            self.assertEqual(cloud_snapshot.verify_against_live(), [])
-
-    def test_snapshot_is_compact_and_carries_provenance(self):
-        size = cloud_snapshot.SNAPSHOT_PATH.stat().st_size
-        self.assertLess(size, 2 * 1024 * 1024, "snapshot should stay a compact artifact")
-        meta = cloud_snapshot.snapshot_meta()
-        for key in ("generated_at_utc", "simulated_slate_date", "newest_real_dk_capture_utc",
-                    "elo_corpus_last_game_date"):
-            self.assertIn(key, meta)
-        self.assertTrue(meta["available"])
+    def _served(self, doc):
+        from dashboard import snapshot_source as ss
+        state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=doc, source="REMOTE", fetch_status="OK", freshness="CURRENT")
+        return mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+            mock.patch.object(ss, "current", return_value=state)
 
     def test_accessors_hand_out_copies_so_a_session_cannot_corrupt_the_shared_snapshot(self):
-        a = cloud_snapshot.demo_opportunities()
-        a[0]["decision"] = "TAMPERED"
-        a.clear()
-        b = cloud_snapshot.demo_opportunities()
-        self.assertTrue(b)
-        self.assertNotEqual(b[0]["decision"], "TAMPERED")
+        from tests.product_fixture import snapshot
+        doc = snapshot()
+        a, b, c = self._served(doc)
+        with a, b, c:
+            first = cloud_snapshot.product_players()
+            first["P1"]["name"] = "TAMPERED"
+            first.clear()
+            second = cloud_snapshot.product_players()
+        self.assertTrue(second)
+        self.assertNotEqual(second["P1"]["name"], "TAMPERED")
 
-    def test_missing_snapshot_fails_loudly_never_silently_empty(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.object(cloud_snapshot, "SNAPSHOT_PATH", Path(tmp) / "nope.json"):
-                cloud_snapshot.reset_cache()
-                try:
-                    with self.assertRaises(cloud_snapshot.SnapshotUnavailable):
-                        cloud_snapshot.demo_opportunities()
-                    self.assertFalse(cloud_snapshot.snapshot_meta()["available"])
-                finally:
-                    cloud_snapshot.reset_cache()
+    def test_missing_snapshot_fails_loudly_never_silently_empty_and_says_why(self):
+        from dashboard import snapshot_source as ss
+        state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=None, source="NONE", fetch_status="FAILED", last_error="HTTP 404")
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+                mock.patch.object(ss, "current", return_value=state):
+            with self.assertRaises(cloud_snapshot.SnapshotUnavailable) as ctx:
+                cloud_snapshot.product_games()
+            self.assertIn("HTTP 404", str(ctx.exception))
+            self.assertIn("Last successful update", str(ctx.exception))
+            self.assertFalse(cloud_snapshot.snapshot_meta()["available"])
 
-    def test_builder_refuses_to_run_in_community_cloud_mode(self):
-        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
-            with self.assertRaises(rm.HeavyFeatureUnavailable):
-                cloud_snapshot.build_snapshot()
+    def test_a_section_missing_from_an_older_snapshot_is_reported_as_such(self):
+        from tests.product_fixture import snapshot
+        doc = snapshot()
+        del doc["product_teams"]
+        a, b, c = self._served(doc)
+        with a, b, c:
+            with self.assertRaises(cloud_snapshot.SectionUnavailable):
+                cloud_snapshot.product_teams()
 
-    def test_demo_builders_read_the_snapshot_and_never_build_the_stack_in_cloud_mode(self):
-        from dashboard import demo_data as dd
-        from dashboard import eligible_bets as eb
-        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
-            self.assertEqual(len(dd.build_demo_games()), 6)
-            self.assertTrue(dd.build_demo_roster())
-            self.assertTrue(eb.all_opportunities())
-            with self.assertRaises(rm.HeavyFeatureUnavailable):
-                dd._demo_context()
-
-    def test_cloud_and_local_demo_board_are_identical(self):
-        from dashboard import eligible_bets as eb
-        with mock.patch.object(rm, "current_mode", return_value=rm.LOCAL_MODE):
-            live = json.loads(json.dumps(eb.all_opportunities()))
-        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
-            snap = eb.all_opportunities()
-        self.assertEqual(live, json.loads(json.dumps(snap)))
+    def test_the_hosted_reader_has_no_builder_bundled_board_or_simulated_accessors(self):
+        for name in ("build_snapshot", "verify_against_live", "write_snapshot", "SNAPSHOT_PATH", "_load_bundled", "demo_games", "demo_roster",
+                     "demo_opportunities", "prop_opportunities", "market_movement", "live_moneyline_rows"):
+            self.assertFalse(hasattr(cloud_snapshot, name), name)
 
 
 # Runs in a clean subprocess: renders EVERY Community Cloud page as ADMIN with
@@ -309,9 +301,15 @@ auth_store.DEFAULT_DB_PATH = pathlib.Path(tempfile.mkdtemp()) / "probe_auth.db"
 from streamlit.testing.v1 import AppTest
 from dashboard import page_registry
 
-state_by_page = {"2_Game_Detail.py": {"selected_game_id": "demo-EDM-COL"},
-                 "25_Player_Intelligence.py": {"selected_player_id": "8478402"},
-                 "31_Team_Intelligence.py": {"selected_team": "EDM"}}
+from unittest import mock
+from dashboard import snapshot_source as _ss
+from tests.product_fixture import snapshot as _fixture
+_doc = _fixture()
+_state = _ss.SnapshotState(**{f: None for f in _ss.SnapshotState._fields})._replace(data=_doc, source="REMOTE", fetch_status="OK", freshness="CURRENT",
+                                                                                     data_as_of=_doc["metadata"]["data_as_of"], generated_at=_doc["metadata"]["generated_at"])
+mock.patch.object(_ss, "remote_enabled", return_value=True).start()
+mock.patch.object(_ss, "current", return_value=_state).start()
+state_by_page = {"2_Game_Detail.py": {"selected_game_id": "2026020900"}, "31_Team_Intelligence.py": {"selected_team": "AAA"}}
 exceptions, sessions = {}, {}
 files = [p.file for specs in page_registry.pages_for("ADMIN").values() for p in specs]
 import pickle
@@ -325,7 +323,7 @@ for f in files:
         exceptions[f] = [e.value[:120] for e in at.exception]
     sessions[f] = len(pickle.dumps({k: v for k, v in at.session_state.filtered_state.items()}))
     if f == "21_Today.py":
-        today_text = " ".join(m.value for m in at.markdown)
+        today_text = " ".join([m.value for m in at.markdown] + [m.label for m in at.metric])
 
 print("RESULT " + json.dumps({
     "files": files, "exceptions": exceptions, "writes": writes, "net": net, "procs": procs,
@@ -333,7 +331,7 @@ print("RESULT " + json.dumps({
     "critical_unchanged": {k: before[k] == digest(v) for k, v in critical.items()},
     "operational_dir_unchanged": snapshot_dir_before == sorted(os.listdir(f"{REPO}/operational")),
     "max_session_state_bytes": max(sessions.values()),
-    "today_banner": 'data-testid="cloud-snapshot-banner"' in today_text and "DATA AS OF" in today_text,
+    "today_has_account": "Available cash" in today_text or "Added by hand today" in today_text,
 }))
 '''
 
@@ -344,7 +342,7 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         env = {k: v for k, v in os.environ.items() if k != rm.ENV_VAR}
-        env["NHL_ENGINE_SNAPSHOT_SOURCE"] = "BUNDLED"    # this probe asserts NO network at all
+        env["NHL_ENGINE_SNAPSHOT_SOURCE"] = "OFF"        # this probe asserts NO network at all; the snapshot is injected in-process
         proc = subprocess.run(
             [sys.executable, "-c", _RENDER_PROBE, str(REPO), json.dumps(list(FORBIDDEN_MODULES))],
             capture_output=True, text=True, timeout=600, env=env, cwd=str(REPO))
@@ -355,7 +353,7 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
 
     def test_every_cloud_page_renders_without_an_exception(self):
         self.assertEqual(self.result["exceptions"], {})
-        self.assertGreaterEqual(len(self.result["files"]), 16)
+        self.assertGreaterEqual(len(self.result["files"]), 13)
 
     def test_no_writes_to_any_database_during_rendering(self):
         self.assertEqual(self.result["writes"], [])
@@ -376,21 +374,21 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     def test_session_state_stays_tiny(self):
         self.assertLess(self.result["max_session_state_bytes"], 20_000)
 
-    def test_freshness_banner_is_shown_on_today(self):
-        self.assertTrue(self.result["today_banner"])
+    def test_today_renders_the_account_from_the_published_snapshot(self):
+        self.assertTrue(self.result["today_has_account"])
 
 
 class TestFreshnessHonesty(unittest.TestCase):
-    def test_banner_says_snapshot_is_not_live_and_names_the_frozen_inputs(self):
+    def test_banner_says_the_deployment_cannot_receive_live_state_except_through_the_feed(self):
         from dashboard import components as comp
-        lines = " ".join(comp.cloud_freshness_lines(cloud_snapshot.snapshot_meta()))
-        self.assertIn("frozen", lines.lower())
+        meta = {"available": True, "generated_at_utc": "2026-10-08T12:00:00Z", "freshness": {"odds": "2026-10-08T11:50:00Z"}}
+        lines = " ".join(comp.cloud_freshness_lines(meta))
         self.assertIn("cannot receive live operational state", lines)
-        self.assertIn("Newest real DraftKings moneyline capture", lines)
+        self.assertIn("2026-10-08T11:50:00Z", lines)
 
     def test_banner_reports_an_unavailable_snapshot_honestly(self):
         from dashboard import components as comp
-        text = comp.cloud_freshness_lines({"available": False, "error": "board.json is missing"})[0]
+        text = comp.cloud_freshness_lines({"available": False, "error": "no snapshot has loaded"})[0]
         self.assertIn("unavailable", text)
 
     def test_frozen_nhl_db_is_never_reported_as_current_state_in_cloud_mode(self):
@@ -419,7 +417,7 @@ class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
     def test_cloud_mode_returns_the_published_performance_section_and_touches_no_database(self):
         from dashboard import paper_performance_view as ppv
         from operational import paper_bankroll as pb
-        published = {t: {"summary": {"wins": 1}, "breakdowns": {}, "bets": [], "answer": "x"} for t in pb.TRACKS}
+        published = {"account": {}, "summary": {}, "origins": {}, "breakdowns": {}, "bets": [], "answer": "x"}
         with tempfile.TemporaryDirectory() as tmp, \
              mock.patch.object(pb, "DB_PATH", Path(tmp) / "must_not_be_created.db"), \
              mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
@@ -430,9 +428,10 @@ class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
 
     def test_a_snapshot_without_a_performance_section_is_reported_not_faked(self):
         from dashboard import paper_performance_view as ppv
-        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), \
+                mock.patch.object(cloud_snapshot, "_load", return_value={"schema_version": 2}):
             with self.assertRaises(cloud_snapshot.SectionUnavailable):
-                ppv.full_dashboard_state()      # the bundled v1 fallback carries no performance section
+                ppv.full_dashboard_state()
 
     def test_read_dashboard_state_is_a_pure_read_that_never_creates_bets(self):
         import hashlib
@@ -447,7 +446,8 @@ class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
             state = ppv.read_dashboard_state(conn, max_bets=5)
             conn.close()
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), before)
-        self.assertEqual(set(state), set(pb.TRACKS))
+        self.assertEqual(set(state), {"account", "summary", "answer", "origins", "breakdowns", "bets"})
+        self.assertEqual(set(state["origins"]), {"AUTOMATIC", "MANUALLY_ADDED", "ALL"})
 
 
 class TestBoundedCachesAndQueries(unittest.TestCase):
@@ -530,7 +530,7 @@ class TestBoundedCachesAndQueries(unittest.TestCase):
 
 class TestOddsArchiveRenderPath(unittest.TestCase):
     def test_repeated_page_reruns_do_not_reread_the_archive_unless_it_changed(self):
-        from dashboard import live_dk as ldk
+        from research.demo_board import live_dk as ldk
         from research.live_sog_pricing import archive
         with tempfile.TemporaryDirectory() as tmp:
             d = Path(tmp)

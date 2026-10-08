@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dashboard import live_dk as ldk
+from research.demo_board import live_dk as ldk
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -42,7 +42,7 @@ _NO_LEGACY_DIR = Path("/nonexistent/path/xyz-legacy")
 
 class TestNeverSpendsACredit(unittest.TestCase):
     def test_never_imports_the_paid_call_client_module(self):
-        tree = ast.parse((REPO_ROOT / "dashboard" / "live_dk.py").read_text())
+        tree = ast.parse((REPO_ROOT / "research" / "demo_board" / "live_dk.py").read_text())
         modules = [n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)] + \
                   [alias.name for n in ast.walk(tree) if isinstance(n, ast.Import) for alias in n.names]
         self.assertNotIn("research.live_sog_pricing.client", modules)
@@ -183,7 +183,7 @@ class TestBuildLiveMoneylineComparisons(unittest.TestCase):
                             retrieved_at_utc="2026-08-31T12:38:09Z")
             with mock.patch.object(ldk, "ARCHIVE_DIR", tmp_path), \
                  mock.patch.object(ldk, "LEGACY_ARCHIVE_DIR", _NO_LEGACY_DIR), \
-                 mock.patch("dashboard.game_detail_view.demo_win_model", return_value=None):
+                 mock.patch("research.demo_board.game_detail_view.demo_win_model", return_value=None):
                 rows = ldk.build_live_moneyline_comparisons()
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["status"], "DATA_UNAVAILABLE")

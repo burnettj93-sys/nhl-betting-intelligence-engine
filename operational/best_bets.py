@@ -59,7 +59,9 @@ EST_COST_PER_EVENT = 2
 
 
 SOG_K = (1, 2, 3, 4, 5)
-MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"
+MODEL_VERSION = "player-rate-toi-v2+platt-2026-10"          # live probability source (validated; see docs/MODEL_VALIDATION.md)
+PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
+MIN_EXPECTED_TOI = 12.0
 MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
 MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
 HISTORY_CACHE_NAME = "best_bets_history_2022_2025.jsonl"
@@ -257,6 +259,30 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
     return model
 
 
+def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, rows: list | None = None) -> dict:
+    """Same output shape as compute_model(), from the chronologically validated skater model
+    (research/product_models) with its calibration. Only players who dressed in their team's last real game, have at
+    least live.MIN_GAMES_FOR_PRICING games of history and an expected 12+ minutes qualify, as before."""
+    from research.product_models import live
+    state = live.build(rows)
+    model: dict = {}
+    for pid, p in state["players"].items():
+        team = curteam.get(pid, p["team"])
+        if team not in today or p["position"] == "G" or pid not in dressed.get(team, set()):
+            continue
+        opp, is_home, _gid = today[team]
+        proj = live.project_matchup(state, pid, opp)
+        if proj is None or not proj["pricing_eligible"] or proj["expected"]["toi"] < MIN_EXPECTED_TOI:
+            continue
+        pr = proj["probabilities"]
+        probs = {f"SOG{k}": pr[f"shots>={k}"]["calibrated"] for k in SOG_K}
+        probs["PTS1"], probs["PTS2"] = pr["points>=1"]["calibrated"], pr["points>=2"]["calibrated"]
+        probs["GOAL1"] = pr["goals>=1"]["calibrated"]
+        model[f"{norm_name(p['name'])}|{team}"] = {"player_id": str(pid), "name": p["name"], "team": team, "opp": opp,
+                                                    "home": is_home, "probs": probs}
+    return model
+
+
 def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None = None) -> dict:
     as_of = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S")
     dressed, curteam = _dressed_and_current_team(conn, list(today), as_of)
@@ -269,8 +295,8 @@ def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None =
         if (cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature
                     and cached.get("version") == MODEL_VERSION):
             return cached["model"]
-    rows, checksum = history_rows()
-    model = compute_model(rows, today, dressed, curteam, date)
+    _rows, checksum = _current_season_rows()
+    model = compute_model_v2(today, dressed, curteam, date)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature,
                                       "version": MODEL_VERSION, "model": model}))

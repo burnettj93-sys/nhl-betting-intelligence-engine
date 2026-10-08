@@ -65,10 +65,10 @@ class TestAllowlist(unittest.TestCase):
             self.assertTrue(rmp.leg_is_eligible(_leg(market_family="PLAYER_SOG", threshold=good_threshold)))
 
     def test_saves_threshold_must_be_in_its_own_validated_set(self):
-        for bad_threshold in (3, 15, 30, 40):
+        for bad_threshold in (3, 15, 19, 36, 40):
             self.assertFalse(rmp.leg_is_eligible(_leg(market_family="GOALIE_SAVES", threshold=bad_threshold)),
                               f"Saves threshold {bad_threshold} must not be parlay-eligible")
-        for good_threshold in (20, 25):
+        for good_threshold in (20, 25, 30, 35):
             self.assertTrue(rmp.leg_is_eligible(_leg(market_family="GOALIE_SAVES", threshold=good_threshold)))
 
     def test_points_thresholds_are_one_and_two_only(self):

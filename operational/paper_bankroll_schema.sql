@@ -54,7 +54,12 @@ CREATE TABLE IF NOT EXISTS paper_bets (
     closing_captured_at_utc               REAL,
     clv                                   REAL,
     notes                                 TEXT,
-    settlement_json                       TEXT  -- v3: per-leg results + repriced odds applied at settlement
+    settlement_json                       TEXT, -- v3: per-leg results + repriced odds applied at settlement
+
+    -- v4: where the ticket came from. Existing rows are AUTOMATIC (the column default; nothing was rewritten).
+    -- MANUALLY_ADDED tickets carry the exact details the user accepted in provenance_json, frozen like every entry field.
+    origin                                TEXT NOT NULL DEFAULT 'AUTOMATIC' CHECK (origin IN ('AUTOMATIC', 'MANUALLY_ADDED')),
+    provenance_json                       TEXT
 );
 
 CREATE TRIGGER IF NOT EXISTS paper_bets_immutability
@@ -73,7 +78,10 @@ WHEN
     NEW.conservative_probability IS NOT OLD.conservative_probability OR
     NEW.stake IS NOT OLD.stake OR
     NEW.created_at_utc IS NOT OLD.created_at_utc OR
-    NEW.idempotency_key IS NOT OLD.idempotency_key
+    NEW.idempotency_key IS NOT OLD.idempotency_key OR
+    NEW.legs_json IS NOT OLD.legs_json OR
+    NEW.origin IS NOT OLD.origin OR
+    NEW.provenance_json IS NOT OLD.provenance_json
 BEGIN
     SELECT RAISE(ABORT, 'paper_bets: entry fields are immutable after creation -- only settlement columns may change');
 END;
@@ -108,3 +116,37 @@ WHEN NEW.stake IS NULL OR NEW.stake <= 0 OR NEW.entry_odds IS NULL OR ABS(NEW.en
 BEGIN
     SELECT RAISE(ABORT, 'paper_bets: stake must be > 0 and entry_odds must be American odds (|odds| >= 100)');
 END;
+
+-- v4: every manual "Add to paper book" request that reached the engine, whatever happened to it. One row per order id, so a
+-- repeated click or a retried transport can never be processed twice; the ticket (if any) is the paper_bets row.
+CREATE TABLE IF NOT EXISTS manual_orders (
+    order_id           TEXT PRIMARY KEY,
+    source             TEXT NOT NULL,
+    option_id          TEXT,
+    status             TEXT NOT NULL CHECK (status IN ('RECORDED', 'ALREADY_RECORDED', 'NEEDS_ACCEPTANCE', 'REJECTED')),
+    reason             TEXT,
+    ticket_id          TEXT,
+    request_json       TEXT NOT NULL,
+    detail_json        TEXT,
+    received_at_utc    TEXT NOT NULL,
+    processed_at_utc   TEXT NOT NULL
+);
+
+-- v4: manual Ontario spot checks. A person looks at the exact selection in DraftKings Ontario and records the price they saw. This is
+-- evidence about one selection at one moment; it never changes a stored ticket and does not make the US-feed price an Ontario price.
+CREATE TABLE IF NOT EXISTS ontario_verifications (
+    verification_id    TEXT PRIMARY KEY,
+    source             TEXT NOT NULL,
+    game_id            TEXT NOT NULL,
+    participant_id     TEXT NOT NULL,
+    participant_name   TEXT,
+    market_family      TEXT NOT NULL,
+    threshold          INTEGER,
+    side               TEXT,
+    ontario_price      REAL NOT NULL CHECK (ABS(ontario_price) >= 100),
+    us_price_shown     REAL,
+    observed_at_utc    TEXT NOT NULL,
+    recorded_at_utc    TEXT NOT NULL,
+    where_seen         TEXT NOT NULL,
+    notes              TEXT
+);

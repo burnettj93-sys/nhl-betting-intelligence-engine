@@ -57,25 +57,31 @@ class TestSogClassification(unittest.TestCase):
 
 
 class TestSavesClassification(unittest.TestCase):
-    def test_20_and_25_are_actionable(self):
-        for t in (20, 25):
-            self.assertTrue(lm.classify_saves_threshold(t).eligible)
+    """Actionable saves thresholds are the ones the goalie model's validation report shows beating both baselines
+    (docs/validation/goalie_team_validation.json): 20+ to 35+. Outside that range there is no support."""
 
-    def test_30_is_partial_not_actionable(self):
-        self.assertFalse(lm.classify_saves_threshold(30).eligible)
-        self.assertIn("PARTIAL", lm.classify_saves_threshold(30).reason)
+    def test_the_whole_validated_range_is_actionable(self):
+        for t in range(20, 36):
+            self.assertTrue(lm.classify_saves_threshold(t).eligible, t)
 
-    def test_35_is_rejected_not_actionable(self):
-        self.assertFalse(lm.classify_saves_threshold(35).eligible)
-        self.assertIn("REJECTED", lm.classify_saves_threshold(35).reason)
+    def test_outside_the_validated_range_is_insufficient_not_actionable(self):
+        for t in (10, 19, 36, 40):
+            c = lm.classify_saves_threshold(t)
+            self.assertFalse(c.eligible, t)
+            self.assertIn("INSUFFICIENT", c.reason)
 
-    def test_40_is_insufficient_not_actionable(self):
-        self.assertFalse(lm.classify_saves_threshold(40).eligible)
-        self.assertIn("INSUFFICIENT", lm.classify_saves_threshold(40).reason)
+    def test_the_validated_set_comes_from_the_report(self):
+        import json
+        from pathlib import Path
+        report = json.loads((Path(lm.__file__).resolve().parent.parent.parent / "docs" / "validation" / "goalie_team_validation.json").read_text())
+        beating = {int(k.split(">=")[1]) for k, m in report["saves_markets"].items()
+                   if m["model_raw"]["log_loss"] < min(m["baseline_goalie_last10_mean"]["log_loss"], m["baseline_league_mean"]["log_loss"])}
+        self.assertEqual(set(lm.SAVES_VALIDATED_THRESHOLDS), beating)
 
     def test_saves_line_is_actionable_end_to_end(self):
         self.assertTrue(lm.saves_line_is_actionable(24.5).eligible)   # -> 25+
-        self.assertFalse(lm.saves_line_is_actionable(34.5).eligible)  # -> 35+ rejected
+        self.assertTrue(lm.saves_line_is_actionable(34.5).eligible)   # -> 35+
+        self.assertFalse(lm.saves_line_is_actionable(35.5).eligible)  # -> 36+ unsupported
 
 
 if __name__ == "__main__":

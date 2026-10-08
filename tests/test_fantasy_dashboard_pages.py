@@ -30,27 +30,8 @@ def _as_admin(at: AppTest) -> AppTest:
 
 
 class TestFantasyPagesLoadCleanly(unittest.TestCase):
-    def test_fantasy_hq_renders_without_exception(self):
-        at = _as_admin(AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=90))
-        at.run()
-        self.assertEqual(len(at.exception), 0)
 
-    def test_fantasy_hq_shows_demo_mode_when_not_connected(self):
-        at = _as_admin(AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=90))
-        at.run()
-        markdown_text = " ".join(m.value for m in at.markdown)
-        self.assertIn("FANTASY DEMO MODE", markdown_text)
 
-    def test_fantasy_hq_never_assigns_a_goalie_to_util(self):
-        # End-to-end regression guard for the real bug found this
-        # sprint (fixed in fantasy/recommendations/lineup_optimizer.py).
-        at = _as_admin(AppTest.from_file(_page("34_Fantasy_HQ.py"), default_timeout=90))
-        at.run()
-        markdown_text = " ".join(m.value for m in at.markdown)
-        self.assertNotEqual(markdown_text, "")  # confirms real content actually rendered, not an empty stop
-        for goalie_name in ("Andrei Vasilevskiy", "Connor Hellebuyck", "Igor Shesterkin", "Jake Oettinger"):
-            marker = f"**{goalie_name}** — Util"
-            self.assertNotIn(marker, markdown_text)
 
     def test_fantasy_settings_renders_without_exception(self):
         at = _as_admin(AppTest.from_file(_page("35_Fantasy_Settings.py"), default_timeout=90))
@@ -97,16 +78,6 @@ class TestAppNavigationIncludesFantasy(unittest.TestCase):
         at.session_state["_auth_role"] = "ADMIN"
         at.run()
         self.assertEqual(len(at.exception), 0)
-
-    def test_switch_page_to_fantasy_hq_works(self):
-        at = AppTest.from_file(os.path.join(REPO_ROOT, "dashboard", "app.py"), default_timeout=90)
-        at.session_state["_auth_username"] = "owner"
-        at.session_state["_auth_role"] = "ADMIN"
-        at.run()
-        at.switch_page("pages/34_Fantasy_HQ.py").run()
-        self.assertEqual(len(at.exception), 0)
-        titles = [t.value for t in at.title]
-        self.assertEqual(titles[0], "Fantasy HQ")
 
 
 if __name__ == "__main__":

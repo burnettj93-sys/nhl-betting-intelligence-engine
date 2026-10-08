@@ -52,7 +52,7 @@ from research.generic_prop_pricing.line_mapping import SOG_ACTIONABLE_THRESHOLDS
 # research -> operational layering inversion (operational already depends on
 # research, never the reverse); duplicated here as a small, static, already-
 # published model-validation constant, not business logic expected to drift.
-SAVES_VALIDATED_THRESHOLDS = frozenset({20, 25})
+from research.generic_prop_pricing.line_mapping import SAVES_VALIDATED_THRESHOLDS  # noqa: E402  (validated thresholds come from the goalie model's report)
 
 # Standard SOG/Saves Certification block (2026-10-01): PLAYER_SOG and
 # GOALIE_SAVES added. PLAYER_SOG's real, certified standard-market shape is
@@ -403,13 +403,15 @@ def select_singles(candidate_legs: list[ParlayLeg], limit: int = MAX_SINGLES) ->
 
 
 def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegIdentity]] | None = None,
-                   max_tickets: int = MAX_TICKETS_PER_DAY) -> dict:
+                   max_tickets: int = MAX_TICKETS_PER_DAY, ticket_filter=None) -> dict:
     """Pick up to `max_tickets` NEW tickets, given the leg sets already
     recorded today (`existing`; they count toward every exposure limit and can
     never be re-selected). Ranked by hit probability, then EV, among tickets
     that pass the policy. Returns
       {"tickets": [ParlayResult...], "pool_size": int, "qualifying": int, "reason": str|None}
-    `reason` explains an empty or short result; it is never padded."""
+    `reason` explains an empty or short result; it is never padded.
+    `ticket_filter(combo, already_selected)` may veto a qualifying ticket by returning a reason string (used for the
+    recording-window reservation in operational/daily_tickets.py); it can only remove tickets, never admit one."""
     existing = existing or []
     pool = _prepare_pool(candidate_legs)
     result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None}
@@ -445,6 +447,9 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
             break
         idents = [leg_identity(l) for l in combo.legs]
         if frozenset(idents) in taken_sets:
+            continue
+        if ticket_filter is not None and ticket_filter(combo, result["tickets"]) is not None:
+            blocked += 1
             continue
         if any(leg_use.get(i, 0) >= MAX_TICKETS_PER_LEG for i in idents):
             blocked += 1

@@ -479,7 +479,7 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
                 quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
-                event_not_started=True,
+                event_not_started=True, model_version=tg.MODEL_VERSION,
             ))
     return legs, excluded
 
@@ -507,7 +507,7 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
     CONFIRMATION's docstring). The function is built now, complete and
     correct, so the day a real starter-confirmation source is integrated
     this path produces real legs with no further code change."""
-    from dashboard.goalie_saves_view import GoalieSavesEngine, StarterProbabilityEngine, load_results, load_starter_results
+    from dashboard.goalie_saves_view import StarterProbabilityEngine, load_starter_results
     from operational import eastern_time as et
     from operational.real_prop_orchestrator import (
         SAVES_MARKET_ID, _apply_starter_certainty_gate, _build_goalie_identity_index, _real_nhl_schedule)
@@ -519,13 +519,13 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
 
     schedule = _real_nhl_schedule(conn)
     goalie_index = _build_goalie_identity_index()
-    saves_results = load_results()
+    from research.product_models import team_goalie as tg
+    try:
+        live_goalies = tg.build_live()
+    except (OSError, ValueError, KeyError) as exc:
+        return legs, [{"identifier": "ALL", "market_family": "GOALIE_SAVES", "reason": f"MODEL_NOT_AVAILABLE: {type(exc).__name__}"}]
     starter_results = load_starter_results()
-    if saves_results is None or starter_results is None:
-        return legs, [{"identifier": "ALL", "market_family": "GOALIE_SAVES",
-                       "reason": "MODEL_RESULTS_NOT_FOUND"}]
-    saves_engine = GoalieSavesEngine(saves_results)
-    starter_engine = StarterProbabilityEngine(starter_results)
+    starter_engine = StarterProbabilityEngine(starter_results) if starter_results is not None else None
 
     for payload in archive_payloads:
         provider_event_id = payload.get("id")
@@ -575,15 +575,16 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
             season_start_year = year if month >= 7 else year - 1
             season = season_start_year * 10000 + (season_start_year + 1)
 
-            starter_projection = starter_engine.project(team, prediction_date)
-            proj = saves_engine.project(int(goalie_id), team, opponent, home_away, int(game_id),
-                                         prediction_date, season)
-            if proj is None:
+            starter_projection = starter_engine.project(team, prediction_date) if starter_engine is not None else None
+            g_state = live_goalies["state"].goalies.get(str(goalie_id))
+            if g_state is None or g_state.games < 5:
                 excluded.append({"identifier": identifier, "market_family": "GOALIE_SAVES",
                                   "reason": "INSUFFICIENT_HISTORY"})
                 continue
-            threshold_probs = {t: proj[f"prob_{t}plus"] for t in (20, 25, 30, 35, 40)}
-            conservative_probs = {t: p * 0.9 for t, p in threshold_probs.items()}
+            mean_saves = live_goalies["state"].goalie_projection(str(goalie_id), team, opponent, live_goalies["alpha"])["expected_saves"]
+            proj = {"confidence": "MEDIUM" if g_state.games >= 20 else "LOW"}
+            threshold_probs = {t: tg.prob_saves_at_least(t, mean_saves, live_goalies["alpha"]) for t in sorted(SAVES_VALIDATED_THRESHOLDS)}
+            conservative_probs = {t: p * 0.9 for t, p in threshold_probs.items()}   # existing multiplicative margin, unchanged
 
             try:
                 threshold = threshold_from_point(any_q["point"])
@@ -638,6 +639,6 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
                 quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
-                event_not_started=True,
+                event_not_started=True, model_version=tg.MODEL_VERSION,
             ))
     return legs, excluded

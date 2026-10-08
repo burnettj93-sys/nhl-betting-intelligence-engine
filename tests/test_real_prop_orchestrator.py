@@ -306,12 +306,12 @@ class TestSavesThresholdMapping(SavesOrchestratorTestBase):
             outcome["point"] = point
         return payload
 
-    def test_29point5_is_30plus_and_not_operationally_eligible(self):
+    def test_29point5_is_30plus_and_is_inside_the_validated_range(self):
         summary = self._run(self._payload_at_point(29.5))
-        self.assertEqual(summary["results"][0]["status"], ge.NOT_MODEL_VALIDATED)
+        self.assertNotEqual(summary["results"][0]["status"], ge.NOT_MODEL_VALIDATED)
 
-    def test_34point5_is_35plus_and_not_operationally_eligible(self):
-        summary = self._run(self._payload_at_point(34.5))
+    def test_35point5_is_36plus_and_not_operationally_eligible(self):
+        summary = self._run(self._payload_at_point(35.5))
         self.assertEqual(summary["results"][0]["status"], ge.NOT_MODEL_VALIDATED)
 
     def test_39point5_is_40plus_and_not_operationally_eligible(self):

@@ -426,26 +426,13 @@ class Test35StatusBannerEmptyStateRender(unittest.TestCase):
         self.assertEqual(list(at.exception), [])
 
 
-# 36. Model Health reflects real registry
-class Test36ModelHealthRealRegistry(unittest.TestCase):
-    def test_model_health_page_renders_all_registry_entries(self):
+# 36. Model Health describes the operating models (page content is covered by tests/test_product_pages.py)
+class Test36ModelHealthDescribesOperatingModels(unittest.TestCase):
+    def test_model_health_page_renders_without_exception_even_with_no_data(self):
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(str(REPO_ROOT / "dashboard/pages/22_Model_Health.py"))
         at.run(timeout=60)
         self.assertEqual(list(at.exception), [])
-        markdown_text = " ".join(m.value for m in at.markdown)
-        # Complete Market Validation Sprint (2026-09-29): the two per-entry status
-        # badges (model validation vs. production status) are independent dimensions
-        # that can legitimately disagree (e.g. VALIDATED model, RESEARCH production).
-        # Without a label a viewer reasonably reads that as a contradiction -- each
-        # badge must carry an explicit dimension label so "PARTIAL" next to "SHADOW
-        # VALIDATED" (or "VALIDATED" next to "RESEARCH") is never ambiguous.
-        self.assertIn("MODEL VALIDATION", markdown_text)
-        self.assertIn("PRODUCTION STATUS", markdown_text)
-        self.assertGreaterEqual(markdown_text.count("MODEL VALIDATION"), len(MODEL_REGISTRY))
-        self.assertGreaterEqual(markdown_text.count("PRODUCTION STATUS"), len(MODEL_REGISTRY))
-        for entry in MODEL_REGISTRY:
-            self.assertIn(entry.display_name, markdown_text)
 
 
 # 37. Research hub renders

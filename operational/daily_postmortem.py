@@ -222,7 +222,7 @@ def build_daily_scoreboard(conn) -> dict:
     real, already-tested aggregation functions rather than
     re-implementing bankroll math here."""
     tracks = {}
-    for track in pb.TRACKS:
+    for track in ("REAL_MARKET_PAPER",):          # simulated tracks are not part of the product
         tracks[track] = {
             "bankroll_summary": pb.bankroll_summary(conn, track),
             "windowed_performance": pb.windowed_performance(conn, track),
@@ -485,8 +485,13 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
         for t in scoreboard["tracks"].values()
     )
 
+    daily_review = None
+    if nhl_conn is not None:
+        from operational import daily_review as _dr
+        daily_review = _dr.build_review(conn, nhl_conn)
     report = {
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "daily_review": daily_review,
         "what_worked": _summarize_what_worked(scoreboard) if any_bets_settled else "WAITING_FOR_SETTLED_DATA",
         "what_didnt": _summarize_what_didnt(issues) if issues else (
             "WAITING_FOR_SETTLED_DATA" if not any_bets_settled else "nothing flagged"),
@@ -545,6 +550,16 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
         "## Normal variance vs. systematic", report["normal_variance_vs_systematic"], "",
         "## Recommended actions", *[f"- {i['category']}: {i['recommended_action']}" for i in report["investigate"]],
     ]
+    rv = report.get("daily_review")
+    if rv:
+        lines += ["", f"## Daily review of {rv['review_date_et']} (Eastern)",
+                  f"- Account: cash ${rv['account']['available_cash']:.2f}, open ${rv['account']['open_stakes']:.2f}, equity ${rv['account']['equity']:.2f}, settled P&L {rv['account']['settled_pnl']:+.2f}"]
+        for origin in ("AUTOMATIC", "MANUALLY_ADDED"):
+            o = rv["origins"][origin]
+            lines.append(f"- {origin}: {o['tickets']} ticket(s), {o['wins']}W-{o['losses']}L-{o['voids']}V, settled P&L {o['settled_pnl']:+.2f}")
+        lines += [f"- {t['ticket_id']} ({t['origin']}): {t['status']} {t['profit_loss']} -- reading {t['reading']}" for t in rv["tickets"]]
+        lines += [f"- DEFECT {d['ticket_id']} {d['kind']}: {d['detail']}" for d in rv["defects"]]
+        lines += [f"- PROPOSAL {p['origin']} {p['market']}: {p['action']} -- {p['evidence']}" for p in rv["proposals"]]
     path.write_text("\n".join(lines))
     return path
 
@@ -583,6 +598,12 @@ def main() -> None:
     finally:
         nhl_conn.close()
     path = write_report_markdown(report)
+    try:
+        from operational import daily_review
+        loss_paths = daily_review.write_loss_postmortems(conn, db.get_conn())
+        print(f"{len(loss_paths)} ticket postmortem file(s) written under reports/daily/")
+    except Exception as exc:  # noqa: BLE001 - the report above is the deliverable; per-ticket files are extra
+        print(f"ticket postmortem files not written: {type(exc).__name__}: {exc}")
     scoreboard = report.get("scoreboard", {}).get("tracks", {})
     print(f"Daily post-mortem written to {path}")
     for track, data in scoreboard.items():

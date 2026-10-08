@@ -1,14 +1,6 @@
-"""Page 36 — Morning Review (Live Odds/Parlay/Post-Mortem activation
-sprint, 2026-09-15, Parts 54-69). The daily quantitative post-mortem:
-what worked, what didn't, why, normal variance vs. systematic issue,
-what to investigate, and whether there's a real software bug or a
-model/challenger hypothesis worth pursuing.
-
-Read-only against operational/paper_bankroll.db -- never writes a
-report file itself (that's operational.daily_postmortem.write_report_
-markdown's job, run from the actual daily job/scheduler, not on every
-page view) and never touches decision_policy, research/model_registry.py,
-or challenger_registry.json (Part 66)."""
+"""Morning Review — the daily review of the paper account: for each ticket settled on the review date, the frozen prices and
+probabilities, each leg's result, the effect on the account, closing prices where captured, defect checks, and whether the evidence
+supports changing anything. Automatic and manually added tickets are shown separately. Nothing here changes a model or a policy."""
 from __future__ import annotations
 
 import sys
@@ -22,162 +14,94 @@ import streamlit as st
 
 from dashboard import auth
 from dashboard import cloud_snapshot
-from dashboard import components as comp
-from dashboard import formatting as fmt
-from operational import daily_postmortem as dpm
+from dashboard import ui
 from operational import paper_bankroll as pb
 from operational import runtime_mode
 
-# Community Cloud: an operational surface, ADMIN-only (server-side; the nav omission is only UX).
 if runtime_mode.is_community_cloud():
     auth.require_admin()
 
-st.title("Morning Review")
-comp.render_model_status_header()
-st.caption("Answers every morning: what worked, what didn't, why, whether it's normal variance or a "
-           "systematic issue, and what (if anything) should be investigated. Never auto-changes a "
-           "production model, threshold, or decision policy -- see PRIVACY_AND_COMPLIANCE-style "
-           "boundary in this module's own docstring.")
+ui.header("Morning Review", "What was predicted and priced, what happened, what it did to the account, and what the evidence supports.")
 
 if runtime_mode.is_community_cloud():
-    # Community Cloud never computes a post-mortem: it displays the one the local
-    # engine produced and published (Cloud live-data sprint).
     try:
         report = cloud_snapshot.morning_review_report()
-    except cloud_snapshot.SnapshotUnavailable as _exc:
-        st.warning(f"The Morning Review is not available in the snapshot currently being served ({_exc}).")
+    except cloud_snapshot.SnapshotUnavailable as exc:
+        ui.unavailable(str(exc), "The Morning Review")
         st.stop()
-    st.caption(f"Report computed by the local engine at {report.get('generated_at_utc', 'an unknown time')}.")
+    st.caption(f"Report computed by the engine at {report.get('generated_at_utc', 'an unknown time')}.")
 else:
+    from operational import daily_postmortem as dpm
     conn = pb.open_for_dashboard()
-    # dashboard/*.py must never import db.py directly -- see
-    # operational/daily_postmortem.py::open_daily_postmortem_report()'s own
-    # docstring (same rationale as operational/real_today_bridge.py).
     report = dpm.open_daily_postmortem_report(conn)
 
-st.markdown("## Yesterday's Scoreboard")
-if report["scoreboard"]["tracks"]:
-    cols = st.columns(len(report["scoreboard"]["tracks"]))
-    for col, (track, data) in zip(cols, report["scoreboard"]["tracks"].items()):
-        s = data["bankroll_summary"]
-        with col:
-            st.markdown(f"**{track}**")
-            st.metric("Bankroll", f"${s['current_bankroll']:,.2f}", delta=f"{s['net_profit']:+,.2f}")
-            st.caption(f"{s['wins']}W-{s['losses']}L-{s['voids']}V ({s['pending']} pending)")
-            st.caption(f"ROI {fmt.format_probability(s['roi']) if s['roi'] is not None else '—'}")
+rv = report.get("daily_review")
+if not rv:
+    ui.unavailable("This report was produced without the daily-review section.", "The daily review")
+    st.stop()
 
-st.divider()
-st.markdown("## Game Edge Parlay Health")
-health = report["parlay_health"]
-if health["status"] == "WAITING_FOR_SETTLED_DATA":
-    comp.render_empty_state("WAITING_FOR_ODDS", "No Game Edge Parlay has settled yet -- expected until "
-                                                  "real 2026-27 games are played, not an error.")
+st.subheader(f"Review of {rv['review_date_et']} (Eastern)")
+a = rv["account"]
+m = st.columns(4)
+m[0].metric("Available cash", ui.money(a["available_cash"]))
+m[1].metric("Open stakes", ui.money(a["open_stakes"]))
+m[2].metric("Equity", ui.money(a["equity"]))
+m[3].metric("Settled P&L (all time)", ui.signed_money(a["settled_pnl"]))
+for origin, label in (("AUTOMATIC", "Automatic tickets"), ("MANUALLY_ADDED", "Manually added tickets")):
+    o = rv["origins"][origin]
+    st.caption(f"{label}: {o['tickets']} total · {o['wins']}W-{o['losses']}L-{o['voids']}V · {o['pending'] + o['unresolved']} open · settled P&L {ui.signed_money(o['settled_pnl'])}")
+
+tickets = rv["tickets"]
+st.subheader("Tickets settled that day")
+if not tickets:
+    st.info(f"No ticket settled on {rv['review_date_et']}. Open tickets: {len(rv['open_tickets'])}.")
+for origin in ("AUTOMATIC", "MANUALLY_ADDED"):
+    mine = [t for t in tickets if t["origin"] == origin]
+    if not mine:
+        continue
+    st.markdown(f"#### {ui.STATUS_TEXT[origin]}")
+    for t in mine:
+        res = {"WIN": "WON", "LOSS": "LOST"}.get(t["status"], t["status"])
+        with st.expander(f"{t['ticket_id']} — {res.title()} {ui.signed_money(t['profit_loss'])} · reading: {t['reading'].title()}", expanded=t["status"] == "LOSS"):
+            st.dataframe([{"Leg": l["label"], "Recorded price": ui.american(l["recorded_price"]), "Quote updated": ui.et_time(l["quote_updated_utc"], True) if l["quote_updated_utc"] else "not frozen",
+                           "Model chance": ui.pct(l["model_probability"]), "Actual": l["actual_value"], "Result": l["outcome"].title(),
+                           "Closing price": (ui.american(l["closing"]["american"]) if l["closing"].get("american") is not None else "n/a"),
+                           "Vs close": l["price_vs_close"] or "—"} for l in t["legs"]], hide_index=True, width="stretch")
+            missing = [l["closing"].get("reason") for l in t["legs"] if l["closing"].get("american") is None]
+            if missing:
+                st.caption("Closing price unavailable for some legs: " + "; ".join(sorted(set(missing))))
+            st.caption(f"Recorded {ui.et_time(t['recorded_at_utc'], True)} · settled {ui.et_time(t['settled_at_utc'], True)} · stake {ui.money(t['stake'])} · estimated combined price {ui.american(t['combined_american'])} · "
+                       f"model hit chance {ui.pct(t['model_hit_probability'])}.")
+            if t.get("variance_note"):
+                st.write(ui.esc(t["variance_note"]))
+            for d in t["defects"]:
+                (st.error if d["severity"] == "DEFECT" else st.caption)(ui.esc(f"{d['kind']}: {d['detail']}"))
+            if not t["defects"]:
+                st.caption("No system defect found in this ticket: prices were timestamped and fresh at entry, it was recorded before puck drop, and its outcome agrees with its legs.")
+
+st.subheader("Defects and variance")
+if rv["defects"]:
+    for d in rv["defects"]:
+        st.error(ui.esc(f"{d['ticket_id']} · {d['kind']}: {d['detail']}"))
 else:
-    hc1, hc2, hc3, hc4 = st.columns(4)
-    hc1.metric("Settled parlays", health["settled_parlays"])
-    hc2.metric("Actual hit rate", fmt.format_probability(health["actual_hit_rate"]))
-    hc3.metric("Avg modeled joint P", fmt.format_probability(health["avg_modeled_joint_probability"]))
-    hc4.metric("Calibration gap", f"{health['calibration_gap']:+.1%}")
-    from research.game_edge_parlay.engine import TARGET_JOINT_PROBABILITY
-    st.caption(f"Target ≈{TARGET_JOINT_PROBABILITY:.0%} modeled joint probability (a preference for "
-               f"ranking and this tracking, never a hard qualification cutoff or something this "
-               f"engine games to look right).")
+    st.write("No system defects were found in the tickets settled that day.")
+if rv.get("notes"):
+    with st.expander(f"{len(rv['notes'])} data note(s) on older tickets"):
+        for d in rv["notes"]:
+            st.caption(ui.esc(f"{d['ticket_id']} · {d['detail']}"))
+for v in rv["variance"]:
+    st.caption(ui.esc(f"{v['ticket_id']}: {v['note']}"))
 
-st.divider()
-st.markdown("## Real-Market Parlay Health")
-rm_health = report["real_market_parlay_health"]
-if rm_health["status"] == "WAITING_FOR_SETTLED_DATA":
-    comp.render_empty_state("WAITING_FOR_ODDS", "No real-market parlay has settled yet -- expected "
-                                                  "until real 2026-27 games are played, not an error.")
-else:
-    rc1, rc2, rc3, rc4 = st.columns(4)
-    rc1.metric("Settled parlays", rm_health["settled_parlays"])
-    rc2.metric("Actual hit rate", fmt.format_probability(rm_health["actual_hit_rate"]))
-    rc3.metric("Avg modeled joint P", fmt.format_probability(rm_health["avg_modeled_joint_probability"]))
-    rc4.metric("Calibration gap", f"{rm_health['calibration_gap']:+.1%}")
+st.subheader("Calibration so far (settled legs)")
+rows = []
+for origin, markets in rv["calibration"].items():
+    for market, b in markets.items():
+        rows.append({"Origin": ui.STATUS_TEXT.get(origin, origin), "Market": market, "Legs": b["legs"], "Expected hits": b["expected"], "Actual hits": b["hits"],
+                     "Brier": round(b["brier"], 3) if b["brier"] is not None else "—", "z": f"{b['z']:+.1f}" if b["z"] is not None else "—"})
+st.dataframe(rows, hide_index=True, width="stretch") if rows else st.caption("No legs have settled yet.")
 
-st.markdown("### Real-Market Parlay Post-Mortems")
-st.caption("Every settled real-money-adjacent parlay loss, re-resolved against the official boxscore to "
-           "show exactly which leg(s) missed and by how much -- never a guessed cause.")
-rm_postmortems = report.get("real_market_parlay_postmortems")
-if not isinstance(rm_postmortems, list):
-    st.caption("Not available on this report.")
-elif not rm_postmortems:
-    st.caption("No real-market parlay losses yet.")
-else:
-    for pm in rm_postmortems:
-        with st.expander(f"paper_bet_id {pm['paper_bet_id']} -- stake ${pm['stake']:.2f}, "
-                          f"P&L {pm['profit_loss']:+.2f}" if pm.get("profit_loss") is not None
-                          else f"paper_bet_id {pm['paper_bet_id']} -- stake ${pm['stake']:.2f}"):
-            st.markdown(f"**Why:** {pm['why']}")
-            if pm["hit_legs"]:
-                st.caption("Legs that hit: " + "; ".join(
-                    f"{h['participant_name']} ({h['market_family']})" for h in pm["hit_legs"]))
-
-    rm_patterns = report.get("real_market_parlay_leg_miss_patterns")
-    if isinstance(rm_patterns, list) and rm_patterns:
-        st.markdown("**Miss pattern by market family:**")
-        for p in rm_patterns:
-            st.caption(f"{p['market_family']}: {p['occurrences']} miss(es) across "
-                       f"{p['unique_game_dates']} game date(s) -- {p['recommended_action']}")
-
-st.divider()
-st.markdown("## SOG / Saves Thesis Tracking")
-st.caption("The owner's hypothesis: SOG and Saves should produce smaller, more repeatable edges than "
-           "other markets.")
-_demo_breakdown = report["scoreboard"]["tracks"].get("DEMO_PAPER", {}).get("breakdowns", {}).get("by_market_family", {})
-thesis_cols = st.columns(3)
-for col, family in zip(thesis_cols, ("PLAYER_SOG", "GOALIE_SAVES", "GAME_EDGE_PARLAY")):
-    row = _demo_breakdown.get(family)
-    with col:
-        st.markdown(f"**{family}**")
-        if not row:
-            st.caption("No settled bets yet.")
-        else:
-            st.metric("ROI", fmt.format_probability(row["roi"]) if row["roi"] is not None else "—")
-            st.caption(f"Hit rate {fmt.format_probability(row['hit_rate']) if row['hit_rate'] is not None else '—'} "
-                       f"({row['bets']} bets)")
-
-st.divider()
-st.markdown("## What Worked / What Didn't")
-w1, w2 = st.columns(2)
-w1.markdown("**What worked**")
-w1.caption(report["what_worked"])
-w2.markdown("**What didn't**")
-w2.caption(str(report["what_didnt"]))
-
-st.markdown("### Normal Variance vs. Systematic")
-st.caption(report["normal_variance_vs_systematic"])
-
-st.divider()
-st.markdown("## Recommended Actions")
-if not report["investigate"]:
-    comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES", "No pattern this cycle cleared even the WATCH bar.")
-else:
-    for issue in report["investigate"]:
-        badge_tone = "unavailable" if issue["recommended_action"] in ("BUG_FIX", "HALT_MARKET") else "input"
-        st.markdown(
-            f"{comp.label_badge(issue['recommended_action'], badge_tone)} **{issue['category']}** "
-            f"— {issue['occurrences']} occurrence(s), {issue['unique_game_dates']} unique date(s)",
-            unsafe_allow_html=True)
-        st.caption(issue.get("explanation", ""))
-
-if report["software_bug_candidates"]:
-    with st.expander(f"Bug-fix candidates ({len(report['software_bug_candidates'])})"):
-        for c in report["software_bug_candidates"]:
-            st.caption(f"{c['category']}: {c.get('explanation', '')}")
-
-if report["challenger_ideas"]:
-    with st.expander(f"Challenger ideas ({len(report['challenger_ideas'])})"):
-        st.caption("A challenger idea is a research recommendation only -- promoting one requires a "
-                   "separate, explicit human action (operational.daily_postmortem.submit_challenger_idea), "
-                   "never automatic.")
-        for c in report["challenger_ideas"]:
-            st.caption(f"{c['category']}: {c.get('explanation', '')}")
-
-st.divider()
-st.markdown("## Failure Taxonomy Distribution")
-st.dataframe([{"Category": k, "Count": v} for k, v in report["failure_summary"].items() if v > 0]
-             or [{"Category": "—", "Count": 0}], width="stretch")
-
-comp.render_provenance_panel()
+st.subheader("What the evidence supports")
+pol = rv["policy"]
+for p in rv["proposals"]:
+    (st.warning if p["action"] != "NONE" else st.caption)(ui.esc(f"{ui.STATUS_TEXT.get(p['origin'], p['origin'])} · {p['market']}: {p['evidence']}"))
+st.caption(f"A change is only suggested after {pol['min_legs_for_a_conclusion']} settled legs in a market and a gap of {pol['z_bar']:.0f} standard errors. Nothing is retuned automatically.")

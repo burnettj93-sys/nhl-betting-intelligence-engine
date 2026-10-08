@@ -14,67 +14,64 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 | Market | Prices | Identity | Projection | Context confirmation | Eligibility | Settlement | In ticket allowlist |
 |---|---|---|---|---|---|---|---|
-| Shots on goal (alternate ladder 2+..5+) | OK | OK | PARTIAL | MISSING | OK | OK | yes |
+| Shots on goal (alternate ladder 2+..5+) | OK | OK | OK | MISSING | OK | OK | yes |
 | Shots on goal (standard two-sided) | PARTIAL | OK | PARTIAL | MISSING | OK | OK | yes |
-| Goalie saves | OK | OK | PARTIAL | MISSING | MISSING | OK | yes |
+| Goalie saves | OK | OK | OK | PARTIAL | PARTIAL | OK | yes |
 | Moneyline | PARTIAL | OK | PARTIAL | PARTIAL | PARTIAL | OK | yes |
 | Puck line | MISSING | OK | MISSING | PARTIAL | MISSING | MISSING | no |
-| Points (1+, 2+) | OK | OK | PARTIAL | MISSING | OK | OK | yes |
-| Goals (anytime scorer) | MISSING | OK | PARTIAL | MISSING | MISSING | PARTIAL | no |
+| Points (1+, 2+) | OK | OK | OK | MISSING | OK | OK | yes |
+| Goals (anytime scorer) | MISSING | OK | OK | MISSING | MISSING | PARTIAL | no |
 
 ## What is missing, per market
 
 ### Shots on goal (alternate ladder 2+..5+)
 * Ontario menu: Market family listed on the DK Ontario menu (owner screenshots, 2026-09-29).
-* projection: Rolling-form model (last 20/60 games, current season) works. The validated research model is blocked: its corpus ends 2026-04-15 (CORPUS_STALE in the sweep logs).
-* context confirmation: No lineup/injury feed. Proxy only: the player dressed in his team's last real game with 20+ games of history and 12+ minutes of ice time.
+* context confirmation: No lineup/injury feed. Proxy only: the player dressed in his team's last real game with 20+ games of history and 12+ expected minutes.
 
 ### Shots on goal (standard two-sided)
 * Ontario menu: Over/under shots listed on the DK Ontario menu.
 * prices: Pulled occasionally (5 captures on 2026-10-06/07); not part of the regular capture.
-* projection: Validated model only; stale corpus, so no legs are produced today.
+* projection: The standard-market leg builder still uses the retired research pipeline (corpus ends 2026-04-15), so it produces no legs; the v2 probabilities could price Over/Under lines but are not wired to this builder.
 * context confirmation: Same as above.
 
 ### Goalie saves
-* Ontario menu: Saves ladders listed (observed 24+ to 34+). The model validates only 20+ and 25+, which are not DK Ontario's lines.
-* projection: Validated for 20+/25+ only; the Ontario ladder (24+, 26+, 28+, ...) is untested.
-* context confirmation: Starting goalie is never confirmed (no feed), so the starter gate blocks every saves leg. This gate is not bypassed.
-* eligibility: Blocked by the starter gate.
+* Ontario menu: Saves ladders listed (observed 24+ to 34+). The goalie model is validated across 20+ to 35+, which covers that ladder.
+* context confirmation: No automated starting-goalie feed can be used. A person can record a confirmed start with its source and time (operational/goalie_confirmations.py); until then every saves leg is blocked.
+* eligibility: The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded confirmation.
 
 ### Moneyline
 * Ontario menu: Listed (verified).
 * prices: h2h is pulled every 2 minutes, but the T-35 evaluation only accepts a quote for its evaluation time (about 35 minutes before puck drop); earlier it reports DATA_UNAVAILABLE (no valid quote as of that time). That is today's actual exclusion reason.
-* projection: T-35 Elo-based model; its uncertainty band is a heuristic, never calibrated.
+* projection: T-35 Elo-based model (its band is a heuristic) drives pricing. A separate strength model (goalie-team-v1) beats the home-rate baseline on held-out games and is shown on Games, but it does not price moneyline legs.
 * context confirmation: Starting goalies are never confirmed (no feed). Moneyline is NOT blocked by that: config.REQUIRE_GOALIE_CONFIRMATION is False, and an unconfirmed starter widens the model's confidence band 1.4x (UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING, a heuristic) before the edge/EV gates run.
 * eligibility: Eligible whenever the T-35 evaluation has a valid quote and clears its own edge/EV gates; if the strict gate were ever enabled, the adapter reports WAIT.
 
 ### Puck line
 * Ontario menu: Listed (verified), plus alternate lines.
 * prices: The spreads market is never requested from the odds provider.
-* projection: No goal-margin model.
+* projection: No goal-margin model: only win probability is validated. Building one needs its own chronological validation.
 * context confirmation: Same unconfirmed-starter situation as moneyline (widened band, no gate).
 * eligibility: Not in the contract allowlist; no certified contract.
 * settlement: No resolver for margin lines.
 
 ### Points (1+, 2+)
 * Ontario menu: Listed (verified), ladder 1-3. Only the 1+ and 2+ lines are modeled.
-* projection: Locked points model blended with the last-60 hit rate, current-season data. A research model, not validated against live results.
 * context confirmation: No lineup/injury feed; same dressed-last-game proxy as shots.
 
 ### Goals (anytime scorer)
 * Ontario menu: Listed (verified).
-* prices: player_goal_scorer_anytime is never requested.
-* projection: A goals research model exists but is not wired into pricing.
+* prices: player_goal_scorer_anytime is never requested: each extra market costs one credit per game per capture on a metered plan, and no payload exists to certify its shape.
 * context confirmation: Same proxy only.
 * eligibility: No contract certification.
 * settlement: The resolver supports goals, but the ledger does not map the leg.
 
 ## Consequences
 
-* Shots on goal and points (EXPERIMENTAL rolling-form model; the validated shots model joins when its corpus is
-  fresh) and moneyline (from about 35 minutes before puck drop) can produce ticket legs.
-* Saves are blocked by the starter-certainty gate (no starting-goalie confirmation exists). That gate is not
-  bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic widened band instead.
-* Points are enabled (certified contract, settlement mapping, rolling model). Puck line and goals are not enabled
-  to fill slots: they lack prices, models and/or settlement.
+* Shots on goal and points (validated projection model with calibration) and moneyline (from about 35 minutes before
+  puck drop) can produce ticket legs.
+* Saves have a validated model but are blocked until a starting goalie is confirmed (a person records the source and
+  time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic
+  widened band instead.
+* Puck line is blocked: no prices requested, no margin model, no settlement resolver. Anytime goals has a validated
+  model but no prices or certified contract, so no leg can exist.
 * An empty board on a day with few priced shots legs is a correct result, not a bug.

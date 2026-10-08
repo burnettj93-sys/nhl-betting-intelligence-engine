@@ -22,10 +22,27 @@ from dataclasses import dataclass
 SOG_ACTIONABLE_THRESHOLDS = frozenset({2, 3, 4, 5})
 SOG_INSUFFICIENT_THRESHOLDS = frozenset({1, 6, 7, 8})
 
-SAVES_VALIDATED_THRESHOLDS = frozenset({20, 25})
-SAVES_PARTIAL_THRESHOLDS = frozenset({30})
-SAVES_REJECTED_THRESHOLDS = frozenset({35})
-SAVES_INSUFFICIENT_THRESHOLDS = frozenset({40})
+def _saves_validated_from_report() -> frozenset:
+    """Saves thresholds whose probability beat both baselines on the held-out season in the goalie model's validation report
+    (docs/validation/goalie_team_validation.json). Falls back to the previous registry set if the report is not present."""
+    import json
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent.parent / "docs" / "validation" / "goalie_team_validation.json"
+    try:
+        report = json.loads(path.read_text())
+        out = set()
+        for key, m in report["saves_markets"].items():
+            if m["model_raw"]["log_loss"] < m["baseline_goalie_last10_mean"]["log_loss"] and m["model_raw"]["log_loss"] < m["baseline_league_mean"]["log_loss"]:
+                out.add(int(key.split(">=")[1]))
+        return frozenset(out) or frozenset({20, 25})
+    except (OSError, ValueError, KeyError):
+        return frozenset({20, 25})
+
+
+SAVES_VALIDATED_THRESHOLDS = _saves_validated_from_report()
+SAVES_PARTIAL_THRESHOLDS = frozenset()
+SAVES_REJECTED_THRESHOLDS = frozenset()
+SAVES_INSUFFICIENT_THRESHOLDS = frozenset({t for t in range(10, 45)} - SAVES_VALIDATED_THRESHOLDS)
 
 
 class NonHalfPointLineError(ValueError):

@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+from collections import defaultdict
 from pathlib import Path
 
 from operational import eastern_time as et
@@ -43,7 +44,9 @@ SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY
 RECENT_SETTLED_LIMIT = 10
 
 FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
-              "DraftKings Ontario. Rolling-form probabilities are experimental and uncalibrated.")
+              "DraftKings Ontario. Player probabilities come from a projection model validated on held-out seasons "
+              "(docs/MODEL_VALIDATION.md); they are estimates, not proof of an edge, and there are no historical "
+              "DraftKings prices to test profitability against.")
 
 STATUS_RECOMMENDED = "RECOMMENDED"
 STATUS_RECORDED = "RECORDED"
@@ -156,12 +159,78 @@ def collect_candidate_legs(nhl_conn, now: dt.datetime) -> dict:
     return {"legs": legs, "sources": report, "second_opinion": notes}
 
 
+# ------------------------------------------------- recording windows (reserved slots) ----
+
+WAVE_GAP_MIN = 90.0         # games whose puck drops are within this of each other form one "wave" of the day
+RESERVED_FOR_LATER = 2      # slots held back for later waves while any later wave has yet to start
+
+
+def day_waves(nhl_conn, et_date: str) -> list[dict]:
+    """The day's puck-drop waves from the schedule: [{"index", "start_utc", "end_utc", "game_ids"}] in time order."""
+    rows = nhl_conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ? AND game_state = 'SCHEDULED' "
+                            "ORDER BY scheduled_start_utc", (et_date,)).fetchall()
+    waves: list[dict] = []
+    for r in rows:
+        if not r["scheduled_start_utc"]:
+            continue
+        t = dt.datetime.fromisoformat(r["scheduled_start_utc"].replace("Z", "+00:00"))
+        t = t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+        if waves and (t - waves[-1]["_last"]).total_seconds() / 60.0 <= WAVE_GAP_MIN:
+            waves[-1]["game_ids"].append(str(r["game_id"]))
+            waves[-1]["_last"], waves[-1]["end_utc"] = t, t.isoformat()
+        else:
+            waves.append({"start_utc": t.isoformat(), "end_utc": t.isoformat(), "_last": t, "game_ids": [str(r["game_id"])]})
+    for i, w in enumerate(waves):
+        w["index"] = i
+        del w["_last"]
+    return waves
+
+
+def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[set]):
+    """(ticket_filter, info). A ticket belongs to the wave of its earliest game. While later waves have yet to start, an earlier
+    wave may hold at most SLOT_COUNT minus (up to RESERVED_FOR_LATER) slots, so early prices cannot use up the whole day. This only
+    ever removes a qualifying ticket from this cycle; it never lets one through that the ticket rules reject."""
+    game_wave = {gid: w["index"] for w in waves for gid in w["game_ids"]}
+
+    def wave_of(game_ids) -> int | None:
+        idx = [game_wave[g] for g in game_ids if g in game_wave]
+        return min(idx) if idx else None
+
+    def later_waves_pending(i: int) -> int:
+        return sum(1 for w in waves if w["index"] > i and dt.datetime.fromisoformat(w["start_utc"]) > now)
+
+    def cap(i: int) -> int:
+        return SLOT_COUNT - min(RESERVED_FOR_LATER, later_waves_pending(i))
+
+    used: dict[int, int] = defaultdict(int)
+    for gs in recorded_game_sets:
+        w = wave_of(gs)
+        if w is not None:
+            used[w] += 1
+
+    def ticket_filter(combo, already) -> str | None:
+        w = wave_of({l.game_id for l in combo.legs})
+        if w is None:
+            return None
+        taken = used[w] + sum(1 for t in already if wave_of({l.game_id for l in t.legs}) == w)
+        if taken >= cap(w):
+            return f"wave {w} already holds {taken} of its {cap(w)} slots; the rest are held for later puck drops"
+        return None
+
+    info = {"waves": [{"index": w["index"], "first_puck_drop_utc": w["start_utc"], "games": len(w["game_ids"]), "slot_cap": cap(w["index"]),
+                       "recorded": used[w["index"]]} for w in waves], "reserved_for_later_waves": RESERVED_FOR_LATER,
+            "gap_minutes": WAVE_GAP_MIN}
+    return ticket_filter, info
+
+
 # --------------------------------------------------------------- recording ----
 
-def recorded_today(bankroll_conn, et_date: str) -> list[dict]:
+def recorded_today(bankroll_conn, et_date: str, origin: str = "AUTOMATIC") -> list[dict]:
+    """Tickets recorded for this Eastern day by one origin. The five daily automatic slots are counted from
+    AUTOMATIC rows only: a ticket added by hand never takes one."""
     rows = bankroll_conn.execute(
-        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND market_id LIKE ? ORDER BY created_at_utc",
-        (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%")).fetchall()
+        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND market_id LIKE ? AND origin = ? "
+        "ORDER BY created_at_utc", (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", origin)).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -296,6 +365,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
                    "settled_at_utc": row.get("settled_at_utc"), "notes": row.get("notes"),
                    "settled_odds": (settlement or {}).get("settled_odds")} if row["result_status"] != "PENDING" else None,
         "alerts": [{"kind": a["kind"], "detail": a["detail"], "at": a["created_at_utc"]} for a in (alerts or [])],
+        "origin": row.get("origin") or "AUTOMATIC",
+        "provenance": json.loads(row["provenance_json"]) if row.get("provenance_json") else None,
     }
 
 
@@ -323,7 +394,8 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
         "ev_after_haircut": combo.ev_conservative, "haircut_margin": combo.leg_probability_margin,
         "rationale": _rationale(combo.joint_probability, 1.0 / combo.combined_decimal, combo.ev_conservative,
                                 len(combo.legs), combo.leg_probability_margin),
-        "recorded_at_utc": None, "event_start_utc": _earliest_start(combo), "result": None, "alerts": []}
+        "recorded_at_utc": None, "event_start_utc": _earliest_start(combo), "result": None, "alerts": [],
+        "origin": "AUTOMATIC", "provenance": None}
 
 
 def exposure(cards: list[dict]) -> dict:
@@ -343,8 +415,12 @@ def exposure(cards: list[dict]) -> dict:
                 g["tickets"].append(c["ticket_id"])
     fin = lambda d: sorted(({**v, "count": len(v["tickets"])} for v in d.values()),  # noqa: E731
                            key=lambda v: (-v["count"], v.get("player") or v.get("matchup")))
-    recorded = [c for c in cards if c["recorded"]]
+    recorded = [c for c in cards if c["recorded"] and c["status"] in (STATUS_RECORDED, STATUS_PENDING, STATUS_UNRESOLVED)]
+    by_origin = {}
+    for c in cards:
+        by_origin[c.get("origin") or "AUTOMATIC"] = by_origin.get(c.get("origin") or "AUTOMATIC", 0) + 1
     return {"tickets_counted": len(cards), "recorded_stake_at_risk": round(sum(c["stake"] for c in recorded), 2),
+            "tickets_by_origin": by_origin,
             "players": fin(players), "games": fin(games),
             "players_on_multiple_tickets": sum(1 for v in players.values() if len(v["tickets"]) > 1),
             "note": ("Tickets that share a player or a game are correlated: they tend to win or lose together, so the "
@@ -360,12 +436,32 @@ def single_card(leg: rmp.ParlayLeg) -> dict:
             "staked": False}
 
 
+def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | None:
+    """Annotates each option with the ticket already holding it (automatic or manual), so the page can show
+    'on the book' instead of offering a second stake."""
+    if not options:
+        return options
+    for opt in options.get("options", []):
+        opt["on_book"] = None
+        legs = opt["legs"]
+        stub = [type("L", (), {"game_id": l["game_id"], "participant_id": l["participant_id"], "market_family": l["market_family"],
+                               "threshold": l["threshold"], "side": l["side"]}) for l in legs]
+        for tid in (pb.compute_ticket_id(et_date, stub), pb.compute_manual_ticket_id(et_date, stub)):
+            row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?", (tid,)).fetchone()
+            if row:
+                opt["on_book"] = {"ticket_id": row["paper_bet_id"], "origin": row["origin"], "status": row["result_status"]}
+                break
+    return options
+
+
 def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.ParlayResult], singles: list[rmp.ParlayLeg],
-                empty_reason: str | None, diagnostics: dict, record_results: list[dict]) -> dict:
+                empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None) -> dict:
     et_date = et.eastern_today(now)
     rows = recorded_today(bankroll_conn, et_date)
-    alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows])
+    manual_rows = recorded_today(bankroll_conn, et_date, origin="MANUALLY_ADDED")
+    alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows + manual_rows])
     cards = [ticket_from_row(r, now, alerts.get(r["paper_bet_id"])) for r in rows]
+    manual_cards = [ticket_from_row(r, now, alerts.get(r["paper_bet_id"])) for r in manual_rows]
     recorded_ids = {c["ticket_id"] for c in cards}
     account = pb.account_state(bankroll_conn, TRACK)
     for combo in recommended:
@@ -394,7 +490,10 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         "date_et": et_date, "generated_at_utc": now.isoformat(),
         "account": account, "slots": {"total": SLOT_COUNT, "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
-        "singles": [single_card(l) for l in singles], "exposure": exposure(cards),
+        "manual_tickets": manual_cards, "origins": pb.origin_performance(bankroll_conn, TRACK),
+        "singles": [single_card(l) for l in singles],
+        "exposure": exposure(cards + manual_cards + [c for c in [ticket_from_row(r, now) for r in open_rows]
+                                                      if c["status"] in (STATUS_RECORDED, STATUS_PENDING, STATUS_UNRESOLVED)]),
         "earlier_open_tickets": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in open_rows],
         "recent_settled": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in settled],
         "label": FEED_LABEL, "policy": {
@@ -403,6 +502,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
             "max_tickets_per_leg": rmp.MAX_TICKETS_PER_LEG, "max_tickets_per_game": rmp.MAX_TICKETS_PER_GAME,
             "stake": pb.PAPER_BET_STAKE},
         "diagnostics": diagnostics, "coverage": market_coverage.audit(diagnostics),
+        "options": mark_on_book(options, bankroll_conn, et_date),
     }
 
 
@@ -476,7 +576,12 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     collected = collected if collected is not None else collect_candidate_legs(nhl_conn, now)
     legs = collected["legs"]
     # Exposure limits count tickets already recorded today; they are never re-selected.
-    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left)
+    try:
+        waves = day_waves(nhl_conn, et_date) if nhl_conn is not None else []
+    except Exception:  # noqa: BLE001 - without a schedule there is no reservation, never a failed cycle
+        waves = []
+    ticket_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
+    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
     singles = rmp.select_singles(legs)
 
     account = pb.account_state(bankroll_conn, TRACK)
@@ -496,10 +601,16 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
-        "capture_plan": _capture_plan(nhl_conn, now),
+        "capture_plan": _capture_plan(nhl_conn, now), "recording_policy": wave_info,
     }
+    from operational import player_options
+    try:
+        options = player_options.build_options(legs, et_date)
+    except Exception as exc:  # noqa: BLE001 - options are informational; never block recording
+        options = {"date_et": et_date, "options": [], "persons": {}, "error": f"{exc.__class__.__name__}: {exc}"}
+    options["generated_at_utc"] = now.isoformat()
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
-                        diagnostics=diagnostics, record_results=record_results)
+                        diagnostics=diagnostics, record_results=record_results, options=options)
     changed = _write_state(state)
     return {
         "eastern_date": et_date, "qualifying_tickets_found": picked["qualifying"],
@@ -514,8 +625,9 @@ def refresh_state_only(bankroll_conn, now: dt.datetime) -> bool:
     """Rewrite the document from the ledger alone (after settlement), keeping
     the last recommendations/singles that were on file."""
     previous = read_state() or {}
+    prev_options = previous.get("options") if previous.get("date_et") == et.eastern_today(now) else None
     state = build_state(bankroll_conn, now, recommended=[], singles=[], empty_reason=previous.get("empty_slot_reason"),
-                        diagnostics=previous.get("diagnostics", {}), record_results=[])
+                        diagnostics=previous.get("diagnostics", {}), record_results=[], options=prev_options)
     # Carry forward unrecorded cards and singles so a settlement pass does not blank the board.
     recorded_ids = {c["ticket_id"] for c in state["tickets"]}
     for card in previous.get("tickets", []):
