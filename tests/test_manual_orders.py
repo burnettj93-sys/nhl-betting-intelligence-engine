@@ -292,6 +292,40 @@ class TestOrderPathCheck(unittest.TestCase):
         self.assertTrue(order_client.issue_title(d).startswith("order-path-check chk_"))
 
 
+class TestViewerIdAllowList(unittest.TestCase):
+    RAW = "a-76-character-opaque-platform-viewer-id-0123456789abcdef0123456789abcdef01234"
+
+    def test_an_opaque_viewer_id_is_matched_by_fingerprint_only(self):
+        class S(dict):
+            pass
+        fp = order_client.fingerprint(self.RAW)
+        self.assertEqual(len(fp), 12)
+        ok = order_client.path_status(S(PAPER_ORDER_TOKEN="ghp_SECRET", ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW)
+        self.assertTrue(ok["direct_ready"] and ok["allowed_by"] == "viewer id")
+        self.assertNotIn(self.RAW, json.dumps(ok))
+        self.assertNotIn("ghp_SECRET", json.dumps(ok))
+        no = order_client.path_status(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_VIEWER_IDS="000000000000"), None, self.RAW)
+        self.assertFalse(no["direct_ready"])
+        self.assertFalse(order_client.path_status(S(ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW)["direct_ready"])      # no token, no one-click
+
+    def test_write_access_accepts_either_identity(self):
+        class S(dict):
+            pass
+        fp = order_client.fingerprint(self.RAW)
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_VIEWER_IDS=fp), None, self.RAW), (True, "t"))
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t", ORDER_ALLOWED_EMAILS="a@x.com"), "a@x.com", None), (True, "t"))
+        self.assertEqual(order_client.configured_write_access(S(PAPER_ORDER_TOKEN="t"), None, self.RAW), (False, None))
+
+    def test_a_platform_viewer_id_is_not_mistaken_for_an_email(self):
+        from unittest import mock
+        from dashboard import ui
+        headers = mock.Mock()
+        headers.get.return_value = self.RAW
+        with mock.patch.object(ui.st, "context", mock.Mock(headers=headers)):
+            self.assertEqual(ui.viewer_id(), self.RAW)
+            self.assertIsNone(ui.viewer_email())
+
+
 class TestViewerIdentity(unittest.TestCase):
     def test_header_formats_yield_an_email_and_a_names_only_shape(self):
         import base64
