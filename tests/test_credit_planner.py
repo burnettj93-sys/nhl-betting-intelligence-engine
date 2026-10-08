@@ -168,6 +168,15 @@ class TestSweeps(unittest.TestCase):
         self.assertEqual(lop.PLANNED_SWEEP_MARKETS, "player_total_saves")
 
 
+class TestDecisionPullGuard(unittest.TestCase):
+    def test_the_t35_pull_ignores_the_soft_daily_budget_and_obeys_the_hard_reserve(self):
+        from operational import moneyline_pregame as mp
+        with mock.patch.object(cp, "enforced", return_value=True), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=289):
+            self.assertTrue(mp._default_guard()["allow"])           # was DEFERRED on 2026-10-08 with 44 spent against a 33.6 soft budget
+        with mock.patch.object(cp, "enforced", return_value=True), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=20):
+            self.assertEqual(mp._default_guard()["reason"], "HARD_RESERVE")
+
+
 class TestLedger(unittest.TestCase):
     def test_record_and_read_back_by_et_day(self):
         cp.record(cp.PROPS, 3, NOW, event="e")

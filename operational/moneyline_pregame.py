@@ -557,7 +557,11 @@ def last_cluster_outcome(audit: dict | None = None) -> dict | None:
 
 
 def _default_guard() -> dict:
-    from operational import odds_quota
+    """The T-35 decision pull is the product's decision feed: under the credit plan it is the FIRST priority and is bounded only by the hard reserve
+    (2026-10-08: the old 3x soft daily budget deferred the 7 PM cluster because credits spent since 00:00 UTC, last night's included, already exceeded it)."""
+    from operational import credit_planner, odds_quota
+    if credit_planner.enforced():
+        return credit_planner.authorize(credit_planner.MONEYLINE_DECISION, 1, dt.datetime.now(dt.timezone.utc))
     return odds_quota.guard(planned=1, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
 
 
@@ -607,7 +611,9 @@ def next_decision_cluster(now: dt.datetime | None = None, *, starts_fn: Callable
     if quota is None:
         try:
             from operational import odds_quota
-            quota = odds_quota.guard(planned=1, now=now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER)
+            from operational import credit_planner
+            quota = (credit_planner.authorize(credit_planner.MONEYLINE_DECISION, 1, now) if credit_planner.enforced()
+                     else odds_quota.guard(planned=1, now=now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER))
         except Exception:  # noqa: BLE001
             quota = {"allow": None, "reason": "UNKNOWN"}
     if not upcoming:
