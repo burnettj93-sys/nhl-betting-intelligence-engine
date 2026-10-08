@@ -111,7 +111,7 @@ for side in ("away", "home"):
         st_ = gl.get("start") or {}
         pr = gl.get("projection") if gl.get("next_game") and gl["next_game"]["game_id"] == gid else None
         grows.append({"Goalie": gl["name"], "Start chance (estimate)": ui.pct(st_.get("probability")) if st_ else "—",
-                      "Status": gl["confirmation"]["status"].title(),
+                      "Status": gl["confirmation"]["status"].replace("_", " ").title(),
                       "Season W-L-OTL": f"{sea.get('wins')}-{sea.get('losses')}-{sea.get('ot_losses')}" if sea.get("games") else "no games yet",
                       "SV%": f"{sea['save_pct']:.3f}" if sea.get("save_pct") is not None else "—",
                       "GAA": f"{sea['gaa']:.2f}" if sea.get("gaa") is not None else "—",
