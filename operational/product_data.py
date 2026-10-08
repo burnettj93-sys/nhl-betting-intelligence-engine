@@ -326,6 +326,8 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                         "schedule_results": max((g["start_utc"] for g in games_out if g["state"] == "FINAL"), default=None)}
         model_health = _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through, goalies_out, players_out, games_out)
         model_health["pipelines"].extend(_lineup_pipelines(lineup_state))
+        model_health["prospective"] = _prospective_checks(nhl, now, live_tg, games_out)
+        model_health["credit_budget"] = _credit_budget(now)
         return {
             "schema_version": SCHEMA_VERSION, "generated_at_utc": _iso(now), "et_today": today,
             "default_date": default_date, "data_through": data_through, "current_season": CURRENT_SEASON_ID,
@@ -358,6 +360,43 @@ def reported_lineups(state: dict, skaters: dict[str, dict]) -> dict[str, dict]:
     return out
 
 
+def _prospective_checks(nhl, now: dt.datetime, live_tg: dict, games_out: list[dict]) -> dict:
+    """Evidence that accumulates on live games: the moneyline shadow scoreboard and the puck-line alternative's untouched 2026-27 log."""
+    out: dict = {}
+    try:
+        from operational import moneyline_model_path
+        out["moneyline"] = moneyline_model_path.scoreboard(nhl)
+    except Exception as exc:  # noqa: BLE001
+        out["moneyline"] = {"error": f"{exc.__class__.__name__}"}
+    try:
+        from research.product_models import puck_line_alternative as pla
+        if pla.OUT_PATH.exists():
+            sched = [g for g in games_out if g["state"] == "SCHEDULED" and g["type"] == "REGULAR" and g["season"] == CURRENT_SEASON_ID]
+            logged = 0
+            for g in sched:
+                try:
+                    logged += pla.shadow_log(live_tg, [g], _iso(now))
+                except Exception:  # noqa: BLE001 - a team the model has never seen
+                    continue
+            out["puck_line"] = {**pla.prospective_score(nhl), "version": pla.VERSION, "newly_logged": logged}
+    except Exception as exc:  # noqa: BLE001
+        out["puck_line"] = {"error": f"{exc.__class__.__name__}"}
+    return out
+
+
+def _credit_budget(now: dt.datetime) -> dict | None:
+    """The Odds API credit position and the goals-market decision, from the provider's own headers (None when the archive is not readable)."""
+    if state_paths.under_test():
+        return None
+    try:
+        from operational import credit_allocation
+        rows = credit_allocation.read_calls(since=now - dt.timedelta(days=credit_allocation.WINDOW_DAYS + 1))
+        st = credit_allocation.status(now, rows=rows)
+        return {**st, "goals_decision": credit_allocation.goals_capture_decision(st, credit_allocation.captures_per_day(rows, now))}
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _lineup_pipelines(state: dict) -> list[dict]:
     status = state.get("status") or "NOT_RUN"
     goalies = (state.get("goalies") or {})
@@ -379,8 +418,8 @@ def _tickets_state() -> dict | None:
 
 
 def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None) -> dict:
-    """Starter confirmation: nothing publishes confirmed starters in a form this system may use, so every goalie is
-    UNCONFIRMED unless a manual confirmation exists (operational/goalie_confirmations.py)."""
+    """Starter confirmation: CONFIRMED only from the team's own post (read automatically, operational/dailyfaceoff.py) or a manual record
+    (operational/goalie_confirmations.py); everything else is UNCONFIRMED."""
     try:
         from operational import goalie_confirmations
         found = goalie_confirmations.lookup(nhl, ng["game_id"], team, pid) if (ng and nhl is not None) else None
@@ -389,8 +428,9 @@ def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None) -> dict
     if found:
         return found
     return {"status": "UNCONFIRMED", "source": None, "checked_at_utc": None,
-            "note": "No confirmation has been recorded. No automated starting-goalie feed can be used, so the chance shown is an estimate "
-                    "from recent usage. Saves props that depend on a named goalie stay blocked until a person records a confirmation."}
+            "note": "No confirmation has been recorded: the team has not posted this start on the page that is read automatically (or the page cites a "
+                    "reporter, which is kept as an expectation), and nobody has recorded one by hand. The chance shown is an estimate from recent usage. "
+                    "Saves props that depend on a named goalie stay blocked until a confirmation exists."}
 
 
 def _team_win(live_tg: dict, team: str, ng: dict, pid: str) -> dict:
@@ -523,7 +563,7 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
                     "not used for pricing.", "Hits: calibrated probability does not clearly beat the simple baseline for 1+; display only.",
                     "There are no historical sportsbook prices, so profitability is NOT claimed; evaluation is forward and frozen."],
          "markets": {"SHOTS (alternate ladder 1+..5+)": "PRICING_ACTIVE", "POINTS (1+, 2+)": "PRICING_ACTIVE",
-                     "ANYTIME GOAL (1+)": "MODEL_READY_PRICES_NOT_CAPTURED", "HITS / BLOCKS": "DISPLAY_ONLY"}},
+                     "ANYTIME GOAL (1+)": "MODEL_READY_PRICES_GATED_BY_CREDIT_BUDGET", "HITS / BLOCKS": "DISPLAY_ONLY"}},
         {"id": "goalie-saves", "name": "Goalie saves and goals against", "version": g_val["model_version"], "role": "LIVE_DISPLAY",
          "purpose": "Expected shots against, save percentage, saves and goals against for a named goalie and opponent, with an 80% range "
                     "and a saves ladder 24+ to 34+.",
@@ -533,9 +573,9 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
                         "report": "docs/validation/goalie_team_validation.json",
                         "range_coverage": g_val["saves_80pct_range_coverage"],
                         "error": g_val["expected_value_mae_final"]},
-         "limits": ["The starter must be known: no confirmation source is connected, so saves props stay blocked from tickets (the gate is not "
-                    "bypassed).", "The fitted calibration did not improve held-out log loss, so raw probabilities are used."],
-         "markets": {"SAVES ladder 24+..34+": "BLOCKED_NO_STARTER_CONFIRMATION"}},
+         "limits": ["The starter must be confirmed: a saves leg exists only for a goalie whose start is confirmed by the team's own post (read automatically from "
+                    "Daily Faceoff) or recorded by hand; a beat reporter's 'Confirmed' is kept as an expectation unless the owner opts in. The gate is not bypassed.", "The fitted calibration did not improve held-out log loss, so raw probabilities are used."],
+         "markets": {"SAVES ladder 24+..34+": "PRICED_ONLY_WITH_CONFIRMED_STARTER"}},
         {"id": "team-win", "name": "Team strength and win probability", "version": g_val["model_version"], "role": "LIVE_DISPLAY",
          "purpose": "Home/away win probability from decayed goal differential (shootouts counted in the result for display).",
          "data": {"source": "MoneyPuck goalie logs (game results derived)", "through": data_through["goalies"]},
@@ -546,9 +586,12 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
                         "report": "docs/validation/goalie_team_validation.json"},
          "limits": ["The named-goalie adjustment did not improve held-out forecasts; it is a scenario, not the probability.",
                     "Puck line: a margin model built on this strength rating (Poisson goals) did NOT beat the base-rate baseline on held-out games "
-                    "(over-predicts home -1.5 covers), so it is not shown or priced. Moneyline pricing is not driven by this model: the existing "
-                    "Elo path (heuristic band) stays the only source for MONEYLINE legs and is unvalidated on this corpus."],
-         "markets": {"MONEYLINE": "BLOCKED_NO_FRESH_PRICES_OR_UNVALIDATED_MODEL", "PUCK LINE": "BLOCKED_MODEL_NOT_VALIDATED_NO_PRICES"}},
+                    "(over-predicts home -1.5 covers); that result stays on record. A direct-logistic alternative beats the base rate on two earlier "
+                    "development folds, but nothing is enabled until it is scored on games it has never seen (2026-27, collecting) and prices and settlement exist.",
+                    "Moneyline: this model is NOT what prices tickets; the Elo path (heuristic band) does. On the same games the two are statistically "
+                    "indistinguishable (docs/validation/moneyline_model_comparison.json) and neither is shown to beat a sportsbook price, so no promotion was made. "
+                    "A versioned opt-in switch and a shadow scoreboard (below) collect market-inclusive evidence on live games."],
+         "markets": {"MONEYLINE": "PRICING_ACTIVE_ELO_NOT_THIS_MODEL", "PUCK LINE": "BLOCKED_UNMET_NO_VALIDATED_MODEL_OR_PRICES"}},
     ]
     pipelines = [{"name": "NHL schedule and results", "through": data_through["schedule_results"], "source": "NHL API → nhl.db"},
                  {"name": "Skater logs", "through": data_through["skaters"], "source": "MoneyPuck daily download"},

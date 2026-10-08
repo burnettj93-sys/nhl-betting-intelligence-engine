@@ -1,0 +1,212 @@
+{
+ "design": "Why this exists: the Model Health page validates the strength model, while the ticket path still uses Elo. Promoting a model because\nit is validated is only honest if it is also compared with the model it would replace on the same games. This is that comparison.",
+ "folds": [
+  {
+   "all_games_incl_shootouts": {
+    "elo_vs_home_rate_log_loss_delta": {
+     "ci_high": 0.0016058668616671934,
+     "ci_low": -0.026413945515547765,
+     "frac_resamples_improved": 0.96,
+     "n_resamples": 2000,
+     "point_delta": -0.012957956084987066
+    },
+    "scores": {
+     "elo_production": {
+      "brier": 0.24018,
+      "home_win_rate": 0.5625,
+      "log_loss": 0.67332,
+      "mean_pred": 0.5464,
+      "n": 1312
+     },
+     "home_rate_baseline": {
+      "brier": 0.24657,
+      "home_win_rate": 0.5625,
+      "log_loss": 0.68628,
+      "mean_pred": 0.5406,
+      "n": 1312
+     },
+     "strength_model": {
+      "brier": 0.23746,
+      "home_win_rate": 0.5625,
+      "log_loss": 0.66749,
+      "mean_pred": 0.5403,
+      "n": 1312
+     }
+    },
+    "strength_vs_elo_log_loss_delta": {
+     "ci_high": 0.00020775555186081096,
+     "ci_low": -0.012190319924320625,
+     "frac_resamples_improved": 0.973,
+     "n_resamples": 2000,
+     "point_delta": -0.005838774207738373
+    },
+    "strength_vs_home_rate_log_loss_delta": {
+     "ci_high": -0.008555571008773688,
+     "ci_low": -0.028623560543411974,
+     "frac_resamples_improved": 1.0,
+     "n_resamples": 2000,
+     "point_delta": -0.01879673029272544
+    }
+   },
+   "decided_in_play_only": {
+    "elo_vs_home_rate_log_loss_delta": {
+     "ci_high": -0.003895470709946114,
+     "ci_low": -0.031792787492488594,
+     "frac_resamples_improved": 0.9975,
+     "n_resamples": 2000,
+     "point_delta": -0.01735927354091904
+    },
+    "scores": {
+     "elo_production": {
+      "brier": 0.23823,
+      "home_win_rate": 0.5626,
+      "log_loss": 0.66891,
+      "mean_pred": 0.5453,
+      "n": 1223
+     },
+     "home_rate_baseline": {
+      "brier": 0.24657,
+      "home_win_rate": 0.5626,
+      "log_loss": 0.68627,
+      "mean_pred": 0.5406,
+      "n": 1223
+     },
+     "strength_model": {
+      "brier": 0.23624,
+      "home_win_rate": 0.5626,
+      "log_loss": 0.66494,
+      "mean_pred": 0.5391,
+      "n": 1223
+     }
+    },
+    "strength_vs_elo_log_loss_delta": {
+     "ci_high": 0.0022055765430281093,
+     "ci_low": -0.010083400539996235,
+     "frac_resamples_improved": 0.8925,
+     "n_resamples": 2000,
+     "point_delta": -0.003974023080067335
+    },
+    "strength_vs_home_rate_log_loss_delta": {
+     "ci_high": -0.011408791095498416,
+     "ci_low": -0.031820230767068636,
+     "frac_resamples_improved": 1.0,
+     "n_resamples": 2000,
+     "point_delta": -0.021333296620986375
+    }
+   },
+   "fit_home_rate": 0.5406,
+   "fit_season": 2023,
+   "scored_season": 2024,
+   "strength_coefficients": [
+    0.1719,
+    0.6879
+   ]
+  },
+  {
+   "all_games_incl_shootouts": {
+    "elo_vs_home_rate_log_loss_delta": {
+     "ci_high": 0.010919169419044694,
+     "ci_low": -0.011830337098286847,
+     "frac_resamples_improved": 0.5325,
+     "n_resamples": 2000,
+     "point_delta": -0.00017741174070851073
+    },
+    "scores": {
+     "elo_production": {
+      "brier": 0.25079,
+      "home_win_rate": 0.5217,
+      "log_loss": 0.69539,
+      "mean_pred": 0.5471,
+      "n": 1311
+     },
+     "home_rate_baseline": {
+      "brier": 0.25119,
+      "home_win_rate": 0.5217,
+      "log_loss": 0.69557,
+      "mean_pred": 0.5626,
+      "n": 1311
+     },
+     "strength_model": {
+      "brier": 0.25021,
+      "home_win_rate": 0.5217,
+      "log_loss": 0.69398,
+      "mean_pred": 0.565,
+      "n": 1311
+     }
+    },
+    "strength_vs_elo_log_loss_delta": {
+     "ci_high": 0.004954650913154279,
+     "ci_low": -0.007630294608172661,
+     "frac_resamples_improved": 0.6695,
+     "n_resamples": 2000,
+     "point_delta": -0.0014134440027664397
+    },
+    "strength_vs_home_rate_log_loss_delta": {
+     "ci_high": 0.00769893353527995,
+     "ci_low": -0.011513245592676302,
+     "frac_resamples_improved": 0.639,
+     "n_resamples": 2000,
+     "point_delta": -0.0015908557434749504
+    }
+   },
+   "decided_in_play_only": {
+    "elo_vs_home_rate_log_loss_delta": {
+     "ci_high": 0.007401923176610592,
+     "ci_low": -0.016721480888811535,
+     "frac_resamples_improved": 0.7835,
+     "n_resamples": 2000,
+     "point_delta": -0.004757897568655967
+    },
+    "scores": {
+     "elo_production": {
+      "brier": 0.24795,
+      "home_win_rate": 0.5272,
+      "log_loss": 0.68944,
+      "mean_pred": 0.5475,
+      "n": 1178
+     },
+     "home_rate_baseline": {
+      "brier": 0.25051,
+      "home_win_rate": 0.5272,
+      "log_loss": 0.6942,
+      "mean_pred": 0.5626,
+      "n": 1178
+     },
+     "strength_model": {
+      "brier": 0.24679,
+      "home_win_rate": 0.5272,
+      "log_loss": 0.68685,
+      "mean_pred": 0.5654,
+      "n": 1178
+     }
+    },
+    "strength_vs_elo_log_loss_delta": {
+     "ci_high": 0.0044107534636412815,
+     "ci_low": -0.009486614664803272,
+     "frac_resamples_improved": 0.7705,
+     "n_resamples": 2000,
+     "point_delta": -0.0025893747829168756
+    },
+    "strength_vs_home_rate_log_loss_delta": {
+     "ci_high": 0.0036747377089302313,
+     "ci_low": -0.0174762625933933,
+     "frac_resamples_improved": 0.9185,
+     "n_resamples": 2000,
+     "point_delta": -0.007347272351572842
+    }
+   },
+   "fit_home_rate": 0.5626,
+   "fit_season": 2024,
+   "scored_season": 2025,
+   "strength_coefficients": [
+    0.273,
+    0.7573
+   ]
+  }
+ ],
+ "limits": [
+  "No historical sportsbook prices are available, so neither model is shown to beat the market.",
+  "Elo here is the unmodified production update rule; the ticket path additionally subtracts a conservative band that is a policy margin, not a calibration."
+ ],
+ "version": "moneyline-compare-v1"
+}

@@ -99,6 +99,9 @@ def _leg_settlement_market_id(leg: dict) -> str | None:
     if family == "PLAYER_POINTS":
         threshold = leg.get("threshold")
         return f"PLAYER_POINTS_{threshold}PLUS" if threshold is not None else None
+    if family == "PLAYER_GOALS":
+        threshold = leg.get("threshold")
+        return f"PLAYER_GOALS_{threshold}PLUS" if threshold is not None else None
     return None
 
 

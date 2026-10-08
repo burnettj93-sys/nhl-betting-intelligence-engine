@@ -17,7 +17,8 @@ from dashboard import ui
 ui.header("Model Health", "The models behind the numbers: freshness, validation evidence, limits, and which markets they price.")
 mh = ui.load(ps.model_health, "Model health")
 
-MARKET_TONE = {"PRICING_ACTIVE": "good", "DISPLAY_ONLY": "muted", "MODEL_READY_PRICES_NOT_CAPTURED": "warn"}
+MARKET_TONE = {"PRICING_ACTIVE": "good", "DISPLAY_ONLY": "muted", "MODEL_READY_PRICES_NOT_CAPTURED": "warn", "MODEL_READY_PRICES_GATED_BY_CREDIT_BUDGET": "warn",
+               "PRICED_ONLY_WITH_CONFIRMED_STARTER": "warn", "PRICING_ACTIVE_ELO_NOT_THIS_MODEL": "warn"}
 st.subheader("Data pipelines")
 st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " "), "Detail": p.get("detail") or ""} for p in mh["pipelines"]], hide_index=True, width="stretch")
 
@@ -62,6 +63,23 @@ for m in mh["models"]:
         st.markdown("**Limits**")
         for lim in m["limits"]:
             st.markdown("- " + ui.esc(lim))
+
+pro = mh.get("prospective") or {}
+if pro:
+    st.subheader("Evidence collecting on live games")
+    st.caption("Backtests cannot show whether a model beats a sportsbook price, so two checks accumulate on games as they are played. Neither changes any ticket.")
+    ml = pro.get("moneyline") or {}
+    if "error" not in ml and ml:
+        ll = ml.get("log_loss") or {}
+        st.markdown(f"**Moneyline: Elo (prices tickets) vs strength model vs market.** {ml.get('scored', 0)} finished game-sides scored of {ml.get('logged', 0)} logged "
+                    f"(a verdict needs {ml.get('min_games_for_a_claim')}).")
+        if ll:
+            st.dataframe([{"Source": {"elo": "Elo (current ticket pricing)", "strength": "Strength model (goalie-team-v1)", "market_no_vig": "Sportsbook price, vig removed"}[k],
+                           "Log loss (lower is better)": v} for k, v in ll.items()], hide_index=True, width="stretch")
+    pl = pro.get("puck_line") or {}
+    if pl and "error" not in pl:
+        st.markdown(f"**Puck line alternative `{pl.get('version')}`** (parameters frozen, untouched 2026-27 games only): {pl.get('scored', 0)} finished of {pl.get('logged', 0)} logged "
+                    f"(a review needs {pl.get('min_games')}). Verdict: {str(pl.get('verdict', '')).replace('_', ' ').lower()}.")
 
 st.subheader("Market coverage for tickets")
 cov = mh.get("market_coverage") or {}

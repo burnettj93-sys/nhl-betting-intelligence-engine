@@ -1,0 +1,117 @@
+{
+ "development": {
+  "folds": [
+   {
+    "coefficients": [
+     -1.1644,
+     0.8414
+    ],
+    "direct_vs_base_rate_log_loss_delta": {
+     "ci_high": -0.002487604490747697,
+     "ci_low": -0.028895772590398217,
+     "frac_resamples_improved": 0.989,
+     "n_resamples": 2000,
+     "point_delta": -0.016199727550378573
+    },
+    "direct_vs_skellam_log_loss_delta": {
+     "ci_high": 0.006330287997966755,
+     "ci_low": -0.006446191023553038,
+     "frac_resamples_improved": 0.5325,
+     "n_resamples": 2000,
+     "point_delta": -0.00029280098255124454
+    },
+    "fit_season": 2022,
+    "scored_season": 2023,
+    "scores": {
+     "base_rate": {
+      "brier": 0.19667,
+      "log_loss": 0.58251,
+      "mean_pred": 0.2492,
+      "n": 1312,
+      "observed": 0.2683
+     },
+     "direct_logistic": {
+      "brier": 0.19038,
+      "log_loss": 0.56631,
+      "mean_pred": 0.2529,
+      "n": 1312,
+      "observed": 0.2683
+     },
+     "skellam": {
+      "brier": 0.19083,
+      "log_loss": 0.5666,
+      "mean_pred": 0.3003,
+      "n": 1312,
+      "observed": 0.2683
+     }
+    }
+   },
+   {
+    "coefficients": [
+     -1.046,
+     0.6237
+    ],
+    "direct_vs_base_rate_log_loss_delta": {
+     "ci_high": -0.0024522253791814386,
+     "ci_low": -0.01846897473003606,
+     "frac_resamples_improved": 0.997,
+     "n_resamples": 2000,
+     "point_delta": -0.01028415623488177
+    },
+    "direct_vs_skellam_log_loss_delta": {
+     "ci_high": 0.00021856170445666567,
+     "ci_low": -0.00708787000440847,
+     "frac_resamples_improved": 0.9705,
+     "n_resamples": 2000,
+     "point_delta": -0.003556170680603765
+    },
+    "fit_season": 2023,
+    "scored_season": 2024,
+    "scores": {
+     "base_rate": {
+      "brier": 0.19031,
+      "log_loss": 0.56855,
+      "mean_pred": 0.2683,
+      "n": 1312,
+      "observed": 0.2553
+     },
+     "direct_logistic": {
+      "brier": 0.18673,
+      "log_loss": 0.55827,
+      "mean_pred": 0.2651,
+      "n": 1312,
+      "observed": 0.2553
+     },
+     "skellam": {
+      "brier": 0.18813,
+      "log_loss": 0.56183,
+      "mean_pred": 0.2951,
+      "n": 1312,
+      "observed": 0.2553
+     }
+    }
+   }
+  ]
+ },
+ "development_verdict": "DEVELOPMENT_SUPPORTS_PROSPECTIVE_TEST",
+ "frozen": {
+  "coefficients": [
+   -1.15231,
+   0.70342
+  ],
+  "fit_games": 5247,
+  "fit_through_season": 2025
+ },
+ "not_enabled": [
+  "No puck-line prices are requested.",
+  "No ledger or settlement mapping exists for a puck-line leg.",
+  "No verdict is claimed before the prospective set has enough finished games."
+ ],
+ "prospective": {
+  "evaluation_set": "2026-27 regular season as played",
+  "min_games": 300,
+  "status": "COLLECTING"
+ },
+ "record_kept": "goalie-team-v1 Skellam margin model failed on 2025-26 (see goalie_team_validation.json)",
+ "version": "puck-line-direct-v1"
+}

@@ -1,5 +1,30 @@
 # Starting-Goalie Source Audit
 
+## Addendum 2026-10-08 — Daily Faceoff is reachable; the 2026-09-24 finding below is superseded for that source
+
+The original audit (kept below for the record) found Daily Faceoff blocked by Cloudflare. That is no longer true. Re-checked on 2026-10-08 with plain HTTP GETs and a descriptive User-Agent:
+
+| Evidence | Result |
+|---|---|
+| `GET https://www.dailyfaceoff.com/starting-goalies/` | HTTP 200, server-rendered Next.js `__NEXT_DATA__` JSON; 10 games, 20 goalie slots |
+| `GET https://www.dailyfaceoff.com/teams/<slug>/line-combinations` (32 teams) | HTTP 200 each, same JSON structure |
+| `robots.txt` | `User-agent: *` → `Allow: /`; only `/api/` and `/cms/` are disallowed (this integration never touches them) |
+| Terms of use | No terms page could be located (the obvious URLs return 404). The owner should read whatever terms apply; the reader has a kill switch, `NHL_ENGINE_DAILYFACEOFF=OFF`, and is rate-limited (starters at most every 20 minutes, line combinations every 3 hours) |
+| What a goalie row carries | goalie, status word (Confirmed / Likely / blank), the newest news item's **source name, source URL and time** |
+
+**What the reader accepts as confirmation.** On 2026-10-08, 11 slots were labelled "Confirmed". Only 1 cited the team's own post (the Flyers); 10 cited named beat reporters (e.g. Russo, Whyno, Granger).
+`operational/dailyfaceoff.py` therefore records **CONFIRMED only when the cited source is the team itself**; a reporter's "Confirmed" and every "Likely" are recorded as EXPECTED, with the source kind kept.
+Accepting reporter-sourced confirmations is an owner decision (`NHL_ENGINE_ACCEPT_REPORTER_CONFIRMATIONS=ON`); it was not made for the owner. The gate (`features/point_in_time.goalie_status` for moneyline, the source-schema consensus for saves)
+is unchanged: a CONFIRMED row from this source, or from a person, is the only thing that opens it. An expectation never walks back a confirmation of the same goalie.
+
+**Is saves automation complete? No.** Automated confirmation now exists, but it covers only the starts a team posts itself (about 1 in 11 at the time of checking); the rest still need a person (the manual path is kept) or the owner's opt-in to
+reporter-sourced confirmations. Availability of the feed itself is verified (HTTP 200, parsed, ingested into `goalie_status_events` with source `dailyfaceoff:<word>|<TEAM|REPORTER>|<url>|<source name>`, shown with source and time on Goalies and Game Detail).
+
+**Reported lineups** from the same source (forward lines, defense pairs, power-play and penalty-kill units, with the reporter and update time) are shown on Players separately from the estimated usage tiers; they are a reporter's published
+expectation for the next game, not a confirmed lineup.
+
+---
+
 **Date:** 2026-09-24 (Starting Goalie Certainty + Prop Contract Watch block). **Method:** this block did not re-research external providers from scratch — a prior sprint (`GOALIE_INTELLIGENCE_FOUNDATION_REPORT.md`, Sections A-E) already performed a real, dated source-contract review (visiting each site's real public pages, checking `robots.txt`, reading each site's own published documentation — never circumventing an access control). This document synthesizes that real, existing research into the format this block requires, adds the NHL API / MoneyPuck / internal-model classification Part 1 asks for, and does not repeat live checks that would just re-confirm the same, recent findings. **No paid provider was integrated. No new external HTTP request was made to any of these sites this block.**
 
 ## Part 1 — Every existing input, classified

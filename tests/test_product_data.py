@@ -124,8 +124,13 @@ class TestGoalieModelPieces(unittest.TestCase):
         self.assertGreater(pl["games_scored"], 1000)
         beats = pl["model"]["log_loss"] < pl["base_rate_baseline"]["log_loss"]
         from operational import product_data
-        text = " ".join(product_data._model_health.__code__.co_consts[i] for i in range(len(product_data._model_health.__code__.co_consts))
-                        if isinstance(product_data._model_health.__code__.co_consts[i], str))
+        def strings(consts):
+            for c in consts:
+                if isinstance(c, str):
+                    yield c
+                elif isinstance(c, tuple):
+                    yield from strings(c)
+        text = " ".join(strings(product_data._model_health.__code__.co_consts))
         if not beats:
             self.assertIn("did NOT beat the base-rate baseline", text)        # the page may not present an unvalidated margin model as usable
 

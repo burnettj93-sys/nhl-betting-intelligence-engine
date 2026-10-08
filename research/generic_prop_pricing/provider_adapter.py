@@ -124,6 +124,14 @@ MALFORMED_QUOTE_SHAPE = "MALFORMED_QUOTE_SHAPE"
 #     ticket engine's own allowlist, the settlement mapping and the player model
 #     gates all apply independently.
 #
+# Gap-closure block (2026-10-08): one more entry, against REAL archived DraftKings payloads (no new paid request):
+#   - (draftkings, PLAYER_GOALS): player_goal_scorer_anytime, four real captures retrieved 2026-10-05T16:05Z (TBL/PHI, WPG/MIN-type
+#     slate games), 36-37 players per game. The shape is ONE-SIDED: every outcome is {"name": "Yes", "description": <player>, "price": <american>}
+#     with no point and no "No" side, so no no-vig probability exists; value is judged from the model probability against the quoted price
+#     (the book's margin stays inside the price, which is conservative). See tests/fixtures/draftkings_player_goal_scorer_real_payload.json
+#     and tests/test_goals_market.py::TestContract. Certifying the contract does not make the market bettable by itself: the engine's own
+#     allowlist, the settlement mapping, the model gate and the credit rule (operational/credit_allocation.py) all apply independently.
+#
 # Every other family remains deliberately unverified -- one observed payload
 # shape never validates an unrelated family (Part 16's instruction, unchanged).
 VERIFIED_CONTRACTS: frozenset[tuple[str, str]] = frozenset({
@@ -133,6 +141,7 @@ VERIFIED_CONTRACTS: frozenset[tuple[str, str]] = frozenset({
     ("draftkings", "PLAYER_SOG"),
     ("draftkings", "GOALIE_SAVES"),
     ("draftkings", "PLAYER_POINTS"),
+    ("draftkings", "PLAYER_GOALS"),
 })
 
 

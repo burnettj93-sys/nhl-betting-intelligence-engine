@@ -5,7 +5,7 @@ Which components exist for each market the ticket workflow could use. Generated 
 under the technical toggle).
 Price evidence: archived Odds API payloads in `operational/odds_archive/live` (market keys requested on
 2026-10-06/07: `h2h`, `player_shots_on_goal_alternate`, `player_shots_on_goal`, `player_total_saves`,
-`player_points`, hits; never `spreads` or a goal-scorer market).
+`player_points`, hits; one five-market diagnostic on 2026-10-05 included `player_goal_scorer_anytime`; never `spreads`).
 Ontario evidence: `research/dk_ontario_market_registry.py` (owner screenshots of the DK Ontario menu, 2026-09-29).
 
 > Prices come from The Odds API's 'draftkings' bookmaker, the US feed. The Ontario menu check is of market families only (owner screenshots, 2026-09-29); Ontario lines and prices can differ and have not been verified.
@@ -20,7 +20,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 | Moneyline | PARTIAL | OK | PARTIAL | PARTIAL | PARTIAL | OK | yes |
 | Puck line | MISSING | OK | MISSING | PARTIAL | MISSING | MISSING | no |
 | Points (1+, 2+) | OK | OK | OK | MISSING | OK | OK | yes |
-| Goals (anytime scorer) | MISSING | OK | OK | MISSING | MISSING | PARTIAL | no |
+| Goals (anytime scorer) | PARTIAL | OK | OK | PARTIAL | OK | OK | yes |
 
 ## What is missing, per market
 
@@ -36,20 +36,20 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Goalie saves
 * Ontario menu: Saves ladders listed (observed 24+ to 34+). The goalie model is validated across 20+ to 35+, which covers that ladder.
-* context confirmation: No automated starting-goalie feed can be used. A person can record a confirmed start with its source and time (operational/goalie_confirmations.py); until then every saves leg is blocked.
-* eligibility: The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded confirmation.
+* context confirmation: Daily Faceoff's public starting-goalies page is read automatically (operational/dailyfaceoff.py). A start counts as CONFIRMED only when the cited source is the team's own post; a beat reporter's "Confirmed" is kept as an expectation unless the owner opts in (on 2026-10-08, 1 of 11 Confirmed labels was team-sourced). A person can still record a confirmation with its source and time (operational/goalie_confirmations.py).
+* eligibility: The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded (team-post or manual) confirmation.
 
 ### Moneyline
 * Ontario menu: Listed (verified).
 * prices: h2h is pulled every 2 minutes, but the T-35 evaluation only accepts a quote for its evaluation time (about 35 minutes before puck drop); earlier it reports DATA_UNAVAILABLE (no valid quote as of that time). That is today's actual exclusion reason.
-* projection: T-35 Elo-based model (its band is a heuristic) drives pricing. A separate strength model (goalie-team-v1) beats the home-rate baseline on held-out games and is shown on Games, but it does not price moneyline legs.
+* projection: The T-35 Elo model (its band is a heuristic) drives pricing. The strength model (goalie-team-v1) shown on Games was compared with it chronologically on the same games (docs/validation/moneyline_model_comparison.json): nominally ahead in both folds, but the paired interval includes zero in both, and neither is shown to beat a sportsbook price. It is therefore NOT promoted. A versioned opt-in switch and a prospective shadow log (operational/moneyline_model_path.py) collect the market-inclusive evidence.
 * context confirmation: Starting goalies are never confirmed (no feed). Moneyline is NOT blocked by that: config.REQUIRE_GOALIE_CONFIRMATION is False, and an unconfirmed starter widens the model's confidence band 1.4x (UNCONFIRMED_GOALIE_UNCERTAINTY_WIDENING, a heuristic) before the edge/EV gates run.
 * eligibility: Eligible whenever the T-35 evaluation has a valid quote and clears its own edge/EV gates; if the strict gate were ever enabled, the adapter reports WAIT.
 
 ### Puck line
 * Ontario menu: Listed (verified), plus alternate lines.
 * prices: The spreads market is never requested from the odds provider.
-* projection: A goal-margin model (Poisson goals around the validated strength rating) was built and validated chronologically; it did NOT beat the base-rate baseline on held-out 2025-26 games, so it is not usable (docs/validation/goalie_team_validation.json, puck_line).
+* projection: The Poisson margin model did NOT beat the base rate on held-out 2025-26 games (kept on record: docs/validation/goalie_team_validation.json). A direct-logistic alternative (puck-line-direct-v1) beats the base rate on two earlier development folds but has had no untouched evaluation: its parameters are frozen and it is scored only on 2026-27 games as they finish (docs/validation/puck_line_alternative.json). Not enabled.
 * context confirmation: Same unconfirmed-starter situation as moneyline (widened band, no gate).
 * eligibility: Not in the contract allowlist; no certified contract.
 * settlement: No resolver for margin lines.
@@ -60,18 +60,16 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Goals (anytime scorer)
 * Ontario menu: Listed (verified).
-* prices: player_goal_scorer_anytime is never requested: each extra market costs one credit per game per capture on a metered plan, and no payload exists to certify its shape.
-* context confirmation: Same proxy only.
-* eligibility: No contract certification.
-* settlement: The resolver supports goals, but the ledger does not map the leg.
+* prices: player_goal_scorer_anytime is requested and available (DraftKings, one-sided Yes prices, 36-37 players a game; four real captures on 2026-10-05). Capture is added to the per-game call only when the credit month still balances after its cost of one credit per game (operational/credit_allocation.py); on 2026-10-08 it does not (short 452 credits), so it is currently off.
+* context confirmation: Reported lineup and injury status from Daily Faceoff are shown on Players; pricing still uses the dressed-in-last-game proxy.
 
 ## Consequences
 
 * Shots on goal and points (validated projection model with calibration) and moneyline (from about 35 minutes before
   puck drop) can produce ticket legs.
-* Saves have a validated model but are blocked until a starting goalie is confirmed (a person records the source and
-  time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic
+* Saves have a validated model but need a confirmed starting goalie (the team's own post read automatically, or a person records
+  the source and time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic
   widened band instead.
-* Puck line is blocked: no prices requested, no margin model, no settlement resolver. Anytime goals has a validated
-  model but no prices or certified contract, so no leg can exist.
+* Puck line is unmet: no prices requested, no validated margin model (the alternative is awaiting untouched 2026-27 evidence), no settlement resolver.
+* Anytime goals is built end to end (certified contract, leg, settlement) but its prices are captured only when the credit month balances; today it does not.
 * An empty board on a day with few priced shots legs is a correct result, not a bug.

@@ -91,6 +91,28 @@ Scored on 1178 held-out games (133 shootout games excluded: this source has no w
 
 A margin model (least squares on the strength rating, Poisson goals with the calibration-season mean total of 5.62) was scored on 1311 held-out games: log loss 0.5293 against 0.5275 for the base rate (lower is better). **It does not beat the base rate** (it over-predicts home −1.5 covers: mean prediction 0.297 against an observed 0.217), so puck-line probabilities are not shown or priced.
 
+**Alternative, `puck-line-direct-v1` (a direct logistic on the strength difference).** The failed result above stays on record. 2025-26 was already looked at once, so it is not used again; the alternative was judged on two earlier folds only (fit on one season, scored once on the next), then its parameters were frozen.
+
+| Scored season | Base rate (log loss) | Skellam (log loss) | Direct logistic (log loss) | Direct − base rate, 95% interval |
+|---|---|---|---|---|
+| 2023-24 | 0.5825 | 0.5666 | 0.5663 | -0.0162 [-0.0289, -0.0025] |
+| 2024-25 | 0.5685 | 0.5618 | 0.5583 | -0.0103 [-0.0185, -0.0025] |
+
+Development verdict: **development supports prospective test**. It is not enabled: there are no puck-line prices, no settlement mapping, and the untouched evaluation set (2026-27 games, logged before they start and scored when finished) has not accumulated enough games.
+
+### Moneyline: strength model against the Elo that prices tickets
+
+Two rolling-origin folds on the same games, paired bootstrap on per-game log loss (`research/product_models/moneyline_comparison.py`, version `moneyline-compare-v1`). Lower log loss is better.
+
+| Scored season | Games | Home-rate | Elo (tickets) | Strength model | Strength − Elo, 95% interval |
+|---|---|---|---|---|---|
+| 2024-25 (decided in play) | 1223 | 0.6863 | 0.6689 | 0.6649 | -0.0040 [-0.0101, +0.0022] |
+| 2024-25 (all games incl. shootouts) | 1312 | 0.6863 | 0.6733 | 0.6675 | -0.0058 [-0.0122, +0.0002] |
+| 2025-26 (decided in play) | 1178 | 0.6942 | 0.6894 | 0.6868 | -0.0026 [-0.0095, +0.0044] |
+| 2025-26 (all games incl. shootouts) | 1311 | 0.6956 | 0.6954 | 0.6940 | -0.0014 [-0.0076, +0.0050] |
+
+The strength model is nominally ahead in every row but every interval reaches zero, and neither model is shown to beat a sportsbook price (no historical prices exist). Elo therefore keeps pricing tickets; `operational/moneyline_model_path.py` records both models and the market's no-vig probability on every priced candidate (the shadow scoreboard on Model Health) and offers an opt-in `NHL_ENGINE_MONEYLINE_MODEL=strength-v1` switch for the owner to use once that evidence exists.
+
 The strength-only model beats the home-rate baseline. Adding each named goalie's expected goals saved per game **did not improve** held-out forecasts (either fitted or tied to the strength coefficient), so a goalie-specific win probability is shown only as a labelled scenario, never as the model's probability.
 
 ### Start likelihood (an estimate, not a confirmation)

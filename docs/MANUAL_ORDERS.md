@@ -29,6 +29,14 @@ opening a page never write anything (tests: `tests/test_product_pages.py`, `test
 * Needs cash: no top-up; below $10 the order is rejected.
 * A single's price is a DraftKings quote; a two-leg parlay's price is an *estimate* (product of the legs' prices). Both are US-feed prices, not verified for Ontario.
 
+## Proving the one-click path without staking anything
+
+Diagnostics → "Order path (one-click add) check" shows, as yes/no values only (the token and the allow-list are never displayed): whether the token secret is configured, how many allowed emails are configured,
+whether the hosted app supplies a viewer email (`st.user.email`), whether that email is on the allow-list, and whether the direct path is ready. "Run non-staking order-path check" files an `order-path-check` issue
+(directly when the path is ready, otherwise through a pre-filled GitHub issue). `operational/manual_orders.py::process_path_check` accepts it only from the repository owner (the same author check as orders), answers on the issue,
+and records the result; **no order, ticket or stake is created and the ledger is not touched.** If the issue was opened by someone else the result is listed as `IGNORED_AUTHOR` with the author's login, which is how a token that belongs to the
+wrong account shows itself. The result appears on the same Diagnostics panel after the next snapshot publish.
+
 ## One-time setup for the one-click path
 
 In Streamlit Cloud → app → Settings → Secrets add:
@@ -39,3 +47,11 @@ ORDER_ALLOWED_EMAILS = "<the email you sign in to the app with>"
 ```
 
 Without these the link path still works end to end.
+
+Exact steps (nothing secret is ever pasted into a chat):
+
+1. On GitHub, signed in as the repository owner (`burnettj93-sys`): Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token. Resource owner: yourself. Repository access: *Only select repositories* →
+   `nhl-betting-intelligence-engine`. Repository permissions: **Issues: Read and write** (nothing else). Expiration: your choice (note the date). Generate and copy the token once.
+2. On share.streamlit.io, open the app's menu → Settings → Secrets, paste the two lines above with the token and the email you sign in to the app with, Save. The app restarts.
+3. Open the app → Diagnostics → "Order path" and press "Run non-staking order-path check". Expected: all five rows `yes`, then a green "ACCEPTED" result within about 2 minutes plus a snapshot refresh.
+4. If "App supplies a viewer email" says `no`, the app is not exposing the signed-in email in this sharing mode; then the direct path cannot identify the viewer and the link path remains the working route (the Diagnostics panel states which).
