@@ -134,8 +134,63 @@ def apply(db_path: Path | None = None, backup_dir: Path | None = None) -> dict:
     return {"status": "ISOLATED", "backup": str(backup), "before": before, "rows_copied": copied}
 
 
+# ----------------------------------------------------------------- simulated paper bets ----
+
+SIMULATED_TRACKS = ("DEMO_PAPER", "GAME_PARLAY_PAPER")
+
+
+def plan_paper_bets(ledger_path: Path) -> dict:
+    conn = sqlite3.connect(ledger_path)
+    try:
+        rows = conn.execute("SELECT track, result_status, COUNT(*) FROM paper_bets GROUP BY 1, 2").fetchall()
+        return {"by_track_status": [list(r) for r in rows],
+                "simulated": conn.execute(f"SELECT COUNT(*) FROM paper_bets WHERE track IN ({','.join('?' * len(SIMULATED_TRACKS))})",
+                                           SIMULATED_TRACKS).fetchone()[0]}
+    finally:
+        conn.close()
+
+
+def apply_paper_bets(ledger_path: Path | None = None, backup_dir: Path | None = None) -> dict:
+    """Moves simulated paper bets (DEMO_PAPER, GAME_PARLAY_PAPER) out of the live account into an archive file. The real
+    REAL_MARKET_PAPER tickets, their ids, settlements, alerts and audit rows are not touched; the archive holds the complete
+    original ledger, so nothing is lost."""
+    from operational import paper_bankroll as pb
+    ledger_path = Path(ledger_path or pb.DB_PATH)
+    backup_dir = Path(backup_dir or REPO / "operational" / "backups")
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    archive = backup_dir / f"paper_bankroll_with_simulated_bets_{stamp}.db"
+    conn = sqlite3.connect(ledger_path)
+    conn.execute("BEGIN EXCLUSIVE")
+    try:
+        before = conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0]
+        real_before = conn.execute("SELECT COUNT(*) FROM paper_bets WHERE track = 'REAL_MARKET_PAPER'").fetchone()[0]
+        simulated = conn.execute("SELECT COUNT(*) FROM paper_bets WHERE track IN ('DEMO_PAPER', 'GAME_PARLAY_PAPER')").fetchone()[0]
+        if not simulated:
+            conn.rollback()
+            return {"status": "NOTHING_TO_ISOLATE", "real_tickets": real_before}
+        shutil.copy2(ledger_path, archive)
+        marks = ",".join("?" * len(SIMULATED_TRACKS))
+        ids = [r[0] for r in conn.execute(f"SELECT paper_bet_id FROM paper_bets WHERE track IN ({marks})", SIMULATED_TRACKS)]
+        id_marks = ",".join("?" * len(ids))
+        conn.execute(f"DELETE FROM paper_audit_log WHERE paper_bet_id IN ({id_marks})", ids)
+        conn.execute(f"DELETE FROM ticket_alerts WHERE paper_bet_id IN ({id_marks})", ids)
+        conn.execute(f"DELETE FROM paper_bets WHERE paper_bet_id IN ({id_marks})", ids)
+        after_real = conn.execute("SELECT COUNT(*) FROM paper_bets WHERE track = 'REAL_MARKET_PAPER'").fetchone()[0]
+        if after_real != real_before or conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0] != before - simulated:
+            conn.rollback()
+            return {"status": "ABORTED", "problem": "real ticket count changed"}
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ISOLATED", "archive": str(archive), "moved": simulated, "real_tickets": real_before}
+
+
 if __name__ == "__main__":
-    if "--apply" in sys.argv:
+    if "--paper-bets" in sys.argv:
+        from operational import paper_bankroll as _pb
+        print(json.dumps(apply_paper_bets() if "--apply" in sys.argv else plan_paper_bets(_pb.DB_PATH), indent=1))
+    elif "--apply" in sys.argv:
         print(json.dumps(apply(), indent=1))
     else:
         c = sqlite3.connect(db.RUNTIME_DB_PATH)

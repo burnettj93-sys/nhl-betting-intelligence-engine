@@ -1,11 +1,5 @@
-"""Page 22 — Model Health: one canonical status board driven entirely by
-research/model_registry.py (Preseason Operationalization sprint, Section
-51-53). No demo rows -- every row here is a real, current MODEL_REGISTRY
-entry. Distinct from the pre-existing "Prop Registry" page (page 10,
-research.player_props.registry), which tracks player-prop-level
-market/confidence support specifically; this page is the broader,
-cross-family status board requested this sprint, including team-level
-and joint-dependence families Prop Registry doesn't cover."""
+"""Model Health — what is actually running: each model's purpose, data freshness and season coverage, validation evidence, limits, and
+whether it is supplying tickets, per market. Status is stated as it is; partial or unvalidated is never relabelled."""
 from __future__ import annotations
 
 import sys
@@ -17,63 +11,66 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from dashboard import components as comp
-from research.model_registry import MODEL_REGISTRY
+from dashboard import product_source as ps
+from dashboard import ui
 
-st.title("Model Health")
-comp.render_model_status_header()
-st.caption("Driven live from research/model_registry.py — not a static demo table.")
-st.caption(
-    "Each card shows two INDEPENDENT dimensions, left to right: **MODEL VALIDATION** (did the "
-    "statistical model clear this project's evidence bar on the historical corpus?) and "
-    "**PRODUCTION STATUS** (is it actually wired into a live decision today?). A model can be "
-    "VALIDATED and still show PRODUCTION: RESEARCH — validation is necessary but not sufficient "
-    "for production use (live contract, settlement, and any starter/lineup gate are separate "
-    "requirements). These two badges are not contradictory even when they differ."
-)
+ui.header("Model Health", "The models behind the numbers: freshness, validation evidence, limits, and which markets they price.")
+mh = ui.load(ps.model_health, "Model health")
 
-status_map = {"VALIDATED": "VALIDATED", "PARTIAL": "PARTIAL", "REJECTED": "REJECTED",
-              "ATTEMPTED_NOT_VALIDATED": "REJECTED", "EMPIRICAL_BASELINE_REMAINS_CHAMPION": "PARTIAL",
-              "VALIDATED_OVERLAY": "SHADOW_VALIDATED", "VALIDATION_COMPLETE (MIXED, see registry)": "PARTIAL"}
+MARKET_TONE = {"PRICING_ACTIVE": "good", "DISPLAY_ONLY": "muted", "MODEL_READY_PRICES_NOT_CAPTURED": "warn"}
+st.subheader("Data pipelines")
+st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " ")} for p in mh["pipelines"]], hide_index=True, width="stretch")
 
-for entry in MODEL_REGISTRY:
-    with st.container(border=True):
-        cols = st.columns([2, 1, 1])
-        with cols[0]:
-            st.markdown(f"**{entry.display_name}**")
-            st.caption(entry.model_id)
-        with cols[1]:
-            badge_status = status_map.get(entry.status, "RESEARCH")
-            comp.render_status_banner(badge_status, entry.status, detail="MODEL VALIDATION")
-        with cols[2]:
-            comp.render_status_banner(
-                entry.operational_status if entry.operational_status in comp.STATUS_BANNER_STYLES
-                else "RESEARCH", entry.operational_status.replace("_", " "), detail="PRODUCTION STATUS")
+st.subheader("Models in use")
+for m in mh["models"]:
+    with st.expander(f"{m['name']} — {m['version']}  ·  {m['role'].replace('_', ' ').title()}", expanded=True):
+        st.write(m["purpose"])
+        d = m["data"]
+        age = d.get("age_days")
+        cols = st.columns(3)
+        cols[0].metric("Data source", d["source"].split(" +")[0][:28])
+        cols[1].metric("Data through", d["through"] or "n/a", f"{age} day(s) old" if age is not None else None, delta_color="off")
+        extra = {k: v for k, v in d.items() if k not in ("source", "through", "age_days")}
+        cols[2].metric(next(iter(extra), "Coverage").replace("_", " ").title(), next(iter(extra.values()), "—"))
+        if len(extra) > 1:
+            st.caption(" · ".join(f"{k.replace('_', ' ')}: {v}" for k, v in list(extra.items())[1:]))
+        v = m["validation"]
+        st.markdown("**Validation evidence**")
+        sp = v["split"]
+        st.caption("Chronological split — " + ", ".join(f"{k.replace('_', ' ')}: {val}" for k, val in sp.items()) + f". Report: `{v['report']}`.")
+        if "summary" in v:
+            s = v["summary"]
+            st.write(f"{s['beating_baselines']} of {s['markets_scored']} threshold markets beat both simple baselines on log loss in the held-out season."
+                     + (f" Not beating: {', '.join(s['not_beating'])}." if s["not_beating"] else ""))
+        if "method" in v:
+            st.caption(v["method"])
+        if "range_coverage" in v:
+            rc = v["range_coverage"]
+            st.write(f"80% saves range contained the result {rc['final_season']:.0%} of the time in the held-out season (nominal 80%).")
+            e = v["error"]
+            st.caption(f"Mean absolute error on {e['n']} held-out goalie games: saves {e['saves_model']:.2f} vs {e['saves_league_mean']:.2f} for the league-average guess; goals against {e['goals_against_model']:.2f} vs {e['goals_against_league']:.2f}.")
+        if "result" in v:
+            r = v["result"]
+            st.dataframe([{"Win-probability variant": k.replace("_", " ").title(), "Log loss": r[k]["log_loss"], "Brier": r[k]["brier"]} for k in
+                          ("home_rate_baseline", "strength_only", "strength_and_named_goalies", "strength_and_goalies_tied")], hide_index=True, width="stretch")
+            st.caption(f"{r['games_scored']} held-out games scored; {r['shootouts_excluded']} shootout games excluded (no winner in the source). Lower is better.")
+        st.markdown("**Markets and ticket status**")
+        st.markdown(" ".join(ui.chip(f"{k}: {val.replace('_', ' ').title()}", MARKET_TONE.get(val, "bad" if "BLOCKED" in val else "muted")) for k, val in m["markets"].items()),
+                    unsafe_allow_html=True)
+        st.markdown("**Limits**")
+        for lim in m["limits"]:
+            st.markdown("- " + ui.esc(lim))
 
-        threshold_bits = []
-        if entry.validated_thresholds:
-            threshold_bits.append(f"Validated: {', '.join(entry.validated_thresholds)}")
-        if entry.partial_thresholds:
-            threshold_bits.append(f"Partial: {', '.join(entry.partial_thresholds)}")
-        if entry.rejected_thresholds:
-            threshold_bits.append(f"Rejected: {', '.join(entry.rejected_thresholds)}")
-        if entry.insufficient_thresholds:
-            threshold_bits.append(f"Insufficient data: {', '.join(entry.insufficient_thresholds)}")
-        if threshold_bits:
-            st.caption(" | ".join(threshold_bits))
-
-        with st.expander("Technical detail"):
-            st.markdown(f"- **Confidence behavior:** {entry.confidence_behavior}")
-            st.markdown(f"- **LOW policy:** {entry.low_policy}")
-            st.markdown(f"- **PIT status:** {entry.pit_status}")
-            if entry.upstream_dependencies:
-                st.markdown(f"- **Upstream:** {', '.join(entry.upstream_dependencies)}")
-            if entry.downstream_consumers:
-                st.markdown(f"- **Downstream:** {', '.join(entry.downstream_consumers)}")
-            if entry.validation_report:
-                st.markdown(f"- **Report:** `{entry.validation_report}`")
-            if entry.results_file:
-                st.markdown(f"- **Freeze file:** `{entry.results_file}`")
-                st.code(entry.code_hash or "hash unavailable", language=None)
-
-comp.render_provenance_panel()
+st.subheader("Market coverage for tickets")
+cov = mh.get("market_coverage") or {}
+rows = cov.get("rows") or []
+if rows:
+    st.dataframe([{"Market": r["market"], "In ticket allow-list": "yes" if r.get("in_ticket_allowlist") else "no",
+                   "Projection": r["components"]["projection"]["status"].title(), "Prices": r["components"]["prices"]["status"].title(),
+                   "Context confirmation": r["components"]["context_confirmation"]["status"].title(),
+                   "Settlement": r["components"]["settlement"]["status"].title(), "Ontario menu": r.get("ontario_menu", "")} for r in rows], hide_index=True, width="stretch")
+    if cov.get("price_feed_caveat"):
+        st.caption(ui.esc(cov["price_feed_caveat"]))
+else:
+    st.caption("Market coverage has not been published yet.")
+st.caption("Nothing on this page claims profitability: there are no historical sportsbook prices to test against, so evidence is calibration and accuracy on held-out games, plus the forward record in Paper Performance.")

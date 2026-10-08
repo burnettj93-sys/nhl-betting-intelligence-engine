@@ -33,7 +33,7 @@ import math
 import re
 
 SCHEMA_VERSION = 2
-SUPPORTED_SCHEMA_VERSIONS = (1, 2)
+SUPPORTED_SCHEMA_VERSIONS = (2,)
 
 PROVENANCE_LIVE = "LIVE — DRAFTKINGS"
 PROVENANCE_REAL_MARKET = "REAL MARKET"
@@ -54,7 +54,8 @@ PUBLICATION_ONLY_FIELDS = ("generated_at", "generated_by", "source_master_commit
 # keys that are pure compute-time stamps inside embedded reports; excluded from the hash
 VOLATILE_KEYS = frozenset({"generated_at_utc", "computed_at_utc"})
 
-REQUIRED_TOP_LEVEL = {1: ("schema_version", "meta", "demo"), 2: ("schema_version", "metadata", "demo")}
+REQUIRED_TOP_LEVEL = {2: ("schema_version", "metadata")}
+FORBIDDEN_TOP_LEVEL = ("demo", "live_moneyline_rows")        # simulated content has no place in a published snapshot
 REQUIRED_METADATA_V2 = ("schema_version", "generated_at", "generated_by", "source_master_commit",
                         "engine_mode", "data_as_of", "freshness")
 FRESHNESS_KEYS = ("nhl_data", "odds", "recommendations", "settlement", "postmortem")
@@ -260,8 +261,9 @@ def validate_snapshot(doc, *, known_secrets: tuple[str, ...] = (), for_publicati
     for key in REQUIRED_TOP_LEVEL[version]:
         if key not in doc:
             raise SnapshotInvalid(f"missing required top-level section {key!r}")
-    if not isinstance(doc["demo"], dict):
-        raise SnapshotInvalid("`demo` must be an object")
+    for key in FORBIDDEN_TOP_LEVEL:
+        if key in doc:
+            raise SnapshotInvalid(f"`{key}` is simulated content and must not appear in a published snapshot")
     meta = metadata_of(doc)
     if version == 2:
         for field in REQUIRED_METADATA_V2:

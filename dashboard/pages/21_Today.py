@@ -1,21 +1,5 @@
-"""Page 21 — Today. Top: the $500 paper account and up to five recorded/recommended
-parlay tickets (operational/daily_tickets.py -- the same ticket ids the ledger,
-settlement and postmortems use). Everything below it (system health, real slate,
-research comparisons, demo showcase) sits behind one "technical" toggle.
-
-Original description: the real-data-first landing page (Real Product Bridge
-block, 2026-09-29, superseding the earlier Same-Day Demo Experience
-sprint's demo-first hierarchy). Order: System Health -> Today's Real Slate
--> Top Conviction (real eligible legs) -> Daily Real-Market Parlays (real,
-cross-game) -> Historical Elo research comparison (real DK prices vs. a
-frozen, always-stale research Elo snapshot -- collapsed by default, see
-2026-10-01's own note where it's built, further down) -> Recorded
-Recommendations (real, paper-tracked) -> Model Health links. Every section
-is REAL OR EMPTY -- no section is ever backfilled with simulated content.
-A Demo / Model Showcase (dashboard/demo_data.py's simulated slate) is
-retained for illustrating the model/combo/parlay machinery, but lives
-behind its own explicit, collapsed, clearly-labeled expander -- it does
-not occupy the normal Today workflow."""
+"""Today — the automatic engine's view of the Eastern-time hockey day: today's games, the (up to five) distinct +100 cross-game
+tickets it recorded or recommends, the shared $500 paper account, and anything added by hand. Read-only."""
 from __future__ import annotations
 
 import sys
@@ -25,646 +9,98 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import datetime as dt
-
 import streamlit as st
 
-from dashboard import cloud_snapshot
-from dashboard import components as comp
-from dashboard import conviction as cv
-from dashboard import data_access as da
-from dashboard import demo_data as dd
-from dashboard import eligible_bets as eb
-from dashboard import formatting as fmt
-from dashboard import live_dk as ldk
-from operational import runtime_mode
-from operational.system_health import build_system_health, odds_collection_status
-from research.game_edge_parlay import engine as gep
-from research.generic_prop_pricing.provider_adapter import VERIFIED_CONTRACTS
-from operational.live_readiness import live_readiness
-from operational import prospective_ledger as pl
+from dashboard import product_source as ps
+from dashboard import ui
 
+ui.header("Today", "Games, the automatic tickets, and the paper account — all from observed data and DraftKings quotes.")
+tk = ui.load(ps.tickets, "The ticket board")
+games = ui.load(ps.games, "The schedule")
+if "account" not in tk:
+    ui.unavailable("The ticket board has not been built yet; it is written by the 15-minute paper-trader job.", "The ticket board")
+    st.stop()
 
-@st.cache_data(show_spinner="Building today's real slate (real moneyline + real SOG legs)...",
-               ttl=300, max_entries=4)
-def _cached_local_real_today_state():
-    # Platform Recovery block (2026-09-29): a real, unloaded run of
-    # build_real_today_state() takes ~14s (every scheduled game's real
-    # T-35 moneyline evaluation + every real archived SOG payload's real
-    # model projection) -- without caching, every single Today page
-    # render/rerun redid this from scratch, which is both a slow real
-    # user experience and (confirmed against the full test suite) can
-    # exceed a 60s AppTest render budget under load. A 5-minute TTL keeps
-    # this responsive while staying close to the real odds refresh
-    # cadence (moneyline-pregame/prop-sweep-second run every 2-15 min) --
-    # never stale enough to show a meaningfully outdated real opportunity.
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_today_state()
+acct, origins = tk["account"], tk.get("origins") or {}
+settled_stake = (origins.get("ALL") or {}).get("settled_stake") or 0
+roi = (origins.get("ALL") or {}).get("roi")
+cols = st.columns(6)
+cols[0].metric("Available cash", ui.money(acct["available_cash"]), help="Starting $500 plus settled results, minus open stakes. No top-ups.")
+cols[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_tickets']} open ticket(s)", delta_color="off")
+cols[2].metric("Equity", ui.money(acct["equity"]), help="Cash plus open stakes at cost.")
+cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
+cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
+cols[5].metric("Tickets", acct["tickets"], help="All tickets ever recorded in this account.")
+st.caption(f"Paper account · $500 start, $10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
+if tk.get("notice"):
+    ui.banner(ui.esc(tk["notice"]), "warn")
+if tk.get("label"):
+    st.caption(ui.esc(tk["label"]))
 
-
-st.title("Today")
-comp.render_model_status_header()
-comp.render_global_search(key_prefix="today")
-
-from dashboard import tickets_view as tv
-
-
-def _tickets_state():
-    try:
-        if runtime_mode.is_community_cloud():
-            return cloud_snapshot.tickets()
-        from operational import daily_tickets
-        return daily_tickets.read_state()
-    except cloud_snapshot.SnapshotUnavailable:
-        return None
-
-
-def _render_ticket_card(ticket: dict) -> None:
-    view = tv.card(ticket)
-    with st.container(border=True):
-        top = st.columns([4, 1])
-        top[0].markdown(f"**{view['title']}**")
-        top[1].markdown(
-            f"<div style='text-align:right'><span style='background:{view['badge_bg']};color:{view['badge_fg']};"
-            f"padding:2px 10px;border-radius:10px;font-weight:600;font-size:0.85rem'>{view['badge']}</span></div>",
-            unsafe_allow_html=True)
-        st.dataframe(
-            [{"Selection": l["selection"], "Game": l["game"], "Price": l["price"], "Priced at": l["priced_at"],
-              "Modeled": l["model"]} for l in view["legs"]],
-            hide_index=True, width="stretch")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Est. combined price", view["combined"].split(" ")[0], help="Estimated: the product of each leg's own "
-                  "sportsbook price. Not a quoted DraftKings parlay price.")
-        c2.metric("Stake", view["stake"])
-        c3.metric("Potential return", view["potential_return"].split(" return")[0])
-        c4.metric("Modeled hit chance", view["hit"])
-        st.caption(view["labels"])
-        st.caption(view["rationale"].replace("$", "\\$"))
-        if view["recorded_at"]:
-            st.caption(f"Recorded {view['recorded_at']} · prices and probabilities above are frozen at that moment.")
-        if view["outcome"]:
-            st.markdown(f"**Result:** {view['outcome']}")
-        for alert in view["alerts"]:
-            st.warning(alert.replace("$", "\\$"))
-
-
-_tk = _tickets_state()
-if not _tk or "account" not in _tk:
-    comp.render_empty_state("NO_TICKET_STATE", "The ticket board has not been built yet. It is written by the "
-                            "15-minute paper-trader job.")
+today = games["et_today"]
+todays = [g for g in games["games"] if g["date_et"] == today and g["type"] == "REGULAR" and g["season"] == "20262027"]
+st.subheader(f"Today's games — {today}")
+if not todays:
+    nxt = games["default_date"]
+    st.info(f"No regular-season games are scheduled for {today}. Next game day: {nxt}. Open Games to browse.")
 else:
-    _fresh = tv.freshness(_tk)
-    for _col, (_label, _value, _help) in zip(st.columns(4), tv.account_header(_tk)):
-        _col.metric(_label, _value, help=_help)
-    st.caption(f"Paper account · \\$500 start, \\$10 per ticket · board updated {_fresh['updated']}"
-               f" ({_fresh['age_minutes']} min ago).")
-    if _fresh["stale"]:
-        st.warning(f"The board is {_fresh['age_minutes']} minutes old. The scheduled job refreshes it every 15 "
-                   "minutes while this Mac is awake; prices may have moved.")
-    if _tk.get("label"):
-        st.warning(_tk["label"])
-    if _tk.get("notice"):
-        st.info(_tk["notice"].replace("$", "\\$"))
-    st.markdown("## Today's tickets")
-    st.caption("Up to five distinct cross-game parlays per day, each at +100 or better. Recorded tickets are paper "
-               "bets and never change; Recommended tickets can still change with the next price refresh.")
-    for _ticket in _tk["tickets"]:
-        _render_ticket_card(_ticket)
-    if _tk.get("exposure") and _tk["tickets"]:
-        _ex = _tk["exposure"]
-        st.markdown("### Shared exposure across these tickets")
-        _pl, _gm = tv.exposure_rows(_ex)
-        st.caption(f"Open stake at risk on recorded tickets: ${_ex['recorded_stake_at_risk']:.2f}. ".replace("$", "\\$")
-                   + _ex["note"])
-        if _pl:
-            st.dataframe(_pl, hide_index=True, width="stretch")
-        else:
-            st.caption("No player appears on more than one ticket.")
-        st.dataframe(_gm, hide_index=True, width="stretch")
-    _empty = tv.empty_slots_text(_tk)
-    if _empty:
-        st.info(_empty.replace("$", "\\$"))
-    if _tk.get("singles"):
-        st.markdown("### Single-leg ideas at +100 or better")
-        st.caption("Not staked and not counted toward the five tickets.")
-        st.dataframe([tv.single_row(x) for x in _tk["singles"]], hide_index=True, width="stretch")
-    if _tk.get("earlier_open_tickets"):
-        st.markdown("### Earlier open tickets")
-        for _ticket in _tk["earlier_open_tickets"]:
-            _render_ticket_card(_ticket)
-    if _tk.get("recent_settled"):
-        with st.expander(f"Recently settled ({len(_tk['recent_settled'])})"):
-            for _ticket in _tk["recent_settled"]:
-                _render_ticket_card(_ticket)
+    rows = []
+    for g in todays:
+        ml = g.get("moneyline") or {}
+        score = f"{g['away_score']}–{g['home_score']}" if g["state"] == "FINAL" else "—"
+        rows.append({"Time": g["start_et"], "Game": f"{g['away']} @ {g['home']}", "Status": ui.STATUS_TEXT.get(g["state"], g["state"].title()),
+                     "Score": score, "Model home win": ui.pct((g.get("win_probability") or {}).get("home")),
+                     "DK moneyline (away / home)": (f"{ui.american((ml.get('away') or {}).get('american'))} / "
+                                                    f"{ui.american((ml.get('home') or {}).get('american'))}" if ml else "no fresh quote"),
+                     "Tickets": len(g.get("tickets") or [])})
+    st.dataframe(rows, hide_index=True, width="stretch")
+    st.caption("Model home win is a display estimate (validated strength model); moneyline quotes are DraftKings US-feed prices and are not used for tickets unless fresh.")
 
-st.divider()
-_show_technical = st.toggle("Show technical health, research and slate detail", value=False, key="today_show_technical")
-if _show_technical:
-    if _tk and _tk.get("coverage"):
-        st.markdown("### Market coverage")
-        st.caption(_tk["coverage"]["price_feed_caveat"].replace("$", "\\$"))
-        st.dataframe(
-            [{"Market": r["market"], "In ticket allowlist": "yes" if r["in_ticket_allowlist"] else "no",
-              **{c.replace("_", " ").title(): v["status"] for c, v in r["components"].items()},
-              "What is missing": " | ".join(r["missing"]) or "nothing"} for r in _tk["coverage"]["rows"]],
-            hide_index=True, width="stretch")
-        _diag = _tk.get("diagnostics") or {}
-        if _diag:
-            st.caption(f"Last cycle: {_diag.get('legs_considered', 0)} legs considered, "
-                       f"{_diag.get('qualifying_tickets', 0)} qualifying tickets.")
-            st.markdown("Capture plan (our 5-hour window is a credit policy, not provider availability)")
-            st.dataframe(_diag.get("capture_plan") or [], hide_index=True, width="stretch")
-            st.markdown("Selection funnel (why tickets did or did not qualify)")
-            st.json(_diag.get("funnel") or {}, expanded=False)
-            st.json(_diag.get("sources") or {}, expanded=False)
-    st.markdown("### System Health")
-    if runtime_mode.is_community_cloud():
-        # Community Cloud: health is the LOCAL ENGINE's, as published in the snapshot
-        # (never computed here -- the web process has no caches/DBs/schedulers to inspect).
-        try:
-            _cloud_health = cloud_snapshot.health_section()
-            health = {i["key"]: {"status": i["status"], "label": i["label"], "message": i.get("message", "")}
-                      for i in _cloud_health["items"]}
-        except cloud_snapshot.SnapshotUnavailable:
-            _cloud_health, health = {}, {}
-    else:
-        _cloud_health = None
-        health = build_system_health()
-    _dot = {"OK": "🟢", "STALE": "🟡", "WAITING": "🔵", "ERROR": "🔴", "NOT_REQUIRED": "⚪", "UNKNOWN": "⚫",
-            "DEGRADED": "🟠"}
-    chip_html = "".join(
-        f'<span style="display:inline-block; margin:3px 6px 3px 0; padding:4px 10px; '
-        f'border-radius:999px; background:#1c2330; border:1px solid #262e3d; font-size:0.78rem;">'
-        f'{_dot.get(item["status"], "⚫")} {item["label"]}: {item["status"]}</span>'
-        for item in health.values()
-    )
-    st.markdown(chip_html, unsafe_allow_html=True)
-    failing = [item for item in health.values() if item["status"] == "ERROR"]
-    if failing:
-        st.error(" · ".join(f"{item['label']}: {item['message']}" for item in failing))
+slots = tk["slots"]
+st.subheader("Automatic tickets")
+st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket is a distinct cross-game bet at +100 or better; recorded tickets are paper bets and never change, "
+           "recommended ones can still move with the next price refresh.")
+for t in tk["tickets"]:
+    ui.ticket_card(t)
+if slots["empty"]:
+    ui.banner("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")), "muted")
+    pol = tk.get("policy") or {}
+    st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
+               f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
+               f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
 
-    _odds_status = (_cloud_health.get("odds_status") if runtime_mode.is_community_cloud() and _cloud_health
-                    else None) or odds_collection_status()
-    oc1, oc2, oc3, oc4, oc5, oc6 = st.columns(6)
-    # The published snapshot deliberately omits the volatile per-sweep `last_updated_utc` (it would make every snapshot
-    # look changed); in Cloud the newest real price time comes from the snapshot's odds freshness component instead.
-    _odds_last = _odds_status.get("last_updated_utc")
-    if not _odds_last and runtime_mode.is_community_cloud():
-        _odds_last = ((cloud_snapshot.freshness().get("components") or {}).get("odds"))
-    oc1.metric("Odds last updated", (_odds_last or "—")[:16])
-    oc2.metric("Credits remaining", _odds_status.get("credits_remaining") if _odds_status.get("credits_remaining") is not None else "—")
-    _next_market_refresh_text, _next_t35_text = "scheduler-driven", None
-    if not runtime_mode.is_community_cloud():
-        # Game-Day Moneyline Freshness block (2026-09-29), Part 12: "Next refresh" used to be a static,
-        # uninformative "scheduler-driven" string that blurred two different concepts -- the ordinary
-        # UI-freshness refresh and the T-35 decision-policy capture. Best-effort only: never let this
-        # break Today (System Health above it already covers real failure states).
-        try:
-            from operational import cloud_snapshot_schema as _schema
-            from operational import moneyline_freshness as _mf
-            from operational import moneyline_pregame as _mp
-            from zoneinfo import ZoneInfo as _ZoneInfo
-            _edt = _ZoneInfo("America/New_York")
-            _now_utc = dt.datetime.now(dt.timezone.utc)
-            _mf_status = _mf.status(_now_utc)
-            _next_ord = _schema.parse_utc(_mf_status["next_ordinary_refresh_utc"])
-            _next_market_refresh_text = (_next_ord.astimezone(_edt).strftime("%-I:%M %p %Z") if _next_ord
-                                          else "none scheduled today")
-            _upcoming_clusters = [c for c in _mp.plan_clusters(_mp.scheduled_starts(_now_utc)) if c.target_pull >= _now_utc]
-            if _upcoming_clusters:
-                _next_t35_text = _upcoming_clusters[0].target_pull.astimezone(_edt).strftime("%-I:%M %p %Z")
-        except Exception:  # noqa: BLE001 -- this metric is informational only
-            _next_market_refresh_text, _next_t35_text = "scheduler-driven", None
-    oc3.metric("Next market refresh", _next_market_refresh_text)
-    oc4.metric("Verified DK contracts", len(VERIFIED_CONTRACTS))
-    oc5.metric("Player prop quotes", _odds_status.get("player_prop_quotes", "—"))
-    oc6.metric("Tracked events", _odds_status.get("tracked_events", "—"))
-    if _next_t35_text:
-        st.caption(f"Next execution capture (T-35, decision-policy pull — separate from the ordinary "
-                   f"market refresh above): {_next_t35_text}")
+ex = tk.get("exposure") or {}
+if ex.get("tickets_counted"):
+    with st.expander(f"Shared exposure across {ex['tickets_counted']} ticket(s) (automatic and manual)"):
+        by = ex.get("tickets_by_origin") or {}
+        st.caption(f"Open stake at risk: {ui.money(ex.get('recorded_stake_at_risk'))} · "
+                   + " · ".join(f"{ui.STATUS_TEXT.get(k, k)}: {v}" for k, v in by.items()) + ". " + ui.esc(ex.get("note", "")))
+        shared = [p for p in ex.get("players", []) if p["count"] > 1]
+        shared_g = [g for g in ex.get("games", []) if g["count"] > 1]
+        if shared:
+            st.markdown("**Players on more than one ticket**")
+            st.dataframe([{"Player": p["player"], "Tickets": p["count"], "Ids": ", ".join(p["tickets"])} for p in shared], hide_index=True, width="stretch")
+        if shared_g:
+            st.markdown("**Games on more than one ticket**")
+            st.dataframe([{"Game": g["matchup"], "Tickets": g["count"], "Ids": ", ".join(g["tickets"])} for g in shared_g], hide_index=True, width="stretch")
+        if not shared and not shared_g:
+            st.caption("No player or game appears on more than one ticket.")
 
-    with st.expander("Real NHL slate + Prospective Recording (technical detail)"):
-        if runtime_mode.is_community_cloud():
-            # Community Cloud memory sprint: the historical NHL corpus is never loaded
-            # or walked from a page render in the thin presentation layer.
-            st.caption("Real-corpus slate detail is not loaded in Community Cloud mode.")
-        else:
-            try:
-                predictions = da.compute_baseline_predictions()
-                dates = da.available_dates(predictions)
-                from operational import eastern_time as _et
-                today_str = _et.eastern_today()
-                todays_games = da.games_on_date(predictions, today_str) if today_str in dates else []
-                if not todays_games:
-                    comp.render_empty_state("NO_GAMES", f"No real NHL games found in the corpus for {today_str}.")
-                else:
-                    for g in todays_games:
-                        readiness = live_readiness("PLAYER_SOG", game_id=g.get("game_id"))
-                        st.caption(f"**{g['away_team']} @ {g['home_team']}** — SOG market readiness: {readiness['status']}")
-            except da.DataAvailabilityError as exc:
-                comp.render_missing_data_page(exc)
+manual = tk.get("manual_tickets") or []
+st.subheader("Added by hand today")
+st.caption("Tickets added with “Add to paper book — $10” on Best Options or Players. They share the account and exposure above, never take one of the five automatic slots, and are reported separately in Paper Performance.")
+if manual:
+    for t in manual:
+        ui.ticket_card(t)
+else:
+    st.caption("None today.")
 
-        st.markdown("**Prospective Recording**")
-        # Production Gap Closure sprint (2026-09-30): this used to check
-        # pl.DB_PATH.exists() unconditionally -- the Cloud container never has
-        # that local ledger file, so this always fell into "No prospective
-        # observations recorded yet" in Cloud mode regardless of what the
-        # PUBLISHED snapshot's own ledger section actually contains. Reads the
-        # published section (dashboard/cloud_snapshot.py::ledger_section())
-        # in Cloud mode, the real local ledger otherwise -- same pattern every
-        # other real section on this page already follows.
-        if runtime_mode.is_community_cloud():
-            try:
-                _op = cloud_snapshot.ledger_section().get("operational")
-            except cloud_snapshot.SnapshotUnavailable:
-                _op = None
-        else:
-            _op = pl.operational_summary(pl.open_for_dashboard(pl.DB_PATH)) if pl.DB_PATH.exists() else None
-
-        if _op is not None:
-            p1, p2, p3 = st.columns(3)
-            p1.metric("Model observations recorded today (UTC)", _op["recorded_today"])
-            p2.metric("Pending settlement", _op["pending_settlement"])
-            p3.metric("Last recorded", (_op["last_recorded_at_utc"] or "—")[:19])
-        else:
-            st.caption("No prospective observations recorded yet — the ledger is created automatically "
-                       "on first real recording.")
-
-    st.divider()
-    st.markdown(
-        """
-        <div style="border:1px solid #1f4d2e; border-radius:6px; padding:8px 12px;
-                    background:#0f2417; color:#7fd99a; font-size:0.85rem; margin-bottom:12px;">
-          <b>LIVE — REAL NHL SCHEDULE / REAL MARKET DATA.</b> Every game, price, and probability
-          below comes from the real engine and real DraftKings data (or is clearly marked
-          unavailable) — never a simulated substitute. A Demo / Model Showcase built on a
-          simulated slate is available in its own collapsed section further down, clearly
-          separated from this real workflow.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ---- 1. Today's real slate + real Top Conviction + real Daily Parlays -----
-    # Real Product Bridge block (2026-09-29): the ONE canonical real-data
-    # structure (dashboard/real_today_view.py) every section below reads from --
-    # real games, real eligible legs (research/real_market_parlay), real
-    # cross-game parlay result. REAL OR EMPTY: an honest empty state is shown
-    # wherever no real opportunity qualifies -- never backfilled with demo data.
-    try:
-        if runtime_mode.is_community_cloud():
-            _real_today = cloud_snapshot.real_today()
-        else:
-            # dashboard/*.py must never import db.py directly (it can trigger
-            # schema migrations on a read-only presentation page), and must
-            # never reference the Cloud publisher/builder module -- this
-            # dedicated operational-layer function owns the real connection
-            # lifecycle instead, and is the SAME function the published Cloud
-            # snapshot's own "real_today" section calls, so LOCAL mode and
-            # Cloud mode are never two separately-derived sources of truth.
-            # Cached (see _cached_local_real_today_state) -- this real
-            # computation is too slow (~14s) to redo on every page rerun.
-            _real_today = _cached_local_real_today_state()
-    except cloud_snapshot.SnapshotUnavailable as _exc:
-        _real_today = None
-        st.caption(f"Real Today data is not available in this snapshot ({_exc}).")
-
-    if _real_today is not None:
-        st.markdown("## 1 · Today's Real Slate")
-        st.caption(f"{_real_today['provenance']} — today's actual NHL games (ET slate selection). Generated "
-                   f"{_real_today['generated_at_utc'][:16]} UTC.")
-        _real_games = _real_today["games"]
-        if not _real_games:
-            comp.render_empty_state("NO_GAMES", "No real NHL games found for today.")
-        else:
-            _rgame_cols = st.columns(2)
-            for i, g in enumerate(_real_games):
-                with _rgame_cols[i % 2]:
-                    with st.container(border=True):
-                        st.markdown(f"**{g['away_team']} @ {g['home_team']}**")
-                        st.caption(f"{g['scheduled_start_utc']} UTC · {g['game_state']}")
-                        leg = g.get("strongest_leg")
-                        if leg:
-                            st.caption(f"Strongest real opportunity: {leg['participant_name']} "
-                                       f"{leg['market_family']} {leg['threshold'] or ''} — "
-                                       f"conservative P {fmt.format_probability(leg['conservative_probability'])} "
-                                       f"({leg['data_label']})")
-                        else:
-                            st.caption("No qualifying real opportunity for this game right now.")
-                        if st.button("Game Detail", key=f"real_game_{g['game_id']}", width="stretch"):
-                            st.session_state["selected_game_id"] = g["game_id"]
-                            st.switch_page("pages/2_Game_Detail.py")
-
-        st.divider()
-        st.markdown("## 2 · Top Conviction")
-        st.caption("Ranked from real, currently eligible market legs (real DraftKings price + real model "
-                   "probability + real contract verification + real identity resolution + real freshness). "
-                   "A real single-sided market (e.g. PLAYER_SOG_ALTERNATE) is ranked by its own real "
-                   "conservative probability — a two-sided no-vig edge cannot be computed for a one-sided "
-                   "market, so this is never a workaround, it is the honest available signal.")
-        _top = _real_today["top_conviction"]
-        if not _top or isinstance(_top, str):
-            comp.render_empty_state("NO_QUALIFYING_REAL_OPPORTUNITIES",
-                                     "No real, currently eligible market opportunity qualifies right now — "
-                                     "that is a real, honest result, not an error.")
-        else:
-            _tc_cols = st.columns(min(len(_top), 5))
-            for col, leg in zip(_tc_cols, _top):
-                with col:
-                    with st.container(border=True):
-                        st.markdown(f"**{leg['participant_name']}**")
-                        st.caption(f"{leg['market_family']} {leg['threshold'] or ''} · {leg['data_label']}")
-                        st.metric("Conservative P", fmt.format_probability(leg["conservative_probability"]))
-                        st.caption(f"Price {fmt.format_american_odds(leg['american_price'])} · "
-                                   f"{leg['sportsbook']}")
-                        st.caption(f"Captured {leg.get('captured_at_utc') or 'unknown'}")
-
-        st.divider()
-        st.markdown("## 3 · Parlay tickets")
-        st.caption("Parlays are no longer built separately on this page. The tickets at the top of Today are the only "
-                   "parlay recommendations: the same ticket ids are recorded in the paper ledger, settled, and "
-                   "explained in postmortems.")
-
-        if _real_today["excluded_count"]:
-            with st.expander(f"Why {_real_today['excluded_count']} real candidate(s) were excluded"):
-                for reason, count in sorted(_real_today["excluded_by_reason"].items(), key=lambda kv: -kv[1]):
-                    st.caption(f"{count} — {reason}")
-
-    # ---- 0. Historical Elo research comparison (real DK prices vs. a FROZEN
-    # research Elo snapshot -- never the real engine's own T-35 decision, which
-    # recomputes Elo fresh from real results on every real evaluation). This
-    # comparison is ALWAYS stale by construction (the snapshot is a one-time
-    # research artifact, not a live rating) -- repeatedly read as "the engine
-    # is broken" despite its own disclaimer, so it's collapsed by default here,
-    # the same treatment the Demo/Model Showcase sections already get below.
-    _live_rows = ldk.build_live_moneyline_comparisons()
-    _live_priced = [(r, comp.market_freshness(r)) for r in _live_rows if r.get("status") == "PRICED"]
-    if _live_priced:
-        with st.expander("Historical Elo research comparison (frozen snapshot, not the live engine — click to expand)"):
-            _snap_state = _live_priced[0][1]["snapshot_state"]
-            st.caption(f"{comp.live_label(ldk.LIVE_SOURCE_LABEL)} — real DraftKings MONEYLINE prices, captured via a real "
-                       f"Odds API pull and compared against a FROZEN, one-time Elo research snapshot (last real game: "
-                       f"2026-04-16) -- not the live trading engine's own Elo, which is recomputed fresh from real "
-                       f"results on every real recommendation/parlay evaluation and is never this stale. This section "
-                       f"is a historical-research comparison, never a reflection of the real engine's own health. "
-                       f"SNAPSHOT FRESHNESS: {_snap_state.replace('_', ' ')} (separate from each price's own freshness below).")
-            for r, _f in sorted(_live_priced, key=lambda rf: -abs(rf[0].get("raw_edge") or 0.0))[:6]:
-                lc1, lc2, lc3, lc4 = st.columns([2, 1, 1, 1])
-                lc1.markdown(f"**{r['side']}** ({r['away_team']} @ {r['home_team']} moneyline)")
-                lc2.caption(f"Model {fmt.format_probability(r['model_probability'])}")
-                lc3.caption(f"Edge {fmt.format_edge(r['raw_edge'])}")
-                # A price that is not CURRENT never shows an actionable badge (the stored decision is unchanged).
-                lc4.markdown(comp.label_badge(r["decision"] if _f["state"] == "CURRENT" else "STALE", "input"),
-                             unsafe_allow_html=True)
-                if r["decision"] == "WAIT" and r.get("elo_staleness_days"):
-                    st.caption(f"⚠ Elo rating is {r['elo_staleness_days']:.0f} days stale for this game -- "
-                               f"real edge, not presented as actionable. {r['decision_reason']}")
-                st.caption(f"Captured {r['captured_at_utc']} · DK price {fmt.format_american_odds(r['current_odds'])} "
-                           f"· Fair {fmt.format_american_odds(r['fair_odds'])}")
-                st.caption(comp.market_freshness_text(_f))
-
-    # ---- 0b. Recorded recommendations (real market, paper-tracked) --------------------
-    st.markdown("## Recorded Recommendations")
-    try:
-        if runtime_mode.is_community_cloud():
-            _recs = cloud_snapshot.real_recommendations()
-        else:
-            from dashboard import real_recommendations_view as _rrv
-            _recs = {"provenance": "REAL MARKET", "moneyline": _rrv.real_moneyline_recommendations()[-300:],
-                     "props": _rrv.real_prop_recommendations_for_conviction_and_parlay()[-300:],
-                     "game_edge_parlays": []}
-    except cloud_snapshot.SnapshotUnavailable as _exc:
-        _recs = None
-        st.caption(f"Recorded recommendations are not available in this snapshot ({_exc}).")
-    if _recs is not None:
-        st.caption(f"{_recs['provenance']} — recommendations the real engine recorded against real prices "
-                   f"(paper-tracked, never real money). Kept separate from the simulated demo board below."
-                   + f"  SNAPSHOT FRESHNESS: {comp.live_data_state().replace('_', ' ')}. Each row's own MARKET FRESHNESS "
-                   f"is shown below; the recorded action is never altered by staleness.")
-        if _recs["moneyline"]:
-            # Production Gap Closure sprint (2026-09-30): this used to render
-            # "{opponent} @ {home}" using SELECTION-relative team/opponent
-            # fields (the model's own pick vs. its opponent), never real
-            # home/away -- since side always equals team, every row rendered
-            # as if the model's selection were the home team, reversing the
-            # matchup for every real away-team pick. The prospective ledger's
-            # predictions table has no home/away column at all (only
-            # team/opponent), so "vs" is used -- an honest, unordered label
-            # that never asserts a home/away fact this data doesn't carry.
-            st.dataframe([{"Game": f"{r.get('team')} vs {r.get('opponent')}",
-                           "Side": r.get("side"), "Status": r.get("prospective_status"),
-                           "Model P": fmt.format_probability(r["conservative_probability"])
-                           if r.get("conservative_probability") is not None else "—",
-                           "Odds": fmt.format_american_odds(r["odds_american"]) if r.get("odds_american") else "—",
-                           "Confidence": r.get("confidence"), "Recorded": (r.get("created_at_utc") or "")[:16],
-                           "Price captured": (_f["market_captured_at"] or "")[:16],
-                           "Game start": (_f["game_start_utc"] or "")[:16],
-                           "Market freshness": _f["state"],
-                           "Shown as": r.get("prospective_status") if _f["state"] == "CURRENT" else "STALE",
-                           "Source": r.get("source")}
-                          for r in _recs["moneyline"][-30:] for _f in [comp.market_freshness(r)]], width="stretch")
-        else:
-            st.caption("No real-market MONEYLINE recommendation has been recorded yet.")
-        if _recs["props"]:
-            st.dataframe([{"Player": o.get("player"), "Market": o.get("market"), "Threshold": o.get("threshold"),
-                           "Decision": o.get("decision") if comp.market_freshness(o)["state"] == "CURRENT" else "STALE",
-                           "Market freshness": comp.market_freshness(o)["state"],
-                           "Price captured": (comp.market_freshness(o)["market_captured_at"] or "")[:16],
-                           "Model P (conservative)": fmt.format_probability(o["conservative_probability"])
-                           if o.get("conservative_probability") is not None else "—"} for o in _recs["props"][-30:]],
-                         width="stretch")
-        for _p in _recs.get("game_edge_parlays", []):
-            _legs = " + ".join(f"{l.get('player')} {l.get('market')} {l.get('threshold')}" for l in _p["combo"]["legs"])
-            _pf = comp.parlay_freshness(_p["combo"]["legs"])
-            if _pf["state"] == "CURRENT":
-                st.markdown(f"**Real Game Edge Parlay — {_p['opponent']} @ {_p['team']}:** {_legs}")
-            else:
-                st.markdown(f"**Game Edge Parlay — {_p['opponent']} @ {_p['team']} — {_pf['state'].replace('_', ' ')} "
-                            f"(not a current opportunity):** {_legs}")
-            if _pf["limiting_leg"]:
-                st.caption("Parlay freshness = its stalest leg. " + comp.market_freshness_text(_pf["limiting_leg"]))
-
-    # ---- Demo / Model Showcase (SIMULATED) -------------------------------------
-    # Complete Market Validation / Live UI Certification sprint (2026-09-29), then
-    # Real Product Bridge block (2026-09-29): this entire showcase is now behind
-    # an explicit, collapsed, clearly-labeled toggle -- it no longer occupies the
-    # normal Today workflow (the real sections above are the primary product).
-    # No data, matching, or downstream logic changed inside it.
-    st.divider()
-    with st.expander("Demo / Model Showcase — SIMULATED, not the real product (click to expand)"):
-        st.caption("Everything below uses a fixed SIMULATED slate to illustrate the model/combo/parlay "
-                   "machinery. Never DraftKings, never live/verified. For the real product, see the "
-                   "sections above.")
-        st.markdown("### Demo Slate — SIMULATED")
-        opportunities = eb.all_opportunities()
-        best_by_game: dict[str, dict] = {}
-        for o in opportunities:
-            if not o.get("actionable", True) or o["decision"] not in ("BET", "WATCH"):
-                continue
-            key = tuple(sorted((o["team"], o["opponent"])))
-            cur = best_by_game.get(key)
-            score = cv.conviction_score(o)
-            if cur is None or score > cur[0]:
-                best_by_game[key] = (score, o)
-
-        game_cols = st.columns(2)
-        for i, g in enumerate(dd.build_demo_games()):
-            key = tuple(sorted((g.away, g.home)))
-            strongest = best_by_game.get(key)
-            with game_cols[i % 2]:
-                with st.container(border=True):
-                    st.markdown(f"**{g.away} @ {g.home}**")
-                    st.caption(f"{g.start_time} · SIMULATED — DEMO ONLY (not today's real schedule) · "
-                               f"Model: {g.model_ready} · Starters: {g.starter_ready}")
-                    if strongest:
-                        _, o = strongest
-                        st.caption(f"Strongest: {o['player']} {o['market']} {o['threshold']} — "
-                                   f"{fmt.format_probability(o['conservative_probability'])} conservative, "
-                                   f"{o['decision']}")
-                    if st.button("Game Detail", key=f"today_game_{g.game_id}", width="stretch"):
-                        st.session_state["selected_game_id"] = g.game_id
-                        st.switch_page("pages/2_Game_Detail.py")
-                    gc2, gc3 = st.columns(2)
-                    if gc2.button(f"{g.away} Hub", key=f"today_away_{g.game_id}", width="stretch"):
-                        st.session_state["selected_team"] = g.away
-                        st.switch_page("pages/31_Team_Intelligence.py")
-                    if gc3.button(f"{g.home} Hub", key=f"today_home_{g.game_id}", width="stretch"):
-                        st.session_state["selected_team"] = g.home
-                        st.switch_page("pages/31_Team_Intelligence.py")
-
-        st.markdown("### Demo Top Conviction")
-        top = cv.top_conviction(opportunities)
-        if not top:
-            comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES",
-                                     "No opportunity on today's simulated slate clears the Top Conviction bar "
-                                     "right now — that's a real, honest result, not an error.")
-        else:
-            cols = st.columns(min(len(top), 5))
-            for col, o in zip(cols, top):
-                with col:
-                    with st.container(border=True):
-                        if st.button(o["player"], key=f"conv_{o['player_id']}_{o['prop']}_{o['threshold']}"):
-                            st.session_state["selected_player_id"] = o["player_id"]
-                            st.switch_page("pages/25_Player_Intelligence.py")
-                        st.caption(f"{o['market']} {o['threshold']} · SIMULATED — DEMO ONLY")
-                        st.metric("Model", fmt.format_probability(o["coherent_probability"]))
-                        st.caption(f"Conservative {fmt.format_probability(o['conservative_probability'])}")
-                        st.caption(f"Fair {fmt.format_american_odds(o['fair_odds'])} · "
-                                   f"Sim. Market {fmt.format_american_odds(o['current_odds'])}")
-                        st.caption(f"Edge {fmt.format_edge(o['conservative_edge'])} · EV {fmt.format_ev(o['ev'])}")
-                        st.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
-                        st.caption(f"Confidence: {o['confidence']}")
-
-        st.markdown("### Demo High-Confidence Combos")
-        combo_board = cv.build_combo_board(opportunities)
-
-        def _render_combo(c: dict) -> None:
-            with st.container(border=True):
-                legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
-                st.markdown(f"**{legs_desc}**")
-                for l in c["legs"]:
-                    st.caption(f"{l['player']} {l['market']} {l['threshold']} — marginal P "
-                               f"{fmt.format_probability(l['coherent_probability'])}, conservative P "
-                               f"{fmt.format_probability(l['conservative_probability'])}, fair "
-                               f"{fmt.format_american_odds(l['fair_odds'])}, current "
-                               f"{fmt.format_american_odds(l['current_odds'])}, edge "
-                               f"{fmt.format_edge(l['raw_edge'])}")
-                cc1, cc2, cc3, cc4 = st.columns(4)
-                cc1.metric("Joint P", fmt.format_probability(c["joint_probability"]))
-                cc2.metric("Fair combo price", fmt.format_american_odds(c["fair_combo_price"]))
-                cc3.metric("Sim. combo price", fmt.format_american_odds(c["simulated_combo_price"]))
-                cc4.metric("Combo edge", fmt.format_edge(c["combo_edge"]))
-                st.caption(f"Dependency: {c['pairwise'][0]['method']}")
-
-        if not combo_board["high_confidence"]:
-            comp.render_empty_state(
-                "NO_QUALIFYING_OPPORTUNITIES",
-                "No combo on today's simulated slate clears the HIGH-CONFIDENCE bar (every leg "
-                "individually >= 65% conservative probability with real positive value, plus real "
-                "positive combined value) — that's a real, honest result, not an error. See Value "
-                "Combinations below for what does exist today.")
-        else:
-            for c in combo_board["high_confidence"]:
-                _render_combo(c)
-
-        if combo_board["value"]:
-            with st.expander(f"Value Combinations — {len(combo_board['value'])} combo(s) with real "
-                              f"joint-dependence support but not individually high-probability "
-                              f"favorites (not HIGH-CONFIDENCE)"):
-                for c in combo_board["value"]:
-                    _render_combo(c)
-
-        if combo_board["research"]:
-            with st.expander(f"Research combinations — {len(combo_board['research'])} combo(s) with "
-                              f"unsupported dependence (not actionable)"):
-                for c in combo_board["research"]:
-                    legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in c["legs"])
-                    st.caption(f"{legs_desc} — JOINT DEPENDENCE NOT VALIDATED")
-
-        st.markdown("### Demo Game Parlays")
-        st.caption("One card per game — a 3-4 leg Game Edge Parlay only where one genuinely qualifies. "
-                   "Never manufactured: most games on most nights correctly show NO QUALIFYING PARLAY.")
-        for g in dd.build_demo_games():
-            parlay_result = gep.build_game_edge_parlay(opportunities, g.away, g.home)
-            with st.container(border=True):
-                st.markdown(f"**{g.away} @ {g.home}**")
-                if parlay_result["status"] == "NO_QUALIFYING_GAME_EDGE_PARLAY":
-                    comp.render_empty_state("NO_QUALIFYING_GAME_EDGE_PARLAY", parlay_result["reason"])
-                else:
-                    combo = parlay_result["combo"]
-                    legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in combo.legs)
-                    st.markdown(f"**{parlay_result['recommended_legs']}-leg:** {legs_desc}")
-                    pc1, pc2, pc3, pc4 = st.columns(4)
-                    pc1.metric("Joint P", fmt.format_probability(combo.joint_probability))
-                    pc2.metric("Fair price", fmt.format_american_odds(combo.fair_combo_price))
-                    pc3.metric("Est. combo price", fmt.format_american_odds(combo.estimated_combo_price))
-                    pc4.metric("Edge", fmt.format_edge(combo.combo_edge))
-                    st.caption("Estimated from individual leg prices — never presented as a real DraftKings "
-                               "parlay quote (no live SGP price has been observed).")
-                    calibration = gep.calibration_snapshot(combo)
-                    st.caption(f"Target ≈{calibration['target_joint_probability']:.0%} · "
-                               f"gap to target {calibration['gap_to_target']:+.1%}")
-
-        st.markdown("### Demo Best Player Props")
-        player_props = sorted(
-            [o for o in opportunities if o["entity_kind"] == "PLAYER" and o.get("actionable", True)
-             and o["decision"] in ("BET", "WATCH")],
-            key=lambda o: -cv.conviction_score(o))[:8]
-        if not player_props:
-            st.caption("No actionable player props on today's simulated slate.")
-        else:
-            st.dataframe([{"Player": o["player"], "Team": o["team"], "Market": o["market"],
-                           "Threshold": o["threshold"], "Model P": fmt.format_probability(o["coherent_probability"]),
-                           "Edge": fmt.format_edge(o["conservative_edge"]), "Action": o["decision"]}
-                          for o in player_props], width='stretch')
-
-        st.markdown("### Demo Best Team Bets")
-        st.caption("Team SOG has no live demo projection wired this sprint — shown as real historical "
-                   "context on each Team Hub's Overview tab, not as a priced bet here. Moneyline is not "
-                   "wired to a live demo projection for the simulated slate either — see the Model Learning "
-                   "page's own honest limitations.")
-
-        st.markdown("### Demo Goalie Opportunities")
-        goalie_opps = sorted([o for o in eb.build_goalie_saves_opportunities() if o["actionable"]
-                              and o["decision"] in ("BET", "WATCH")], key=lambda o: -cv.conviction_score(o))
-        if not goalie_opps:
-            st.caption("No actionable goalie saves opportunity on today's simulated slate.")
-        else:
-            for o in goalie_opps[:5]:
-                gcol1, gcol2, gcol3 = st.columns([2, 1, 1])
-                gcol1.markdown(f"**{o['player']}** ({o['team']}) — {o['threshold']} saves")
-                gcol2.caption(f"Model {fmt.format_probability(o['coherent_probability'])}")
-                gcol3.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
-
-    # ---- Model Health -------------------------------------------------------
-    st.divider()
-    st.markdown("## Model Health")
-    mh1, mh2, mh3 = st.columns(3)
-    if mh1.button("Open Model Health"):
-        st.switch_page("pages/22_Model_Health.py")
-    if mh2.button("Open Model Learning"):
-        st.switch_page("pages/32_Model_Learning.py")
-    if mh3.button("Open Paper Performance"):
-        st.switch_page("pages/33_Paper_Performance.py")
-
-    comp.render_provenance_panel()
+if tk.get("earlier_open_tickets"):
+    st.subheader("Earlier tickets still open")
+    for t in tk["earlier_open_tickets"]:
+        ui.ticket_card(t)
+if tk.get("recent_settled"):
+    st.subheader("Recently settled")
+    for t in tk["recent_settled"][:5]:
+        ui.ticket_card(t)
+    st.caption("Full history, both origins, is on Ticket History.")

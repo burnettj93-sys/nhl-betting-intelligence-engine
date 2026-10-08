@@ -1,7 +1,6 @@
-"""Page 2 — Game Detail: full breakdown of one game's model output, plus
-team context. MODEL INPUT (Elo + home ice) is visually separated from
-RESEARCH METRIC (MoneyPuck) values throughout — this distinction is
-mandatory, not cosmetic."""
+"""Game Detail — exactly the game that was selected (by link, by the Games page, or by the pickers here); never a substitute.
+Both teams' form, goalies with start estimates and confirmation status, the skaters who are likely to play with roles and
+matchup projections, prices and tickets."""
 from __future__ import annotations
 
 import sys
@@ -11,529 +10,136 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import altair as alt
-import pandas as pd
 import streamlit as st
 
-from dashboard import cloud_snapshot
-from dashboard import components as comp
-from dashboard import data_access as da
-from dashboard import model_view as mv
-from operational import runtime_mode
+from dashboard import product_source as ps
+from dashboard import ui
 
+ui.header("Game Detail", "One game: teams, goalies, players, prices and tickets.")
+games = ui.load(ps.games, "The schedule")
+details = ui.load(ps.game_details, "Game detail")
+all_games = {g["game_id"]: g for g in games["games"]}
 
-@st.cache_data(show_spinner="Loading real NHL corpus and computing baseline predictions...", max_entries=8, ttl=3600)
-def _load_predictions() -> list[dict]:
-    return da.compute_baseline_predictions()
+wanted = st.query_params.get("game") or st.session_state.get("selected_game_id")
+if wanted and str(wanted) not in all_games:
+    ui.unavailable(f"Game {wanted} is not in the schedule on file. Nothing else is shown in its place — pick a game below.", "That game")
+    wanted = None
 
+# --- pickers: date then game, defaulting to the requested game or the current day
+reg = [g for g in games["games"] if g["season"] == "20262027" and g["type"] == "REGULAR"]
+dates = sorted({g["date_et"] for g in reg})
+start_date = all_games[str(wanted)]["date_et"] if wanted else games["default_date"]
+if start_date not in dates:
+    dates = sorted(set(dates) | {start_date})
+c1, c2 = st.columns(2)
+date = c1.selectbox("Date (Eastern)", dates, index=dates.index(start_date) if start_date in dates else 0, key="gd_date")
+day = sorted((g for g in games["games"] if g["date_et"] == date and (g["type"] == "REGULAR" or str(wanted) == g["game_id"])),
+             key=lambda g: (g["start_utc"] or "", g["game_id"]))
+if not day:
+    st.info("No games on that date.")
+    st.stop()
+ids = [g["game_id"] for g in day]
+default_id = str(wanted) if wanted and str(wanted) in ids else ids[0]
+gid = c2.selectbox("Game", ids, index=ids.index(default_id), key=f"gd_game_{date}",
+                   format_func=lambda i: f"{all_games[i]['away']} @ {all_games[i]['home']} · {all_games[i]['start_et']}")
+st.session_state["selected_game_id"] = gid
+st.query_params["game"] = gid
+g = all_games[gid]
 
-@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
-def _cached_local_real_game_detail_state(game_id: str) -> dict:
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_game_detail_state(game_id)
+st.subheader(f"{g['away']} @ {g['home']}")
+st.markdown(ui.status_chip(g["state"]) + ui.chip(g["type"].title(), "muted") + ui.chip(f"Game {gid}", "muted"), unsafe_allow_html=True)
+st.caption(f"{ui.et_time(g['start_utc'], True) if g['start_utc'] else 'time n/a'} · Eastern date {g['date_et']} · {g['season_label']}")
 
+d = details.get(gid)
+if g["state"] == "FINAL":
+    suffix = f" ({g['period_type']})" if g.get("period_type") in ("OT", "SO") else ""
+    st.metric("Final score", f"{g['away']} {g['away_score']} – {g['home']} {g['home_score']}{suffix}")
+    st.caption(f"Result recorded {ui.et_time(g.get('result_observed_at_utc'), True)}.")
+    gs = g.get("goalies") or {}
+    if gs.get("home") or gs.get("away"):
+        rows = []
+        for side, team in (("away", g["away"]), ("home", g["home"])):
+            s = gs.get(side)
+            if s:
+                rows.append({"Team": team, "Goalie (started)": s["name"], "Shots against": int(s["shots_against"]), "Saves": int(s["saves"]),
+                             "Goals against": int(s["goals_against"]), "Minutes": s["toi"]})
+        st.markdown("#### Goalies")
+        st.dataframe(rows, hide_index=True, width="stretch")
+elif g.get("win_probability"):
+    wp = g["win_probability"]
+    m = st.columns(3)
+    m[0].metric(f"{g['home']} win chance", ui.pct(wp["home"]))
+    m[1].metric(f"{g['away']} win chance", ui.pct(wp["away"]))
+    ml = g.get("moneyline")
+    if ml and ml.get("home") and ml.get("away"):
+        m[2].metric("DraftKings moneyline", f"{ui.american(ml['away']['american'])} / {ui.american(ml['home']['american'])}",
+                    f"{g['away']} / {g['home']}", delta_color="off")
+        st.caption(f"Quote captured {ui.et_time(ml['home']['quote_captured_at_utc'], True)} ({ui.age_text(ml['home']['quote_captured_at_utc'])}). US feed; not verified for Ontario.")
+    else:
+        m[2].caption("No DraftKings moneyline quote on file.")
+    st.caption(wp["model"] + ". A display estimate, not a recommendation: moneyline tickets need a fresh quote and are not driven by this model.")
+if g.get("tickets"):
+    st.caption("Tickets with a leg in this game: " + ", ".join(g["tickets"]))
 
-def _moneypuck_conn():
-    # Deliberately NOT @st.cache_resource: a cached sqlite3.Connection can
-    # get reused from a different script-run thread than the one that
-    # created it (sqlite3 connections aren't thread-safe by default),
-    # which raised "SQLite objects created in a thread can only be used
-    # in that same thread" under Streamlit AppTest's per-run threading.
-    # This call is cheap (one sqlite3.connect + schema check) and only
-    # happens once per page load, so recomputing it is free.
-    try:
-        return da.get_moneypuck_connection()
-    except da.DataAvailabilityError:
-        return None
-
-
-st.title("Game Detail")
-comp.render_model_status_header()
-comp.render_data_mode_badge()
-
-# Preseason Closing sprint (Track 2): DEMO-mode game-intelligence branch.
-# Every demo game_id is prefixed "demo-" (see dashboard/demo_data.py) --
-# this early branch renders the full enriched intelligence view and
-# stops, leaving 100% of the existing REAL historical Game Detail logic
-# below completely untouched for real game_ids.
-_selected_game_id = st.session_state.get("selected_game_id")
-if _selected_game_id and str(_selected_game_id).startswith("demo-"):
-    from dashboard import demo_data as dd
-    from dashboard import game_detail_view as gdv
-    from dashboard import player_intelligence_view as piv
-    from dashboard import formatting as fmt
-
-    comp.render_global_search(key_prefix="gamedetail")
-    st.markdown(
-        f"""
-        <div style="border:1px solid #5a4420; border-radius:6px; padding:8px 12px;
-                    background:#241c10; color:#e8c46a; font-size:0.85rem; margin-bottom:12px;">
-          {dd.DEMO_MODE_LABEL}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    game = gdv.find_demo_game(_selected_game_id)
-    if game is None:
-        comp.render_empty_state("ERROR", "Demo game not found.")
-        st.stop()
-
-    # Header (Section 26)
-    h1, h2, h3 = st.columns(3)
-    h1.markdown(f"### {game.away} @ {game.home}")
-    h1.caption(f"{game.date} · {game.start_time}")
-    h2.markdown("**Mode**")
-    h2.markdown(comp.label_badge("DEMO", "research"), unsafe_allow_html=True)
-    h3.markdown("**Game Status**")
-    h3.markdown(comp.label_badge("SIMULATED", "research"), unsafe_allow_html=True)
-
-    # Readiness strip (Section 27)
-    st.markdown("#### Readiness")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.markdown(f"Model: {comp.label_badge(game.model_ready, 'input' if game.model_ready == 'READY' else 'unavailable')}", unsafe_allow_html=True)
-    r2.markdown(f"Starters: {comp.label_badge(game.starter_ready, 'input' if game.starter_ready in ('CONFIRMED', 'PROJECTED') else 'unavailable')}", unsafe_allow_html=True)
-    r3.markdown(f"Markets: {comp.label_badge(game.market_ready, 'input' if game.market_ready == 'READY' else 'unavailable')}", unsafe_allow_html=True)
-    r4.markdown(f"Data Health: {comp.label_badge('OK' if not game.warnings else 'STALE', 'input' if not game.warnings else 'unavailable')}", unsafe_allow_html=True)
-
-    st.divider()
-
-    from dashboard import eligible_bets as eb
-    from dashboard import conviction as cv
-
-    game_all_opps = eb.eligible_bets_for_game(game.away, game.home)
-    game_actionable = game_all_opps["actionable"]
-    game_research = game_all_opps["research_only"]
-    legacy_game_opps = [o for o in dd.build_demo_opportunities() if o["team"] in (game.away, game.home)]
-
-    tab_preview, tab_bets, tab_props, tab_stats, tab_trends, tab_model = st.tabs(
-        ["PREVIEW", "BETS", "PLAYER PROPS", "STATS", "BETTING TRENDS", "MODEL"]
-    )
-
-    # ---- PREVIEW ------------------------------------------------------
-    with tab_preview:
-        st.markdown("#### Win Model")
-        win = gdv.demo_win_model(game.away, game.home)
-        if win is None:
-            st.caption("Real Elo ratings unavailable for one or both teams in the historical corpus.")
-        else:
-            wc1, wc2 = st.columns(2)
-            wc1.metric(f"{game.away} Win P", fmt.format_probability(win["away_win_p"]))
-            wc2.metric(f"{game.home} Win P", fmt.format_probability(win["home_win_p"]))
-            st.caption("Real Elo ratings (as of the end of the real historical corpus) applied to this "
-                       "simulated matchup via the unmodified logistic win-probability formula. Fair "
-                       "moneyline intentionally not shown -- no real sportsbook moneyline exists for this game.")
-
-        st.markdown("#### Team SOG")
-        tc1, tc2 = st.columns(2)
-        for col, team, is_home in ((tc1, game.away, False), (tc2, game.home, True)):
-            proj = gdv.team_sog_projection(team, is_home)
-            with col:
-                st.markdown(f"**{team}**")
-                if proj:
-                    st.metric("Expected SOG", f"{proj.get('expected_sog', 0):.1f}" if proj.get("expected_sog") else "—")
-                else:
-                    st.caption("Not available.")
-        if win and all(gdv.team_sog_projection(t, h) for t, h in ((game.away, False), (game.home, True))):
-            away_sog = gdv.team_sog_projection(game.away, False).get("expected_sog")
-            home_sog = gdv.team_sog_projection(game.home, True).get("expected_sog")
-            if away_sog and home_sog:
-                st.caption(f"DERIVED DEMO INSIGHT (sum of two individually-projected team SOG values, "
-                           f"NOT a validated betting market): combined expected SOG ≈ {away_sog + home_sog:.1f}. "
-                           f"There is no validated GAME_TOTAL_SHOTS market in this engine.")
-
-        st.markdown("#### Top Conviction — this game")
-        game_conviction = [o for o in cv.top_conviction(eb.all_opportunities())
-                            if o["team"] in (game.away, game.home)]
-        if not game_conviction:
-            st.caption("No Top Conviction opportunity for this game on today's simulated slate.")
-        else:
-            for o in game_conviction:
-                st.caption(f"{o['player']} ({o['team']}) — {o['market']} {o['threshold']}: "
-                           f"{fmt.format_probability(o['coherent_probability'])} model, "
-                           f"edge {fmt.format_edge(o['conservative_edge'])}")
-
-        st.markdown("#### Game Edge Parlay")
-        from research.game_edge_parlay import engine as gep
-        _parlay_result = gep.build_game_edge_parlay(eb.all_opportunities(), game.away, game.home)
-        if _parlay_result["status"] == "NO_QUALIFYING_GAME_EDGE_PARLAY":
-            comp.render_empty_state("NO_QUALIFYING_GAME_EDGE_PARLAY", _parlay_result["reason"])
-        else:
-            _combo = _parlay_result["combo"]
-            _legs_desc = " + ".join(f"{l['player']} {l['market']} {l['threshold']}" for l in _combo.legs)
-            st.markdown(f"**{_parlay_result['recommended_legs']}-leg:** {_legs_desc}")
-            gp1, gp2, gp3 = st.columns(3)
-            gp1.metric("Joint P", fmt.format_probability(_combo.joint_probability))
-            gp2.metric("Est. combo price", fmt.format_american_odds(_combo.estimated_combo_price))
-            gp3.metric("Edge", fmt.format_edge(_combo.combo_edge))
-            st.caption("Estimated from individual leg prices — never a real DraftKings parlay quote.")
-
-        context_players = gdv.game_context_players(_selected_game_id)
-        if context_players:
-            st.markdown("#### Context Active")
-            for o in context_players:
-                plain = comp.CONTEXT_STATE_PLAIN_LABEL.get(o["context_state"], o["context_state"])
-                st.caption(f"{o['player']} ({o['team']}) — {plain}")
-
-        st.markdown("#### Waiting On")
-        reasons = gdv.game_wait_reasons(_selected_game_id)
-        if not reasons:
-            st.caption("Nothing outstanding.")
-        else:
-            for r in reasons:
-                st.caption(f"- {r}")
-
-    # ---- BETS -----------------------------------------------------------
-    with tab_bets:
-        st.markdown(f"#### All eligible bets — {game.away} @ {game.home}")
-        if not game_actionable:
-            comp.render_empty_state("NO_QUALIFYING_OPPORTUNITIES")
-        else:
-            sorted_rows = sorted(game_actionable, key=lambda o: -cv.conviction_score(o))
-            for o in sorted_rows:
-                with st.container(border=True):
-                    r1, r2, r3, r4 = st.columns([2, 1, 1, 1])
-                    if r1.button(f"{o['player']} ({o['team']}) — {o['market']} {o['threshold']}",
-                                 key=f"gdbets_{o['market_id']}_{o['player_id']}"):
-                        st.session_state["selected_player_id"] = o["player_id"]
-                        st.switch_page("pages/25_Player_Intelligence.py")
-                    r2.caption(f"Model {fmt.format_probability(o['coherent_probability'])}")
-                    r3.caption(f"Edge {fmt.format_edge(o['conservative_edge'])}")
-                    r4.markdown(comp.label_badge(o["decision"], "input"), unsafe_allow_html=True)
-
-        # Combinations (Track 2): same-game combos scoped to this game's rosters,
-        # reusing the real joint-dependence logic from the Combinations page.
-        st.markdown("#### Combinations")
-        _joint_results = da.load_json_safely("research/joint_scoring_dependence_results.json")
-        if _joint_results is None:
-            st.caption("Joint scoring dependence results not found.")
-        else:
-            combos = gdv.game_combinations(_selected_game_id, _joint_results["rho_by_name"])
-            if not combos:
-                st.caption("No qualifying same-game combinations for this matchup's demo roster.")
-            for c in combos:
-                oa, ob = c["leg_a"], c["leg_b"]
-                legs_label = (f"{c['player']} {oa['market']} {oa['threshold']} + "
-                              f"{c['player']} {ob['market']} {ob['threshold']}")
-                with st.container(border=True):
-                    st.markdown(f"**{legs_label}**")
-                    if c["redundant"]:
-                        st.warning(f"{oa['market']} 1+ already implies {ob['market']} 1+ — the joint "
-                                   f"probability equals the smaller leg's own probability exactly, not "
-                                   f"the product of the two legs.")
-                    else:
-                        comp.render_status_banner("VALIDATED", f"Joint model: {c['dependence_name']}")
-                    cc1, cc2, cc3 = st.columns(3)
-                    cc1.metric("Naive Independent P", fmt.format_probability(c["naive"]) if not c["redundant"] else "n/a")
-                    cc2.metric("Validated Joint P", fmt.format_probability(c["validated"]))
-                    cc3.metric("Dependence Effect", fmt.format_pp_delta(c["validated"] - c["naive"]) if not c["redundant"] else "—")
-            st.caption("PROBABILITY MODEL: VALIDATED &nbsp;|&nbsp; PRICE: SIMULATED (UX review only) "
-                       "&nbsp;|&nbsp; POLICY: DEMO ONLY — NOT OPERATIONAL", unsafe_allow_html=False)
-
-        if game_research:
-            with st.expander(f"Research-only / not actionable — {len(game_research)}"):
-                for o in game_research:
-                    st.caption(f"{o['player']} — {o['market']} {o['threshold']}: "
-                               f"{o.get('decision_reason', 'not actionable')}")
-
-    # ---- PLAYER PROPS -----------------------------------------------------
-    with tab_props:
-        st.markdown("#### Starters & Goalie Saves")
-        goalies = [g_ for g_ in dd.build_demo_goalies() if g_["team"] in (game.away, game.home)]
-        if not goalies:
-            st.caption("No real goalie identity mapped for either team in the demo roster.")
-        for g_ in goalies:
-            gc1, gc2, gc3 = st.columns(3)
-            gc1.markdown(f"**{g_['name']}** ({g_['team']})")
-            gc1.caption(f"Starter: {g_['starter_status'].replace('_', ' ')} ({g_['starter_probability']*100:.0f}%) "
-                        f"— Model Confidence: {g_['confidence']} (separate dimension)")
-            gc2.metric("Expected Saves", f"{g_['expected_saves']:.1f}" if g_["expected_saves"] else "—")
-            with gc3:
-                for k, v in g_["thresholds"].items():
-                    st.markdown(comp.label_badge(f"{k} {v.replace('_', ' ')}", "input" if v == "VALIDATED" else "unavailable"),
-                                unsafe_allow_html=True)
-
-        st.markdown("#### Top Player Opportunities")
-        top = sorted(legacy_game_opps, key=lambda o: (-{"BET": 3, "WATCH": 2, "WAIT": 1, "PASS": 0}[o["decision"]],
-                                                        -o["conservative_edge"]))[:6]
-        for o in top:
-            if st.button(f"Open {o['player']} — Player Intelligence", key=f"gd_player_{o['player_id']}_{o['prop']}"):
-                st.session_state["selected_player_id"] = o["player_id"]
-                st.switch_page("pages/25_Player_Intelligence.py")
-            comp.render_opportunity_card({
-                "player": o["player"], "team": o["team"], "opponent": o["opponent"], "market": o["market"],
-                "threshold": o["threshold"], "decision": o["decision"], "confidence": o["confidence"],
-                "raw_probability": o["raw_probability"], "context_adjusted_probability": o["context_adjusted_probability"],
-                "conservative_probability": o["conservative_probability"],
-                "market_no_vig_probability": o["market_no_vig_probability"], "fair_odds": o["fair_odds"],
-                "current_odds": o["current_odds"], "max_acceptable_price": o["max_acceptable_price"],
-                "conservative_edge": o["conservative_edge"], "ev": o["ev"], "context_state": o["context_state"],
-                "context_raw": o["raw_probability"], "context_adjusted": o["context_adjusted_probability"],
-                "context_delta": o["context_adjusted_probability"] - o["raw_probability"],
-                "drivers": [], "risks": [o["decision_reason"]],
-            })
-
-        with st.expander(f"Full game prop table ({len(game_actionable) + len(game_research)} rows)"):
-            all_game_rows = game_actionable + game_research
-            gf1, gf2, gf3 = st.columns(3)
-            team_f = gf1.selectbox("Team", ["ALL", game.away, game.home], key="gd_team_filter")
-            decision_f = gf2.selectbox("Decision", ["ALL", "BET", "WATCH", "WAIT", "PASS", "RESEARCH_ONLY"], key="gd_decision_filter")
-            conf_f = gf3.selectbox("Confidence", ["ALL", "HIGH", "MEDIUM", "LOW"], key="gd_conf_filter")
-            filtered = all_game_rows
-            if team_f != "ALL":
-                filtered = [o for o in filtered if o["team"] == team_f]
-            if decision_f != "ALL":
-                filtered = [o for o in filtered if o["decision"] == decision_f]
-            if conf_f != "ALL":
-                filtered = [o for o in filtered if o["confidence"] == conf_f]
-            table = [{"Decision": o["decision"], "Player": o["player"], "Market": o["market"],
-                      "Threshold": o["threshold"], "Conservative P": fmt.format_probability(o["conservative_probability"]),
-                      "Current": fmt.format_american_odds(o.get("current_odds")), "Confidence": o["confidence"]}
-                     for o in filtered]
-            st.dataframe(table, width="stretch")
-
-    # ---- STATS --------------------------------------------------------------
-    with tab_stats:
-        st.markdown("#### Player Availability")
-        for team_name in (game.away, game.home):
-            st.markdown(f"**{team_name}**")
-            team_players = {o["player_id"]: o["player"] for o in legacy_game_opps if o["team"] == team_name}
-            if not team_players:
-                st.caption("No roster mapped for this team in the demo roster.")
-            for pid, name in team_players.items():
-                activity = dd.player_activity_status(pid, team_name, game.home if team_name == game.away else game.away)
-                st.caption(f"{name}: {activity.get('status', 'UNKNOWN')} ({activity.get('reason', 'UNKNOWN')})")
-        st.caption("No verified injury feed exists in this engine — availability is PROJECTED_ACTIVE / "
-                   "PROJECTED_INACTIVE / UNKNOWN only, never a fabricated diagnosis.")
-
-    # ---- BETTING TRENDS -------------------------------------------------------
-    with tab_trends:
-        st.markdown("#### Simulated Market Movement")
-        movement = dd.build_demo_market_movement(legacy_game_opps)
-        if not movement:
-            st.caption("No movement snapshots for this game's demo roster.")
-        else:
-            st.dataframe([{"Player": m["player"], "Market": m["market"],
-                           "Opening (sim)": fmt.format_american_odds(m["opening"]),
-                           "Current (sim)": fmt.format_american_odds(m["current"]),
-                           "Model Fair": fmt.format_american_odds(m["model_fair"]),
-                           "Direction": m["direction"]} for m in movement], width="stretch")
-        st.caption("SIMULATED MARKET (DEMO ONLY) — deterministic synthetic movement, never a real "
-                   "sportsbook line history.")
-
-    # ---- MODEL --------------------------------------------------------------
-    with tab_model:
-        st.markdown("#### Readiness detail")
-        st.caption(f"Model: {game.model_ready} · Starters: {game.starter_ready} · Markets: {game.market_ready}")
-        if game.warnings:
-            for w in game.warnings:
-                st.caption(f"- {w}")
-        st.markdown("#### Data Freshness")
-        st.caption("Schedule: SIMULATED · Roster: real (demo roster) · Starter: SIMULATED · "
-                   "Model: real frozen output · Odds: SIMULATED")
-        st.caption("Every model probability shown for this game is the real, frozen production "
-                   "model's own output for real NHL player identities on a simulated near-future "
-                   "schedule. Prices are SIMULATED MARKET (DEMO ONLY).")
-
-    comp.render_provenance_panel()
+if d is None:
+    st.info("Lineup and projection detail is built for games from 3 days ago through 7 days ahead; this game is outside that window, so only the information above is available.")
     st.stop()
 
-# Production Gap Closure sprint (2026-09-30): a real, CURRENT game_id (from
-# Today's real slate) is never in the frozen historical corpus the block
-# below searches -- it used to silently fall back to that corpus's own
-# last available date (2026-04-16), rendering an unrelated April game with
-# only a small warning. Every non-demo game_id is now looked up FIRST
-# against nhl.db's own real, current `games` table (never the historical
-# corpus); a real game_id always resolves to itself here. Only a game_id
-# genuinely absent from the real schedule (e.g. an old historical id) ever
-# falls through to the historical browsing section below.
-if _selected_game_id:
-    try:
-        if runtime_mode.is_community_cloud():
-            _real_detail = cloud_snapshot.real_game_details().get(str(_selected_game_id))
-            if _real_detail is None:
-                _real_detail = {"status": "NOT_FOUND", "game_id": str(_selected_game_id)}
-        else:
-            _real_detail = _cached_local_real_game_detail_state(str(_selected_game_id))
-    except cloud_snapshot.SnapshotUnavailable as _exc:
-        _real_detail = None
-        st.caption(f"Real game detail is not available in this snapshot ({_exc}).")
-
-    if _real_detail is not None and _real_detail["status"] == "FOUND":
-        comp.render_global_search(key_prefix="gamedetail_real")
-        st.markdown(
-            f"""
-            <div style="border:1px solid #1f4d2e; border-radius:6px; padding:8px 12px;
-                        background:#0f2417; color:#7fd99a; font-size:0.85rem; margin-bottom:12px;">
-              <b>LIVE — REAL GAME.</b> This is the exact real game requested — real nhl.db schedule
-              data, never a substituted or historical game. Frozen historical research browsing is
-              available separately below for games outside today's real schedule.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.divider()
-        st.subheader(f"{_real_detail['away_team']} @ {_real_detail['home_team']}")
-        st.caption(f"{_real_detail['game_date_et']} (ET) · State: {_real_detail['game_state']}"
-                   + (f" · Result: {_real_detail['home_team']} {_real_detail['home_score']} – "
-                      f"{_real_detail['away_team']} {_real_detail['away_score']}"
-                      if _real_detail["game_state"] == "FINAL" else ""))
-
-        st.markdown("### Real moneyline model state")
-        from dashboard import formatting as fmt
-        _ml = _real_detail["moneyline"]
-        if _ml["status"] == "AVAILABLE":
-            for _r in _ml["reports"]:
-                cc1, cc2, cc3 = st.columns(3)
-                cc1.metric(f"{_r['selection']}", _r["action"])
-                cc2.metric("Model conservative P", fmt.format_probability(_r["model_conservative_probability"])
-                           if _r["model_conservative_probability"] is not None else "—")
-                cc3.metric("DraftKings price", fmt.format_american_odds(_r.get("current_draftkings_price")))
-                if _r.get("action_reason"):
-                    st.caption(_r["action_reason"])
-        elif _ml["status"] == "GAME_NOT_SCHEDULED":
-            st.caption(f"MODEL UNAVAILABLE — {_ml['reason']}")
-        elif _ml["status"] == "EVENT_ALREADY_STARTED":
-            st.caption("MODEL UNAVAILABLE — this game has already started; a pre-game moneyline "
-                       "evaluation is no longer produced.")
-        else:
-            st.caption(f"MODEL UNAVAILABLE — {_ml.get('reason', 'no real model state could be produced')}")
-
-        comp.render_provenance_panel()
-        with st.expander("Frozen historical research corpus (a different data source — not this game)"):
-            st.caption("This section browses research/real_nhl_results/normalized_regular_season_games.jsonl, "
-                       "a frozen historical corpus that stops in April 2026 — it never contains today's real "
-                       "games and is shown here only for separate historical research, never as this game's own detail.")
-        st.stop()
-    # else: NOT_FOUND in nhl.db's real schedule -- fall through to the
-    # historical-corpus browsing below, which has its own honest,
-    # non-substituting messaging for this case.
-
+players, goalies = ui.load(ps.players, "Players"), ui.load(ps.goalies, "Goalies")
 try:
-    records = _load_predictions()
-except da.DataAvailabilityError as exc:
-    comp.render_missing_data_page(exc)
-    st.stop()
+    opts = {o["option_id"]: o for o in ps.options().get("options", [])}
+except ps.Unavailable:
+    opts = {}
 
-dates = da.available_dates(records)
-default_game_id = st.session_state.get("selected_game_id")
+for side in ("away", "home"):
+    s = d["sides"][side]
+    st.markdown(f"### {s['team']} ({'away' if side == 'away' else 'home'})")
+    rec = s.get("record")
+    if rec:
+        st.caption(f"Record {rec['w']}-{rec['l']}-{rec['otl']} in {rec['gp']} game(s) · goals {rec['gf']}–{rec['ga']} · team strength rating {s['strength_rating']:+.2f} goals/game"
+                   + ("  ·  last 5: " + " ".join(x["result"] for x in rec.get("last5", [])) if rec.get("last5") else ""))
+    else:
+        st.caption("No regular-season games played yet this season.")
 
-col1, col2 = st.columns([1, 2])
-with col1:
-    default_date_idx = len(dates) - 1
-    if default_game_id is not None:
-        found = da.game_by_id(records, default_game_id)
-        if found is not None and found["game_date"] in dates:
-            default_date_idx = dates.index(found["game_date"])
-        elif not str(default_game_id).startswith("demo-"):
-            # Real Morning Production Pull sprint (2026-09-29): a real, current game_id (e.g. from
-            # today's live schedule) is now caught and rendered by the real-game-detail branch ABOVE
-            # this block (Production Gap Closure sprint, 2026-09-30) before real_slate code is ever
-            # reached here -- a game_id that still lands in this branch is genuinely absent from
-            # BOTH nhl.db's real schedule and this frozen historical corpus. Say so explicitly instead
-            # of guessing which historical game the viewer actually wanted.
-            st.warning(
-                f"Game id {default_game_id} is not part of this frozen historical research corpus "
-                f"either. Showing historical browsing instead, starting from its most recent date — "
-                f"not a substitution for the game you requested."
-            )
-    selected_date = st.selectbox("Date", dates, index=default_date_idx)
-with col2:
-    day_games = da.games_on_date(records, selected_date)
-    labels = [f"{g['away_team']} @ {g['home_team']}" for g in day_games]
-    default_game_idx = 0
-    if default_game_id is not None:
-        ids = [g["game_id"] for g in day_games]
-        if default_game_id in ids:
-            default_game_idx = ids.index(default_game_id)
-    chosen_label = st.selectbox("Game", labels, index=default_game_idx if labels else 0) if labels else None
+    st.markdown("**Goalies**")
+    grows = []
+    for pid in s["goalie_ids"]:
+        gl = goalies.get(pid)
+        if not gl:
+            continue
+        sea = gl.get("season") or {}
+        st_ = gl.get("start") or {}
+        pr = gl.get("projection") if gl.get("next_game") and gl["next_game"]["game_id"] == gid else None
+        grows.append({"Goalie": gl["name"], "Start chance (estimate)": ui.pct(st_.get("probability")) if st_ else "—",
+                      "Status": gl["confirmation"]["status"].title(),
+                      "Season W-L-OTL": f"{sea.get('wins')}-{sea.get('losses')}-{sea.get('ot_losses')}" if sea.get("games") else "no games yet",
+                      "SV%": f"{sea['save_pct']:.3f}" if sea.get("save_pct") is not None else "—",
+                      "GAA": f"{sea['gaa']:.2f}" if sea.get("gaa") is not None else "—",
+                      "Exp. saves": f"{pr['expected_saves']:.1f} ({pr['saves_range_80'][0]}–{pr['saves_range_80'][1]})" if pr else "—",
+                      "Exp. GA": f"{pr['expected_goals_against']:.2f}" if pr else "—"})
+    if grows:
+        st.dataframe(grows, hide_index=True, width="stretch")
+        st.caption("Start chance is an estimate from recent usage and rest; no confirmation source is connected, so every goalie is Unconfirmed. Expected saves show the 80% range.")
+    else:
+        st.caption("No goalie data on file for this team.")
 
-if not day_games or chosen_label is None:
-    st.warning("No games on this date.")
-    st.stop()
-
-game = day_games[labels.index(chosen_label)]
-st.session_state["selected_game_id"] = game["game_id"]
-
-st.divider()
-st.subheader(f"{game['away_team']} @ {game['home_team']}")
-st.caption(f"{game['game_date']} · {game['period_type']} · Result: "
-           f"{game['home_team']} {game['home_score']} – {game['away_team']} {game['away_score']}")
-
-st.markdown("### Model output")
-c1, c2, c3 = st.columns(3)
-c1.metric(f"{game['home_team']} win probability", f"{game['p_home'] * 100:.1f}%")
-c2.metric(f"{game['away_team']} win probability", f"{(1 - game['p_home']) * 100:.1f}%")
-c3.metric("Confidence (display heuristic)", mv.confidence_label(game["p_home"]))
-st.caption(
-    "Confidence is a simple distance-from-50% heuristic for display, NOT the production "
-    "uncertainty/CI band — that requires goalie-confirmation data unavailable in historical "
-    "research mode. See README.md's dashboard section."
-)
-
-st.markdown("### Model contribution breakdown")
-driver = mv.elo_diff_driver(game)
-waterfall = pd.DataFrame([
-    {"component": "Base team strength (Elo)", "value": driver["home_elo"] - driver["away_elo"]},
-    {"component": "Home ice", "value": driver["home_advantage"]},
-])
-chart = alt.Chart(waterfall).mark_bar().encode(
-    x=alt.X("component:N", title=None, sort=None),
-    y=alt.Y("value:Q", title="Elo points (toward home)"),
-    color=alt.condition(alt.datum.value > 0, alt.value("#5b8def"), alt.value("#e05c5c")),
-)
-st.altair_chart(chart, use_container_width=True)
-st.caption(
-    "PROBABILITY DRIVERS, not causal attribution. Player / goalie / rest contributions: "
-    + comp.NOT_AVAILABLE + " — no real roster or schedule-event data exists for this "
-    "historical game in research mode."
-)
-
-st.markdown("### Team context")
-conn = _moneypuck_conn()
-tab1, tab2 = st.tabs([game["home_team"], game["away_team"]])
-for tab, team in ((tab1, game["home_team"]), (tab2, game["away_team"])):
-    with tab:
-        team_history = [r for r in da.games_for_team(records, team) if r["game_date"] < game["game_date"]]
-        recent5 = team_history[-5:]
-        recent10 = team_history[-10:]
-
-        def _record(games):
-            wins = sum(1 for r in games if (r["home_team"] == team and r["actual_home_win"] == 1.0)
-                       or (r["away_team"] == team and r["actual_home_win"] == 0.0))
-            return f"{wins}-{len(games) - wins}"
-
-        st.markdown(f"{comp.label_badge('MODEL INPUT', 'input')}", unsafe_allow_html=True)
-        cc1, cc2 = st.columns(2)
-        cc1.metric("Last 5 record", _record(recent5) if recent5 else "N/A")
-        cc2.metric("Last 10 record", _record(recent10) if recent10 else "N/A")
-
-        if recent10:
-            df = pd.DataFrame([
-                {"game_date": r["game_date"],
-                 "elo": r["rating_home_pregame"] if r["home_team"] == team else r["rating_away_pregame"]}
-                for r in recent10
-            ])
-            st.altair_chart(
-                alt.Chart(df).mark_line(point=True).encode(
-                    x="game_date:T", y=alt.Y("elo:Q", title="Elo rating", scale=alt.Scale(zero=False)),
-                ),
-                use_container_width=True,
-            )
-
-        st.markdown(f"{comp.label_badge(comp.RESEARCH_METRIC, 'research')}", unsafe_allow_html=True)
-        if conn is None:
-            st.caption("MoneyPuck research DB not found — research context unavailable.")
-        else:
-            ctx = mv.moneypuck_context(conn, team, game["game_date"], game["season"], window=25)
-            rc1, rc2, rc3 = st.columns(3)
-            rc1.metric("5v5 xG share (25g)", f"{ctx['xg_share_5v5']:.3f}" if ctx["xg_share_5v5"] is not None else "N/A")
-            rc2.metric("Offense xGF/60 (25g)", f"{ctx['offense_xgf60']:.2f}" if ctx["offense_xgf60"] is not None else "N/A")
-            rc3.metric("Defense xGA/60 (25g)", f"{ctx['defense_xga60']:.2f}" if ctx["defense_xga60"] is not None else "N/A")
-            rc4, rc5 = st.columns(2)
-            rc4.metric("PP xGF/60 (25g)", f"{ctx['pp_xgf60']:.2f}" if ctx["pp_xgf60"] is not None else "N/A")
-            rc5.metric("PK xGA/60 (25g)", f"{ctx['pk_xga60']:.2f}" if ctx["pk_xga60"] is not None else "N/A")
-            st.caption("Tested in research — none of these are currently used by the production model. "
-                       "See Research Lab for why.")
-
-comp.render_provenance_panel()
+    st.markdown("**Skaters (by recent ice time)**")
+    rows = []
+    for pid in s["skater_ids"]:
+        p = players.get(pid)
+        if not p:
+            continue
+        pr = p.get("projection") if p.get("next_game") and p["next_game"]["game_id"] == gid else None
+        rows.append({"Player": p["name"], "Pos": p["position"], "Line": str(p["line"]) if p["line"] else "—", "PP": f"PP{p['pp_unit']}" if p["pp_unit"] else "—",
+                     "TOI": f"{p['recent_avg']['toi']:.1f}", "PP min": f"{p['recent_avg']['toi_pp']:.1f}",
+                     "Exp. shots": f"{pr['expected']['shots']:.2f}" if pr else "—",
+                     "Shots 2+": ui.pct(pr["probabilities"]["shots>=2"]) if pr else "—",
+                     "Point 1+": ui.pct(pr["probabilities"]["points>=1"]) if pr else "—",
+                     "Goal": ui.pct(pr["probabilities"]["goals>=1"]) if pr else "—",
+                     "Sample": f"{pr['games_observed']} g" + (" (limited)" if pr["limited_history"] else "") if pr else "—",
+                     "Best option": "yes" if p.get("option_id") in opts else "—"})
+    if rows:
+        st.dataframe(rows, hide_index=True, width="stretch")
+        st.caption("Lines and power-play units are inferred from recent ice time (not an official lineup) — see each player's page for the games used. Probabilities are calibrated; players with fewer than 20 prior games are flagged limited and are not priced.")
+    else:
+        st.caption("No skater logs on file for this team yet this season.")

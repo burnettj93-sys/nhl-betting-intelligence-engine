@@ -1,13 +1,4 @@
-"""Page 33 — Paper Performance (Live DK / Paper Bankroll completion
-sprint, 2026-08-31, Parts 24-49). Answers the owner's own question:
-"If this program had actually put $10 on every BET recommendation, what
-would the bankroll be?" -- from immutable stored paper-bet entries and
-settlements only, never recomputed from today's current odds.
-
-Three economic tracks, never mixed: REAL_MARKET_PAPER (real, verified
-DraftKings prices only), DEMO_PAPER (deterministic simulated demo
-prices), and REAL_BET (the existing operational/prospective_ledger.py
--- untouched here, currently and correctly empty)."""
+"""Paper Performance — the one $500 paper account, with automatic and manually added tickets reported separately and together."""
 from __future__ import annotations
 
 import sys
@@ -19,127 +10,51 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from dashboard import cloud_snapshot
-from dashboard import components as comp
-from dashboard import formatting as fmt
-from dashboard import paper_performance_view as ppv
-from operational import paper_bankroll as pb
+from dashboard import product_source as ps
+from dashboard import ui
 
-st.title("Paper Performance")
-comp.render_model_status_header()
-st.caption("Theoretical bankroll tracking: what would have happened if this engine's own BET "
-           "recommendations had each received a flat $10 paper wager. Never a real-money bet.")
+ui.header("Paper Performance", "What the paper account has done: shared cash, results by origin, and every settled ticket.")
+perf = ui.load(ps.performance, "Paper performance")
+acct, summ, origins = perf["account"], perf["summary"], perf["origins"]
 
-try:
-    state = ppv.full_dashboard_state()
-except cloud_snapshot.SnapshotUnavailable as _exc:
-    st.warning(f"Paper performance is not available in the snapshot currently being served ({_exc}).")
-    st.stop()
+a = st.columns(5)
+a[0].metric("Available cash", ui.money(acct["available_cash"]))
+a[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_tickets']} open", delta_color="off")
+a[2].metric("Equity", ui.money(acct["equity"]))
+a[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
+a[4].metric("ROI on settled", ui.pct(summ["roi"], 1) if summ.get("roi") is not None else "—")
+st.caption("One account: $500 start, $10 per ticket, no top-ups. Cash returns as tickets settle. Hit rates and ROI on a handful of tickets say almost nothing about skill.")
 
-TRACK_LABEL = {"REAL_MARKET_PAPER": "Real-Market Paper (real DraftKings prices)",
-               "DEMO_PAPER": "Demo Paper (simulated prices)",
-               "GAME_PARLAY_PAPER": "Game Edge Parlay Paper (single-game)"}
+st.subheader("By origin")
+rows = []
+for key, label in (("AUTOMATIC", "Automatic (engine)"), ("MANUALLY_ADDED", "Manually added"), ("ALL", "All tickets")):
+    o = origins[key]
+    rows.append({"Origin": label, "Tickets": o["tickets"], "Settled": o["settled"], "Won": o["wins"], "Lost": o["losses"], "Void": o["voids"],
+                 "Open": o["pending"] + o["unresolved"], "Open stake": ui.money(o["open_stake"]), "Settled stake": ui.money(o["settled_stake"]),
+                 "Settled P&L": ui.signed_money(o["settled_pnl"]), "ROI": ui.pct(o["roi"], 1) if o["roi"] is not None else "—",
+                 "Hit rate": ui.pct(o["hit_rate"]) if o["hit_rate"] is not None else "—"})
+st.dataframe(rows, hide_index=True, width="stretch")
+st.caption("Manually added tickets never take one of the five daily automatic slots and are never mixed into the engine's own record. Unresolved tickets stay open until their settlement rules can be applied.")
 
-tab_real, tab_demo, tab_parlay = st.tabs(
-    [TRACK_LABEL["REAL_MARKET_PAPER"], TRACK_LABEL["DEMO_PAPER"], TRACK_LABEL["GAME_PARLAY_PAPER"]])
+hist = summ.get("bankroll_history") or []
+if hist:
+    st.subheader("Bankroll after each settled ticket")
+    st.line_chart([{"Settled ticket #": i, "Bankroll": h["bankroll"]} for i, h in enumerate(hist)], x="Settled ticket #", y="Bankroll")
 
-for tab, track in ((tab_real, "REAL_MARKET_PAPER"), (tab_demo, "DEMO_PAPER"), (tab_parlay, "GAME_PARLAY_PAPER")):
+tab_all, tab_auto, tab_manual = st.tabs(["All", "Automatic", "Manually added"])
+for tab, key in ((tab_all, "ALL"), (tab_auto, "AUTOMATIC"), (tab_manual, "MANUALLY_ADDED")):
     with tab:
-        data = state[track]
-        summary, breakdowns, bets = data["summary"], data["breakdowns"], data["bets"]
-
-        # st.markdown treats a "$...$" pair as inline LaTeX -- escape every
-        # literal dollar sign so "$500.00 ... $0.00" renders as plain
-        # text instead of being parsed as math notation.
-        st.markdown(f"#### {data['answer'].replace('$', chr(92) + '$')}")
-
-        h1, h2, h3, h4 = st.columns(4)
-        h1.metric("Starting Bankroll", f"${summary['starting_bankroll']:,.2f}")
-        h2.metric("Current Bankroll", f"${summary['current_bankroll']:,.2f}",
-                   delta=f"{summary['net_profit']:+,.2f}")
-        h3.metric("ROI", fmt.format_probability(summary["roi"]) if summary["roi"] is not None else "—")
-        h4.metric("Record", f"{summary['wins']}-{summary['losses']}-{summary['voids']}"
-                             f" ({summary['pending']} pending)")
-
-        h5, h6, h7, h8 = st.columns(4)
-        h5.metric("Hit Rate", fmt.format_probability(summary["hit_rate"]) if summary["hit_rate"] is not None else "—")
-        h6.metric("Settled Turnover", f"${summary['total_staked']:,.2f}",
-                   help="Stake on bets that have actually resolved (WIN/LOSS/VOID) -- what ROI is computed "
-                        "against. See Placed Stakes / Pending Exposure below for money currently in flight.")
-        h7.metric("Max Drawdown", f"${summary['max_drawdown']:,.2f}")
-        h8.metric("Streak", f"{summary['current_streak_length']} {summary['current_streak_type'] or '—'}")
-
-        # Production Gap Closure sprint (2026-09-30): "Total Staked" used to
-        # be the ONLY staking figure shown, and it silently read $0.00 while
-        # real $10 bets sat PENDING (it only ever summed settled turnover,
-        # above). These three numbers are the honest, non-overlapping
-        # picture: how much has actually been placed, how much of that is
-        # still awaiting an outcome, and how much bankroll is left to stake.
-        p1, p2, p3 = st.columns(3)
-        p1.metric("Placed Stakes (all bets)", f"${summary['placed_stakes_total']:,.2f}")
-        p2.metric("Pending Exposure", f"${summary['pending_exposure']:,.2f}")
-        p3.metric("Available Balance", f"${summary['available_balance']:,.2f}",
-                   help="Current bankroll minus pending exposure -- what's free to stake next.")
-
-        if summary["bets"] > 0 and (summary["wins"] + summary["losses"] + summary["voids"]) == 0:
-            if track == "DEMO_PAPER":
-                st.caption("Demo Paper is a static, simulated illustration built from a fixed demo slate -- "
-                           "its bets have no real game date and are never settled by design. This is not "
-                           "pending real activity; it's a fixed example of what the bankroll math looks like.")
-            else:
-                st.caption(f"{summary['pending']} paper bet(s) are recorded and still PENDING -- no game in "
-                           "this track has gone FINAL and been settled yet. This is a normal, honest state, "
-                           "not an error.")
-        elif summary["bets"] == 0:
-            comp.render_empty_state(
-                "NO_QUALIFYING_OPPORTUNITIES",
-                "No BET-grade opportunity has existed on this track yet to paper-bet -- WAITING FOR "
-                "SETTLED REAL RECOMMENDATIONS." if track == "REAL_MARKET_PAPER" else
-                "No BET-grade opportunity on today's simulated slate to paper-bet.")
-
-        if summary["bankroll_history"]:
-            st.markdown("#### Bankroll History")
-            chart_rows = [{"Bet #": i, "Bankroll": h["bankroll"]}
-                          for i, h in enumerate(summary["bankroll_history"])]
-            st.line_chart(chart_rows, x="Bet #", y="Bankroll")
-
-        st.markdown("#### Performance Breakdowns")
-        bd1, bd2 = st.columns(2)
-        with bd1:
-            st.markdown("**By Market Family**")
-            st.dataframe([{"Market": k, **v} for k, v in breakdowns["by_market_family"].items()], width="stretch")
-            st.markdown("**By Confidence**")
-            st.dataframe([{"Confidence": k, **v} for k, v in breakdowns["by_confidence"].items()], width="stretch")
-            st.markdown("**By Edge Bucket**")
-            st.dataframe([{"Edge": k, **v} for k, v in breakdowns["by_edge_bucket"].items()], width="stretch")
-        with bd2:
-            st.markdown("**By Odds Range**")
-            st.dataframe([{"Odds Range": k, **v} for k, v in breakdowns["by_odds_range"].items()], width="stretch")
-            st.markdown("**Top Conviction vs Other**")
-            st.dataframe([{"Group": k, **v} for k, v in breakdowns["by_top_conviction"].items()], width="stretch")
-            st.markdown("**Straight vs Combo**")
-            st.dataframe([{"Group": k, **v} for k, v in breakdowns["by_straight_vs_combo"].items()], width="stretch")
-
-        with st.expander(f"Full paper bet log ({len(bets)})"):
-            table = [{
-                "Date": b.get("game_date"), "Player/Team": b.get("player_name_snapshot") or b.get("team"),
-                "Market": f"{b.get('market_family') or b.get('market_id')} {b.get('threshold') or ''}".strip(),
-                "Price Source": b.get("price_source"), "Model P": fmt.format_probability(b.get("model_probability")),
-                "Odds": fmt.format_american_odds(b.get("entry_odds")), "Stake": f"${b['stake']:.2f}",
-                "Result": b.get("result_status"),
-                "P/L": f"${b['profit_loss']:.2f}" if b.get("profit_loss") is not None else "—",
-                "Closing Odds": fmt.format_american_odds(b.get("closing_odds")) if b.get("closing_odds") else "—",
-                "CLV": fmt.format_pp_delta(b.get("clv")) if b.get("clv") is not None else "WAITING",
-                "Bankroll After": "—",
-            } for b in bets]
-            if table:
-                st.dataframe(table, width="stretch")
-            else:
-                st.caption("No paper bets recorded yet.")
-
-st.divider()
-st.markdown("#### Real Bets")
-st.caption("REAL_BET is tracked entirely separately in operational/prospective_ledger.py and is "
-           "currently and correctly empty -- no real money has been wagered by this engine.")
-
-comp.render_provenance_panel()
+        bd = perf["breakdowns"].get(key) or {}
+        if not origins[key]["tickets"]:
+            st.caption("No tickets yet.")
+            continue
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**By market family**")
+            st.dataframe([{"Market": k, **v} for k, v in bd.get("by_market_family", {}).items()], hide_index=True, width="stretch")
+            st.markdown("**By straight vs combo**")
+            st.dataframe([{"Type": k, **v} for k, v in bd.get("by_straight_vs_combo", {}).items()], hide_index=True, width="stretch")
+        with c2:
+            st.markdown("**By price range**")
+            st.dataframe([{"Odds range": k, **v} for k, v in bd.get("by_odds_range", {}).items()], hide_index=True, width="stretch")
+st.caption("Full ticket-by-ticket detail, including legs, prices and postmortems, is on Ticket History.")

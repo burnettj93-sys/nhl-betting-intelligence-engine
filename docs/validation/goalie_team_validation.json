@@ -1,0 +1,1227 @@
+{
+ "alpha_saves": 0.0259,
+ "elapsed_seconds": 3.6,
+ "expected_value_mae_final": {
+  "goals_against_league": 1.2223,
+  "goals_against_model": 1.2056,
+  "n": 2622,
+  "saves_league_mean": 5.402,
+  "saves_model": 5.1026,
+  "shots_against_model": 5.1177
+ },
+ "league_mean_saves_calibration": 24.916,
+ "model_version": "goalie-team-v1",
+ "params": {
+  "shot_half_life_games": 30.0,
+  "shot_k_games": 8.0,
+  "strength_half_life_games": 25.0,
+  "strength_k_games": 10.0,
+  "sv_half_life_shots": 1500.0,
+  "sv_prior_shots": 600.0
+ },
+ "platt_params": {
+  "saves>=20": [
+   0.8201768063167262,
+   0.18002250299423403
+  ],
+  "saves>=21": [
+   0.74175040702284,
+   0.24082199882020622
+  ],
+  "saves>=22": [
+   0.7449441536349948,
+   0.1414890541755847
+  ],
+  "saves>=23": [
+   0.8147142701854095,
+   0.02942152205189028
+  ],
+  "saves>=24": [
+   0.8198668740314314,
+   -0.015345346952781074
+  ],
+  "saves>=25": [
+   0.8337866935330693,
+   -0.09944885898847074
+  ],
+  "saves>=26": [
+   0.8419466002767234,
+   -0.1367802194175034
+  ],
+  "saves>=27": [
+   0.8449055677290214,
+   -0.1721211874484349
+  ],
+  "saves>=28": [
+   0.824886908667574,
+   -0.22304656471302864
+  ],
+  "saves>=29": [
+   0.8666511850397236,
+   -0.25875604459268486
+  ],
+  "saves>=30": [
+   0.8564567231550185,
+   -0.3036512135205044
+  ],
+  "saves>=31": [
+   0.84424274136873,
+   -0.36327725183737863
+  ],
+  "saves>=32": [
+   0.8662472570809214,
+   -0.3721996135502791
+  ],
+  "saves>=33": [
+   0.8472086034559694,
+   -0.4814042172069443
+  ],
+  "saves>=34": [
+   0.9324893873925345,
+   -0.39830139405368925
+  ],
+  "saves>=35": [
+   0.9353525609994001,
+   -0.44564656196316876
+  ]
+ },
+ "rows": {
+  "goalie_calibration": 2621,
+  "goalie_final": 2622
+ },
+ "saves_80pct_range_coverage": {
+  "calibration_season": 0.831,
+  "final_season": 0.8303,
+  "nominal": 0.8
+ },
+ "saves_markets": {
+  "saves>=20": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.7606,
+    "brier": 0.18289,
+    "log_loss": 0.55212,
+    "mean_pred": 0.7607,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.7606,
+    "brier": 0.18341,
+    "log_loss": 0.55433,
+    "mean_pred": 0.7973,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5692,
+     "n": 73,
+     "observed": 0.4795
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6622,
+     "n": 482,
+     "observed": 0.6266
+    },
+    {
+     "bin": "0.7-0.8",
+     "mean_pred": 0.7525,
+     "n": 1255,
+     "observed": 0.7633
+    },
+    {
+     "bin": "0.8-0.9",
+     "mean_pred": 0.8348,
+     "n": 744,
+     "observed": 0.8656
+    },
+    {
+     "bin": "0.9-1.0",
+     "mean_pred": 0.9094,
+     "n": 27,
+     "observed": 0.8889
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.7606,
+    "brier": 0.17323,
+    "log_loss": 0.5266,
+    "mean_pred": 0.7553,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.7606,
+    "brier": 0.17271,
+    "log_loss": 0.52521,
+    "mean_pred": 0.7583,
+    "n": 2586
+   },
+   "platt": [
+    0.8202,
+    0.18
+   ]
+  },
+  "saves>=21": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.7069,
+    "brier": 0.20924,
+    "log_loss": 0.61049,
+    "mean_pred": 0.7078,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.7069,
+    "brier": 0.20867,
+    "log_loss": 0.60867,
+    "mean_pred": 0.7452,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.567,
+     "n": 195,
+     "observed": 0.4821
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6581,
+     "n": 897,
+     "observed": 0.6589
+    },
+    {
+     "bin": "0.7-0.8",
+     "mean_pred": 0.7456,
+     "n": 1210,
+     "observed": 0.7471
+    },
+    {
+     "bin": "0.8-0.9",
+     "mean_pred": 0.8257,
+     "n": 270,
+     "observed": 0.8556
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.7069,
+    "brier": 0.19742,
+    "log_loss": 0.58119,
+    "mean_pred": 0.7087,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.7069,
+    "brier": 0.19656,
+    "log_loss": 0.57914,
+    "mean_pred": 0.7033,
+    "n": 2586
+   },
+   "platt": [
+    0.7418,
+    0.2408
+   ]
+  },
+  "saves>=22": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.6469,
+    "brier": 0.23094,
+    "log_loss": 0.65723,
+    "mean_pred": 0.6514,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.6469,
+    "brier": 0.23011,
+    "log_loss": 0.6532,
+    "mean_pred": 0.6882,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4651,
+     "n": 108,
+     "observed": 0.3519
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5602,
+     "n": 642,
+     "observed": 0.5327
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6509,
+     "n": 1167,
+     "observed": 0.6615
+    },
+    {
+     "bin": "0.7-0.8",
+     "mean_pred": 0.738,
+     "n": 624,
+     "observed": 0.7804
+    },
+    {
+     "bin": "0.8-0.9",
+     "mean_pred": 0.8239,
+     "n": 39,
+     "observed": 0.8205
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.6469,
+    "brier": 0.21778,
+    "log_loss": 0.62602,
+    "mean_pred": 0.6436,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.6469,
+    "brier": 0.21713,
+    "log_loss": 0.62463,
+    "mean_pred": 0.6446,
+    "n": 2586
+   },
+   "platt": [
+    0.7449,
+    0.1415
+   ]
+  },
+  "saves>=23": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.5932,
+    "brier": 0.24576,
+    "log_loss": 0.68804,
+    "mean_pred": 0.5929,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.5932,
+    "brier": 0.2425,
+    "log_loss": 0.67819,
+    "mean_pred": 0.6277,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3662,
+     "n": 83,
+     "observed": 0.253
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4591,
+     "n": 443,
+     "observed": 0.4492
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.551,
+     "n": 966,
+     "observed": 0.5745
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6435,
+     "n": 842,
+     "observed": 0.6722
+    },
+    {
+     "bin": "0.7-0.8",
+     "mean_pred": 0.7313,
+     "n": 235,
+     "observed": 0.7702
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.5932,
+    "brier": 0.22914,
+    "log_loss": 0.65017,
+    "mean_pred": 0.5765,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.5932,
+    "brier": 0.22855,
+    "log_loss": 0.64886,
+    "mean_pred": 0.5837,
+    "n": 2586
+   },
+   "platt": [
+    0.8147,
+    0.0294
+   ]
+  },
+  "saves>=24": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.5271,
+    "brier": 0.25471,
+    "log_loss": 0.70657,
+    "mean_pred": 0.5336,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.5271,
+    "brier": 0.25071,
+    "log_loss": 0.69461,
+    "mean_pred": 0.5651,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2762,
+     "n": 36,
+     "observed": 0.25
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.363,
+     "n": 285,
+     "observed": 0.2912
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4555,
+     "n": 812,
+     "observed": 0.4815
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5484,
+     "n": 951,
+     "observed": 0.5542
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6399,
+     "n": 440,
+     "observed": 0.7023
+    },
+    {
+     "bin": "0.7-0.8",
+     "mean_pred": 0.7284,
+     "n": 60,
+     "observed": 0.7167
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.5271,
+    "brier": 0.23489,
+    "log_loss": 0.66217,
+    "mean_pred": 0.5147,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.5271,
+    "brier": 0.2341,
+    "log_loss": 0.66042,
+    "mean_pred": 0.5221,
+    "n": 2586
+   },
+   "platt": [
+    0.8199,
+    -0.0153
+   ]
+  },
+  "saves>=25": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.4722,
+    "brier": 0.25693,
+    "log_loss": 0.71153,
+    "mean_pred": 0.4748,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.4722,
+    "brier": 0.25012,
+    "log_loss": 0.69339,
+    "mean_pred": 0.5021,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2669,
+     "n": 182,
+     "observed": 0.2363
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3581,
+     "n": 698,
+     "observed": 0.3481
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4497,
+     "n": 946,
+     "observed": 0.5
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5415,
+     "n": 605,
+     "observed": 0.5868
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6351,
+     "n": 137,
+     "observed": 0.7153
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.4722,
+    "brier": 0.23543,
+    "log_loss": 0.66298,
+    "mean_pred": 0.4434,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.4722,
+    "brier": 0.23412,
+    "log_loss": 0.6602,
+    "mean_pred": 0.4612,
+    "n": 2586
+   },
+   "platt": [
+    0.8338,
+    -0.0994
+   ]
+  },
+  "saves>=26": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.42,
+    "brier": 0.2517,
+    "log_loss": 0.70111,
+    "mean_pred": 0.4178,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.42,
+    "brier": 0.244,
+    "log_loss": 0.68111,
+    "mean_pred": 0.4402,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1762,
+     "n": 59,
+     "observed": 0.1525
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2607,
+     "n": 439,
+     "observed": 0.2392
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3507,
+     "n": 975,
+     "observed": 0.3949
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4442,
+     "n": 787,
+     "observed": 0.4981
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5368,
+     "n": 289,
+     "observed": 0.5813
+    },
+    {
+     "bin": "0.6-0.7",
+     "mean_pred": 0.6325,
+     "n": 36,
+     "observed": 0.7222
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.42,
+    "brier": 0.231,
+    "log_loss": 0.65336,
+    "mean_pred": 0.3847,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.42,
+    "brier": 0.22955,
+    "log_loss": 0.65033,
+    "mean_pred": 0.4025,
+    "n": 2586
+   },
+   "platt": [
+    0.8419,
+    -0.1368
+   ]
+  },
+  "saves>=27": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.3693,
+    "brier": 0.2394,
+    "log_loss": 0.67569,
+    "mean_pred": 0.3635,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.3693,
+    "brier": 0.23305,
+    "log_loss": 0.65886,
+    "mean_pred": 0.3808,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1711,
+     "n": 191,
+     "observed": 0.1675
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2568,
+     "n": 832,
+     "observed": 0.2764
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3476,
+     "n": 972,
+     "observed": 0.3961
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4394,
+     "n": 482,
+     "observed": 0.5021
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5329,
+     "n": 99,
+     "observed": 0.596
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.3693,
+    "brier": 0.22086,
+    "log_loss": 0.6315,
+    "mean_pred": 0.33,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.3693,
+    "brier": 0.21918,
+    "log_loss": 0.6279,
+    "mean_pred": 0.3469,
+    "n": 2586
+   },
+   "platt": [
+    0.8449,
+    -0.1721
+   ]
+  },
+  "saves>=28": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.3136,
+    "brier": 0.22121,
+    "log_loss": 0.63849,
+    "mean_pred": 0.3129,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.3136,
+    "brier": 0.21539,
+    "log_loss": 0.62226,
+    "mean_pred": 0.3251,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1656,
+     "n": 447,
+     "observed": 0.1365
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2505,
+     "n": 1109,
+     "observed": 0.2813
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3416,
+     "n": 784,
+     "observed": 0.3916
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4325,
+     "n": 206,
+     "observed": 0.534
+    },
+    {
+     "bin": "0.5-0.6",
+     "mean_pred": 0.5254,
+     "n": 27,
+     "observed": 0.7037
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.3136,
+    "brier": 0.20366,
+    "log_loss": 0.59361,
+    "mean_pred": 0.28,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.3136,
+    "brier": 0.20199,
+    "log_loss": 0.58985,
+    "mean_pred": 0.2955,
+    "n": 2586
+   },
+   "platt": [
+    0.8249,
+    -0.223
+   ]
+  },
+  "saves>=29": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.2649,
+    "brier": 0.20065,
+    "log_loss": 0.5948,
+    "mean_pred": 0.2664,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.2649,
+    "brier": 0.1948,
+    "log_loss": 0.57831,
+    "mean_pred": 0.2738,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0821,
+     "n": 86,
+     "observed": 0.0465
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1585,
+     "n": 949,
+     "observed": 0.1728
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2464,
+     "n": 1089,
+     "observed": 0.2984
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3394,
+     "n": 395,
+     "observed": 0.4127
+    },
+    {
+     "bin": "0.4-0.5",
+     "mean_pred": 0.4346,
+     "n": 65,
+     "observed": 0.4154
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.2649,
+    "brier": 0.18598,
+    "log_loss": 0.55391,
+    "mean_pred": 0.2278,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.2649,
+    "brier": 0.18439,
+    "log_loss": 0.54996,
+    "mean_pred": 0.2487,
+    "n": 2586
+   },
+   "platt": [
+    0.8667,
+    -0.2588
+   ]
+  },
+  "saves>=30": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.2216,
+    "brier": 0.17777,
+    "log_loss": 0.54476,
+    "mean_pred": 0.2244,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.2216,
+    "brier": 0.17252,
+    "log_loss": 0.529,
+    "mean_pred": 0.2277,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0809,
+     "n": 249,
+     "observed": 0.0643
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1526,
+     "n": 1297,
+     "observed": 0.1735
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2409,
+     "n": 860,
+     "observed": 0.2919
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3347,
+     "n": 163,
+     "observed": 0.4356
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.2216,
+    "brier": 0.16472,
+    "log_loss": 0.50479,
+    "mean_pred": 0.1883,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.2216,
+    "brier": 0.16324,
+    "log_loss": 0.50086,
+    "mean_pred": 0.2068,
+    "n": 2586
+   },
+   "platt": [
+    0.8565,
+    -0.3037
+   ]
+  },
+  "saves>=31": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.181,
+    "brier": 0.1528,
+    "log_loss": 0.48607,
+    "mean_pred": 0.1871,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.181,
+    "brier": 0.14826,
+    "log_loss": 0.47298,
+    "mean_pred": 0.1869,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0763,
+     "n": 521,
+     "observed": 0.0729
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1462,
+     "n": 1518,
+     "observed": 0.164
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2361,
+     "n": 497,
+     "observed": 0.3179
+    },
+    {
+     "bin": "0.3-0.4",
+     "mean_pred": 0.3333,
+     "n": 49,
+     "observed": 0.449
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.181,
+    "brier": 0.1413,
+    "log_loss": 0.44876,
+    "mean_pred": 0.1531,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.181,
+    "brier": 0.13987,
+    "log_loss": 0.44487,
+    "mean_pred": 0.1701,
+    "n": 2586
+   },
+   "platt": [
+    0.8442,
+    -0.3633
+   ]
+  },
+  "saves>=32": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.1481,
+    "brier": 0.13068,
+    "log_loss": 0.43429,
+    "mean_pred": 0.1545,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.1481,
+    "brier": 0.12618,
+    "log_loss": 0.41945,
+    "mean_pred": 0.1515,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0717,
+     "n": 1014,
+     "observed": 0.0789
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1403,
+     "n": 1318,
+     "observed": 0.1669
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2298,
+     "n": 238,
+     "observed": 0.3151
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.1481,
+    "brier": 0.12093,
+    "log_loss": 0.39831,
+    "mean_pred": 0.1228,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.1481,
+    "brier": 0.11984,
+    "log_loss": 0.39496,
+    "mean_pred": 0.1384,
+    "n": 2586
+   },
+   "platt": [
+    0.8662,
+    -0.3722
+   ]
+  },
+  "saves>=33": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.1125,
+    "brier": 0.10325,
+    "log_loss": 0.36314,
+    "mean_pred": 0.1263,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.1125,
+    "brier": 0.09994,
+    "log_loss": 0.35213,
+    "mean_pred": 0.1213,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0653,
+     "n": 1549,
+     "observed": 0.0665
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1332,
+     "n": 971,
+     "observed": 0.172
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2268,
+     "n": 65,
+     "observed": 0.3077
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.1125,
+    "brier": 0.09595,
+    "log_loss": 0.33199,
+    "mean_pred": 0.0949,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.1125,
+    "brier": 0.09511,
+    "log_loss": 0.32916,
+    "mean_pred": 0.1113,
+    "n": 2586
+   },
+   "platt": [
+    0.8472,
+    -0.4814
+   ]
+  },
+  "saves>=34": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.0893,
+    "brier": 0.08464,
+    "log_loss": 0.3127,
+    "mean_pred": 0.1022,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.0893,
+    "brier": 0.08139,
+    "log_loss": 0.30123,
+    "mean_pred": 0.0959,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0551,
+     "n": 2067,
+     "observed": 0.0648
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1285,
+     "n": 492,
+     "observed": 0.1789
+    },
+    {
+     "bin": "0.2-0.3",
+     "mean_pred": 0.2213,
+     "n": 27,
+     "observed": 0.3333
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.0893,
+    "brier": 0.07876,
+    "log_loss": 0.28581,
+    "mean_pred": 0.0708,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.0893,
+    "brier": 0.07815,
+    "log_loss": 0.28312,
+    "mean_pred": 0.0886,
+    "n": 2586
+   },
+   "platt": [
+    0.9325,
+    -0.3983
+   ]
+  },
+  "saves>=35": {
+   "baseline_goalie_last10_mean": {
+    "base_rate": 0.0692,
+    "brier": 0.06654,
+    "log_loss": 0.2597,
+    "mean_pred": 0.082,
+    "n": 2586
+   },
+   "baseline_league_mean": {
+    "base_rate": 0.0692,
+    "brier": 0.06446,
+    "log_loss": 0.25186,
+    "mean_pred": 0.0749,
+    "n": 2586
+   },
+   "calibration_platt": [
+    {
+     "bin": "0.0-0.1",
+     "mean_pred": 0.0462,
+     "n": 2347,
+     "observed": 0.0571
+    },
+    {
+     "bin": "0.1-0.2",
+     "mean_pred": 0.1246,
+     "n": 236,
+     "observed": 0.1907
+    }
+   ],
+   "common_rows": 2586,
+   "model_platt": {
+    "base_rate": 0.0692,
+    "brier": 0.06275,
+    "log_loss": 0.23919,
+    "mean_pred": 0.0536,
+    "n": 2586
+   },
+   "model_raw": {
+    "base_rate": 0.0692,
+    "brier": 0.06233,
+    "log_loss": 0.23681,
+    "mean_pred": 0.0699,
+    "n": 2586
+   },
+   "platt": [
+    0.9354,
+    -0.4456
+   ]
+  }
+ },
+ "splits": {
+  "calibration": 2024,
+  "final_evaluation": 2025,
+  "train": [
+   2022,
+   2023
+  ]
+ },
+ "start_likelihood": {
+  "base_rate": {
+   "base_rate": 0.4429,
+   "brier": 0.24677,
+   "log_loss": 0.68668,
+   "mean_pred": 0.437,
+   "n": 5857
+  },
+  "coefficients": [
+   -1.7602,
+   3.7113,
+   1.3479,
+   -0.3499,
+   -3.6962
+  ],
+  "model": {
+   "base_rate": 0.4429,
+   "brier": 0.20678,
+   "log_loss": 0.60171,
+   "mean_pred": 0.4391,
+   "n": 5857
+  },
+  "note": "Estimates how likely each recently used goalie is to start; it is not a confirmation.",
+  "samples_final": 5857,
+  "share_of_last10_only": {
+   "base_rate": 0.4429,
+   "brier": 0.23325,
+   "log_loss": 0.65956,
+   "mean_pred": 0.4396,
+   "n": 5857
+  }
+ },
+ "win_coefficients": {
+  "base": [
+   0.2515212553209722
+  ],
+  "full": [
+   0.2597134503712397,
+   0.625271052255396,
+   0.8462830984573679
+  ],
+  "strength_only": [
+   0.272993064014609,
+   0.7573346817622878
+  ]
+ },
+ "win_probability": {
+  "calibration_full": [
+   {
+    "bin": "0.2-0.4",
+    "mean_pred": 0.3589,
+    "n": 63,
+    "observed": 0.381
+   },
+   {
+    "bin": "0.4-0.6",
+    "mean_pred": 0.5217,
+    "n": 677,
+    "observed": 0.5052
+   },
+   {
+    "bin": "0.6-0.8",
+    "mean_pred": 0.6594,
+    "n": 433,
+    "observed": 0.5843
+   }
+  ],
+  "coefficients": {
+   "goalie_saved_goals": 0.8463,
+   "intercept": 0.2597,
+   "strength_diff": 0.6253
+  },
+  "coefficients_strength_only": [
+   0.273,
+   0.7573
+  ],
+  "games_scored": 1178,
+  "home_rate_baseline": {
+   "base_rate": 0.5272,
+   "brier": 0.25051,
+   "log_loss": 0.6942,
+   "mean_pred": 0.5626,
+   "n": 1178
+  },
+  "shootouts_excluded": 133,
+  "strength_and_goalies_tied": {
+   "base_rate": 0.5272,
+   "brier": 0.2487,
+   "log_loss": 0.69129,
+   "mean_pred": 0.5671,
+   "n": 1178
+  },
+  "strength_and_named_goalies": {
+   "base_rate": 0.5272,
+   "brier": 0.24811,
+   "log_loss": 0.68988,
+   "mean_pred": 0.5649,
+   "n": 1178
+  },
+  "strength_only": {
+   "base_rate": 0.5272,
+   "brier": 0.24679,
+   "log_loss": 0.68685,
+   "mean_pred": 0.5654,
+   "n": 1178
+  },
+  "tied_note": "Goalie term tied to the strength coefficient: a goal saved per game counts like a goal of differential per game (no extra fitted parameter)."
+ }
+}

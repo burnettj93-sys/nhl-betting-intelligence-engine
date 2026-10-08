@@ -24,7 +24,7 @@ import streamlit as st
 from dashboard import auth
 
 st.set_page_config(
-    page_title="NHL Model Research Dashboard",
+    page_title="NHL Betting Intelligence",
     page_icon="🏒",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -68,10 +68,9 @@ pg = st.navigation(_nav_sections)
 
 with st.sidebar:
     st.markdown("### 🏒 NHL Intelligence Engine")
-    st.caption("Model Research + Intelligence Dashboard")
-    st.caption("Read-only research view — v1")
+    st.caption("Games, players, goalies and paper tickets")
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
-        st.caption("☁️ Community Cloud mode — read-only snapshot view")
+        st.caption("☁️ Hosted view — data is published by the engine every ~15 minutes")
     st.divider()
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
         st.caption("🔒 Access is controlled by Streamlit private sharing")

@@ -1,12 +1,6 @@
-"""Page 30 — Players (Platform Recovery block, 2026-09-30, superseding
-the earlier demo-default Preseason Interactive Product sprint). Default
-view is REAL: real NHL player identity, real current team/position, and
-(cross-referenced against the same rows Player Props shows) real market
-state -- MARKET_UNAVAILABLE, honestly, when no real eligible leg exists
-for a player. Click a row to open Player Intelligence with that real
-player selected. The prior demo roster is retained for illustrating the
-model/decision machinery, but lives behind its own explicit, collapsed,
-clearly-labeled expander."""
+"""Players — current-season and recent usage and production for every skater who has played this season, the role each is
+inferred to have (line, power-play unit) with its source and timestamp, matchup-specific expected values for the next game,
+and the best qualifying +100 option when one exists. History is shown as history; projections are labelled projections."""
 from __future__ import annotations
 
 import sys
@@ -18,98 +12,113 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from dashboard import cloud_snapshot
-from dashboard import components as comp
-from operational import runtime_mode
+from dashboard import product_source as ps
+from dashboard import ui
 
-
-@st.cache_data(show_spinner="Loading real players...", ttl=3600, max_entries=1)
-def _cached_local_real_players():
-    from operational import real_today_bridge
-    return real_today_bridge.open_all_players_list()
-
-
-@st.cache_data(show_spinner="Loading real player market state...", ttl=300, max_entries=1)
-def _cached_local_real_player_props_rows():
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_player_props_state()["rows"]
-
-
-st.title("Players")
-comp.render_model_status_header()
-comp.render_global_search(key_prefix="players")
-
-st.markdown(
-    """
-    <div style="border:1px solid #1f4d2e; border-radius:6px; padding:8px 12px;
-                background:#0f2417; color:#7fd99a; font-size:0.85rem; margin-bottom:12px;">
-      <b>LIVE — REAL NHL PLAYERS.</b> Every player below is a real, current NHL entity. Current
-      team is shown when real roster membership is known — otherwise "—", never guessed. Market
-      state (right column) is the same real eligible leg data Player Props shows, or an honest
-      MARKET UNAVAILABLE. A Demo / Model Showcase illustrating the decision machinery (simulated
-      matchups/prices) is available in its own collapsed section further down.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
+ui.header("Players", "Skaters who have played this season. Pick a player for the full picture.")
+players = ui.load(ps.players, "Player data")
+meta = ps.meta()
 try:
-    if runtime_mode.is_community_cloud():
-        _real_players = cloud_snapshot.real_all_players()
-        _real_market_rows = cloud_snapshot.real_player_props()["rows"]
-    else:
-        _real_players = _cached_local_real_players()
-        _real_market_rows = _cached_local_real_player_props_rows()
-except cloud_snapshot.SnapshotUnavailable as _exc:
-    _real_players = None
-    st.caption(f"Real player data is not available in this snapshot ({_exc}).")
+    tk = ps.tickets()
+    opts = {o["option_id"]: o for o in ps.options().get("options", [])}
+    cash = tk["account"]["available_cash"]
+    page_ts = tk["generated_at_utc"]
+except ps.Unavailable:
+    opts, cash, page_ts = {}, None, None
 
-if _real_players is not None:
-    _market_by_id = {r["player_id"]: r for r in _real_market_rows}
-    search_q = st.text_input("Filter by name", key="real_players_filter")
-    rows = [p for p in _real_players if not search_q or search_q.lower() in p["full_name"].lower()]
-    st.caption(f"{len(rows)} real player(s) (of {len(_real_players)} total).")
+teams = sorted({p["team"] for p in players.values()})
+f = st.columns([3, 2, 2, 2])
+q = f[0].text_input("Search by name", key="pl_q")
+team = f[1].selectbox("Team", ["All teams"] + teams, key="pl_team")
+pos = f[2].selectbox("Position", ["All", "Forwards", "Defense"], key="pl_pos")
+sort = f[3].selectbox("Sort by", ["Recent ice time", "Season points", "Season shots", "Name"], key="pl_sort")
 
-    for p in rows[:200]:
-        cols = st.columns([2, 1, 1, 2])
-        if cols[0].button(p["full_name"], key=f"real_players_row_{p['player_id']}"):
-            st.session_state["selected_player_id"] = p["player_id"]
-            st.switch_page("pages/25_Player_Intelligence.py")
-        cols[1].caption(p.get("team") or "—")
-        cols[2].caption(p.get("position") or "—")
-        market = _market_by_id.get(p["player_id"])
-        cols[3].caption(f"{market['market']} {market['threshold']}" if market else "MARKET UNAVAILABLE")
-    if len(rows) > 200:
-        st.caption(f"Showing first 200 of {len(rows)} matches — refine your filter to narrow further.")
+rows = list(players.values())
+if q:
+    rows = [p for p in rows if q.lower() in p["name"].lower()]
+if team != "All teams":
+    rows = [p for p in rows if p["team"] == team]
+if pos != "All":
+    want = "F" if pos == "Forwards" else "D"
+    rows = [p for p in rows if (p["position"] == "D") == (want == "D")]
+key = {"Recent ice time": lambda p: -p["recent_avg"]["toi"], "Season points": lambda p: -(p["season"].get("points") or 0),
+       "Season shots": lambda p: -(p["season"].get("shots") or 0), "Name": lambda p: p["name"]}[sort]
+rows.sort(key=key)
+st.caption(f"{len(rows)} of {len(players)} skaters. Season = {meta['current_season'][:4]}-{meta['current_season'][6:]} regular season to date; recent = last up to 6 games.")
 
+table = [{"Player": p["name"], "Team": p["team"], "Pos": p["position"], "Line": str(p["line"]) if p["line"] else "—", "PP": f"PP{p['pp_unit']}" if p["pp_unit"] else "—",
+          "GP": p["season"].get("games", 0), "G": int(p["season"].get("goals") or 0), "A": int(p["season"].get("assists") or 0),
+          "Pts": int(p["season"].get("points") or 0), "SOG": int(p["season"].get("shots") or 0),
+          "TOI": round(p["recent_avg"]["toi"], 1), "Option": "yes" if p.get("option_id") in opts else ""} for p in rows[:400]]
+ev = st.dataframe(table, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row", key="pl_table", height=320)
+ids = [p["player_id"] for p in rows[:400]]
+sel = None
+if ev and ev.selection.rows:
+    sel = ids[ev.selection.rows[0]]
+elif st.query_params.get("player") in players:
+    sel = st.query_params["player"]
+if len(rows) > 400:
+    st.caption("Showing the first 400; narrow the filters to see the rest.")
+if not sel:
+    st.info("Select a row to open that player.")
+    st.stop()
+
+st.query_params["player"] = sel
+p = players[sel]
 st.divider()
+st.subheader(f"{p['name']} — {p['team']} · {p['position']}")
+s = p["season"]
+n = max(s.get("games", 0), 1)
+a = st.columns(6)
+a[0].metric("Games", s.get("games", 0))
+a[1].metric("Goals / Assists", f"{int(s.get('goals') or 0)} / {int(s.get('assists') or 0)}")
+a[2].metric("Points", int(s.get("points") or 0), f"{(s.get('points') or 0) / n:.2f} per game", delta_color="off")
+a[3].metric("Shots on goal", int(s.get("shots") or 0), f"{(s.get('shots') or 0) / n:.2f} per game", delta_color="off")
+a[4].metric("Hits / Blocks", f"{int(s.get('hits') or 0)} / {int(s.get('blocks') or 0)}")
+a[5].metric("Avg ice time", f"{s.get('toi_avg', 0):.1f} min", f"PP {s.get('toi_pp_avg', 0):.1f} min", delta_color="off")
 
-with st.expander("Demo / Model Showcase — SIMULATED, not the real product (click to expand)"):
-    st.caption("Everything below uses a fixed SIMULATED slate and roster to illustrate the "
-               "model/decision machinery. Never a real current matchup. For the real product, "
-               "see the section above.")
+st.markdown("#### Role (inferred)")
+if p["line"]:
+    kind = "defense pair" if p["position"] == "D" else "forward line"
+    st.write(f"**{kind.title()} {p['line']}**" + (f" · **power-play unit {p['pp_unit']}**" if p["pp_unit"] else " · no regular power-play unit"))
+    st.caption(f"{p['role_source']} Newest game used: {p['last_game_date']}. Recent averages — ice time {p['recent_avg']['toi']:.1f} min, power play {p['recent_avg']['toi_pp']:.1f} min.")
+else:
+    st.caption("Not enough recent games to infer a role (needs at least 2 this season).")
 
-    from dashboard import demo_data as dd
-    from dashboard import player_intelligence_view as piv
+st.markdown("#### Recent games (history)")
+st.dataframe([{"Date": r["date"], "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": r["toi_pp"], "SOG": int(r["shots"]),
+               "G": int(r["goals"]), "A": int(r["assists"]), "Hits": int(r["hits"]), "Blk": int(r["blocks"])} for r in p["recent_games"]],
+             hide_index=True, width="stretch")
 
-    st.markdown("### Demo Players — SIMULATED")
-    roster = dd.build_demo_roster()
-    opportunities = dd.build_demo_opportunities()
-    demo_search_q = st.text_input("Filter by name", key="players_local_filter")
+st.markdown("#### Next game (projection)")
+ng, pr = p.get("next_game"), p.get("projection")
+if not ng:
+    st.caption("No upcoming regular-season game is scheduled for this team in the schedule on file.")
+elif not pr:
+    st.caption("A projection could not be built for this player.")
+else:
+    st.write(f"**{ng['opp']}** {'at home' if ng['home'] else 'away'} · {ui.et_time(ng['start_utc'], True)} · game {ng['game_id']}")
+    e = pr["expected"]
+    b = st.columns(6)
+    b[0].metric("Expected ice time", f"{e['toi']:.1f} min")
+    b[1].metric("Expected PP time", f"{e['toi_pp']:.1f} min")
+    b[2].metric("Expected shots", f"{e['shots']:.2f}")
+    b[3].metric("Expected goals", f"{e['goals']:.2f}")
+    b[4].metric("Expected assists", f"{e['assists']:.2f}")
+    b[5].metric("Expected points", f"{e['points']:.2f}")
+    c = st.columns(2)
+    c[0].metric("Expected hits", f"{e['hits']:.2f}")
+    c[1].metric("Expected blocks", f"{e['blocks']:.2f}")
+    pb = pr["probabilities"]
+    st.dataframe([{"Event": k.replace(">=", " ") + "+", "Calibrated chance": ui.pct(v, 1)} for k, v in pb.items()], hide_index=True, width="stretch")
+    note = f"Model {pr['model_version']}, {pr['games_observed']} prior games."
+    if pr["limited_history"]:
+        note += " Limited history: probabilities for players with fewer than 20 prior games over-predicted in testing and are not used for pricing."
+    st.caption(note + " Expected values and chances are projections for this matchup, not past results. Validation: docs/validation/skater_projection_validation.json.")
 
-    for player in roster:
-        if demo_search_q and demo_search_q.lower() not in player.name.lower():
-            continue
-        opps = [o for o in opportunities if o["player_id"] == player.player_id]
-        best = piv.hero_summary(opps)
-        cols = st.columns([2, 1, 1, 1, 1, 1])
-        if cols[0].button(player.name, key=f"players_row_{player.player_id}"):
-            st.session_state["selected_player_id"] = player.player_id
-            st.switch_page("pages/25_Player_Intelligence.py")
-        cols[1].caption(f"{player.team} · {player.position}")
-        cols[2].caption(f"vs {player.opponent}")
-        cols[3].markdown(comp.label_badge("PROJECTED ACTIVE", "research"), unsafe_allow_html=True)
-        cols[4].caption(best["market"] + " " + best["threshold"] if best else "MODEL ONLY")
-        cols[5].markdown(comp.label_badge(best["decision"], "input") if best else "—", unsafe_allow_html=True)
-
-comp.render_provenance_panel()
+st.markdown("#### Best qualifying +100 option")
+opt = opts.get(p.get("option_id"))
+if opt:
+    ui.option_card(opt, key=f"pl_{opt['option_id']}", cash=cash, page_generated_at=page_ts)
+else:
+    st.caption("No qualifying option for this player right now: either no fresh DraftKings price is on file for them, or no single or cross-game pairing reaches +100 with positive value under the ticket policy.")

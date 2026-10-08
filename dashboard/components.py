@@ -39,12 +39,6 @@ def cloud_banner_model(fr: dict, meta: dict) -> dict:
         headline = f"⚠️ REMOTE UPDATE FAILED — LAST-KNOWN-GOOD SNAPSHOT (data {str(fr.get('state')).replace('_', ' ')} as of its timestamp)"
         if tone == "ok":
             tone = "warn"
-    elif fr.get("source") == "BUNDLED_FALLBACK":
-        notices.append("The remote snapshot has never loaded in this process — showing the frozen BUNDLED "
-                       f"fallback{' (' + fr['last_error'] + ')' if fr.get('last_error') else ''}.")
-        headline = f"⚠️ REMOTE SNAPSHOT UNAVAILABLE — BUNDLED FALLBACK ({str(fr.get('state')).replace('_', ' ')})"
-        if tone == "ok":
-            tone = "warn"
     lines = [f"DATA AS OF: {fr.get('data_as_of') or 'unknown'}",
              f"LAST UPDATED: {fr.get('last_updated') or 'unknown'}"]
     comps = fr.get("components") or {}
@@ -63,24 +57,18 @@ def cloud_banner_model(fr: dict, meta: dict) -> dict:
                 parts.append(f"{label} {mf['state']} (newest {mf['age_minutes']:.0f} min old; limit 180 min, 90 min within 4 h of a game)"
                              if mf["age_minutes"] is not None else f"{label} {mf['state']}")
         lines.append("MARKET FRESHNESS (separate from snapshot freshness): " + " · ".join(parts))
-    lines.append("Demo board prices are SIMULATED (labeled SIMULATED — DEMO ONLY); real DraftKings rows are "
-                 "labeled LIVE — DRAFTKINGS; recorded recommendations are labeled REAL MARKET.")
+    lines.append("Prices are DraftKings quotes (US feed via The Odds API) with the provider's own quote time; recorded tickets are paper bets.")
     return {"headline": headline, "tone": tone, "notices": notices, "lines": lines, "state": fr.get("state")}
 
 
 def cloud_freshness_lines(meta: dict) -> list[str]:
-    """Back-compat plain-text summary used by older callers/tests."""
+    """Plain-text summary of the data feed."""
     if not meta.get("available"):
-        return ["Snapshot data is unavailable in this deployment: " + str(meta.get("error", "unknown reason"))]
-    return [
-        f"Demo board (simulated prices, real model output) frozen at {str(meta.get('generated_at_utc') or meta.get('generated_at'))[:16]} UTC "
-        f"for the simulated slate {meta.get('simulated_slate_date')}.",
-        f"Newest real DraftKings moneyline capture in this snapshot: "
-        f"{meta.get('newest_real_dk_capture_utc') or (meta.get('freshness') or {}).get('odds') or 'none'}. "
-        f"Elo ratings reflect games through {meta.get('elo_corpus_last_game_date') or 'unknown'}.",
-        "This deployment has no scheduler and cannot receive live operational state except through the "
-        "published snapshot; it never runs models, syncs, settlement or backups.",
-    ]
+        return ["Data is unavailable in this deployment: " + str(meta.get("error", "unknown reason"))]
+    return [f"Data published {str(meta.get('generated_at_utc') or meta.get('generated_at'))[:16]} UTC; newest DraftKings quote in it: "
+            f"{(meta.get('freshness') or {}).get('odds') or 'none'}.",
+            "This deployment has no scheduler and cannot receive live operational state except through the published data; it never "
+            "runs models, syncs, settlement or backups."]
 
 
 def render_cloud_snapshot_banner() -> None:
@@ -168,43 +156,22 @@ def live_label(base_label: str) -> str:
 def render_model_status_header() -> None:
     if runtime_mode.is_community_cloud():
         render_cloud_snapshot_banner()
-    st.markdown(
-        f"""
-        <div style="border:1px solid #3a3f4b; border-radius:8px; padding:10px 16px;
-                    background:#161a22; margin-bottom:10px;">
-          <span style="color:#8b93a7; font-size:0.78rem; letter-spacing:.05em;">MODEL STATUS</span><br/>
-          <span style="color:#e8ecf5; font-size:1.05rem; font-weight:600;">{da.MODEL_STATUS}</span>
-          <span style="color:#5c6579; font-size:0.85rem;"> &mdash; not a proven profitable betting model</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.caption("Paper money only. Projections are validated on held-out games but no profitability is claimed or proven.")
 
 
 def render_data_mode_badge() -> None:
-    st.markdown(
-        f"""
-        <div style="display:inline-block; border:1px solid #3a5f4a; border-radius:6px;
-                    padding:4px 10px; background:#132018; color:#7fd9a0;
-                    font-size:0.78rem; letter-spacing:.04em; margin-bottom:12px;">
-          DATA MODE: {da.DATA_MODE}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    return None
 
 
 def render_provenance_panel() -> None:
     with st.expander("Data provenance & status", expanded=False):
         st.markdown(
-            f"""
-- **NHL results source:** NHL Web API / real historical corpus (`research/real_nhl_results/`)
-- **MoneyPuck:** ARCHIVAL_RESEARCH (downloaded once, not a live feed)
-- **MoneyPuck xG model version semantics:** UNKNOWN (see `MONEYPUCK_TEAM_INGESTION_REPORT.md`)
-- **Current model status:** {da.MODEL_STATUS} — baseline production Elo model, unmodified
-- **Historical odds:** NOT YET INTEGRATED
-- **Goalie starter intelligence:** NOT YET INTEGRATED
-- **Data mode:** {da.DATA_MODE} — no live current-season game feed is wired up in this project yet
+            """
+- **Schedule and results:** NHL web API, ingested into the engine's database.
+- **Player and goalie game logs:** MoneyPuck game-by-game files (updated daily).
+- **Goalie season records:** NHL.com player pages.
+- **Prices:** DraftKings via The Odds API (US feed); the provider's quote time is shown wherever a price is.
+- **Starting goalies:** no confirmation feed is connected; start chances are estimates and status is Unconfirmed.
             """
         )
 

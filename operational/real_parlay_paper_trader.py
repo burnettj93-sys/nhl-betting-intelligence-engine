@@ -81,10 +81,22 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             price_refresh = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
 
-        stake_summary = daily_tickets.run_cycle(nhl_conn, bankroll_conn, now)
+        # One candidate-leg pool serves manual orders (revalidated against current prices) and the automatic selector.
+        collected = daily_tickets.collect_candidate_legs(nhl_conn, now)
+        try:
+            from operational import manual_orders
+            manual_summary = manual_orders.poll_and_process(bankroll_conn, nhl_conn, now, current_legs=collected["legs"])
+        except Exception as exc:  # noqa: BLE001 - the queue must never stop automatic tickets
+            manual_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "processed": 0}
+        stake_summary = daily_tickets.run_cycle(nhl_conn, bankroll_conn, now, collected=collected)
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
         if settlement_summary.get("settled"):
             daily_tickets.refresh_state_only(bankroll_conn, now)
+        try:
+            from operational import product_data
+            product_summary = product_data.refresh_state(now, nhl=nhl_conn, tickets_state=daily_tickets.read_state())
+        except Exception as exc:  # noqa: BLE001 - the product pages keep the last good document
+            product_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
     finally:
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
@@ -92,7 +104,8 @@ def run(now: dt.datetime | None = None) -> dict:
         bankroll_conn.close()
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
-              "revalidation_summary": revalidation_summary, "price_refresh": price_refresh}
+              "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
+              "manual_orders": manual_summary, "product_state": product_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],
@@ -100,7 +113,7 @@ def run(now: dt.datetime | None = None) -> dict:
         "insufficient_funds": stake_summary["insufficient_funds"], "status": "SUCCESS"})
     settled_count = (settlement_summary or {}).get("settled", 0)
     if (stake_summary["newly_recorded"] > 0 or settled_count > 0 or stake_summary["state_changed"]
-            or revalidation_summary.get("alerts_recorded") or _publish_heartbeat_due(now)):
+            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or _publish_heartbeat_due(now)):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result

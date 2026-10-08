@@ -28,7 +28,6 @@ from pathlib import Path
 from operational import cloud_snapshot_schema as schema
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BUNDLED_PATH = REPO_ROOT / "dashboard" / "cloud_snapshot" / "board.json"
 
 MAX_BETS_PER_TRACK = 200
 MAX_LEDGER_ROWS_PER_TYPE = 100
@@ -95,61 +94,6 @@ def _git_head() -> str:
 
 
 # ---- sections -------------------------------------------------------------------------------------
-def _demo_section() -> dict:
-    """The deterministic demo board. Every recommendation row in it is stamped with the canonical
-    demo provenance (`source` / `is_demo`) if it does not already carry one, so a consumer can
-    never mistake a simulated row for a real one."""
-    demo = json.loads(BUNDLED_PATH.read_text())["demo"]
-    for key in ("opportunities", "prop_opportunities", "goalie_saves_opportunities"):
-        for row in demo.get(key, []):
-            row.setdefault("source", schema.PROVENANCE_DEMO)
-            row.setdefault("is_demo", True)
-    demo["provenance"] = schema.PROVENANCE_DEMO
-    return demo
-
-
-def _live_rows() -> list[dict]:
-    from dashboard import live_dk as ldk
-    return ldk.build_live_moneyline_comparisons()
-
-
-def _real_recommendations() -> dict:
-    from dashboard import real_recommendations_view as rrv
-    from operational import paper_bankroll as pb
-    pl_conn, pb_conn = _ledger_conn(), _bankroll_conn()
-    try:
-        ml = rrv.real_moneyline_recommendations(pl_conn=pl_conn, bankroll_conn=pb_conn)
-        ml = ml[-MAX_REAL_REC_ROWS:]
-        props = rrv.real_prop_recommendations_for_conviction_and_parlay(pl_conn=pl_conn)[-MAX_REAL_REC_ROWS:]
-        parlays = _real_parlays(props)
-    finally:
-        pl_conn.close()
-        pb_conn.close()
-    return {
-        "provenance": schema.PROVENANCE_REAL_MARKET,
-        "moneyline": [_pick(r, _MONEYLINE_REC_FIELDS) for r in ml],
-        "props": props,
-        "game_edge_parlays": parlays,
-    }
-
-
-def _real_parlays(props: list[dict]) -> list[dict]:
-    """Game Edge Parlays over REAL prop recommendations only (empty until a
-    prop contract is verified and a BET-grade real leg exists)."""
-    import dataclasses
-    from research.game_edge_parlay import engine as gep
-    teams = {(o["team"], o["opponent"]) for o in props if o.get("team") and o.get("opponent")}
-    out = []
-    for team, opponent in sorted(teams):
-        result = gep.build_game_edge_parlay(props, team, opponent)
-        if result["status"] != "QUALIFIED":
-            continue
-        combo = result["combo"]
-        out.append({"team": team, "opponent": opponent, "recommended_legs": result["recommended_legs"],
-                    "combo": dataclasses.asdict(combo), "provenance": schema.PROVENANCE_REAL_MARKET})
-    return out
-
-
 def _performance() -> dict:
     from dashboard import paper_performance_view as ppv
     conn = _bankroll_conn()
@@ -168,15 +112,6 @@ def _morning_review() -> dict:
     finally:
         conn.close()
         nhl_conn.close()
-
-
-def _model_learning() -> dict:
-    from operational import daily_model_review as dmr
-    conn = _ledger_conn()
-    try:
-        return dmr.run_daily_review(conn)
-    finally:
-        conn.close()
 
 
 def _ledger() -> dict:
@@ -199,61 +134,6 @@ def _data_status() -> dict:
     from operational import ingestion_health
     cache = dv.load_readiness_cache()
     return {"readiness_cache": cache, "ingestion_health": ingestion_health.load_health()}
-
-
-def build_real_today_section() -> dict:
-    """Real Product Bridge block (2026-09-29): the ONE real state the
-    published Cloud snapshot's "real_today" section carries. Delegates to
-    operational/real_today_bridge.py::open_real_today_state() -- the SAME
-    function dashboard/pages/21_Today.py's own LOCAL-mode branch calls
-    directly (never through this module: dashboard/*.py files must never
-    reference "cloud_snapshot_builder" at all, see
-    tests/test_cloud_live_data.py::test_cloud_pages_never_import_the_publisher_or_builder)
-    -- so LOCAL mode and the published Cloud snapshot are never two
-    separately-derived sources of truth."""
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_today_state()
-
-
-def _real_today() -> dict:
-    return build_real_today_section()
-
-
-def build_real_player_props_section() -> dict:
-    """Same rationale as build_real_today_section() -- delegates to
-    operational/real_today_bridge.py::open_real_player_props_state()."""
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_player_props_state()
-
-
-def _real_player_props() -> dict:
-    return build_real_player_props_section()
-
-
-def build_real_team_intelligence_section() -> dict:
-    """Same rationale as build_real_today_section() -- delegates to
-    operational/real_today_bridge.py::open_all_teams_state()."""
-    from operational import real_today_bridge
-    return real_today_bridge.open_all_teams_state()
-
-
-def _real_team_intelligence() -> dict:
-    return build_real_team_intelligence_section()
-
-
-def _real_all_players() -> list[dict]:
-    from operational import real_today_bridge
-    return real_today_bridge.open_all_players_list()
-
-
-def _real_goalies() -> dict:
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_goalies_state()
-
-
-def _real_game_details() -> dict:
-    from operational import real_today_bridge
-    return real_today_bridge.open_real_game_details_for_today()
 
 
 def _health() -> dict:
@@ -295,19 +175,46 @@ def _tickets() -> dict:
     return daily_tickets.read_state() or {"status": "NOT_RUN"}
 
 
+def _product(key: str):
+    def build():
+        from operational import product_data
+        state = product_data.read_state()
+        if state is None:
+            raise RuntimeError("product_state.json has not been built yet (written by the paper-trader job)")
+        return state[key]
+    return build
+
+
+def _product_meta() -> dict:
+    from operational import product_data
+    state = product_data.read_state()
+    if state is None:
+        raise RuntimeError("product_state.json has not been built yet (written by the paper-trader job)")
+    return {k: state[k] for k in ("schema_version", "generated_at_utc", "et_today", "default_date", "data_through", "current_season")}
+
+
+def _manual_orders() -> dict:
+    from operational import manual_orders
+    conn = _bankroll_conn()
+    try:
+        return {"orders": manual_orders.recent_orders(conn)} if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name = 'manual_orders'").fetchone() else {"orders": []}
+    finally:
+        conn.close()
+
+
 _SECTION_BUILDERS = {
-    "live_moneyline_rows": _live_rows,
     "tickets": _tickets,
-    "real_recommendations": _real_recommendations,
-    "real_today": _real_today,
-    "real_player_props": _real_player_props,
-    "real_team_intelligence": _real_team_intelligence,
-    "real_all_players": _real_all_players,
-    "real_goalies": _real_goalies,
-    "real_game_details": _real_game_details,
+    "product_meta": _product_meta,
+    "product_games": _product("games"),
+    "product_game_details": _product("game_details"),
+    "product_players": _product("players"),
+    "product_goalies": _product("goalies"),
+    "product_teams": _product("teams"),
+    "product_model_health": _product("model_health"),
+    "manual_orders": _manual_orders,
     "performance": _performance,
     "morning_review": _morning_review,
-    "model_learning": _model_learning,
     "ledger": _ledger,
     "data_status": _data_status,
     "health": _health,
@@ -327,14 +234,15 @@ def _freshness(sections: dict) -> dict:
     def last_success(component):
         return (health.get(component) or {}).get("last_success_utc")
 
-    rows = sections.get("live_moneyline_rows") or []
-    real = sections.get("real_recommendations") or {}
-    rec_times = [r.get("created_at_utc") for r in (real.get("moneyline") or [])] + \
-                [r.get("created_at_utc") for r in (real.get("props") or [])]
+    games = (sections.get("product_games") or {}).get("games") or []
+    quotes = [q.get("quote_captured_at_utc") for g in games for q in ((g.get("moneyline") or {}).get("home"), (g.get("moneyline") or {}).get("away"))
+              if q]
+    tickets = sections.get("tickets") or {}
+    prop_quotes = [l.get("quote_updated_utc") for t in (tickets.get("tickets") or []) + (tickets.get("manual_tickets") or []) for l in t.get("legs", [])]
     return {
         "nhl_data": last_success("nhl_sync_full"),
-        "odds": _max_ts(r.get("captured_at_utc") for r in rows),
-        "recommendations": _max_ts(rec_times),
+        "odds": _max_ts(quotes + prop_quotes),
+        "recommendations": (sections.get("product_meta") or {}).get("generated_at_utc"),
         "settlement": last_success("settlement"),
         "postmortem": last_success("postmortem"),
     }
@@ -377,12 +285,9 @@ def build_live_snapshot(now: dt.datetime | None = None, *, sections: tuple[str, 
             "engine_mode": f"{runtime_mode.current_mode()}/{deployment_mode.current_mode()}",
             "data_as_of": data_as_of,
             "freshness": fresh,
-            "simulated_slate_date": json.loads(BUNDLED_PATH.read_text())["meta"].get("simulated_slate_date"),
-            "provenance": {"demo": schema.PROVENANCE_DEMO, "live_moneyline_rows": schema.PROVENANCE_LIVE,
-                           "real_recommendations": schema.PROVENANCE_REAL_MARKET},
+            "provenance": {"product_games": "NHL API + DraftKings via The Odds API", "tickets": schema.PROVENANCE_REAL_MARKET},
             "sections_omitted": sorted(errors),
         },
-        "demo": _demo_section(),
         **built,
     }
     doc = _sanitize_strings(doc, str(REPO_ROOT))
