@@ -1,0 +1,1660 @@
+{
+ "model_version": "player-rate-toi-v2",
+ "chosen_config": {
+  "rate_half_life_games": 30,
+  "toi_half_life_games": 8,
+  "k_minutes": 300,
+  "k_toi_games": 3.0,
+  "opp_half_life_games": 20.0,
+  "opp_beta": 0.5,
+  "opp_cap": [
+   0.88,
+   1.12
+  ],
+  "opp_k_games": 6.0
+ },
+ "config_search_calibration_logloss_sum": [
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 8,
+    "k_minutes": 300,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.21626
+  },
+  {
+   "config": {
+    "rate_half_life_games": 60,
+    "toi_half_life_games": 8,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.22958
+  },
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 8,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.25035
+  },
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 15,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.25067
+  },
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 5,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.25181
+  },
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 8,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.0,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.25694
+  },
+  {
+   "config": {
+    "rate_half_life_games": 15,
+    "toi_half_life_games": 8,
+    "k_minutes": 600,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.28916
+  },
+  {
+   "config": {
+    "rate_half_life_games": 30,
+    "toi_half_life_games": 8,
+    "k_minutes": 1200,
+    "k_toi_games": 3.0,
+    "opp_half_life_games": 20.0,
+    "opp_beta": 0.5,
+    "opp_cap": [
+     0.88,
+     1.12
+    ],
+    "opp_k_games": 6.0
+   },
+   "score": 3.29743
+  }
+ ],
+ "dispersion": {
+  "shots": 0.0575,
+  "goals": 0.0,
+  "assists": 0.0,
+  "points": 0.0,
+  "hits": 0.2193,
+  "blocks": 0.1145
+ },
+ "split": {
+  "train": [
+   2022,
+   2023
+  ],
+  "calibration": 2024,
+  "final_evaluation": 2025
+ },
+ "rows": {
+  "calibration": 46654,
+  "final": 46622
+ },
+ "markets": {
+  "shots>=1": {
+   "common_rows": 44924,
+   "model_raw": {
+    "n": 44924,
+    "base_rate": 0.7335,
+    "brier": 0.17936,
+    "log_loss": 0.53556,
+    "mean_pred": 0.756
+   },
+   "model_platt": {
+    "n": 44924,
+    "base_rate": 0.7335,
+    "brier": 0.17848,
+    "log_loss": 0.53397,
+    "mean_pred": 0.7352
+   },
+   "baseline_last30_empirical": {
+    "n": 44924,
+    "base_rate": 0.7335,
+    "brier": 0.1813,
+    "log_loss": 0.54204,
+    "mean_pred": 0.7403
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.4-0.5",
+     "n": 162,
+     "mean_pred": 0.4628,
+     "observed": 0.3827
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 3178,
+     "mean_pred": 0.566,
+     "observed": 0.5038
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 10164,
+     "mean_pred": 0.6555,
+     "observed": 0.5949
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 14746,
+     "mean_pred": 0.7491,
+     "observed": 0.7216
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 13466,
+     "mean_pred": 0.8482,
+     "observed": 0.8585
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 3206,
+     "mean_pred": 0.9228,
+     "observed": 0.9476
+    }
+   ],
+   "platt": [
+    1.0118,
+    -0.1291
+   ],
+   "baseline_live_formula": {
+    "n": 44924,
+    "base_rate": 0.7335,
+    "brier": 0.18073,
+    "log_loss": 0.54038,
+    "mean_pred": 0.7194
+   },
+   "calibration_live_formula": [
+    {
+     "bin": "0.2-0.3",
+     "n": 40,
+     "mean_pred": 0.2722,
+     "observed": 0.425
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 214,
+     "mean_pred": 0.3596,
+     "observed": 0.4159
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 2032,
+     "mean_pred": 0.4609,
+     "observed": 0.5064
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 6380,
+     "mean_pred": 0.5564,
+     "observed": 0.5787
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 11253,
+     "mean_pred": 0.6578,
+     "observed": 0.6628
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 11918,
+     "mean_pred": 0.7572,
+     "observed": 0.7707
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 9390,
+     "mean_pred": 0.8442,
+     "observed": 0.8585
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 3697,
+     "mean_pred": 0.9173,
+     "observed": 0.9248
+    }
+   ]
+  },
+  "shots>=2": {
+   "common_rows": 44924,
+   "model_raw": {
+    "n": 44924,
+    "base_rate": 0.4325,
+    "brier": 0.21196,
+    "log_loss": 0.61316,
+    "mean_pred": 0.447
+   },
+   "model_platt": {
+    "n": 44924,
+    "base_rate": 0.4325,
+    "brier": 0.21078,
+    "log_loss": 0.61011,
+    "mean_pred": 0.4237
+   },
+   "baseline_last30_empirical": {
+    "n": 44924,
+    "base_rate": 0.4325,
+    "brier": 0.21537,
+    "log_loss": 0.62051,
+    "mean_pred": 0.4408
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.1-0.2",
+     "n": 1054,
+     "mean_pred": 0.1771,
+     "observed": 0.1347
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 7227,
+     "mean_pred": 0.2579,
+     "observed": 0.2066
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 10869,
+     "mean_pred": 0.3518,
+     "observed": 0.2998
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 9707,
+     "mean_pred": 0.4463,
+     "observed": 0.4261
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 7930,
+     "mean_pred": 0.5496,
+     "observed": 0.5678
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 5502,
+     "mean_pred": 0.6432,
+     "observed": 0.6834
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 2342,
+     "mean_pred": 0.7419,
+     "observed": 0.8036
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 291,
+     "mean_pred": 0.8246,
+     "observed": 0.8797
+    }
+   ],
+   "platt": [
+    1.1504,
+    -0.0769
+   ],
+   "baseline_live_formula": {
+    "n": 44924,
+    "base_rate": 0.4325,
+    "brier": 0.21472,
+    "log_loss": 0.61907,
+    "mean_pred": 0.4151
+   },
+   "calibration_live_formula": [
+    {
+     "bin": "0.0-0.1",
+     "n": 100,
+     "mean_pred": 0.0832,
+     "observed": 0.09
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 3445,
+     "mean_pred": 0.1633,
+     "observed": 0.1733
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 9296,
+     "mean_pred": 0.2523,
+     "observed": 0.2593
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 10950,
+     "mean_pred": 0.3543,
+     "observed": 0.3567
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 6677,
+     "mean_pred": 0.4497,
+     "observed": 0.4596
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 6990,
+     "mean_pred": 0.5431,
+     "observed": 0.5871
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 4953,
+     "mean_pred": 0.6411,
+     "observed": 0.6758
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 2351,
+     "mean_pred": 0.7408,
+     "observed": 0.7895
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 162,
+     "mean_pred": 0.8289,
+     "observed": 0.821
+    }
+   ]
+  },
+  "shots>=3": {
+   "common_rows": 44924,
+   "model_raw": {
+    "n": 44924,
+    "base_rate": 0.2229,
+    "brier": 0.14917,
+    "log_loss": 0.46253,
+    "mean_pred": 0.2228
+   },
+   "model_platt": {
+    "n": 44924,
+    "base_rate": 0.2229,
+    "brier": 0.14902,
+    "log_loss": 0.46131,
+    "mean_pred": 0.2077
+   },
+   "baseline_last30_empirical": {
+    "n": 44924,
+    "base_rate": 0.2229,
+    "brier": 0.15155,
+    "log_loss": 0.46992,
+    "mean_pred": 0.2283
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 7376,
+     "mean_pred": 0.0748,
+     "observed": 0.0515
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 16279,
+     "mean_pred": 0.1485,
+     "observed": 0.1237
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 9676,
+     "mean_pred": 0.2469,
+     "observed": 0.2472
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 6843,
+     "mean_pred": 0.3454,
+     "observed": 0.3827
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 3133,
+     "mean_pred": 0.4429,
+     "observed": 0.5034
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 1373,
+     "mean_pred": 0.5404,
+     "observed": 0.6256
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 231,
+     "mean_pred": 0.6347,
+     "observed": 0.6926
+    }
+   ],
+   "platt": [
+    1.1123,
+    0.0237
+   ],
+   "baseline_live_formula": {
+    "n": 44924,
+    "base_rate": 0.2229,
+    "brier": 0.15132,
+    "log_loss": 0.46876,
+    "mean_pred": 0.2054
+   },
+   "calibration_live_formula": [
+    {
+     "bin": "0.0-0.1",
+     "n": 10758,
+     "mean_pred": 0.0641,
+     "observed": 0.0728
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 15697,
+     "mean_pred": 0.1458,
+     "observed": 0.1481
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 8804,
+     "mean_pred": 0.2528,
+     "observed": 0.281
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 4407,
+     "mean_pred": 0.3458,
+     "observed": 0.3805
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 3377,
+     "mean_pred": 0.4313,
+     "observed": 0.4738
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 1553,
+     "mean_pred": 0.537,
+     "observed": 0.6059
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 317,
+     "mean_pred": 0.6309,
+     "observed": 0.6404
+    }
+   ]
+  },
+  "shots>=4": {
+   "common_rows": 44924,
+   "model_raw": {
+    "n": 44924,
+    "base_rate": 0.1041,
+    "brier": 0.08314,
+    "log_loss": 0.28522,
+    "mean_pred": 0.0988
+   },
+   "model_platt": {
+    "n": 44924,
+    "base_rate": 0.1041,
+    "brier": 0.0832,
+    "log_loss": 0.28513,
+    "mean_pred": 0.0941
+   },
+   "baseline_last30_empirical": {
+    "n": 44924,
+    "base_rate": 0.1041,
+    "brier": 0.08437,
+    "log_loss": 0.29272,
+    "mean_pred": 0.1077
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 28263,
+     "mean_pred": 0.0478,
+     "observed": 0.0393
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 11243,
+     "mean_pred": 0.1435,
+     "observed": 0.1607
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 3893,
+     "mean_pred": 0.2398,
+     "observed": 0.2867
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 1317,
+     "mean_pred": 0.3387,
+     "observed": 0.4093
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 190,
+     "mean_pred": 0.4375,
+     "observed": 0.5
+    }
+   ],
+   "platt": [
+    1.045,
+    0.0279
+   ],
+   "baseline_live_formula": {
+    "n": 44924,
+    "base_rate": 0.1041,
+    "brier": 0.08434,
+    "log_loss": 0.29221,
+    "mean_pred": 0.0915
+   },
+   "calibration_live_formula": [
+    {
+     "bin": "0.0-0.1",
+     "n": 29740,
+     "mean_pred": 0.0409,
+     "observed": 0.0472
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 9873,
+     "mean_pred": 0.1422,
+     "observed": 0.1644
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 3650,
+     "mean_pred": 0.2434,
+     "observed": 0.2723
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 1387,
+     "mean_pred": 0.3439,
+     "observed": 0.3814
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 230,
+     "mean_pred": 0.4372,
+     "observed": 0.4348
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 39,
+     "mean_pred": 0.5373,
+     "observed": 0.6154
+    }
+   ]
+  },
+  "shots>=5": {
+   "common_rows": 44924,
+   "model_raw": {
+    "n": 44924,
+    "base_rate": 0.0463,
+    "brier": 0.04084,
+    "log_loss": 0.15702,
+    "mean_pred": 0.0403
+   },
+   "model_platt": {
+    "n": 44924,
+    "base_rate": 0.0463,
+    "brier": 0.04082,
+    "log_loss": 0.15693,
+    "mean_pred": 0.0408
+   },
+   "baseline_last30_empirical": {
+    "n": 44924,
+    "base_rate": 0.0463,
+    "brier": 0.0414,
+    "log_loss": 0.16434,
+    "mean_pred": 0.0481
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 40506,
+     "mean_pred": 0.0284,
+     "observed": 0.0306
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 3847,
+     "mean_pred": 0.1366,
+     "observed": 0.1705
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 521,
+     "mean_pred": 0.2292,
+     "observed": 0.3167
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 50,
+     "mean_pred": 0.3217,
+     "observed": 0.38
+    }
+   ],
+   "platt": [
+    1.0036,
+    0.0216
+   ],
+   "baseline_live_formula": {
+    "n": 44924,
+    "base_rate": 0.0463,
+    "brier": 0.04135,
+    "log_loss": 0.16423,
+    "mean_pred": 0.0378
+   },
+   "calibration_live_formula": [
+    {
+     "bin": "0.0-0.1",
+     "n": 40564,
+     "mean_pred": 0.0243,
+     "observed": 0.0319
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 3627,
+     "mean_pred": 0.144,
+     "observed": 0.1599
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 558,
+     "mean_pred": 0.2392,
+     "observed": 0.2706
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 158,
+     "mean_pred": 0.3182,
+     "observed": 0.2911
+    }
+   ]
+  },
+  "points>=1": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.349,
+    "brier": 0.20477,
+    "log_loss": 0.59739,
+    "mean_pred": 0.359
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.349,
+    "brier": 0.2041,
+    "log_loss": 0.59562,
+    "mean_pred": 0.3441
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.349,
+    "brier": 0.20699,
+    "log_loss": 0.6024,
+    "mean_pred": 0.351
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.1-0.2",
+     "n": 3433,
+     "mean_pred": 0.1755,
+     "observed": 0.1474
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 13923,
+     "mean_pred": 0.2535,
+     "observed": 0.215
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 13486,
+     "mean_pred": 0.3468,
+     "observed": 0.3194
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 8559,
+     "mean_pred": 0.4466,
+     "observed": 0.4691
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 5444,
+     "mean_pred": 0.5434,
+     "observed": 0.5907
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 1517,
+     "mean_pred": 0.6331,
+     "observed": 0.6796
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 256,
+     "mean_pred": 0.7334,
+     "observed": 0.7852
+    }
+   ],
+   "platt": [
+    1.1232,
+    -0.004
+   ]
+  },
+  "points>=2": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.0902,
+    "brier": 0.07552,
+    "log_loss": 0.2678,
+    "mean_pred": 0.0865
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.0902,
+    "brier": 0.07551,
+    "log_loss": 0.26767,
+    "mean_pred": 0.0851
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.0902,
+    "brier": 0.07644,
+    "log_loss": 0.27462,
+    "mean_pred": 0.0907
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 32145,
+     "mean_pred": 0.0502,
+     "observed": 0.0439
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 11154,
+     "mean_pred": 0.1417,
+     "observed": 0.1597
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 2864,
+     "mean_pred": 0.235,
+     "observed": 0.2839
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 385,
+     "mean_pred": 0.3399,
+     "observed": 0.4364
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 74,
+     "mean_pred": 0.4221,
+     "observed": 0.4459
+    }
+   ],
+   "platt": [
+    1.022,
+    0.0284
+   ]
+  },
+  "goals>=1": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.1528,
+    "brier": 0.121,
+    "log_loss": 0.39554,
+    "mean_pred": 0.1549
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.1528,
+    "brier": 0.12099,
+    "log_loss": 0.39546,
+    "mean_pred": 0.1505
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.1528,
+    "brier": 0.12264,
+    "log_loss": 0.40224,
+    "mean_pred": 0.1538
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 14313,
+     "mean_pred": 0.0615,
+     "observed": 0.0597
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 18899,
+     "mean_pred": 0.1486,
+     "observed": 0.1365
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 10251,
+     "mean_pred": 0.2404,
+     "observed": 0.2491
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 3048,
+     "mean_pred": 0.3355,
+     "observed": 0.3596
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 111,
+     "mean_pred": 0.4183,
+     "observed": 0.3694
+    }
+   ],
+   "platt": [
+    1.0265,
+    0.0045
+   ]
+  },
+  "assists>=1": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.2419,
+    "brier": 0.17129,
+    "log_loss": 0.52159,
+    "mean_pred": 0.2473
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.2419,
+    "brier": 0.17115,
+    "log_loss": 0.52095,
+    "mean_pred": 0.2365
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.2419,
+    "brier": 0.17333,
+    "log_loss": 0.52738,
+    "mean_pred": 0.2431
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 184,
+     "mean_pred": 0.0925,
+     "observed": 0.0815
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 16702,
+     "mean_pred": 0.1631,
+     "observed": 0.1398
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 18083,
+     "mean_pred": 0.2441,
+     "observed": 0.2331
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 8337,
+     "mean_pred": 0.342,
+     "observed": 0.365
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 2711,
+     "mean_pred": 0.4387,
+     "observed": 0.4858
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 523,
+     "mean_pred": 0.5347,
+     "observed": 0.5679
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 82,
+     "mean_pred": 0.6177,
+     "observed": 0.6951
+    }
+   ],
+   "platt": [
+    1.0697,
+    0.0122
+   ]
+  },
+  "hits>=1": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.5748,
+    "brier": 0.205,
+    "log_loss": 0.59576,
+    "mean_pred": 0.6062
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.5748,
+    "brier": 0.20001,
+    "log_loss": 0.58463,
+    "mean_pred": 0.5785
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.5748,
+    "brier": 0.1993,
+    "log_loss": 0.58281,
+    "mean_pred": 0.5836
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.2-0.3",
+     "n": 41,
+     "mean_pred": 0.2871,
+     "observed": 0.0976
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 2333,
+     "mean_pred": 0.3695,
+     "observed": 0.1856
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 9260,
+     "mean_pred": 0.4545,
+     "observed": 0.3156
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 11517,
+     "mean_pred": 0.5494,
+     "observed": 0.4825
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 11128,
+     "mean_pred": 0.6501,
+     "observed": 0.6706
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 8186,
+     "mean_pred": 0.7454,
+     "observed": 0.8019
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 3920,
+     "mean_pred": 0.8412,
+     "observed": 0.9245
+    },
+    {
+     "bin": "0.9-1.0",
+     "n": 237,
+     "mean_pred": 0.9227,
+     "observed": 0.9789
+    }
+   ],
+   "platt": [
+    1.2257,
+    -0.2136
+   ]
+  },
+  "hits>=2": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.2948,
+    "brier": 0.1655,
+    "log_loss": 0.50297,
+    "mean_pred": 0.2982
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.2948,
+    "brier": 0.16306,
+    "log_loss": 0.49374,
+    "mean_pred": 0.2761
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.2948,
+    "brier": 0.16305,
+    "log_loss": 0.49548,
+    "mean_pred": 0.3038
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 1494,
+     "mean_pred": 0.0853,
+     "observed": 0.0167
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 13260,
+     "mean_pred": 0.1532,
+     "observed": 0.0799
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 11789,
+     "mean_pred": 0.2472,
+     "observed": 0.216
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 9108,
+     "mean_pred": 0.348,
+     "observed": 0.3713
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 5677,
+     "mean_pred": 0.4457,
+     "observed": 0.5151
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 3217,
+     "mean_pred": 0.5453,
+     "observed": 0.6546
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 1704,
+     "mean_pred": 0.643,
+     "observed": 0.7981
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 306,
+     "mean_pred": 0.7325,
+     "observed": 0.8987
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 67,
+     "mean_pred": 0.8249,
+     "observed": 0.9552
+    }
+   ],
+   "platt": [
+    1.2627,
+    0.071
+   ]
+  },
+  "hits>=3": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.1439,
+    "brier": 0.10033,
+    "log_loss": 0.32744,
+    "mean_pred": 0.1349
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.1439,
+    "brier": 0.09971,
+    "log_loss": 0.32475,
+    "mean_pred": 0.1306
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.1439,
+    "brier": 0.09896,
+    "log_loss": 0.32644,
+    "mean_pred": 0.1502
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 23178,
+     "mean_pred": 0.0541,
+     "observed": 0.0316
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 13234,
+     "mean_pred": 0.1444,
+     "observed": 0.1421
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 5904,
+     "mean_pred": 0.2435,
+     "observed": 0.3047
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 2705,
+     "mean_pred": 0.3456,
+     "observed": 0.4599
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 1264,
+     "mean_pred": 0.4435,
+     "observed": 0.6242
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 235,
+     "mean_pred": 0.5331,
+     "observed": 0.7532
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 96,
+     "mean_pred": 0.6469,
+     "observed": 0.8542
+    }
+   ],
+   "platt": [
+    1.0995,
+    0.1139
+   ]
+  },
+  "blocks>=1": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.4899,
+    "brier": 0.21801,
+    "log_loss": 0.62615,
+    "mean_pred": 0.4975
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.4899,
+    "brier": 0.21802,
+    "log_loss": 0.62616,
+    "mean_pred": 0.4976
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.4899,
+    "brier": 0.22297,
+    "log_loss": 0.63704,
+    "mean_pred": 0.498
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.2-0.3",
+     "n": 3872,
+     "mean_pred": 0.2746,
+     "observed": 0.2601
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 14740,
+     "mean_pred": 0.3507,
+     "observed": 0.3378
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 10011,
+     "mean_pred": 0.4429,
+     "observed": 0.4434
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 2871,
+     "mean_pred": 0.5417,
+     "observed": 0.5409
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 5611,
+     "mean_pred": 0.6573,
+     "observed": 0.6302
+    },
+    {
+     "bin": "0.7-0.8",
+     "n": 7325,
+     "mean_pred": 0.7475,
+     "observed": 0.7453
+    },
+    {
+     "bin": "0.8-0.9",
+     "n": 2188,
+     "mean_pred": 0.8249,
+     "observed": 0.8519
+    }
+   ],
+   "platt": [
+    0.9985,
+    0.0005
+   ]
+  },
+  "blocks>=2": {
+   "common_rows": 46622,
+   "model_raw": {
+    "n": 46622,
+    "base_rate": 0.1934,
+    "brier": 0.13153,
+    "log_loss": 0.4171,
+    "mean_pred": 0.199
+   },
+   "model_platt": {
+    "n": 46622,
+    "base_rate": 0.1934,
+    "brier": 0.13155,
+    "log_loss": 0.41719,
+    "mean_pred": 0.1996
+   },
+   "baseline_last30_empirical": {
+    "n": 46622,
+    "base_rate": 0.1934,
+    "brier": 0.13437,
+    "log_loss": 0.42654,
+    "mean_pred": 0.2004
+   },
+   "calibration_raw": [
+    {
+     "bin": "0.0-0.1",
+     "n": 18069,
+     "mean_pred": 0.0703,
+     "observed": 0.0632
+    },
+    {
+     "bin": "0.1-0.2",
+     "n": 12215,
+     "mean_pred": 0.1343,
+     "observed": 0.1371
+    },
+    {
+     "bin": "0.2-0.3",
+     "n": 3197,
+     "mean_pred": 0.2582,
+     "observed": 0.2315
+    },
+    {
+     "bin": "0.3-0.4",
+     "n": 5869,
+     "mean_pred": 0.3512,
+     "observed": 0.3173
+    },
+    {
+     "bin": "0.4-0.5",
+     "n": 4875,
+     "mean_pred": 0.4457,
+     "observed": 0.4531
+    },
+    {
+     "bin": "0.5-0.6",
+     "n": 2217,
+     "mean_pred": 0.5393,
+     "observed": 0.576
+    },
+    {
+     "bin": "0.6-0.7",
+     "n": 177,
+     "mean_pred": 0.6193,
+     "observed": 0.6215
+    }
+   ],
+   "platt": [
+    0.9876,
+    -0.0099
+   ]
+  }
+ },
+ "expected_value_accuracy": {
+  "shots": {
+   "mae_model": 1.0279,
+   "n": 46622
+  },
+  "points": {
+   "mae_model": 0.5406,
+   "n": 46622
+  },
+  "goals": {
+   "mae_model": 0.2736,
+   "n": 46622
+  },
+  "assists": {
+   "mae_model": 0.412,
+   "n": 46622
+  },
+  "hits": {
+   "mae_model": 0.893,
+   "n": 46622
+  },
+  "blocks": {
+   "mae_model": 0.7266,
+   "n": 46622
+  },
+  "toi": {
+   "mae_model": 1.978,
+   "n": 46622
+  },
+  "toi_pp": {
+   "mae_model": 0.783,
+   "n": 46622
+  }
+ },
+ "splits": {
+  "games_prior_5_to_19": {
+   "shots>=2": {
+    "n": 1698,
+    "base_rate": 0.2815,
+    "brier": 0.19935,
+    "log_loss": 0.58707,
+    "mean_pred": 0.3697
+   },
+   "shots>=3": {
+    "n": 1698,
+    "base_rate": 0.1078,
+    "brier": 0.09365,
+    "log_loss": 0.33061,
+    "mean_pred": 0.1548
+   },
+   "points>=1": {
+    "n": 1698,
+    "base_rate": 0.2362,
+    "brier": 0.18044,
+    "log_loss": 0.54593,
+    "mean_pred": 0.2977
+   },
+   "goals>=1": {
+    "n": 1698,
+    "base_rate": 0.1095,
+    "brier": 0.09715,
+    "log_loss": 0.34159,
+    "mean_pred": 0.1251
+   },
+   "hits>=2": {
+    "n": 1698,
+    "base_rate": 0.3086,
+    "brier": 0.1961,
+    "log_loss": 0.57554,
+    "mean_pred": 0.2765
+   },
+   "blocks>=1": {
+    "n": 1698,
+    "base_rate": 0.434,
+    "brier": 0.23344,
+    "log_loss": 0.65947,
+    "mean_pred": 0.4431
+   }
+  },
+  "games_prior_20_plus": {
+   "shots>=2": {
+    "n": 44924,
+    "base_rate": 0.4325,
+    "brier": 0.21196,
+    "log_loss": 0.61316,
+    "mean_pred": 0.447
+   },
+   "shots>=3": {
+    "n": 44924,
+    "base_rate": 0.2229,
+    "brier": 0.14917,
+    "log_loss": 0.46253,
+    "mean_pred": 0.2228
+   },
+   "points>=1": {
+    "n": 44924,
+    "base_rate": 0.3533,
+    "brier": 0.20569,
+    "log_loss": 0.59933,
+    "mean_pred": 0.3613
+   },
+   "goals>=1": {
+    "n": 44924,
+    "base_rate": 0.1545,
+    "brier": 0.1219,
+    "log_loss": 0.39758,
+    "mean_pred": 0.156
+   },
+   "hits>=2": {
+    "n": 44924,
+    "base_rate": 0.2942,
+    "brier": 0.16435,
+    "log_loss": 0.50023,
+    "mean_pred": 0.299
+   },
+   "blocks>=1": {
+    "n": 44924,
+    "base_rate": 0.492,
+    "brier": 0.21743,
+    "log_loss": 0.62489,
+    "mean_pred": 0.4995
+   }
+  },
+  "role_changed": {
+   "shots>=2": {
+    "n": 1553,
+    "base_rate": 0.3181,
+    "brier": 0.202,
+    "log_loss": 0.59181,
+    "mean_pred": 0.3464
+   },
+   "shots>=3": {
+    "n": 1553,
+    "base_rate": 0.1236,
+    "brier": 0.10261,
+    "log_loss": 0.35068,
+    "mean_pred": 0.1425
+   },
+   "points>=1": {
+    "n": 1553,
+    "base_rate": 0.2505,
+    "brier": 0.1807,
+    "log_loss": 0.5453,
+    "mean_pred": 0.281
+   },
+   "goals>=1": {
+    "n": 1553,
+    "base_rate": 0.0972,
+    "brier": 0.08753,
+    "log_loss": 0.31441,
+    "mean_pred": 0.1178
+   },
+   "hits>=2": {
+    "n": 1553,
+    "base_rate": 0.3406,
+    "brier": 0.17836,
+    "log_loss": 0.53251,
+    "mean_pred": 0.3079
+   },
+   "blocks>=1": {
+    "n": 1553,
+    "base_rate": 0.4495,
+    "brier": 0.22549,
+    "log_loss": 0.64258,
+    "mean_pred": 0.4529
+   }
+  },
+  "role_stable": {
+   "shots>=2": {
+    "n": 45069,
+    "base_rate": 0.4308,
+    "brier": 0.21183,
+    "log_loss": 0.61291,
+    "mean_pred": 0.4476
+   },
+   "shots>=3": {
+    "n": 45069,
+    "base_rate": 0.2219,
+    "brier": 0.14869,
+    "log_loss": 0.46141,
+    "mean_pred": 0.223
+   },
+   "points>=1": {
+    "n": 45069,
+    "base_rate": 0.3524,
+    "brier": 0.2056,
+    "log_loss": 0.59918,
+    "mean_pred": 0.3617
+   },
+   "goals>=1": {
+    "n": 45069,
+    "base_rate": 0.1547,
+    "brier": 0.12215,
+    "log_loss": 0.39834,
+    "mean_pred": 0.1562
+   },
+   "hits>=2": {
+    "n": 45069,
+    "base_rate": 0.2932,
+    "brier": 0.16506,
+    "log_loss": 0.50195,
+    "mean_pred": 0.2979
+   },
+   "blocks>=1": {
+    "n": 45069,
+    "base_rate": 0.4913,
+    "brier": 0.21775,
+    "log_loss": 0.62558,
+    "mean_pred": 0.499
+   }
+  }
+ },
+ "platt_params": {
+  "shots>=1": [
+   1.0118,
+   -0.1291
+  ],
+  "shots>=2": [
+   1.1504,
+   -0.0769
+  ],
+  "shots>=3": [
+   1.1123,
+   0.0237
+  ],
+  "shots>=4": [
+   1.045,
+   0.0279
+  ],
+  "shots>=5": [
+   1.0036,
+   0.0216
+  ],
+  "points>=1": [
+   1.1232,
+   -0.004
+  ],
+  "points>=2": [
+   1.022,
+   0.0284
+  ],
+  "goals>=1": [
+   1.0265,
+   0.0045
+  ],
+  "assists>=1": [
+   1.0697,
+   0.0122
+  ],
+  "hits>=1": [
+   1.2257,
+   -0.2136
+  ],
+  "hits>=2": [
+   1.2627,
+   0.071
+  ],
+  "hits>=3": [
+   1.0995,
+   0.1139
+  ],
+  "blocks>=1": [
+   0.9985,
+   0.0005
+  ],
+  "blocks>=2": [
+   0.9876,
+   -0.0099
+  ]
+ },
+ "elapsed_seconds": 67.0
+}
