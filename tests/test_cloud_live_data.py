@@ -594,7 +594,10 @@ class TestOptInAndScheduling(unittest.TestCase):
 
     def test_the_pregame_refresh_is_not_a_publish_trigger(self):
         src = (REPO / "operational" / "nhl_sync.py").read_text()
-        self.assertNotIn("cloud_publish_hook", src)
+        # 2026-10-08: the daily and midday syncs now refresh the published status; the 30-minute pregame refresh stays out (the trader's heartbeat covers it).
+        self.assertIn('if args.mode in ("full", "midday")', src)
+        self.assertEqual(src.count("cloud_publish_hook"), 2)               # the import and the one call, both inside that guard
+        self.assertLess(src.index('if args.mode in ("full", "midday")'), src.index("cloud_publish_hook"))
         for name in ("live_odds_daily_pull.py", "settle_daily_observations.py", "daily_postmortem.py"):
             self.assertIn("cloud_publish_hook", (REPO / "operational" / name).read_text(), name)
 

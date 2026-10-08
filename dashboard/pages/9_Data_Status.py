@@ -1,8 +1,9 @@
-"""Page 9 — Data Status: is today's hockey data current, and exactly
-when did the engine obtain it? Reads a cached snapshot only — see
-DAILY_OPERATIONAL_SYNC_REPORT.md."""
+"""Page 9 — Data Status: one coherent status per source — how far its data runs, when it was last fetched, how old it is right now, when it refreshes next, and
+why it is not current if it is not. States are derived from the sources' own evidence timestamps at the moment the page is opened, so a badge ages by itself.
+Technical detail (the evidence, the once-a-day readiness cache, job health) is on Diagnostics. This page never makes a network call or spends a credit."""
 from __future__ import annotations
 
+import datetime as dt
 import sys
 from pathlib import Path
 
@@ -15,108 +16,63 @@ import streamlit as st
 from dashboard import auth
 from dashboard import cloud_snapshot
 from dashboard import components as comp
-from dashboard import data_status_view as dv
-from operational import ingestion_health
+from dashboard import ui
 from operational import runtime_mode
+from operational import source_status as ss
 
-# Community Cloud: an operational surface, ADMIN-only (server-side; the nav omission is only UX).
 if runtime_mode.is_community_cloud():
     auth.require_admin()
 
 st.title("Data Status")
 comp.render_model_status_header()
-st.markdown(
-    """
-    <div style="border:1px solid #232d38; border-radius:6px; padding:8px 12px;
-                background:#10151c; color:#8c99a8; font-size:0.85rem; margin-bottom:12px;">
-      Answers "do I have all of today's required hockey data, and exactly when did I obtain it?"
-      Reads a cached snapshot only — this page never makes a network call. Refresh explicitly with:
-      <code>python3 sync_daily.py</code>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
 
 if runtime_mode.is_community_cloud():
-    # Community Cloud has no caches of its own: this is the LOCAL ENGINE's data status as
-    # published in the snapshot (see the banner for how current that is).
     try:
-        _ds = cloud_snapshot.data_status_section()
+        doc = cloud_snapshot.data_status_section().get("sources")
     except cloud_snapshot.SnapshotUnavailable as _exc:
         st.warning(f"Data status is not available in the snapshot currently being served ({_exc}).")
         st.stop()
-    cache = _ds.get("readiness_cache")
 else:
-    _ds = None
-    cache = dv.load_readiness_cache()
-if cache is None:
-    st.info("No sync has been run yet. Run `python3 sync_daily.py` to populate this page.")
+    doc = ss.build()
+if not doc:
+    st.info("The status evidence has not been published yet. It is rebuilt every time the engine publishes (about every 25 minutes).")
     st.stop()
 
-readiness = cache["readiness"]
-nhl = cache["nhl_sync"]
-mp = cache["moneypuck_sync"]
+now = dt.datetime.now(dt.timezone.utc)
+preview = ss.parse(st.query_params.get("as_of")) if st.query_params.get("as_of") else None
+if preview is not None:
+    now = preview
+view = ss.evaluate(doc, now)
 
-st.caption(f"Last sync generated at (UTC): {readiness['generated_at_utc']}")
-
-STATUS_COLOR = {"CURRENT": "#3ecf8e", "PROJECTED": "#3ecf8e", "NO_CHANGE": "#3ecf8e",
-                 "STALE": "#e8b84f", "NOT_REFRESHED": "#e8b84f",
-                 "UNAVAILABLE": "#f0654f", "REQUIRES_PERMISSION": "#f0654f",
-                 "SUCCESS": "#3ecf8e", "PARTIAL_SUCCESS": "#e8b84f", "FAILED": "#f0654f"}
-
-
-def badge(status: str) -> str:
-    color = STATUS_COLOR.get(status, "#8c99a8")
-    return f'<span style="color:{color}; font-family:monospace; font-weight:600;">{status}</span>'
-
-
-rows = [
-    ("NHL Schedule", readiness["nhl_schedule"]["status"], readiness["nhl_schedule"].get("window", "")),
-    ("NHL Results", readiness["nhl_results"]["status"],
-     f"{readiness['nhl_results'].get('games_finalized_this_run', 0)} finalized this run"),
-    ("MoneyPuck Team", readiness["moneypuck_team"]["status"], readiness["moneypuck_team"].get("reason", "")),
-    ("MoneyPuck Skater", readiness["moneypuck_skater"]["status"], readiness["moneypuck_skater"].get("reason", "")),
-    ("MoneyPuck Goalie", readiness["moneypuck_goalie"]["status"], readiness["moneypuck_goalie"].get("reason", "")),
-    ("Odds (The Odds API)", readiness["odds"]["status"], readiness["odds"].get("reason", "")),
-    ("Starter Intelligence", readiness["starter_intelligence"]["status"],
-     readiness["starter_intelligence"].get("reason", "")),
-]
-for label, status, detail in rows:
-    c1, c2, c3 = st.columns([2, 1, 3])
-    c1.markdown(f"**{label}**")
-    c2.markdown(badge(status), unsafe_allow_html=True)
-    c3.caption(detail)
-st.caption("Odds (The Odds API) above reflects the sync-job readiness cache (24h staleness threshold) — "
-           "a DIFFERENT cache and threshold from Today's own per-price \"MARKET FRESHNESS\" banner "
-           "(a tighter, puck-drop-relative window). Both are honest, real freshness checks; they answer "
-           "different questions and can legitimately disagree.")
-
-st.divider()
-st.markdown("### Last NHL sync detail")
-st.json(nhl)
-if mp:
-    st.markdown("### Last MoneyPuck sync detail")
-    st.json(mp)
-
-st.divider()
-st.markdown("### Scheduled ingestion job health")
-st.caption("P0.1 (2026-09-24 hardening block): last attempt, last success, status, and data age per "
-           "scheduled component -- read from a local cache only, same no-network-call rule as the "
-           "rest of this page. A component with no row here has never run since this cache was last "
-           "cleared, not necessarily an error.")
-health = _ds.get("ingestion_health") if _ds is not None else ingestion_health.load_health()
-if not health:
-    st.caption("No scheduled job has recorded a run yet.")
+if preview is not None:
+    st.warning(f"PREVIEW: these states are evaluated as of {view['as_of_utc']}, not now, using the evidence the engine last published. Remove `as_of` from the address to return to now.")
+if view["snapshot_stale"]:
+    st.error(f"STATUS SNAPSHOT IS STALE: the engine last published this status {ss._fmt_age(view['snapshot_age_min'])} ago (it normally publishes about every {int(doc.get('publish_interval_min', 25))} minutes). "
+             "The ages below are still calculated from the last evidence, so anything that has aged out shows as stale; refresh times shown may not have happened.")
 else:
-    for component, row in sorted(health.items()):
-        age_hours = ingestion_health.component_age_hours(row)
-        age_text = f"{age_hours:.1f}h ago" if age_hours is not None else "never succeeded"
-        c1, c2, c3, c4 = st.columns([2, 1, 2, 2])
-        c1.markdown(f"**{component}**")
-        c2.markdown(badge(row.get("last_status", "UNKNOWN")), unsafe_allow_html=True)
-        c3.caption(f"Last attempt: {row.get('last_attempt_utc', '—')}")
-        c4.caption(f"Last success: {row.get('last_success_utc', 'never')} ({age_text})")
-        if row.get("last_detail"):
-            st.caption(f"　　{row['last_detail']}")
+    st.caption(f"Status published {ss._fmt_age(view['snapshot_age_min'])} ago · evaluated {view['as_of_utc']} · ages are calculated when you open this page.")
 
+TONE = {ss.CURRENT: "good", ss.STALE: "bad", ss.NOT_DUE: "info", ss.DISABLED: "muted", ss.BUDGET_LIMITED: "warn", ss.BLOCKED: "bad", ss.UNAVAILABLE: "bad", ss.ESTIMATE: "muted"}
+LABEL = {ss.CURRENT: "Current", ss.STALE: "Stale", ss.NOT_DUE: "Not due", ss.DISABLED: "Disabled", ss.BUDGET_LIMITED: "Budget-limited", ss.BLOCKED: "Blocked",
+         ss.UNAVAILABLE: "Unavailable", ss.ESTIMATE: "Estimate"}
+
+
+def when(stamp: str | None) -> str:
+    t = ss.parse(stamp)
+    return "—" if t is None else ui.et_time(ss._iso(t), True)
+
+
+rows = []
+for r in view["rows"]:
+    nxt = "—"
+    if r["next_refresh_utc"]:
+        nxt = when(r["next_refresh_utc"]) + (" (overdue)" if r["next_overdue"] else "")
+    rows.append({"Source": r["label"], "Status": LABEL[r["state"]], "Data through": r["data_through"] or "—", "Last successful fetch": when(r["last_success_utc"]),
+                 "Age now": ss._fmt_age(r["age_min"]) if r["age_min"] is not None else "—", "Policy": f"≤ {ss._fmt_age(r['limit_min'])}" if r["limit_min"] else "—",
+                 "Next refresh": nxt, "Why": r["reason"] or ""})
+st.dataframe(rows, hide_index=True, width="stretch")
+st.markdown(" ".join(ui.chip(f"{LABEL[s]}: {sum(1 for r in view['rows'] if r['state'] == s)}", TONE[s]) for s in TONE if any(r["state"] == s for r in view["rows"])), unsafe_allow_html=True)
+st.caption("Current = inside the source's own freshness policy · Stale = past it · Not due = nothing needs it yet · Disabled = a feed that is switched off · "
+           "Budget-limited = the credit allowance or reserve does not allow a refresh · Estimate = a model estimate, not a source. "
+           "Policies differ by source on purpose: prices are judged in minutes (tighter near puck drop), daily files in hours. Technical detail is on Diagnostics.")
 comp.render_provenance_panel()
