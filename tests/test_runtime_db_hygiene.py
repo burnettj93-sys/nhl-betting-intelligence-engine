@@ -189,3 +189,44 @@ class TestGitStaysCleanAndRealRuntimeDbIsNeverTouchedByTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestResolvedPathCannotSilentlyCreateOrUseTheWrongDatabase(unittest.TestCase):
+    """2026-10-08: an empty data/nhl.db appeared because a connection to a path that did not exist created it. The resolved path must now be a usable database."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def test_missing_path_raises_and_creates_nothing(self):
+        target = self.tmp / "nhl.db"
+        with mock.patch.object(db, "DB_PATH", target):
+            with self.assertRaises(db.WrongDatabaseError):
+                db.get_conn()
+        self.assertFalse(target.exists())
+
+    def test_empty_file_raises(self):
+        target = self.tmp / "nhl.db"
+        target.write_bytes(b"")
+        with mock.patch.object(db, "DB_PATH", target), self.assertRaises(db.WrongDatabaseError) as cm:
+            db.get_conn()
+        self.assertIn("0 bytes", str(cm.exception))
+
+    def test_a_database_without_games_raises(self):
+        import sqlite3
+        target = self.tmp / "other.db"
+        c = sqlite3.connect(target)
+        c.execute("CREATE TABLE unrelated (x)")
+        c.commit()
+        c.close()
+        with mock.patch.object(db, "DB_PATH", target), self.assertRaises(db.WrongDatabaseError):
+            db.get_conn()
+
+    def test_init_db_creates_on_purpose_and_the_result_is_usable(self):
+        target = self.tmp / "fresh.db"
+        db.init_db(db_path=target).close()
+        with mock.patch.object(db, "DB_PATH", target):
+            db.get_conn().close()
+
+    def test_explicit_paths_are_the_callers_choice(self):
+        db.get_conn(self.tmp / "explicit.db").close()

@@ -46,10 +46,11 @@ _ROWS = [
         "identity_mapping": ("OK", "Goalie name + team."),
         "projection": ("OK", "goalie-team-v1: raw probabilities beat both baselines at every threshold 20+ to 35+ on the held-out 2025-26 "
                              "season; the fitted calibration did not help, so it is not used (docs/validation/goalie_team_validation.json)."),
-        "context_confirmation": ("PARTIAL", "Daily Faceoff's public starting-goalies page is read automatically (operational/dailyfaceoff.py). A start counts as "
-                                            "CONFIRMED only when the cited source is the team's own post; a beat reporter's \"Confirmed\" is kept as an expectation "
-                                            "unless the owner opts in (on 2026-10-08, 1 of 11 Confirmed labels was team-sourced). A person can still record a "
-                                            "confirmation with its source and time (operational/goalie_confirmations.py)."),
+        "context_confirmation": ("PARTIAL", "Daily Faceoff's public starting-goalies page can be read automatically (operational/dailyfaceoff.py; OFF until the owner opts in "
+                                            "because the site's network terms restrict automated access). A start counts as CONFIRMED only with an identifiable source "
+                                            "(the team, or a recognized beat reporter, with a name and link), a fresh timestamp and text that names the goalie, and no later "
+                                            "report naming another goalie. A person can also record a confirmation with its source and time "
+                                            "(operational/goalie_confirmations.py)."),
         "eligibility": ("PARTIAL", "The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded (team-post or manual) confirmation."),
         "settlement": ("OK", "GOALIE_SAVES_<k>PLUS; a goalie who does not play voids that leg."),
     },
@@ -75,15 +76,18 @@ _ROWS = [
     {
         "market": "Puck line", "family": "PUCK_LINE",
         "ontario_menu": "Listed (verified), plus alternate lines.",
-        "prices": ("MISSING", "The spreads market is never requested from the odds provider."),
+        "prices": ("MISSING", "The spreads market is never requested from the odds provider, so no real payload exists to certify. A shape validator "
+                              "(research/generic_prop_pricing/puck_line_contract.py) and an owner-run one-credit capture script (deploy/capture_puck_line_contract.py) are built; "
+                              "the capture was not run because it spends a credit."),
         "identity_mapping": ("OK", "Team abbreviations would reuse the moneyline mapping."),
         "projection": ("MISSING", "The Poisson margin model did NOT beat the base rate on held-out 2025-26 games (kept on record: docs/validation/goalie_team_validation.json). "
                                   "A direct-logistic alternative (puck-line-direct-v1) beats the base rate on two earlier development folds but has had no untouched "
                                   "evaluation: its parameters are frozen and it is scored only on 2026-27 games as they finish (docs/validation/puck_line_alternative.json). "
-                                  "Not enabled."),
+                                  "Not enabled; the prediction is unvalidated."),
         "context_confirmation": ("PARTIAL", "Same unconfirmed-starter situation as moneyline (widened band, no gate)."),
-        "eligibility": ("MISSING", "Not in the contract allowlist; no certified contract."),
-        "settlement": ("MISSING", "No resolver for margin lines."),
+        "eligibility": ("MISSING", "Not in the contract allowlist; no certified contract (and, separately, no validated prediction)."),
+        "settlement": ("OK", "Built and tested: operational/outcome_resolver.py::resolve_puck_line on the official final score (extra-time margin is one goal), "
+                             "mapped from the ledger leg (PUCK_LINE, team, signed line). Not used by any ticket because the market is not enabled."),
     },
     {
         "market": "Points (1+, 2+)", "family": "PLAYER_POINTS",
@@ -161,7 +165,7 @@ def render_markdown() -> str:
             "* Saves have a validated model but need a confirmed starting goalie (the team's own post read automatically, or a person records",
             "  the source and time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic",
             "  widened band instead.",
-            "* Puck line is unmet: no prices requested, no validated margin model (the alternative is awaiting untouched 2026-27 evidence), no settlement resolver.",
+            "* Puck line is unmet: no prices requested (so no certified contract), no validated margin model (the alternative is awaiting untouched 2026-27 evidence). Settlement is built and tested.",
             "* Anytime goals is built end to end (certified contract, leg, settlement) but its prices are captured only when the credit month balances; today it does not.",
             "* An empty board on a day with few priced shots legs is a correct result, not a bug.", ""]
     return "\n".join(out)

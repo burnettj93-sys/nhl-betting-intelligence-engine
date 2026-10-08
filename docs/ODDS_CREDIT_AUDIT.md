@@ -41,28 +41,47 @@ Findings:
 * At the trader's measured 4.4 captured games per day: **+4.4 credits/day** if added to the shots + points call. If added only to the second sweep (the freshest window, 45–75 min out)
   about half of that.
 
-## 4. Bounded allocation (implemented)
+## 4. The credit plan (implemented 2026-10-08, `operational/credit_planner.py`)
 
-Optional markets (today: anytime goals) may be captured only when the month still balances after their cost:
+**Duplicates and unnecessary refreshes found** (Oct 1–8): shots (alternate) was bought by two jobs for the same game (trader with points; both prop sweeps with saves); the 3–4.5 h "first" sweep bought
+shots and saves hours before any starter is confirmed and before a price taken then could still be fresh at the decision; prop captures refreshed every ~55–105 minutes as a price neared its freshness limit
+(up to four captures a game); each job could borrow up to 3× the even daily pace on its own; the display-only moneyline refresh ran every 75–150 minutes; the shots + points call and the sweeps were unaware of one another.
 
-`allow = (trailing_daily_burn + extra_per_day) × days_left ≤ usable_credits`
+**What the plan does** (all recomputed from the provider's own remaining-credit header, so it corrects itself day to day):
 
-`operational/credit_allocation.py::goals_capture_decision` implements this rule. Today it evaluates **DENY**: need 729 credits against 277 usable (short 452; 350 of that shortfall exists
-without goals). The rule never reaches into the reserve and never lowers an existing market's cadence on its own.
+| Step | Spend | Rule |
+|---|---|---|
+| Day budget D | `(remaining + spent today − 20 reserve) / days left at the start of today` | anchored to the start of the day so it does not shrink as the day's own spending happens |
+| 1. Moneyline decision pulls | up to 3 credits, always funded | the T-35 league-wide pull per start cluster (the decision feed). Never starved. |
+| 2. Display refresh | 1 credit (a second only once every game is priced) | the Games page moneyline age; lowest priority |
+| 3. Shots + points | 2 credits per game, **one capture per game** inside its actionable window (≤ 1.75 h before puck drop, fresh through puck drop) | games chosen wave by wave (a wave = puck drops within 90 minutes), one from each wave in turn, earliest first; the chosen set is saved for the day and not reshuffled |
+| 4. Saves | 1 credit, only for a game with a **confirmed** starter, in the 45–75 minute sweep | the first sweep is retired; sweeps no longer re-buy shots |
+| 5. Anytime goals | +1 credit for a game already priced in step 3 | after saves; only credits left over |
+| 6. Refresh | a second props capture | only with leftover credits |
 
-## 5. What it takes to price goals — decision for the owner (nothing was changed)
+Every paid job records its spend in a ledger (`credit_plan_ledger.jsonl`) and asks `credit_planner.authorize` first; the hard reserve always wins. Timestamp safeguards are untouched (provider update time, retrieval time, freshness limits).
 
-| Option | Credits/day | Month balance (Oct 8 → Nov 1) | Cost of the option |
+**What fits** (2026-10-08, 297 credits remaining, 24 days to the reset): D = 11.5 credits/day.
+
+| Games that day | Credits needed: required markets for every game (decision 3 + display 1 + 2/game) | Credits needed: everything (+ saves for confirmed starters, goals, second refresh) | Games priced with D = 11.5 |
 |---|---|---|---|
-| A. Status quo, no goals | 27.0 | −350 (pricing stops ≈ Oct 19) | none; but all paid pricing ends 12 days early |
-| B. Hold to the even pace, no goals | 11.9 | 0 | roughly halves captures (about 4–5 games/night priced instead of all) |
-| C. Hold to the even pace, goals included, fewer games | 11.9 | 0 | goals priced, but only for the games the budget reaches |
-| D. Keep today's cadence + goals on a larger provider allowance | 31.4 | needs about 730 credits for the rest of the month (about 450 more than remain) | a paid plan change — not made; check the provider's current price list for the tier that covers it |
-| E. Merge shots into one per-game call (shots + points + saves + goals = 4 credits/game vs 4 today for shots/points + shots/saves) | ≈ 27 + 0 | −350 | goals at no extra cost, but still over budget; saves timing must move |
+| 4 | 12 | 20 | 3 of 4 |
+| 7 (typical) | 18 | 29 | 3 of 7 (+1 goals market) |
+| 12 | 28 | 44 | 3 of 12 |
 
-No spending limit or plan was changed. With the pipeline built (see MARKET_COVERAGE_AUDIT.md), pricing goals is a single configuration decision once the month balances.
+Shortfall to price every game with the required markets at 7 games a day: **6.5 credits/day, about 156 credits through the cycle**; for everything including goals and saves: about 420 credits. The month balances under the plan (it never reaches into the reserve); what it cannot do inside the existing allowance is price every game.
+
+## 5. Decision for the owner — trade-offs (nothing purchased or changed)
+
+| Option | Effect |
+|---|---|
+| A. Run the plan as built (no purchase) | Month balances. About 3 games priced on a 7-game night; goals for at most one of them; saves only on light nights. Tickets form from fewer games. |
+| B. Price more games, fewer markets | e.g. points only (1 credit/game): about 7 games priced, no shots ladder. Fewer legs per game, wider coverage. Requires choosing which market to drop. |
+| C. Larger provider allowance | Full coverage at 7 games a night needs about 29 credits/day (about 700 for the rest of the cycle). That is a plan change; check the provider's current price list. Not made. |
+| D. Accept running dry | The previous behaviour: full coverage until about Oct 19, then no paid pricing until Nov 1. |
+
+Anytime-goal pricing is therefore *built and allocated where it fits* (leftover credits on lighter nights); it is not blocked, and it is not affordable for every game within the current allowance.
 
 ## 6. Hygiene
 
-The credit position is shown on Diagnostics (admin) from `credit_allocation.status()`. The key-rotation blocker is unchanged: after rotating, run `python3 deploy/verify_odds_key.py`;
-a new key starts a new counter, which this module reads from the first response.
+The credit position and today's plan are shown on Diagnostics (admin). A new key starts a new counter, which the planner reads from the first response. The key-rotation blocker is unchanged: after rotating, run `python3 deploy/verify_odds_key.py`.

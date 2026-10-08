@@ -119,7 +119,7 @@ for side in ("away", "home"):
                       "Exp. GA": f"{pr['expected_goals_against']:.2f}" if pr else "—"})
     if grows:
         st.dataframe(grows, hide_index=True, width="stretch")
-        st.caption("Start chance is an estimate from recent usage and rest; no confirmation source is connected, so every goalie is Unconfirmed. Expected saves show the 80% range.")
+        st.caption("Start chance is an estimate from recent usage and rest. A goalie is Confirmed only on a fresh, sourced confirmation (team, recognized beat reporter, or a recorded manual one) with no later disagreeing report; otherwise Unconfirmed. Expected saves show the 80% range.")
     else:
         st.caption("No goalie data on file for this team.")
 

@@ -18,7 +18,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 | Shots on goal (standard two-sided) | PARTIAL | OK | PARTIAL | MISSING | OK | OK | yes |
 | Goalie saves | OK | OK | OK | PARTIAL | PARTIAL | OK | yes |
 | Moneyline | PARTIAL | OK | PARTIAL | PARTIAL | PARTIAL | OK | yes |
-| Puck line | MISSING | OK | MISSING | PARTIAL | MISSING | MISSING | no |
+| Puck line | MISSING | OK | MISSING | PARTIAL | MISSING | OK | no |
 | Points (1+, 2+) | OK | OK | OK | MISSING | OK | OK | yes |
 | Goals (anytime scorer) | PARTIAL | OK | OK | PARTIAL | OK | OK | yes |
 
@@ -36,7 +36,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Goalie saves
 * Ontario menu: Saves ladders listed (observed 24+ to 34+). The goalie model is validated across 20+ to 35+, which covers that ladder.
-* context confirmation: Daily Faceoff's public starting-goalies page is read automatically (operational/dailyfaceoff.py). A start counts as CONFIRMED only when the cited source is the team's own post; a beat reporter's "Confirmed" is kept as an expectation unless the owner opts in (on 2026-10-08, 1 of 11 Confirmed labels was team-sourced). A person can still record a confirmation with its source and time (operational/goalie_confirmations.py).
+* context confirmation: Daily Faceoff's public starting-goalies page can be read automatically (operational/dailyfaceoff.py; OFF until the owner opts in because the site's network terms restrict automated access). A start counts as CONFIRMED only with an identifiable source (the team, or a recognized beat reporter, with a name and link), a fresh timestamp and text that names the goalie, and no later report naming another goalie. A person can also record a confirmation with its source and time (operational/goalie_confirmations.py).
 * eligibility: The starter gate is unchanged and not bypassed: a leg exists only for a goalie with a recorded (team-post or manual) confirmation.
 
 ### Moneyline
@@ -48,11 +48,10 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Puck line
 * Ontario menu: Listed (verified), plus alternate lines.
-* prices: The spreads market is never requested from the odds provider.
-* projection: The Poisson margin model did NOT beat the base rate on held-out 2025-26 games (kept on record: docs/validation/goalie_team_validation.json). A direct-logistic alternative (puck-line-direct-v1) beats the base rate on two earlier development folds but has had no untouched evaluation: its parameters are frozen and it is scored only on 2026-27 games as they finish (docs/validation/puck_line_alternative.json). Not enabled.
+* prices: The spreads market is never requested from the odds provider, so no real payload exists to certify. A shape validator (research/generic_prop_pricing/puck_line_contract.py) and an owner-run one-credit capture script (deploy/capture_puck_line_contract.py) are built; the capture was not run because it spends a credit.
+* projection: The Poisson margin model did NOT beat the base rate on held-out 2025-26 games (kept on record: docs/validation/goalie_team_validation.json). A direct-logistic alternative (puck-line-direct-v1) beats the base rate on two earlier development folds but has had no untouched evaluation: its parameters are frozen and it is scored only on 2026-27 games as they finish (docs/validation/puck_line_alternative.json). Not enabled; the prediction is unvalidated.
 * context confirmation: Same unconfirmed-starter situation as moneyline (widened band, no gate).
-* eligibility: Not in the contract allowlist; no certified contract.
-* settlement: No resolver for margin lines.
+* eligibility: Not in the contract allowlist; no certified contract (and, separately, no validated prediction).
 
 ### Points (1+, 2+)
 * Ontario menu: Listed (verified), ladder 1-3. Only the 1+ and 2+ lines are modeled.
@@ -70,6 +69,6 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 * Saves have a validated model but need a confirmed starting goalie (the team's own post read automatically, or a person records
   the source and time). That gate is not bypassed. Moneyline is not blocked by missing goalie confirmation; it carries a heuristic
   widened band instead.
-* Puck line is unmet: no prices requested, no validated margin model (the alternative is awaiting untouched 2026-27 evidence), no settlement resolver.
+* Puck line is unmet: no prices requested (so no certified contract), no validated margin model (the alternative is awaiting untouched 2026-27 evidence). Settlement is built and tested.
 * Anytime goals is built end to end (certified contract, leg, settlement) but its prices are captured only when the credit month balances; today it does not.
 * An empty board on a day with few priced shots legs is a correct result, not a bug.

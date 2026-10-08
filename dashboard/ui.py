@@ -360,13 +360,18 @@ def est_pp(p: dict) -> str:
     return _PP_USAGE.get(p.get("pp_usage"), "—")
 
 
-def reported_line(p: dict) -> str:
+def _shown(p: dict):
     r = p.get("reported")
+    return r if r and r.get("status", "REPORTED") == "REPORTED" else None
+
+
+def reported_line(p: dict) -> str:
+    r = _shown(p)
     return (r.get("line") or "—") if r else "—"
 
 
 def reported_pp(p: dict) -> str:
-    r = p.get("reported")
+    r = _shown(p)
     return (r.get("pp") or "—") if r else "—"
 
 

@@ -135,7 +135,10 @@ def _save_state(state: dict, path: Path | None) -> None:
 
 
 def _default_guard(now: dt.datetime) -> dict:
-    from operational import odds_quota
+    """The display refresh is the lowest-priority spend: the credit plan allows it one credit a day (two when every game is priced)."""
+    from operational import credit_planner as cp, odds_quota
+    if cp.enforced():
+        return cp.authorize(cp.MONEYLINE_UI, 1, now, plan=cp.load_plan(cp._et_day(now.strftime("%Y-%m-%dT%H:%M:%SZ"))))
     return odds_quota.guard(planned=1, now=now)   # default (1.0x) soft pace -- T-35 keeps its own 3x priority
 
 

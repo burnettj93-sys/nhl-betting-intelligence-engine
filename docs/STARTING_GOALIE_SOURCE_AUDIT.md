@@ -1,27 +1,19 @@
 # Starting-Goalie Source Audit
 
-## Addendum 2026-10-08 — Daily Faceoff is reachable; the 2026-09-24 finding below is superseded for that source
+## Addendum 2026-10-08 — Daily Faceoff: reachable, policy-governed, and OFF until the owner opts in
 
-The original audit (kept below for the record) found Daily Faceoff blocked by Cloudflare. That is no longer true. Re-checked on 2026-10-08 with plain HTTP GETs and a descriptive User-Agent:
+The original audit (kept below for the record) found Daily Faceoff blocked by Cloudflare. That is no longer true technically, but a second finding now matters more.
 
-| Evidence | Result |
-|---|---|
-| `GET https://www.dailyfaceoff.com/starting-goalies/` | HTTP 200, server-rendered Next.js `__NEXT_DATA__` JSON; 10 games, 20 goalie slots |
-| `GET https://www.dailyfaceoff.com/teams/<slug>/line-combinations` (32 teams) | HTTP 200 each, same JSON structure |
-| `robots.txt` | `User-agent: *` → `Allow: /`; only `/api/` and `/cms/` are disallowed (this integration never touches them) |
-| Terms of use | No terms page could be located (the obvious URLs return 404). The owner should read whatever terms apply; the reader has a kill switch, `NHL_ENGINE_DAILYFACEOFF=OFF`, and is rate-limited (starters at most every 20 minutes, line combinations every 3 hours) |
-| What a goalie row carries | goalie, status word (Confirmed / Likely / blank), the newest news item's **source name, source URL and time** |
+**Access (checked 2026-10-08, plain HTTP GETs, descriptive User-Agent).** `/starting-goalies/` and `/teams/<slug>/line-combinations` (32 teams) return HTTP 200 with server-rendered Next.js JSON. `robots.txt` (`User-agent: *`): `Allow: /`; only `/api/` and `/cms/` are disallowed (never touched).
 
-**What the reader accepts as confirmation.** On 2026-10-08, 11 slots were labelled "Confirmed". Only 1 cited the team's own post (the Flyers); 10 cited named beat reporters (e.g. Russo, Whyno, Granger).
-`operational/dailyfaceoff.py` therefore records **CONFIRMED only when the cited source is the team itself**; a reporter's "Confirmed" and every "Likely" are recorded as EXPECTED, with the source kind kept.
-Accepting reporter-sourced confirmations is an owner decision (`NHL_ENGINE_ACCEPT_REPORTER_CONFIRMATIONS=ON`); it was not made for the owner. The gate (`features/point_in_time.goalie_status` for moneyline, the source-schema consensus for saves)
-is unchanged: a CONFIRMED row from this source, or from a person, is the only thing that opens it. An expectation never walks back a confirmation of the same goalie.
+**Terms — a concrete restriction.** Daily Faceoff belongs to The Nation Network (its footer says "Copyright © 2026 The Nation Network Ltd" and lists the network's sites). Daily Faceoff's own footer links only a privacy policy and its `/terms-of-use` path redirects to a 404. The network's Terms of Service, linked from its sister sites (https://oilersnation.com/terms-of-service, "Updated and Effective as of January 9th, 2019"), state that they govern "any and all of its subsidiaries, affiliates, brands and entities that it controls" and prohibit a user from: "(g) use any robot, spider, rover, scraper or any other data-mining technology or automatic or manual process to monitor, cache, frame, mask, extract data from, copy or distribute any data from the Services, our network or databases", and from making "any commercial use of (other than to keep and share information for your own non-commercial purposes) any content, materials, or databases from our network".
+`robots.txt` permission and a low request rate do **not** establish permission under those terms. For that reason the reader is **disabled by default** (`NHL_ENGINE_DAILYFACEOFF` unset ⇒ no request is ever made) and runs only after the owner sets `NHL_ENGINE_DAILYFACEOFF=ON` in `.env`, which is the owner's acknowledgment that they have read the terms and accept the use for personal, non-commercial research. A licensed alternative is Daily Faceoff/Nation Network directly (ask for data access) or RotoWire's API (Part 2 below). Roughly 150 requests were made to the site on 2026-10-08 while building and checking this integration, before the terms finding.
 
-**Is saves automation complete? No.** Automated confirmation now exists, but it covers only the starts a team posts itself (about 1 in 11 at the time of checking); the rest still need a person (the manual path is kept) or the owner's opt-in to
-reporter-sourced confirmations. Availability of the feed itself is verified (HTTP 200, parsed, ingested into `goalie_status_events` with source `dailyfaceoff:<word>|<TEAM|REPORTER>|<url>|<source name>`, shown with source and time on Goalies and Game Detail).
+**Confirmation policy (owner-set).** A row is CONFIRMED only when: the status word is "Confirmed"; the cited source is identifiable — the team itself (TEAM_POST) or a recognized beat reporter (RECOGNIZED_REPORTER; `operational/recognized_starter_sources.json`, matched by the account handle in the cited link, with a name and link) — never blank or unlisted; the item is no more than 30 hours old and not in the future; its text names the goalie; and the feed's last good fetch is under 90 minutes old. "Likely", blank and unsupported entries are stored as EXPECTED. Source name, link, time and basis are stored on every row (`dailyfaceoff:<word>|<basis>|<link>|<source name>`, effective time = the item's own time) and shown on Goalies and Game Detail. A later report from any source naming a different goalie turns the confirmation into a CONFLICT and the gate stays closed; an expectation naming the same goalie never walks a confirmation back. A recognized reporter whose confirmations were wrong 2 or more times in their last 10 resolved ones is suspended automatically (`operational/dailyfaceoff.py::source_record`). On 2026-10-08, of 11 "Confirmed" items, 1 cited the team and 10 cited named beat reporters (all 10 recognized, so all 11 qualify); 26 handles were seeded as recognized (2 excluded because the handle does not match the displayed name); the seed is a judgment, owner-editable.
 
-**Reported lineups** from the same source (forward lines, defense pairs, power-play and penalty-kill units, with the reporter and update time) are shown on Players separately from the estimated usage tiers; they are a reporter's published
-expectation for the next game, not a confirmed lineup.
+**The same standard for lineups and injuries.** A team's reported lineup is shown (line, pair, power-play and penalty-kill unit, injury flag) only when its source is identifiable and the report is under 48 hours old. On 2026-10-08, 14 of 32 team reports had no identifiable source (the site's automatic "Last Game (date)" lineup, or a label like "Projected") and were treated as UNSOURCED; they are never displayed as a reported line or unit.
+
+**Failure handling and caching.** A failed fetch keeps the last good copy with its own fetch time and records the cause; a dead feed (no good fetch in 90 minutes) withdraws every automated confirmation until it recovers; starters are fetched at most every 20 minutes and line combinations every 3 hours; tests never reach the site.
 
 ---
 

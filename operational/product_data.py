@@ -247,7 +247,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                    "season_source": {"name": "NHL.com player page", "fetched_at_utc": land.get("fetched_at_utc"),
                                      "last_ok_utc": land.get("last_ok_utc"), "error": land.get("error")},
                    "recent_starts": goalie_recent(tg_state, pid), "games_in_log": g.games if g else 0,
-                   "next_game": ng, "start": None, "projection": None, "confirmation": _confirmation(pid, team, ng, nhl)}
+                   "next_game": ng, "start": None, "projection": None, "confirmation": _confirmation(pid, team, ng, nhl, now)}
             if ng:
                 sp = {s["goalie_id"]: s for s in expected_starters(team, ng["date_et"])}
                 s = sp.get(pid)
@@ -265,7 +265,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         # ---- skaters
         from operational import dailyfaceoff
         lineup_state = lineup_state if lineup_state is not None else dailyfaceoff.load_state()
-        reported = reported_lineups(lineup_state, sk["players"])
+        reported = reported_lineups(lineup_state, sk["players"], now)
         players_out, by_team = {}, defaultdict(list)
         for pid, p in sk["players"].items():
             team = p["team"]
@@ -341,21 +341,28 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
             nhl.close()
 
 
-def reported_lineups(state: dict, skaters: dict[str, dict]) -> dict[str, dict]:
+def reported_lineups(state: dict, skaters: dict[str, dict], now: dt.datetime | None = None) -> dict[str, dict]:
     """{player_id: reported assignment} from the lineup source, kept apart from the estimated usage tiers.
 
-    A reported assignment is what a beat reporter published for the team's next game (forward line, defense pair, power-play and
-    penalty-kill unit), with the reporter, link and the time the report was updated; it is not what the player did last night and not
-    a guarantee of who will dress. Players the source does not list are simply absent, never filled in."""
+    A reported assignment is what an identifiable source (the team, or a recognized beat reporter, with a name and a link) published for the team's
+    next game: forward line / defense pair, power-play and penalty-kill unit, injury flag. It is shown only while the report is fresh (REPORTED).
+    A report with no identifiable source (e.g. the site's automatic "Last Game" lineup) is UNSOURCED and a report older than the limit is STALE;
+    both are carried with their reason but with every assignment blanked, never shown as a line or unit. Players the source does not list are
+    absent, never filled in."""
     from operational import dailyfaceoff
+    now = now or dt.datetime.now(dt.timezone.utc)
     teams = ((state.get("lines") or {}).get("teams")) or {}
     fetched = (state.get("lines") or {}).get("fetched_at_utc")
     out: dict[str, dict] = {}
     for team, t in teams.items():
-        matched = dailyfaceoff.observed_lineup(state, team, {pid: p for pid, p in skaters.items()})
+        matched = dailyfaceoff.observed_lineup(state, team, dict(skaters.items()), now)
         for pid, r in matched.items():
-            out[pid] = {"line": r["line"], "pp": r["pp"], "pk": r["pk"], "injury_status": r["injury_status"],
-                        "game_time_decision": r["game_time_decision"], "reported_by": t.get("reported_by"), "source_url": t.get("source_url"),
+            q = r["report"]
+            ok = q["status"] == "REPORTED"
+            out[pid] = {"status": q["status"], "basis": q["basis"], "age_hours": q["age_hours"],
+                        "line": r["line"] if ok else None, "pp": r["pp"] if ok else None, "pk": r["pk"] if ok else None,
+                        "injury_status": r["injury_status"] if ok else None, "game_time_decision": r["game_time_decision"] if ok else False,
+                        "reported_by": t.get("reported_by"), "source_url": t.get("source_url") if q["basis"] != "NO_SOURCE" else None,
                         "updated_at_utc": t.get("updated_at_utc"), "fetched_at_utc": fetched, "source": "Daily Faceoff line combinations"}
     return out
 
@@ -392,7 +399,15 @@ def _credit_budget(now: dt.datetime) -> dict | None:
         from operational import credit_allocation
         rows = credit_allocation.read_calls(since=now - dt.timedelta(days=credit_allocation.WINDOW_DAYS + 1))
         st = credit_allocation.status(now, rows=rows)
-        return {**st, "goals_decision": credit_allocation.goals_capture_decision(st, credit_allocation.captures_per_day(rows, now))}
+        from operational import credit_planner, eastern_time as _et
+        plan = credit_planner.load_plan(_et.eastern_today(now))
+        spent = credit_planner.spent_today(now)
+        return {**st, "goals_decision": credit_allocation.goals_capture_decision(st, credit_allocation.captures_per_day(rows, now)),
+                "plan": ({"day": plan["day"], "D": plan["budget"].get("D"), "games_today": plan["games_today"], "games_priced": len(plan["games_priced"]),
+                          "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]), "saves_games": len(plan["saves_games"]),
+                          "allowance": plan["allowance"], "shortfall_per_day_required_only": plan["shortfall_per_day_required_only"],
+                          "shortfall_per_day_everything": plan["shortfall_per_day_everything"]} if plan else None),
+                "spent_today_by_class": spent, "month_view": credit_planner.month_view(now, st["remaining"])}
     except Exception:  # noqa: BLE001
         return None
 
@@ -401,15 +416,23 @@ def _lineup_pipelines(state: dict) -> list[dict]:
     status = state.get("status") or "NOT_RUN"
     goalies = (state.get("goalies") or {})
     sides = [sd for g in goalies.get("games", []) for sd in g["sides"].values()]
-    team_confirmed = sum(1 for sd in sides if sd["status"] == "CONFIRMED")
-    reporter_confirmed = sum(1 for sd in sides if sd["status_word"].lower() == "confirmed" and sd["status"] != "CONFIRMED")
+    by_basis: dict[str, int] = {}
+    for sd in sides:
+        if sd["status_word"].lower() == "confirmed":
+            key = sd["basis"] if sd["status"] == "CONFIRMED" else f"{sd['basis']} (not accepted: {sd.get('rejected_because') or sd['basis']})"
+            by_basis[key] = by_basis.get(key, 0) + 1
+    note = f"status {status}" + (f"; {state['disabled_reason']}" if state.get("disabled_reason") else "") + (f"; last error: {state['last_error']}" if state.get("last_error") else "")
     lines = (state.get("lines") or {})
-    note = f"status {status}" + (f"; last error: {state['last_error']}" if state.get("last_error") else "")
+    from operational import dailyfaceoff
+    quality: dict[str, int] = {}
+    for team_report in (lines.get("teams") or {}).values():
+        q = dailyfaceoff.lineup_basis(team_report, dt.datetime.now(dt.timezone.utc))["status"]
+        quality[q] = quality.get(q, 0) + 1
     return [{"name": "Starting goalie reports", "through": goalies.get("fetched_at_utc"), "source": "Daily Faceoff public page (" + note + ")",
-             "detail": f"{len(sides)} goalie slots read; {team_confirmed} confirmed by the team's own post (accepted), "
-                       f"{reporter_confirmed} labelled Confirmed but sourced from a reporter (kept as an expectation)."},
+             "detail": (f"{len(sides)} goalie slots read; items labelled Confirmed by source: {by_basis or 'none'}. Only a team post or a recognized beat reporter, "
+                        "fresh, naming the goalie, counts as a confirmation.") if sides else "No starter data read."},
             {"name": "Reported lineups", "through": lines.get("fetched_at_utc"), "source": "Daily Faceoff line combinations (" + note + ")",
-             "detail": f"{len(lines.get('teams') or {})} teams read."}]
+             "detail": (f"{len(lines.get('teams') or {})} teams read; reports by standard: {quality}. Only REPORTED (identifiable source, fresh) lineups are shown.") if lines.get("teams") else "No lineup data read."}]
 
 
 def _tickets_state() -> dict | None:
@@ -417,12 +440,12 @@ def _tickets_state() -> dict | None:
     return daily_tickets.read_state()
 
 
-def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None) -> dict:
+def _confirmation(pid: str, team: str | None, ng: dict | None, nhl=None, now: dt.datetime | None = None) -> dict:
     """Starter confirmation: CONFIRMED only from the team's own post (read automatically, operational/dailyfaceoff.py) or a manual record
     (operational/goalie_confirmations.py); everything else is UNCONFIRMED."""
     try:
         from operational import goalie_confirmations
-        found = goalie_confirmations.lookup(nhl, ng["game_id"], team, pid) if (ng and nhl is not None) else None
+        found = goalie_confirmations.lookup(nhl, ng["game_id"], team, pid, now) if (ng and nhl is not None) else None
     except Exception:  # noqa: BLE001 - absence means no manual confirmation
         found = None
     if found:

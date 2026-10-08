@@ -417,7 +417,25 @@ def effective_start(provider_commence_utc: str, official_start_utc: str | None) 
     return min(provider, parse(official_start_utc))
 
 
-def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None, games: dict | None = None) -> dict:
+def planned_decision(plan: dict, game_id: str | None, hours: float, age_min: float | None, now: dt.datetime) -> tuple[str | None, str]:
+    """(decision, reason) under the day's credit plan. FIRST: one capture per priced game, inside its actionable window (a price taken
+    FIRST_CAPTURE_HOURS before puck drop is still inside the near-game freshness limit at puck drop). REFRESH only with leftover credits."""
+    from operational import credit_planner as cp
+    if hours <= 0 or hours > CAPTURE_HORIZON_H:
+        return None, "OUTSIDE_HORIZON"
+    if game_id is None or str(game_id) not in set(plan["games_priced"]):
+        return None, "NOT_IN_CREDIT_PLAN"
+    if age_min is None:
+        return ("FIRST", "OK") if hours <= cp.FIRST_CAPTURE_HOURS else (None, "BEFORE_ACTIONABLE_WINDOW")
+    if capture_decision(hours, age_min) != "REFRESH":
+        return None, "FRESH_ENOUGH"
+    left = plan["allowance"].get(cp.REFRESH, 0.0) - cp.spent_today(now).get(cp.REFRESH, 0.0)
+    return ("REFRESH", "OK") if left >= EST_COST_PER_EVENT else (None, "NO_CREDITS_FOR_REFRESH")
+
+
+def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None, games: dict | None = None, plan: dict | None = None) -> dict:
+    """Per-game DraftKings prop captures. With a day plan (production) the credit planner decides which games are priced, with which markets and
+    how often; without one (tests, manual use) the legacy cadence and the month rule for the goals market apply."""
     from operational import odds_quota
     from research.live_sog_pricing import archive as _archive, client as _client
     client = client or _client
@@ -431,11 +449,15 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         return summary
     spent_today = credits_spent_today_by_this_job(now)
     games = games or {}
-    from operational import credit_allocation
-    goals = credit_allocation.goals_decision(now)
-    markets = f"{MARKETS},{GOALS_MARKET_KEY}" if goals["allow"] else MARKETS
-    est_cost = EST_COST_PER_EVENT + (1 if goals["allow"] else 0)
-    summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
+    if plan is None:
+        from operational import credit_allocation
+        goals = credit_allocation.goals_decision(now)
+        legacy_markets = f"{MARKETS},{GOALS_MARKET_KEY}" if goals["allow"] else MARKETS
+        legacy_cost = EST_COST_PER_EVENT + (1 if goals["allow"] else 0)
+        summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
+    else:
+        summary["plan"] = {"day": plan.get("day"), "D": plan["budget"].get("D"), "games_priced": len(plan["games_priced"]),
+                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"])}
 
     def start_of(e):
         matched = match_game(e, games)
@@ -445,14 +467,27 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
     for e in upcoming:
         hours = (start_of(e) - now).total_seconds() / 3600.0
         age_min = decision_age_min(e["id"], now)
-        decision = capture_decision(hours, age_min)
+        matched = match_game(e, games)
+        gid = matched[0] if matched else None
+        if plan is None:
+            decision, markets, est_cost, klass = capture_decision(hours, age_min), legacy_markets, legacy_cost, None
+            why = "OK"
+        else:
+            from operational import credit_planner as cp
+            decision, why = planned_decision(plan, gid, hours, age_min, now)
+            klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
+            with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
+            markets = f"{MARKETS},{GOALS_MARKET_KEY}" if with_goals else MARKETS
+            est_cost = cp.BASE_COST + (cp.GOALS_COST if with_goals else 0)
         if decision is None:
+            if why == "NOT_IN_CREDIT_PLAN":
+                summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})
             continue
         summary["events_seen"] += 1
-        if spent_today + est_cost > DAILY_CREDIT_CAP:
+        if plan is None and spent_today + est_cost > DAILY_CREDIT_CAP:
             summary["skipped"].append({"event_id": e["id"], "reason": "BEST_BETS_DAILY_CREDIT_CAP"})
             continue
-        gate = guard(est_cost)
+        gate = guard(est_cost) if plan is None else cp.authorize(klass, est_cost, now, plan=plan)
         if not gate.get("allow"):
             summary["skipped"].append({"event_id": e["id"], "reason": gate.get("reason")})
             break
@@ -462,6 +497,8 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
             continue
         archive_mod.archive_result(r, event_id=e["id"], market_filter=markets, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
+        if plan is not None:
+            cp.record(klass, cost, now, event=e["id"], game_id=gid, markets=markets)
         spent_today += cost
         summary["credits_spent"] += cost
         summary["events_captured"] += 1
@@ -694,6 +731,18 @@ def current_model(conn, now: dt.datetime, *, upcoming_only: bool = True) -> dict
     return {"date": date, "games": games, "model": model}
 
 
+def _day_plan(conn, now: dt.datetime) -> dict | None:
+    """The saved credit plan for today's (ET) games; None outside production so tests and manual runs keep the legacy cadence."""
+    from operational import credit_planner as cp, eastern_time as et, goalie_confirmations, odds_quota
+    if not cp.enforced():
+        return None
+    day = et.eastern_today(now)
+    rows = conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ?", (day,)).fetchall()
+    starts = {str(r["game_id"]): _parse_utc(r["scheduled_start_utc"] if r["scheduled_start_utc"].endswith("Z") else r["scheduled_start_utc"] + "Z") for r in rows}
+    return cp.day_plan(now, day, starts, remaining=odds_quota.latest_remaining(),
+                       confirmed_games={g for g in goalie_confirmations.confirmed_games(conn, now)})
+
+
 def _refresh_locked(now, *, conn, capture, client) -> dict:
     import db
     owns = conn is None
@@ -702,7 +751,8 @@ def _refresh_locked(now, *, conn, capture, client) -> dict:
         # Capture first, so the model and the downstream selector see the
         # prices just pulled. current_model() needs only the schedule.
         snapshot = current_model(conn, now)
-        capture_summary = (capture_prices(now, client=client, games=snapshot["games"])
+        plan = _day_plan(conn, now) if (capture and snapshot["games"]) else None
+        capture_summary = (capture_prices(now, client=client, games=snapshot["games"], plan=plan)
                            if (capture and snapshot["games"]) else None)
         state = {
             "status": "OK" if snapshot["games"] else "NO_UPCOMING_GAMES",

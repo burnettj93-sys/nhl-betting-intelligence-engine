@@ -84,6 +84,17 @@ if _cb:
     st.dataframe([{"Call class": k, "Calls (trailing window)": v["calls"], "Credits": v["credits"], "Share": f"{v['share']:.0%}"} for k, v in _cb["spend_by_class"].items()],
                  hide_index=True, width="stretch")
     st.caption("Computed from the provider's own response headers on every archived call (docs/ODDS_CREDIT_AUDIT.md).")
+    _pl, _mv = _cb.get("plan"), _cb.get("month_view")
+    if _pl:
+        st.markdown(f"**Today's credit plan ({_pl['day']}).** Day budget {_pl['D']} credits for {_pl['games_today']} game(s): "
+                    f"{_pl['games_priced']} priced (shots + points), {_pl['games_not_priced']} not priced, goals for {_pl['goals_games']}, saves for {_pl['saves_games']} (confirmed starters only). "
+                    f"Short {_pl['shortfall_per_day_required_only']} credits today to price every game with the required markets.")
+        st.dataframe([{"Class": k.replace("_", " ").title(), "Allowance": v, "Spent today": _cb["spent_today_by_class"].get(k, 0.0)} for k, v in _pl["allowance"].items()],
+                     hide_index=True, width="stretch")
+    if _mv:
+        st.caption(f"Month view at {_mv['typical_games_per_day']} games a day: {_mv['games_priced_per_day']} priced each day; pricing every game with the required markets needs "
+                   f"{_mv['need_required_only_per_day']} credits/day against a budget of {_mv['D']} — short about {_mv['shortfall_month_required_only']} credits through the cycle "
+                   f"({_mv['shortfall_month_everything']} with saves, goals and a second display refresh).")
 else:
     st.caption("Credit position is not in the published snapshot yet.")
 

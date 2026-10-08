@@ -43,7 +43,7 @@ table = [{"Goalie": g["name"], "Team": g["team"], "Next game": (f"{'vs' if g['ne
           "W-L-OTL": rec(g), "SV%": f"{g['season']['save_pct']:.3f}" if (g.get("season") or {}).get("save_pct") is not None else "—",
           "GAA": f"{g['season']['gaa']:.2f}" if (g.get("season") or {}).get("gaa") is not None else "—",
           "SO": str((g.get("season") or {}).get("shutouts")) if (g.get("season") or {}).get("games") else "—"} for g in rows]
-st.caption(f"{len(rows)} goalie(s). Status is Unconfirmed everywhere until a confirmation is recorded — no starting-goalie feed is connected, so the start chance is an estimate from recent usage and rest.")
+st.caption(f"{len(rows)} goalie(s). Status is Confirmed only while a fresh confirmation exists — from the team, a recognized beat reporter (read automatically when that feed is enabled), or a person who recorded one — and no later report disagrees. Otherwise it is Unconfirmed; the start chance is an estimate from recent usage and rest.")
 ev = st.dataframe(table, hide_index=True, width="stretch", on_select="rerun", selection_mode="single-row", key="gl_table", height=360)
 ids = [g["player_id"] for g in rows]
 sel = ids[ev.selection.rows[0]] if ev and ev.selection.rows else (st.query_params.get("goalie") if st.query_params.get("goalie") in goalies else None)
@@ -96,6 +96,8 @@ else:
     k[1].metric("Start status", cf["status"].replace("_", " ").title())
     k[2].metric("Status source / checked", cf["source"] or "none", cf.get("checked_at_utc") and ui.et_time(cf["checked_at_utc"], True) or "never", delta_color="off")
     st.caption(ui.esc(cf["note"]))
+    if cf.get("source_url"):
+        st.markdown(f"Source link: [{ui.esc(cf['source'])}]({cf['source_url']}) · basis: {ui.esc(str(cf.get('basis', '')).replace('_', ' ').title())}")
     with st.expander("Record a confirmed start for this game"):
         st.caption("Only record what you have actually seen from a published source (team or league announcement, broadcast, morning-skate report). "
                    "The record keeps where you saw it and when; it is what unlocks saves props for this goalie. The model's estimate never confirms anything.")

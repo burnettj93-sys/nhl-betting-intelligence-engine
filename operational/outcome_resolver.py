@@ -195,6 +195,22 @@ def resolve_moneyline(conn: sqlite3.Connection, *, game_id, side_team_id: str) -
                     resolution_source="OFFICIAL_NHL_GAME_RESULT", official_game_status=game_state)
 
 
+def resolve_puck_line(conn: sqlite3.Connection, *, game_id, team_id: str, line: float) -> dict:
+    """Puck line (spread) for `team_id` at `line` (e.g. -1.5 or +1.5): covers when (team goals - opponent goals) + line > 0 on the OFFICIAL final
+    score. The final score includes overtime, and a shootout game's final score already carries the winner's extra goal, so an extra-time game's
+    margin is exactly one goal (verified on every OT/SO game in the production database). A .5 line can never push. Fails closed if the game is
+    not final or the team did not play in it."""
+    is_final, game_state = _is_final(conn, game_id)
+    if not is_final:
+        return _result(GAME_NOT_FINAL, official_game_status=game_state)
+    row = _game_row(conn, game_id)
+    if str(team_id) not in (row["home_team"], row["away_team"]):
+        return _result(TEAM_DID_NOT_PLAY, official_game_status=game_state)
+    margin = (row["home_score"] - row["away_score"]) * (1 if str(team_id) == row["home_team"] else -1)
+    return _result(RESOLVED, actual_value=margin, outcome_hit=(margin + float(line)) > 0,
+                    resolution_source="OFFICIAL_NHL_GAME_RESULT", official_game_status=game_state)
+
+
 def _latest_team_stat(conn: sqlite3.Connection, game_id, team_id: str) -> sqlite3.Row | None:
     return conn.execute(
         """SELECT * FROM team_game_stats WHERE game_id=? AND team_id=?
@@ -258,6 +274,11 @@ def resolve_prediction(conn: sqlite3.Connection, prediction: dict) -> dict:
     ledger's own "N+" string convention (Part: never re-invent a second
     threshold representation)."""
     market_id = (prediction.get("market_id") or "").upper()
+    if market_id.startswith("PUCK_LINE"):          # the line is a signed half-goal (-1.5 / +1.5), not an "N+" count
+        try:
+            return resolve_puck_line(conn, game_id=prediction.get("game_id"), team_id=prediction.get("team"), line=float(prediction.get("threshold")))
+        except (TypeError, ValueError):
+            return _result(UNSUPPORTED_SETTLEMENT_MARKET)
     threshold_str = str(prediction.get("threshold") or "0").rstrip("+")
     try:
         threshold = int(threshold_str)

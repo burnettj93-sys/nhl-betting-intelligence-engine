@@ -79,7 +79,7 @@ a[5].metric("Avg ice time", f"{s.get('toi_avg', 0):.1f} min", f"PP {s.get('toi_p
 
 st.markdown("#### Reported lineup (from a lineup source)")
 rep = p.get("reported")
-if rep:
+if rep and rep.get("status", "REPORTED") == "REPORTED":
     bits = [f"Line/pair **{rep['line']}**" if rep.get("line") else "no forward line or pair listed",
             f"power play **{rep['pp']}**" if rep.get("pp") else "no power-play unit listed"]
     if rep.get("pk"):
@@ -88,8 +88,11 @@ if rep:
     if rep.get("injury_status") or rep.get("game_time_decision"):
         st.warning(f"Injury status on the report: {rep.get('injury_status') or 'game-time decision'}.")
     link = f" — [{rep['reported_by']}]({rep['source_url']})" if rep.get("source_url") else f" — {rep.get('reported_by') or 'reporter not named'}"
-    st.caption(f"{rep['source']}{link}. Report updated {ui.age_text(rep['updated_at_utc'])}; fetched {rep['fetched_at_utc']}. "
-               "This is the lineup a reporter published for the next game, not a confirmed lineup and not what the player did last game.")
+    st.caption(f"{rep['source']}{link}, basis: {str(rep.get('basis', '')).replace('_', ' ').title()}. Report updated {ui.age_text(rep['updated_at_utc'])}; fetched {rep['fetched_at_utc']}. "
+               "This is the lineup the source published for the next game, not a confirmed lineup and not what the player did last game.")
+elif rep:
+    why = {"STALE": f"it is {rep.get('age_hours')} hours old, past the freshness limit", "UNSOURCED": "it has no identifiable source (a team or recognized beat reporter with a link)"}.get(rep["status"], rep["status"])
+    st.caption(f"A lineup is on file for this team but is not shown: {why}. Reported by: {rep.get('reported_by') or 'no one named'}.")
 else:
     st.caption("No reported line or power-play unit is available for this player (the lineup source did not list them or has not been read yet).")
 

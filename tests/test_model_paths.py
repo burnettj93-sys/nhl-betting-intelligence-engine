@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import sqlite3
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -23,14 +24,30 @@ def games_db():
     return c
 
 
-class TestMoneylinePath(unittest.TestCase):
+class IsolatedState(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict("os.environ", {"NHL_ENGINE_STATE_DIR": tempfile.mkdtemp()})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+
+class TestMoneylinePath(IsolatedState):
     def test_default_is_elo_and_changes_nothing(self):
         self.assertEqual(mmp.active_model(), mmp.ELO)
         self.assertEqual(mmp.version(), "moneyline-t35-v1")
         self.assertEqual(mmp.apply_switch(REPORT, True, "TOR", "MTL"), (0.60, 0.55))
 
+    def test_asking_for_the_switch_is_not_enough_without_evidence(self):
+        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "evidence", return_value={}):
+            self.assertEqual(mmp.active_model(), mmp.ELO)
+        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "evidence", return_value={"supports_strength_model": False}):
+            self.assertEqual(mmp.active_model(), mmp.ELO)
+        with mock.patch.dict("os.environ", {}), mock.patch.object(mmp, "evidence", return_value={"supports_strength_model": True}):
+            self.assertEqual(mmp.active_model(), mmp.ELO)                  # evidence alone does not switch either; the owner must also ask
+
     def test_switch_uses_strength_probability_with_the_same_band(self):
-        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "strength_probability", return_value=0.70):
+        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "evidence", return_value={"supports_strength_model": True}), \
+                mock.patch.object(mmp, "strength_probability", return_value=0.70):
             self.assertEqual(mmp.version(), "moneyline-strength-v1")
             true_home, cons_home = mmp.apply_switch(REPORT, True, "TOR", "MTL")
             true_away, cons_away = mmp.apply_switch(REPORT, False, "TOR", "MTL")
@@ -40,7 +57,8 @@ class TestMoneylinePath(unittest.TestCase):
         self.assertAlmostEqual(cons_away, 0.25)
 
     def test_unknown_team_falls_back_to_elo(self):
-        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "strength_probability", return_value=None):
+        with mock.patch.dict("os.environ", {mmp.ENV: "strength-v1"}), mock.patch.object(mmp, "evidence", return_value={"supports_strength_model": True}), \
+                mock.patch.object(mmp, "strength_probability", return_value=None):
             self.assertEqual(mmp.apply_switch(REPORT, True, "XXX", "YYY"), (0.60, 0.55))
 
     def test_an_unknown_setting_is_ignored(self):
@@ -61,6 +79,21 @@ class TestMoneylinePath(unittest.TestCase):
         self.assertLess(sb["log_loss"]["strength"], sb["log_loss"]["elo"] + 1)       # computed, not asserted to win
         self.assertIn("market_no_vig", sb["log_loss"])
         self.assertEqual(sb["verdict"], "TOO_FEW_GAMES")
+        self.assertFalse(sb["supports_strength_model"])
+
+    def test_scoreboard_supports_the_strength_model_only_when_the_interval_is_below_zero(self):
+        c = games_db()
+        for t in ("TOR", "MTL"):
+            c.execute("INSERT OR IGNORE INTO teams (team_id, full_name) VALUES (?, ?)", (t, t))
+        for i in range(200):
+            c.execute("INSERT INTO games (game_id, home_team, away_team, game_state, home_score, away_score) VALUES (?, 'TOR', 'MTL', 'FINAL', ?, ?)", (1000 + i, 3, 2 if i % 4 else 4))
+            clearly_better = i % 4 != 0
+            mmp.record_shadow(NOW, str(1000 + i), "2026-10-08", "TOR", "MTL", "TOR", 0.55, 0.80 if clearly_better else 0.30, 0.55, -120)
+        sb = mmp.scoreboard(c)
+        self.assertEqual(sb["scored"], 200)
+        self.assertLess(sb["strength_minus_elo"]["ci_high"], 0)
+        self.assertTrue(sb["supports_strength_model"])
+        self.assertEqual(sb["verdict"], "STRENGTH_SUPPORTED")
 
 
 class TestComparisonReport(unittest.TestCase):
@@ -85,7 +118,7 @@ class TestComparisonReport(unittest.TestCase):
         self.assertEqual(mmp.active_model(), mmp.ELO)
 
 
-class TestPuckLineAlternative(unittest.TestCase):
+class TestPuckLineAlternative(IsolatedState):
     def test_saved_report_keeps_the_failed_model_on_record_and_enables_nothing(self):
         rep = json.loads(pla.OUT_PATH.read_text())
         self.assertIn("failed", rep["record_kept"])

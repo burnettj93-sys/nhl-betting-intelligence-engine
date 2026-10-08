@@ -12,7 +12,9 @@ Two mechanisms, both versioned and tested:
     Elo probability, the strength-model probability and the market's no-vig probability at decision time. After games finish,
     `scoreboard()` scores all three on the same games -- a prospective, market-inclusive comparison that no backtest here can give;
   * an OPT-IN SWITCH, `NHL_ENGINE_MONEYLINE_MODEL=strength-v1`: ticket legs then use the strength model's probability with the same
-    conservative band the Elo path applies. Off by default; flipping it is the owner's decision after the scoreboard has enough games.
+    conservative band the Elo path applies. The switch is INERT until the evidence supports it: asking for it is not enough, and neither is a
+    nominally lower log loss. It takes effect only after the scoreboard has MIN_GAMES_FOR_A_CLAIM finished game-sides and the paired 95%
+    interval of (strength - Elo) log loss lies entirely below zero (`active_model`, `scoreboard`).
 """
 from __future__ import annotations
 
@@ -31,9 +33,25 @@ MIN_GAMES_FOR_A_CLAIM = 150          # below this the scoreboard states "too few
 _live_cache: dict = {}
 
 
+EVIDENCE_NAME = "moneyline_model_evidence.json"
+
+
+def evidence() -> dict:
+    """The latest prospective verdict (written by scoreboard()); {} until there is one."""
+    p = state_paths.path(EVIDENCE_NAME)
+    try:
+        return json.loads(p.read_text()) if p.exists() else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def active_model() -> str:
+    """Elo unless BOTH the owner asked for the strength model AND the prospective evidence supports it. Asking is not enough: the switch is inert
+    until the shadow scoreboard has MIN_GAMES_FOR_A_CLAIM finished game-sides and the paired 95% interval of (strength - Elo) log loss lies below zero."""
     value = (os.environ.get(ENV) or ELO).strip().lower()
-    return value if value in VERSIONS else ELO
+    if value == STRENGTH and evidence().get("supports_strength_model") is True:
+        return STRENGTH
+    return ELO
 
 
 def version() -> str:
@@ -130,4 +148,19 @@ def scoreboard(conn) -> dict:
             out["log_loss"]["market_no_vig"] = mean([_ll(r["market_no_vig"], y) for r, y in with_market])
             out["market_games"] = len(with_market)
     out["verdict"] = ("TOO_FEW_GAMES" if n < MIN_GAMES_FOR_A_CLAIM else "ENOUGH_GAMES_FOR_OWNER_DECISION")
+    supports = False
+    if n >= MIN_GAMES_FOR_A_CLAIM:
+        from research import elo_comparison as ec
+        d = ec.paired_bootstrap_delta([_ll(r["elo"], y) for r, y in scored], [_ll(r["strength"], y) for r, y in scored])
+        out["strength_minus_elo"] = {k: round(d[k], 5) for k in ("point_delta", "ci_low", "ci_high")}
+        supports = d["ci_high"] < 0.0
+        out["verdict"] = "STRENGTH_SUPPORTED" if supports else "NOT_DISTINGUISHABLE_OR_WORSE"
+    out["supports_strength_model"] = supports
+    out["scored_at_utc"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        p = state_paths.path(EVIDENCE_NAME)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"supports_strength_model": supports, "scored": n, "verdict": out["verdict"], "scored_at_utc": out["scored_at_utc"]}))
+    except OSError:
+        pass
     return out

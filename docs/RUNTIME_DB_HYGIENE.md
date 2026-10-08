@@ -51,3 +51,8 @@ Copy made with SQLite's online backup API while no job was running, then verifie
 ## Pinned-hash guard updated (deliberate)
 
 Twelve older research-sprint tests (`test_production_boundary_files_unchanged` and equivalents) pin `db.py`'s SHA-256 to prove research work never touched the production DB layer. Centralizing path resolution necessarily changes `db.py`, so the pinned value was updated from `b598f464...` to `02361fb5...` in exactly those 12 assertions (12 one-line hash swaps, nothing else). `config.py` and `schema.sql` pins are untouched; `schema.sql` and all query/connection semantics are unchanged.
+
+
+## The resolved path can no longer create or use the wrong database (2026-10-08)
+
+An empty `data/nhl.db` appeared (0 bytes, no tables, untracked, referenced by no job, `.env` or launchd plist; `db.resolve_db_path()` resolves to `operational/runtime/nhl.db` locally) because a connection to a path that did not exist silently created it. `db.get_conn()` with no explicit path now raises `db.WrongDatabaseError` unless the resolved database exists, is not empty and has a `games` table; an explicit path is still the caller's deliberate choice, and `db.init_db()` is the only way to create one on purpose. Tests: `tests/test_runtime_db_hygiene.py::TestResolvedPathCannotSilentlyCreateOrUseTheWrongDatabase`. The stray file was removed after verifying all of the above.
