@@ -24,7 +24,7 @@ if runtime_mode.is_community_cloud():
     auth.require_admin()
 
 st.title("Data Status")
-comp.render_model_status_header()
+# One coherent status on this page: the generic snapshot banner (a different policy, in hours) is not shown here; Diagnostics carries the technical detail.
 
 if runtime_mode.is_community_cloud():
     try:

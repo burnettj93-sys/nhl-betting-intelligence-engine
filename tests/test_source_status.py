@@ -138,7 +138,8 @@ class TestPage(unittest.TestCase):
         snap["data_status"] = {"sources": stale}
         at2 = run_page("9_Data_Status.py", snap)
         self.assertTrue(any("STATUS SNAPSHOT IS STALE" in e.value for e in at2.error))
-        self.assertNotIn("different cache", text(at2))                                               # no implementation-heavy cache explanation on the normal view
+        self.assertNotIn("different cache", text(at2))
+        self.assertNotIn("SNAPSHOT CURRENT", " ".join(str(m.value) for m in at2.markdown) + text(at2))    # no second, disagreeing banner on this page                                               # no implementation-heavy cache explanation on the normal view
 
 
 if __name__ == "__main__":
