@@ -139,7 +139,7 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("Best qualifying +100 option", t)
 
     def test_diagnostics_order_path_panel_shows_booleans_and_a_check_button(self):
-        at = run_page("37_Diagnostics.py", snapshot())
+        at = run_page("37_Diagnostics.py", snapshot(), setup=lambda a: a.session_state.__setitem__("_owner_unlocked", True))      # administrative: needs the owner unlock
         t = text(at) + " " + " ".join(str(d.value.to_dict()) for d in at.dataframe)
         self.assertIn("Order path (one-click add) check", t)
         self.assertIn("One-click (direct) path ready", t)

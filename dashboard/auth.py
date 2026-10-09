@@ -26,27 +26,48 @@ _SESSION_KEY_USERNAME = "_auth_username"
 _SESSION_KEY_ROLE = "_auth_role"
 
 
-# COMMUNITY_CLOUD_MODE has NO application-level accounts. Streamlit's own private-sharing setting ("Only specific
-# people can view this app") is the single access control: whoever can reach the app may use it. Every page that
-# stays available in Cloud is a read-only presentation of the published snapshot (no credentials, no Yahoo, no
-# writes, no destructive or ingestion controls -- see dashboard/page_registry.py and the tests that scan the Cloud
-# pages), so one implicit viewer identity is used. The role string is "ADMIN" only because the existing per-page
-# guards compare against it; in Cloud it grants nothing beyond the read-only surface. LOCAL_MODE and PRODUCTION_MODE
-# keep the full account system unchanged.
-CLOUD_VIEWER = {"username": "Streamlit viewer", "role": "ADMIN"}
+# COMMUNITY_CLOUD_MODE has NO application-level accounts, and (from 2026-10-09) the hosted app is PUBLIC: anyone with the link may open it, signed out. Every visitor is
+# therefore an anonymous read-only VISITOR. What a visitor can do is exactly what the pages offer: read the published snapshot, and (once the app's write credential exists)
+# create their own personal account and add paper bets to it, each order signed with that account's own passcode (operational/log_signing.py), so one visitor cannot write
+# to another's account. Nothing a visitor does can reach the model's $500 book, which no hosted page writes. Administrative pages (Diagnostics) need the OWNER unlock: a
+# passphrase held only in the Streamlit secret OWNER_ACCESS_PASSPHRASE. Without that secret nobody can unlock them on the hosted app. LOCAL and PRODUCTION keep the full account
+# system unchanged.
+CLOUD_VIEWER = {"username": "Visitor", "role": "USER"}
+CLOUD_OWNER = {"username": "Owner (unlocked)", "role": "ADMIN"}
+OWNER_SECRET = "OWNER_ACCESS_PASSPHRASE"
+_SESSION_KEY_OWNER = "_owner_unlocked"
 
 
 def current_user() -> dict | None:
     """Returns {"username": ..., "role": ...} if logged in this
-    session, else None. Never raises. In COMMUNITY_CLOUD_MODE every session that reaches the app (already
-    admitted by Streamlit's private sharing) is the implicit read-only viewer."""
+    session, else None. Never raises. In COMMUNITY_CLOUD_MODE every session is the anonymous visitor (role USER) unless the owner unlocked it this session."""
     if runtime_mode.is_community_cloud():
-        return dict(CLOUD_VIEWER)
+        return dict(CLOUD_OWNER) if st.session_state.get(_SESSION_KEY_OWNER) else dict(CLOUD_VIEWER)
     username = st.session_state.get(_SESSION_KEY_USERNAME)
     role = st.session_state.get(_SESSION_KEY_ROLE)
     if username is None or role is None:
         return None
     return {"username": username, "role": role}
+
+
+def owner_unlock_available() -> bool:
+    """True when the hosted app has an owner passphrase configured (otherwise there is nothing to unlock and no control is shown)."""
+    return bool(_setting(OWNER_SECRET))
+
+
+def try_owner_unlock(passphrase: str) -> bool:
+    """Unlocks the administrative pages for THIS browser session only. Constant-time comparison; a wrong attempt waits a second."""
+    import time
+    configured = _setting(OWNER_SECRET)
+    if configured and hmac.compare_digest(str(passphrase or "").encode(), configured.encode()):
+        st.session_state[_SESSION_KEY_OWNER] = True
+        return True
+    time.sleep(1.0)
+    return False
+
+
+def owner_lock() -> None:
+    st.session_state.pop(_SESSION_KEY_OWNER, None)
 
 
 def _set_session(username: str, role: str) -> None:
