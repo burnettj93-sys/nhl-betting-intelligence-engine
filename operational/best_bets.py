@@ -618,9 +618,10 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
 
 
 def check_tomorrow(now: dt.datetime, *, client=None, archive_mod=None, plan: dict | None = None, force: bool = False, games: dict | None = None) -> dict:
-    """Once in the evening (capture_schedule.EVENING_CHECK_ET): has DraftKings posted tomorrow's player prices yet? Asks for the first market it posts (shots) for each
-    of tomorrow's games. An answer with nothing in it costs 0 credits, so the check is free until the bookmaker has posted something; the first posted answer is
-    paid for from the TOMORROW class (one credit a day), and any game after that is recorded BUDGET_BLOCKED (the provider may well have posted it; we did not look).
+    """Twice a day (capture_schedule.TOMORROW_CHECKS_ET): has DraftKings posted tomorrow's player prices at this hour? The earliest game is asked about every market we price, the
+    others about shots. An answer with nothing in it costs 0 credits, so the check is free until the bookmaker has posted something; a posted answer is paid for from the TOMORROW
+    class, and any game after the allowance is used is recorded BUDGET_BLOCKED (the provider may well have posted it; we did not look). Each answer is stored as an OBSERVATION with its
+    time (price_availability.observations): it says what DraftKings had posted when asked, nothing more.
     Tomorrow's moneylines need no call of their own: every league-wide moneyline pull already returns them."""
     from operational import capture_schedule as sched, credit_planner as cp, eastern_time as et, price_availability as pa
     from research.live_sog_pricing import archive as _archive, client as _client
@@ -637,28 +638,33 @@ def check_tomorrow(now: dt.datetime, *, client=None, archive_mod=None, plan: dic
     todays = [e for e in events.data if et.eastern_today(_parse_utc(e["commence_time"])) == tomorrow]
     out["ran"] = True
     out["games"] = len(todays)
-    for e in sorted(todays, key=lambda x: x["commence_time"]):
+    ALL_MARKETS = [SOG_MARKET_KEY, POINTS_MARKET_KEY, GOALS_MARKET_KEY, "player_total_saves"]
+    for i, e in enumerate(sorted(todays, key=lambda x: x["commence_time"])):
         hours = (_parse_utc(e["commence_time"]) - now).total_seconds() / 3600.0
         matched = match_game(e, games or {})
         gid = str(matched[0]) if matched else f"event:{e['id']}"
         matchup = f"{e.get('away_team')} at {e.get('home_team')}"
+        # The earliest game is asked about every market we price (a market not posted costs 0), so each check records what DraftKings had posted for all four at that
+        # hour; the other games are asked about shots only, which bounds the cost if DraftKings has started posting.
+        asked = ALL_MARKETS if i == 0 else [SOG_MARKET_KEY]
         gate = cp.authorize(cp.TOMORROW, 1, now, plan=plan) if cp.enforced() else {"allow": True}
         if (not gate.get("allow") and str(gate.get("reason", "")).endswith("_DAILY_ALLOWANCE") and cp.spent_today(now).get(cp.TOMORROW, 0.0) < cp.TOMORROW_COST):
-            gate = {"allow": True, "reason": "OK_FIRST_TOMORROW_CREDIT"}   # a day whose plan left nothing over still asks; asking costs 0 unless DraftKings has posted, and one credit a day at most
+            gate = {"allow": True, "reason": "OK_FIRST_TOMORROW_CREDIT"}   # a day whose plan left nothing over still asks; asking costs 0 unless DraftKings has posted, and a credit a day or so at most
         if not gate.get("allow"):
             pa.note_unfetched(tomorrow, gid, SOG_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail=f"tomorrow's check allowance is used ({gate.get('reason')})",
                               matchup=matchup, game_date=tomorrow)
             continue
-        r = client.get_event_odds(e["id"], markets=SOG_MARKET_KEY)
+        mk = ",".join(asked)
+        r = client.get_event_odds(e["id"], markets=mk)
         out["checked"] += 1
-        got = _record_answer(tomorrow, gid, [SOG_MARKET_KEY], r, now, hours, matchup, tomorrow, e["commence_time"])
+        got = _record_answer(tomorrow, gid, asked, r, now, hours, matchup, tomorrow, e["commence_time"])
         if not r.ok:
             continue
-        archive_mod.archive_result(r, event_id=e["id"], market_filter=SOG_MARKET_KEY, bookmaker_filter="draftkings")
+        archive_mod.archive_result(r, event_id=e["id"], market_filter=mk, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
         if cost:
-            cp.record(cp.TOMORROW, cost, now, event=e["id"], markets=SOG_MARKET_KEY)
-        if (got.get(SOG_MARKET_KEY) or {}).get("status") == pa.POSTED:
+            cp.record(cp.TOMORROW, cost, now, event=e["id"], markets=mk)
+        if any((v or {}).get("status") == pa.POSTED for v in got.values()):
             out["posted"] += 1
     pa.mark_tomorrow_checked(now)
     return out
@@ -712,23 +718,22 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
             quote = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(),
                                            now, limit)
             fresh = hours > 0 and quote["fresh"]
-            # RECORDING WINDOW (production, i.e. under the credit plan): a price is recordable only if it was retrieved inside this game's PREGAME slot
-            # (capture_schedule.PREGAME_HOURS before puck drop). The morning and midday looks are fresh by AGE for a couple of hours, but they are the first look, not the
-            # re-check, so without this rule an 8 AM capture could record all five of the day's tickets before lineups or later prices exist.
+            # An EARLY price: fresh by age, but retrieved from the morning/midday look, long before puck drop. It is as usable as any fresh price (options, personal-log adds,
+            # automatic tickets); automatic tickets built on early prices are capped per day, and every ticket is re-judged at the moment of recording
+            # (operational/daily_tickets.py), so a price that has aged out by then is not used.
             early = False
-            if fresh and _cp_enforced():
+            if fresh:
                 from operational import capture_schedule as _sched
                 start_eff = effective_start(payload.get("commence_time") or game["start_utc"], game["start_utc"])
-                if captured_at < start_eff - dt.timedelta(hours=_sched.PREGAME_HOURS + 0.05):
-                    fresh, early = False, True
-            # Provisional: not recordable, but the provider's own quote time is within PROVISIONAL_MAX_AGE_MIN and we retrieved it today (Eastern), so it is today's
-            # look at the market, not a leftover from yesterday. Judged by the same function as every other quote (same missing/malformed/future rules).
+                early = captured_at < start_eff - dt.timedelta(hours=_sched.SLOT_CLOSE_HOURS)
+            # Provisional: NOT fresh any more, but the provider's own quote time is within PROVISIONAL_MAX_AGE_MIN and we retrieved it today (Eastern), so it is today's look
+            # at the market, not a leftover from yesterday. Judged by the same function as every other quote (same missing/malformed/future rules).
             provisional = False
             if hours > 0 and not fresh:
                 wide = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(), now, PROVISIONAL_MAX_AGE_MIN)
                 from operational import eastern_time as _et
                 provisional = bool(wide["fresh"]) and _et.eastern_today(captured_at) == _et.eastern_today(now)
-            status = "BEFORE_PREGAME_WINDOW" if early else quote["status"]
+            status = quote["status"]
             for o in m.get("outcomes", []):
                 if m.get("key") == GOALS_MARKET_KEY:          # one-sided "Yes" prices: anytime goal == 1+ goals, no point, no "No" side
                     if o.get("name") != "Yes" or o.get("price") is None:
@@ -751,7 +756,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     american_price=float(o["price"]), conservative_probability=entry["probs"][f"{prob_prefix}{k}"],
                     sportsbook="draftkings", captured_at_utc=captured_at.isoformat(),
                     retrieved_at_utc=quote["retrieved_at_utc"], quote_updated_utc=quote["quote_updated_utc"],
-                    quote_age_min=quote["quote_age_min"], freshness_status=status, provisional=provisional,
+                    quote_age_min=quote["quote_age_min"], freshness_status=status, provisional=provisional, early=early,
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],

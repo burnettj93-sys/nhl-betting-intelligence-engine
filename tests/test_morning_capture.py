@@ -60,9 +60,12 @@ class TestSlots(unittest.TestCase):
     def test_pregame_hours_match_the_planner(self):
         self.assertEqual(sched.PREGAME_HOURS, cp.FIRST_CAPTURE_HOURS)
 
-    def test_tomorrow_check_once_in_the_evening(self):
-        self.assertFalse(sched.tomorrow_check_due(at(19, 0), None))
-        self.assertTrue(sched.tomorrow_check_due(at(20, 20), None))
+    def test_tomorrow_is_checked_twice_a_day_each_time_once(self):
+        self.assertFalse(sched.tomorrow_check_due(at(7, 0), None))
+        self.assertTrue(sched.tomorrow_check_due(at(8, 12), None))
+        self.assertFalse(sched.tomorrow_check_due(at(9, 0), at(8, 13)))
+        self.assertFalse(sched.tomorrow_check_due(at(19, 0), at(8, 13)))
+        self.assertTrue(sched.tomorrow_check_due(at(20, 20), at(8, 13)))
         self.assertFalse(sched.tomorrow_check_due(at(21, 0), at(20, 21)))
 
 
@@ -194,20 +197,24 @@ class TestTomorrowCheck(IsolatedState):
             out = bb.check_tomorrow(now, client=client, archive_mod=mock.Mock(), plan=plan, games={"9": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-10T23:10:00Z"}})
         return out, rec
 
-    def test_not_due_before_the_evening(self):
-        out, _ = self.check(at(15, 0), FakeClient(self.EVENT, {"bookmakers": []}, 0))
+    def test_not_due_before_the_first_check_of_the_day(self):
+        out, _ = self.check(at(7, 0), FakeClient(self.EVENT, {"bookmakers": []}, 0))
         self.assertEqual(out["reason"], "NOT_DUE")
 
     def test_nothing_posted_is_recorded_as_not_posted_and_costs_nothing_even_when_the_day_has_no_tomorrow_allowance(self):
         client = FakeClient(self.EVENT, {"bookmakers": []}, 0)
         out, rec = self.check(at(20, 20), client)
         self.assertEqual((out["ran"], out["checked"], out["posted"]), (True, 1, 0))
-        self.assertEqual(client.calls, [cp.SHOTS_KEY if hasattr(cp, "SHOTS_KEY") else bb.SOG_MARKET_KEY])
-        st = pa.read("2026-10-10")["games"]["9"]["markets"][bb.SOG_MARKET_KEY]
-        self.assertEqual(st["status"], pa.NOT_POSTED)
+        self.assertEqual(client.calls, [",".join([bb.SOG_MARKET_KEY, bb.POINTS_MARKET_KEY, bb.GOALS_MARKET_KEY, "player_total_saves"])])      # the earliest game: every market we price
+        mk = pa.read("2026-10-10")["games"]["9"]["markets"]
+        self.assertEqual({v["status"] for v in mk.values()}, {pa.NOT_POSTED})
+        self.assertEqual(len(mk), 4)                                                    # each market has its own answer and time
+        obs = pa.observations("2026-10-10")
+        self.assertEqual(len(obs), 4)
+        self.assertTrue(all(o["status"] == "NOT_POSTED" and o["hours_to_start"] is not None for o in obs))
         rec.assert_not_called()
         self.assertIsNotNone(pa.tomorrow_last_check())
-        out2, _ = self.check(at(21, 0), FakeClient(self.EVENT, {"bookmakers": []}, 0))            # not asked twice the same evening
+        out2, _ = self.check(at(21, 0), FakeClient(self.EVENT, {"bookmakers": []}, 0))            # not asked twice in the same slot
         self.assertEqual(out2["reason"], "NOT_DUE")
 
     def test_a_posted_market_is_paid_for_once_from_the_tomorrow_class_then_later_games_are_budget_blocked(self):

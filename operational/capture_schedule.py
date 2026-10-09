@@ -12,10 +12,11 @@ of the game (docs/MORNING_WORKFLOW.md, "What DraftKings actually posts"). The sc
 
 A slot is satisfied by ANY capture of the planned markets taken at or after the slot opened (whichever job pulled it). A market the bookmaker had not posted
 when we asked (NOT_POSTED, cost 0) is looked at again after RECHECK_MINUTES, so the first time it appears is caught without waiting for the next slot.
-Tomorrow's games get one cheap check in the evening (EVENING_CHECK_ET) and are otherwise covered by the morning slot once they become "today".
+Tomorrow's games get two cheap checks a day (TOMORROW_CHECKS_ET) and are otherwise covered by the morning slot once they become "today". Each check is recorded as an observation with its time.
 
-Recording is separate and stricter: a ticket is recorded only on prices inside the recording freshness limit, i.e. after a PREGAME capture. A morning price
-can never be the basis of a recorded ticket.
+Using a price is judged by its actual age, not by the slot that fetched it: a price inside the freshness limit (150 minutes; 100 within two hours of puck drop) can be shown, added to a
+personal log, and (capped, see daily_tickets.EARLY_TICKET_CAP) recorded on an automatic ticket at any hour; one that has aged out can only be shown as provisional. The pregame slot exists
+because it is the last look before the game, not because nothing earlier may be acted on.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ import datetime as dt
 MORNING, MIDDAY, PREGAME = "MORNING", "MIDDAY", "PREGAME"
 MORNING_START_ET = (8, 0)
 MIDDAY_START_ET = (12, 30)
-EVENING_CHECK_ET = (20, 15)           # tomorrow's games: one cheap availability check
+TOMORROW_CHECKS_ET = ((8, 10), (20, 15))   # tomorrow's games: two cheap availability checks a day (morning and evening); each is an observation, with its time
 SLOT_CLOSE_HOURS = 3.0                # morning/midday slots close this long before puck drop
 RECHECK_MINUTES = 60.0                # re-ask for a market that was NOT_POSTED when last asked
 PREGAME_HOURS = 1.75                  # == credit_planner.FIRST_CAPTURE_HOURS (kept equal by a test)
@@ -99,6 +100,9 @@ def decide(now: dt.datetime, start: dt.datetime, captured_at: dict[str, dt.datet
 
 
 def tomorrow_check_due(now: dt.datetime, last_check: dt.datetime | None) -> bool:
-    """One availability check for tomorrow's games once the evening time has passed, and not again the same evening."""
-    due_at = _localize(_et_date(now), *EVENING_CHECK_ET)
-    return now >= due_at and (last_check is None or last_check < due_at)
+    """Due when a check time of today (08:10 or 20:15 ET) has passed and no check has been made since it."""
+    passed = [t for t in (_localize(_et_date(now), h, m) for h, m in TOMORROW_CHECKS_ET) if t <= now]
+    if not passed:
+        return False
+    latest = max(passed)
+    return last_check is None or last_check < latest

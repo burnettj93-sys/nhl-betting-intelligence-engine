@@ -70,7 +70,10 @@ def report(*, games_per_day: float = 6.8, busiest_night: int = 16, listed_days: 
     lv = [level("minimum", "Minimum that meets the requirement", games_per_day), level("fuller", "Fuller service (adds a last refresh and anytime goals earlier)", games_per_day)]
     out = {"inputs": {"games_per_game_day": games_per_day, "busiest_night": busiest_night, "listed_game_days": listed_days, "days_per_month": DAYS_PER_MONTH,
                       "clusters_per_day": CLUSTERS_PER_DAY, "reserve": RESERVE,
-                      "costs": "league moneyline call 1 credit; per-game props 1 credit per market that returns data (an unposted market costs 0); events listing 0"},
+                      "costs": "league moneyline call 1 credit; per-game props 1 credit per market that returns data (an unposted market costs 0); events listing 0",
+                      "costs_verified": "against 1,331 archived provider calls (docs/validation/credit_cost_audit.json): events listing 1,105 calls at 0; league moneyline 109 calls at 1; "
+                                        "per-game props 117 calls = 193 credits = exactly the markets that returned data; and the account counter (218 of 218 credits charged this cycle). "
+                                        "The provider's own documentation says the same (the-odds-api.com usage-quota costs)."},
            "tiers": [{"name": n, "credits_per_month": c, "usd_per_month": u} for n, c, u in TIERS],
            "levels": lv, "minimum_budget": {"credits_per_month": lv[0]["credits_per_month"], "credits_per_day_average": lv[0]["credits_per_day_average"],
                                             "busiest_night_credits": round(busiest_night * lv[0]["credits_per_game"] + CLUSTERS_PER_DAY + MONEYLINE_DISPLAY["minimum"] + TOMORROW_CHECK),

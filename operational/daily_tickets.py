@@ -263,8 +263,8 @@ def code_version() -> str:
 
 def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> list[str]:
     """Reasons a selected ticket may NOT be recorded right now, judged on the clock at the moment of recording (a cycle can spend minutes capturing prices after it
-    selected). Every leg must be a fresh price: not provisional, the provider's own quote time inside the limit that applies at this distance from puck drop, and
-    the game not started. A morning price can therefore never be the basis of a recorded ticket, however good the ticket looked."""
+    selected). Every leg must be a fresh price: not provisional (aged), the provider's own quote time inside the limit that applies at this distance from puck drop, and
+    the game not started. A morning price that is still fresh may be used (subject to EARLY_TICKET_CAP); one that has aged out is not, however good the ticket looked."""
     from operational import best_bets, quote_freshness
     reasons = []
     for l in combo.legs:
@@ -277,12 +277,6 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
             continue
         if start is None or not l.quote_updated_utc:
             continue                      # no timestamps to re-judge: the gate that built the leg already refused a missing or malformed quote time
-        if best_bets._cp_enforced():
-            from operational import capture_schedule as sched
-            got = quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc)
-            if got is not None and got < start - dt.timedelta(hours=sched.PREGAME_HOURS + 0.05):
-                reasons.append(f"{rmp.leg_label(l)}: price was retrieved before this game's pregame window opened")
-                continue
         hours = (start - now).total_seconds() / 3600.0
         a = quote_freshness.assess(l.quote_updated_utc, l.retrieved_at_utc or l.captured_at_utc, now, best_bets.price_age_limit_min(hours))
         if not a["fresh"]:
@@ -582,10 +576,12 @@ def _availability_block(nhl_conn, now: dt.datetime) -> dict:
     tomorrow = (dt.date.fromisoformat(today) + dt.timedelta(days=1)).isoformat()
     out = {"schedule": {"morning_from_et": "%02d:%02d" % sched.MORNING_START_ET, "midday_from_et": "%02d:%02d" % sched.MIDDAY_START_ET,
                         "pregame_minutes_before_puck_drop": round(sched.PREGAME_HOURS * 60), "slot_close_hours_before": sched.SLOT_CLOSE_HOURS,
-                        "recheck_not_posted_minutes": sched.RECHECK_MINUTES, "tomorrow_check_et": "%02d:%02d" % sched.EVENING_CHECK_ET}}
+                        "recheck_not_posted_minutes": sched.RECHECK_MINUTES, "tomorrow_checks_et": ["%02d:%02d" % t for t in sched.TOMORROW_CHECKS_ET]}}
     try:
         out["today"] = pa.summary(today)
         out["today"]["sentence"] = pa.sentence(today)
+        out["tomorrow_observations"] = pa.observations(tomorrow)
+        out["today_observations"] = pa.observations(today, 40)
         out["tomorrow"] = pa.summary(tomorrow)
         out["tomorrow"]["sentence"] = pa.sentence(tomorrow)
         out["tomorrow_last_check_utc"] = (pa.tomorrow_last_check().isoformat() if pa.tomorrow_last_check() else None)
@@ -616,9 +612,8 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
             avail = pa.sentence(et.eastern_today(now), ids)
         except Exception:  # noqa: BLE001
             avail = ""
-        return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. A ticket is recorded only on prices fetched within "
-                f"{sched.PREGAME_HOURS * 60:.0f} minutes of puck drop (from about {opens.astimezone(et.EASTERN).strftime('%-I:%M %p ET')} for the first game), so every "
-                f"one is re-checked at the last moment. {avail} Provisional options appear here as soon as a morning or midday price is on file.").strip()
+        return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. No fresh price qualifies right now (a price is fresh for up to 150 minutes, 100 "
+                f"when the game is under two hours away). {avail} The engine looks again every 15 minutes, and again about {sched.PREGAME_HOURS * 60:.0f} minutes before each puck drop.").strip()
     return base
 
 
@@ -646,8 +641,45 @@ def _record_selection_audit(et_date: str, now: dt.datetime, picked: dict, slots_
     return {"recording_cycles_today": [r for r in rows if r.get("date_et") == et_date][-AUDIT_KEEP_DAYS_ROWS:], "latest_cycle": latest}
 
 
-PROVISIONAL_NOTE = ("Provisional: built from today's earlier look at DraftKings' prices. Nothing here is recorded and no slot is used. A ticket is recorded only after its prices are "
-                    "re-fetched shortly before puck drop and it still qualifies on them; prices and chances can move or disappear before then.")
+EARLY_TICKET_CAP = 2     # automatic tickets per Eastern day that may rest on an EARLY price (a fresh price from a morning/midday look); see docs/MORNING_WORKFLOW.md for why
+
+
+def _is_early_leg(retrieved_at, start) -> bool:
+    from operational import capture_schedule as sched, quote_freshness
+    r, st = quote_freshness.parse_utc(retrieved_at), quote_freshness.parse_utc(start)
+    return r is not None and st is not None and r < st - dt.timedelta(hours=sched.SLOT_CLOSE_HOURS)
+
+
+def early_tickets_recorded(existing_rows: list[dict]) -> int:
+    """How many tickets already recorded today rest on at least one early price (derived from each leg's own retrieval time and the game's start)."""
+    n = 0
+    for r in existing_rows:
+        try:
+            legs = json.loads(r.get("legs_json") or "[]")
+        except json.JSONDecodeError:
+            continue
+        if any(_is_early_leg(l.get("retrieved_at_utc") or l.get("captured_at_utc"), l.get("game_start_utc") or l.get("provider_start_utc")) for l in legs):
+            n += 1
+    return n
+
+
+def early_policy(existing_rows: list[dict]):
+    """Ticket veto: at most EARLY_TICKET_CAP tickets a day may rest on early prices, so a morning look cannot use up the day's slots (or the exposure limits that go with them)
+    before the later games are priced. A ticket entirely on pregame-window prices is never affected."""
+    used = early_tickets_recorded(existing_rows)
+
+    def veto(combo, already) -> str | None:
+        if not any(getattr(l, "early", False) for l in combo.legs):
+            return None
+        taken = used + sum(1 for t in already if any(getattr(l, "early", False) for l in t.legs))
+        if taken >= EARLY_TICKET_CAP:
+            return f"{taken} of the day's {EARLY_TICKET_CAP} early-price tickets are taken; the rest wait for prices closer to puck drop"
+        return None
+    return veto
+
+
+PROVISIONAL_NOTE = ("Provisional: built from an earlier look at DraftKings' prices that is now older than the freshness limit. Nothing here is recorded and no slot is used. It can be "
+                    "recorded or added once its prices are refreshed and it still qualifies on them; prices and chances can move or disappear before then.")
 
 
 def _with_provisional_eligible(legs: list) -> list:
@@ -694,7 +726,12 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         waves = day_waves(nhl_conn, et_date) if nhl_conn is not None else []
     except Exception:  # noqa: BLE001 - without a schedule there is no reservation, never a failed cycle
         waves = []
-    ticket_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
+    wave_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
+    early_filter = early_policy(existing_rows)
+    wave_info["early_price_cap"] = {"cap": EARLY_TICKET_CAP, "used": early_tickets_recorded(existing_rows)}
+
+    def ticket_filter(combo, already):
+        return wave_filter(combo, already) or early_filter(combo, already)
     picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
     singles = rmp.select_singles(legs)
     selection_audit = _record_selection_audit(et_date, now, picked, slots_left)

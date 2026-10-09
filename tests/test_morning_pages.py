@@ -9,7 +9,7 @@ import unittest
 from dashboard import ui
 from operational import price_availability as pa
 from tests.product_fixture import GEN, snapshot
-from tests.test_product_pages import FIXTURE_NOW, run_page, text
+from tests.test_product_pages import FIXTURE_NOW, choose_log, run_page, text
 
 U = dt.timezone.utc
 
@@ -41,12 +41,13 @@ def morning_snapshot(*, provisional=True):
     snap["product_games"]["default_date"] = "2026-10-15"
     checked = iso(dt.datetime(2026, 10, 15, 12, 6, tzinfo=U))             # 8:06 AM ET
     tk["diagnostics"]["price_availability"] = {
-        "schedule": {"morning_from_et": "08:00", "midday_from_et": "12:30", "pregame_minutes_before_puck_drop": 105, "tomorrow_check_et": "20:15"},
+        "schedule": {"morning_from_et": "08:00", "midday_from_et": "12:30", "pregame_minutes_before_puck_drop": 105, "tomorrow_checks_et": ["08:10", "20:15"]},
         "today": {**availability("2026-10-15", "BBB at AAA", "2026-10-15T23:00:00Z", {"player_shots_on_goal_alternate": pa.POSTED, "player_points": pa.NOT_POSTED}, checked),
                   "sentence": "DraftKings player prices are on file for 1 of 1 games."},
         "tomorrow": {**availability("2026-10-16", "BBB at AAA", "2026-10-16T23:00:00Z", {"player_shots_on_goal_alternate": pa.NOT_POSTED}, iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U))),
                      "sentence": "DraftKings player prices are on file for 0 of 1 games; 1 not posted by DraftKings yet."},
-        "tomorrow_last_check_utc": iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U))}
+        "tomorrow_last_check_utc": iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U)),
+        "tomorrow_observations": [{"at": iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U)), "game": "BBB at AAA", "market": "player_shots_on_goal_alternate", "status": "NOT_POSTED", "outcomes": 0, "hours_to_start": 22.5}]}
     if provisional:
         for o in tk["options"]["options"]:
             o["provisional"] = True
@@ -76,18 +77,32 @@ class TestMorningPages(unittest.TestCase):
         self.assertIn("PROVISIONAL — quoted", t)
         self.assertNotIn("STALE — quoted 5.0 h ago", t)            # a provisional price is not mislabelled stale inside its provisional limit
 
-    def test_best_options_marks_provisional_cards_and_offers_no_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot())
+    def test_best_options_marks_aged_provisional_cards_and_offers_no_add_control(self):
+        at = run_page("26_Player_Props.py", morning_snapshot(), setup=choose_log)
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("Provisional.", t)
-        self.assertIn("cannot be added until its prices are re-checked", t)
-        self.assertFalse([b for b in at.button if "Add to" in (b.label or "")], "no add control on a provisional option")
+        self.assertIn("older than the freshness limit", t)
+        self.assertFalse([b for b in at.button if (b.label or "").startswith("Add to ")], "no add control on an aged provisional option")
+
+    def test_a_fresh_morning_option_can_be_added_to_a_personal_log(self):
+        snap = morning_snapshot(provisional=False)
+        for o in snap["tickets"]["options"]["options"]:
+            o["early"] = True
+            for l in o["legs"]:
+                l["early"] = True
+        at = run_page("26_Player_Props.py", snap, setup=choose_log)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
+        t = text(at)
+        self.assertIn("Morning price.", t)
+        self.assertNotIn("Provisional.", t)
+        self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"], "a fresh morning option is addable")
 
     def test_a_non_provisional_option_still_offers_its_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False))
+        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False), setup=choose_log)
         self.assertEqual(len(at.exception), 0)
         self.assertNotIn("Provisional.", text(at))
+        self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"])
 
     def test_a_provisional_price_past_its_provisional_limit_is_stale(self):
         old = ui.provisional_staleness("2026-10-14T20:00:00Z", FIXTURE_NOW)             # 21 hours old
@@ -100,6 +115,7 @@ class TestMorningPages(unittest.TestCase):
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("1 not posted by DraftKings yet", t)
+        self.assertIn("not a rule about DraftKings", t)
         rows = [r for df in at.dataframe for r in df.value.to_dict("records")]
         flat = " ".join(str(v) for r in rows for v in r.values())
         self.assertIn("Not posted by DraftKings yet", flat)

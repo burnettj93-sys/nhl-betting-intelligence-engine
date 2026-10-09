@@ -124,7 +124,7 @@ def record(day: str, game_id: str, market: str, status: str, now: dt.datetime, *
         _save(doc)
         if status in (POSTED, NOT_POSTED):
             with open(state_paths.path(HISTORY_NAME), "a") as f:
-                f.write(json.dumps({"at": _stamp(now), "game_id": str(game_id), "market": market, "status": status, "outcomes": outcomes,
+                f.write(json.dumps({"at": _stamp(now), "day": day, "game_id": str(game_id), "market": market, "status": status, "outcomes": outcomes,
                                     "hours_to_start": None if hours_to_start is None else round(hours_to_start, 2)}) + "\n")
     except OSError:
         pass
@@ -265,4 +265,17 @@ def morning_status_from(games: dict, now: dt.datetime, day: str) -> dict:
         out["state"] = MORNING_PARTIAL
     else:
         out["state"] = MORNING_MISSED if now >= start + dt.timedelta(minutes=MORNING_GRACE_MIN) else MORNING_NOT_YET
+    return out
+
+
+def observations(day: str, limit: int = 60) -> list[dict]:
+    """Every provider answer on file for games of `day` (newest last): when each market was asked about, for which game, how long before puck drop, and whether DraftKings had posted it.
+    These are OBSERVATIONS at those times, not a finding about DraftKings' practice."""
+    rows = [r for r in history() if r.get("day") == day]
+    games = _load(day)["games"]
+    out = []
+    for r in rows[-limit:]:
+        g = games.get(r["game_id"]) or {}
+        out.append({"at": r["at"], "game": g.get("matchup") or r["game_id"], "market": r["market"], "status": r["status"], "outcomes": r.get("outcomes", 0),
+                    "hours_to_start": r.get("hours_to_start")})
     return out

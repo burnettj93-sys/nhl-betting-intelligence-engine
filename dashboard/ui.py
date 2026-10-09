@@ -392,8 +392,8 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                      ("Result", signed_money(pnl) if pnl is not None else ("Not recorded" if t.get("provisional") else "Open"), None,
                       ("good" if (pnl or 0) > 0 else "bad" if (pnl or 0) < 0 else "") if pnl is not None else "open")], outcomes=not t.get("provisional"))
         if t.get("provisional"):
-            banner("<b>Provisional — not recorded.</b> Built from today's earlier look at DraftKings' prices. It uses no slot and no money. It is recorded only if, after its prices "
-                   "are re-fetched shortly before puck drop, it still qualifies.", "warn")
+            banner("<b>Provisional — not recorded.</b> Built from an earlier look at DraftKings' prices that is now older than the freshness limit. It uses no slot and no money. "
+                   "It is recorded only if, once its prices are refreshed, it still qualifies.", "warn")
         st.caption(esc(t["rationale"]))
         leg_why(legs)
         if t.get("recorded_at_utc"):
@@ -477,8 +477,10 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         if stale_any:
             banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation, and it cannot be added.", "bad")
         elif prov_any:
-            banner("<b>Provisional.</b> Built from an earlier look at DraftKings' prices today. It can move or disappear, nothing is recorded from it, and it cannot be added "
-                   "until its prices are re-checked shortly before puck drop.", "warn")
+            banner("<b>Provisional.</b> An earlier look at DraftKings' price today, now older than the freshness limit. It can be browsed, but it cannot be added or recorded until its "
+                   "price is refreshed (the engine looks again every 15 minutes and re-checks it against the current price when you add it).", "warn")
+        elif opt.get("early"):
+            banner("<b>Morning price.</b> From an earlier look today and still inside the freshness limit, so it can be added. It is re-checked against the current price when you add it.", "info")
         st.caption(esc(opt["rationale"]))
         leg_why(opt["legs"])
         if show_people and opt.get("best_for"):

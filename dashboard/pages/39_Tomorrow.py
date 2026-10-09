@@ -36,15 +36,22 @@ tom = av.get("tomorrow") or {}
 sched = av.get("schedule") or {}
 last = av.get("tomorrow_last_check_utc")
 st.markdown("**Player props for these games**")
+obs = av.get("tomorrow_observations") or []
+checks = ", ".join(sched.get("tomorrow_checks_et") or ["08:10", "20:15"])
 if date == tomorrow and tom.get("games"):
     ui.banner(ui.esc(tom.get("sentence") or ""), "info")
-    st.caption(f"The engine asks DraftKings once each evening (after {sched.get('tomorrow_check_et', '20:15')} ET) whether it has posted tomorrow's player prices; last check "
-               f"{ui.et_time(last, True) if last else 'not yet'}. Asking about a market that is not posted costs no credit, so this check is nearly free until DraftKings posts. "
+    st.caption(f"What this shows is what DraftKings had posted **when the engine asked**, not a rule about DraftKings. It asks twice a day ({checks} ET); last check "
+               f"{ui.et_time(last, True) if last else 'not yet'}. Asking about a market that is not posted costs no credit, so a check is nearly free until DraftKings posts. "
                "From 8:00 AM ET on the game day the normal morning look takes over.")
     ui.availability_table(tom)
+    if obs:
+        with st.expander(f"Every check on file for these games ({len(obs)})"):
+            st.dataframe([{"Asked at (ET)": ui.et_time(o["at"], True), "Game": o["game"], "Market": ui.MARKET_WORDS.get(o["market"], o["market"]),
+                           "Hours before puck drop": o.get("hours_to_start"), "Result": ("Posted" + (f" ({o['outcomes']} prices)" if o.get("outcomes") else "")) if o["status"] == "POSTED" else "Not posted"}
+                          for o in reversed(obs)], hide_index=True, width="stretch")
 else:
-    st.caption("DraftKings has not been asked about these games yet: the first check is the evening before (after "
-               f"{sched.get('tomorrow_check_et', '20:15')} ET). DraftKings has so far posted player props on the morning of the game, not a day ahead (docs/MORNING_WORKFLOW.md).")
+    st.caption(f"DraftKings has not been asked about these games yet: the checks run twice a day ({checks} ET). Earlier looks at other game days are in the checks table once a day has them "
+               "(docs/MORNING_WORKFLOW.md lists what has been observed so far, with dates and hours).")
 
 st.markdown("**Games and early moneylines**")
 n_stale = 0
