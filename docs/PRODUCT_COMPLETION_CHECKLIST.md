@@ -1,69 +1,112 @@
-# Product completion checklist (revision 3)
+# Product completion checklist (revision 4, 2026-10-09)
 
-Status words, used strictly: **VERIFIED** (built, tested, and checked on the hosted app, or the evidence file is named) · **INCOMPLETE** (does not work end to end; the exact missing piece is stated) ·
-**EXTERNAL BLOCKER** (needs an action only the owner or a third party can take; the action is stated). The product is **not** complete: items 1–4 below are unmet. Code on `master`; the scheduled jobs run the
-pinned release checkout at the same commit (see the delivery message for the commit). Nothing in this revision is a claim of a betting edge.
+Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
+**BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
+Earlier "finished" claims were not used as evidence: every row below was re-checked in this audit, on the hosted app where it is a hosted feature.
 
-## 1. Manual writes (one click from the hosted app) — INCOMPLETE; EXTERNAL BLOCKER for credentials
+## Versions (one commit everywhere)
 
-| Piece | Status | Evidence |
+| What | Commit | Evidence |
 |---|---|---|
-| Is `X-Streamlit-User` a trusted authenticated identity? | **Trust not established → not used** | Measured on the hosted app: `st.user` empty, header present as an opaque 76-character value. Streamlit staff (https://discuss.streamlit.io/t/community-cloud-authentication-is-x-streamlit-user-a-supported-fallback/121998, 2026-07-19): "not a documented or stable public API … should not be relied upon for authentication or user identification … no guarantees about its format or presence"; "the only supported and stable approach is to configure your own OIDC provider and use `st.login`/`st.user`". No documentation says the gateway overwrites a client-supplied copy, and it cannot be tested from outside (the app is reachable only through the platform's login). Stable observations and hashing do not prove trust, so the earlier fingerprint allow-list **was removed**. |
-| Writes authorised by a supported sign-in | VERIFIED in code and tests; hosted state verified | `st.login()` (OIDC) → verified `st.user.email` → `ORDER_ALLOWED_EMAILS`, plus `PAPER_ORDER_TOKEN`; the platform header is never read for authorisation (`tests/test_manual_orders.py::TestSupportedSignInOnly`); `Authlib` added to `dashboard/requirements.txt`; the hosted Diagnostics panel shows the new rows and the setup message after a reboot (sign-in configured: no). |
-| One-click write after configuration (button → durable record → status → duplicate prevention → reconciliation) | **EXTERNAL BLOCKER — not verified** | Needs the owner's Google OAuth client, GitHub token and Streamlit secrets (exact steps: `docs/MANUAL_ORDERS.md`, repeated in the setup checklist). I will verify it the moment they exist. |
-| Non-staking verification | VERIFIED, kept | Diagnostics → "Run non-staking order-path check" (hosted button → link or direct; queue accepted check #60 in 12 s on 2026-10-08, no order, ticket or stake). |
-| Real stake | not done, by instruction | none recorded; only after the owner's explicit selection. |
+| Pre-change audit ZIP (before any work in this round) | `475bcbf0bc` | `nhl_engine_audit_PRE_475bcbf0bc.zip`, exported 2026-10-09T02:13Z |
+| Repository `master` = pinned release checkout the scheduled jobs run from = hosted app = published data | see the delivery message (`FINAL_COMMIT`) | Diagnostics → "Versions and the unattended engine" shows the hosted app's commit and the data's commit; the watchdog's `release_pinned` check compares release to `origin/master` every 30 minutes |
 
-## 2. Goalie, lineup and injury sources — INCOMPLETE; EXTERNAL BLOCKER
+## 1. Core engine
 
-Daily Faceoff stays **disabled** (the opt-in switch does not itself grant permission; the Nation Network terms prohibit scrapers and automated extraction; no permission was requested or granted). The product shows only what
-it can source: Goalies are Unconfirmed unless a person records a confirmation; Players shows "Estimated usage tier / Est. PP usage" (inferred) and an empty "Reported lineup" block; Data Status says Disabled with the reason.
-Investigated alternatives with exact blockers: `docs/STARTING_GOALIE_SOURCE_AUDIT.md` Addendum 2 — NHL's own API (official dressed rosters ≈ 90 minutes before puck drop, both goalies listed, no starter, lines, PP units or injuries; **NHL.com terms also prohibit unauthorized automated compiling, which is a standing exposure of the existing core feed**), MySportsFeeds (from CA$5/month personal "if you qualify", CA$25 commercial; lineup and injury add-ons unpriced; crowd-sourced), SportsDataIO (quote only; free trial is UEFA only), Sportradar (trial key; quote), RotoWire (sales). None is integrated, purchased or registered.
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| Up to five distinct cross-game tickets a day, combined ≥ +100, defensible value | WORKS | Rules in `research/real_market_parlay/engine.py` (EV ≥ 5% after a 3-point probability haircut; one leg on at most 2 tickets, one game on at most 3); 2026-10-07: 3 tickets, 2026-10-08: 5. Fewer than five is explained on Today ("N slots empty — …"); standards were not lowered to fill slots. |
+| Real DraftKings odds, refreshed several times a day | **PARTIAL (BLOCKED on a budget decision)** | Moneyline decision pull per start cluster + one display refresh; player props one capture per priced game ≈100 min before puck drop. The free 500-credit plan prices 78 of 163 remaining games (`docs/ODDS_BUDGET_CONFIGURATIONS.md`); more coverage/refreshes need the provider's $30/month tier — **not purchased**. |
+| Shots (alternate) | WORKS | 14 ticket legs so far, 8 won / 6 lost (mean model chance 61% → ~8.6 expected); full chain price → identity → probability → ticket → settlement → page verified (`tests/`, hosted Ticket History). |
+| Points | WORKS (tiny sample) | 2 legs, both lost (expected ≈0.9 wins). Model validated; the live sample says nothing. |
+| Anytime goals | PARTIAL | Priced for the games the credit plan covers; model validated (`goals>=1`); no ticket has used it yet. |
+| Goalie saves | **PARTIAL (BLOCKED: starter source)** | Model validated (16/16 markets beat baselines) and displayed; **no saves leg can be priced until a start is confirmed**, and no permitted automatic source exists (see 4). No saves ticket has ever existed. |
+| Moneyline | PARTIAL | All games priced by the T-35 pull; Elo path prices tickets; strength model **not promoted** (evidence gate: 150 finished game-sides). No moneyline ticket yet (legs go stale or games have started when evaluated). |
+| Spread / puck line | **BLOCKED** | Settlement, shape validator and leg builder are done and tested; the provider contract needs one real payload (1 credit — the capture was rejected by the approval layer, not bypassed) and the model is unvalidated and **kept out of selection**. |
+| $10 per automatic ticket vs the $500 model book; open bets, settlement, balance, P&L, postmortems tracked | WORKS | Model book $465.76 = $500 − $90 staked + $55.76 returned; 9 settled tickets, 2W–7L, −$34.24, no open tickets (hosted Today / Paper Performance; independent re-derivation in `audit_evidence/model_vs_personal_reconciliation.json`). |
 
-## 3. Odds budget — INCOMPLETE (existing allowance cannot meet the requested coverage)
+## 2. Current data, no demo content
 
-`docs/ODDS_BUDGET_CONFIGURATIONS.md` (observed costs, schedule on file, reset date check): **A (existing allowance, running):** 78 of 163 remaining games (48%) get shots + points, 18 of them goals, one capture per game, 3 moneyline decision pulls + 1 display refresh a day;
-**in-allowance alternative A2 (owner's choice, implemented, off):** points only → 132 of 163 (81%); **B (all games, priority markets, actionable captures):** 441 credits for Oct 9–31, short 175 on the free plan; **C (full markets, 3 captures per game):** 2,117 credits, short 1,851; both need the provider's next tier
-(20K credits, $30/month — a purchase, **not made**). Reset date: the provider does not state it; observed once at 2026-10-01 00:04Z (calendar month, UTC); only the account dashboard can confirm. Five-ticket target: at most `floor(3k/2)` tickets from k priced games (4+ games to reach 5); under A 13 of 23 nights can reach 5.
-Duplicate/unnecessary calls removed (see the document). A defect found and fixed: the T-35 moneyline decision pull for the 7 PM cluster (6 games) on 2026-10-08 was deferred by the old soft daily budget — those six games had no moneyline decision quote that evening; it now obeys only the hard reserve (the next cluster was captured at 22:50Z).
+| Requirement | Status | Evidence |
+|---|---|---|
+| Today / Game Detail / Players / Goalies / board default to the current ET day and season | WORKS | Hosted Today shows 2026-10-09 games; Players "season = 2026-27"; no demo/simulated wording (page-wide test). |
+| Update times and "data through" shown; odds freshness from the provider's quote time | WORKS | Header line on every page; Data Status table (data through, last fetch, age now, policy, next refresh, reason). |
+| A stale snapshot must not say "CURRENT"; Data Status and the cards agree | WORKS (defect found and fixed) | The top banner used a 13-hour rule and said CURRENT at 63 minutes while Data Status said STALE. It now says "SNAPSHOT PUBLISHED N MIN AGO" and turns to "NOT RECENTLY PUBLISHED" after 60 minutes — the same limit Data Status uses (`tests/test_cloud_live_data.py`). |
+| Stale data traced to a cause | WORKS | Previous Data Status defect (daily readiness cache, wrong odds file) fixed earlier and re-verified; watchdog reports the publication age. |
+| Known limit | PARTIAL | Player game logs come from MoneyPuck and trail by 1–2 days ("Player logs through 2026-10-06" on 10-09); stated on every header and on Data Status (≤ 36 h policy). |
 
-## 4. Puck line — unmet; components separated
+## 3. Unfamiliar-player recommendations (Arttu Hyry, Mavrik Bourque)
 
-* **Non-spending work, done and tested:** settlement (`resolve_puck_line`, official final score, extra-time margin one goal, ledger mapping), a shape validator for the provider's `spreads` market, a leg builder whose legs can never be selected (`provider_contract_verified` False, `model_threshold_eligible` False, family not in the allowlist), an owner-run capture script, and a certification test that activates when the real fixture exists.
-* **Contract certification — needs one user action:** one real DraftKings `spreads` payload, which costs **one Odds API credit**. My capture was rejected by the approval layer ("Real-World Transactions") and was not bypassed. The exact action: run `python3 deploy/capture_puck_line_contract.py --confirm-spend-1-credit` yourself, or tell me in chat that you authorise spending one credit on it. Then the fixture, a parity test and the contract entry follow. This is **separate from** validation.
-* **Model validation — separate requirement, unmet:** the Skellam result stays on record (0.52926 vs base rate 0.52751); `puck-line-direct-v1` is frozen and scored only on untouched 2026-27 games (see Model Health: 0 of its logged games finished; a review needs 300). Nothing unvalidated is in selection.
+| Finding | Detail |
+|---|---|
+| Identity / team / schedule | Both correct (regular-season game ids; Hyry DAL, Bourque NSH; no preseason/AHL/old-season mixing in the model history). |
+| Hyry | **Defect found and fixed.** 28 NHL games, ~13–14 min, no power play, 0 points in 3 games this season; DraftKings offered +370 for 1+ point and the model said 27–29%. Walk-forward on 2025-26 shows the calibrated model **over-predicts below 40 prior games** (points 1+: 26–28% predicted vs 24% observed; shots 2+: 32–34% vs 28–30%) and is calibrated from 40 (27.5% vs 27.1%) — `docs/validation/low_sample_calibration.json`. The floor moved from 20 to 40 games; Hyry is no longer priced, and his hosted page says so ("Limited history … no recommendation is made"). The ticket that used him was a manual add of the option card. |
+| Bourque | 159 games, tier-2 usage, power-play unit 2: a legitimate shots leg. Three losses on three tickets are normal variance, not a defect. |
+| Sample of other recommended players | Every other leg ever recommended has 62–331 prior games (Leonard 86, Kadri 325, Malkin 291, Landeskog 62, Coleman 314, Lee 331, Seguin 194, Dvorak 260). |
+| Card rationale | Every option and ticket card has "Why this selection": role (labelled inferred), season and recent production, expected output, sample size and the main uncertainty (`operational/leg_context.py`). |
+| Discarded analysis | A role-specific slice (low ice time, no power play) was dropped because it was defined by the game's actual ice time — a leak; it is not used as evidence. |
 
-## 5. Data Status defect (7:01 AM badges still showing at 6 PM ET) — VERIFIED; evidence at the end
+## 4. Player and goalie details
 
-## Unchanged VERIFIED items (release carried forward, tests green)
+| Item | Status | Note |
+|---|---|---|
+| Players: ice time, PP time, shots/goals/assists/hits/blocks (season and recent), expected production, estimated tier | WORKS | Players page. |
+| Reported line / PP unit | **BLOCKED (permission)** | Shown empty and labelled; the estimated tier is separate and labelled "inferred". Daily Faceoff stays disabled (Nation Network terms prohibit scrapers; the owner's acknowledgement does not grant permission). Permitted alternatives and their costs: `docs/STARTING_GOALIE_SOURCE_AUDIT.md`. |
+| Goalies: W-L-OTL, SV%, GAA, SO, recent starts, start chance (estimate), expected saves/GA with ranges, team win % if he starts | WORKS | Goalies page. No team data substitutes for a goalie's own. |
+| Starter confirmation with source and time | **BLOCKED** | Only a person-recorded confirmation or a team post is accepted; none is automatic. |
 
-Today / ET dates / current games; best +100 option per person; shared account and exposure ($500 start, history intact, 9 tickets); automatic recording and settlement; no demo content; freshness and provenance rules; settlement safeguards; postmortems; Ontario verification flow; anytime-goal legs live; credit plan running; player-role relabelling; moneyline evidence gate (strength model not promoted); DB path guard.
+## 5. Best +100 option and redundant bets
 
-## Credential rotation — EXTERNAL BLOCKER
+| Item | Status | Evidence |
+|---|---|---|
+| Best supported +100 option on player and goalie pages (single, else a labelled estimated parlay; no invented combined prices) | WORKS in code; hosted populated state **PENDING** | Player and goalie pages show the option card or the exact reason there is none. Options need captured prices (about 2–5 PM ET for tonight's games), so the populated card could not be shown on the hosted app this morning. |
+| Redundant recommendations reworked or hidden; technical rejections in Diagnostics | WORKS | Option de-duplication by legs; rejections in Diagnostics. |
+| Browsing, filtering or refreshing never records a bet | WORKS | Tests: no order and no ledger write without a button press. |
 
-The exposed Odds API key must be rotated by the owner (`docs/CREDENTIAL_ROTATION.md`), then `python3 deploy/verify_odds_key.py`.
+## 6. Personal bet logs by code
 
-## Data Status defect (2026-10-08) — trace, fix and evidence
+| Item | Status | Evidence |
+|---|---|---|
+| My Bets / Model Bets / Both, clearly separated; labelled "Manually added" | WORKS | Hosted My Bets (desktop and 390 px mobile). |
+| Personal bets never affect the $500 model book | WORKS | Separate database file; the model's queries count `origin = 'AUTOMATIC'` only; `deploy/qa_two_logs.py` on a copy of the live ledger: two logs × two bets, settled WIN/LOSS — hash of every ledger table identical before/after, account identical, each log reconciles (`audit_evidence/isolated_two_log_qa.json`). |
+| Create/open by code, collision refusal, durable, no duplicate submissions | WORKS | Hash-only storage, `CODE_IN_USE` / `LOG_NOT_FOUND` refusals, order-id idempotence, same-bet-same-day refusal, rate limits (`tests/test_personal_logs.py`, 30 tests). The page and `docs/PERSONAL_LOGS.md` say a code is **not authentication** and the published data is public. |
+| Destination obvious before adding | WORKS | "Adding to your personal log *X* — separate from the model book" above every add button. |
+| Earlier manual ticket | WORKS | `ME3D7C508EBFDD3` (lost, −$10) left the model accounting (model P&L −$44.24 → −$34.24, cash $455.76 → $465.76, tickets 10 → 9); the ledger row is untouched (hash of the table identical), a copy sits in "unclaimed earlier manual tickets" with migration and audit rows; ledger backed up first. The owner claims it with `python3 -m operational.personal_logs claim-legacy`. |
+| **The hosted add button end to end** | **BLOCKED** | Needs the app's write credential. Without it the button only builds a pre-filled GitHub issue that the repository owner alone can submit — which is not an end-to-end test and is not offered to friends. Exact action: `docs/PERSONAL_LOGS.md` → create a fine-grained token (Issues: read/write on this one repository) and add `LOG_WRITE_TOKEN` to the app's Streamlit secrets. I will run the hosted add + settle test with isolated test data as soon as it exists. |
 
-**Where updates stopped.** Source updates → readiness/status → publication → hosted page: the page rendered `operational/data_readiness_cache.json` verbatim, a file written **once a day** by the 07:00 ET sync (`sync_daily.py`), so every badge was frozen at that
-moment (11:01Z) and the age fields ("0.0 h") never grew; nothing re-published after the sync either. Its **odds entry was wrong evidence, not stale odds**: `operational/readiness.py` read `research/live_sog_board_cache.json`, a retired research file last touched 2026-08-27 ("1000 hours"), while real
-moneyline quotes were minutes old (e.g. quote `2026-10-08T21:04:04Z`, fetched 21:04:32Z). So Odds read STALE for two reasons at once: wrong file, and a status that could never change.
+## 7. Paper book, settlement, postmortems
 
-**Fix** (`operational/source_status.py`, `dashboard/pages/9_Data_Status.py`): the engine records, at every publication (the trader at least every ~25 minutes; also after the daily and midday NHL syncs), the **timestamps** of each source's own evidence — data-through, last successful fetch, last attempt, freshness policy, next refresh, limiter —
-never ages; the page derives each state from those timestamps and the current time when it is opened, with source-specific policies (daily files in hours, prices in minutes and tighter near puck drop). Separate states: Current, Stale (past policy), Not due, Disabled (a switched-off feed, with the reason), Budget-limited, Blocked, Unavailable, Estimate; a stale **status snapshot** (the engine stopped publishing) is a separate red banner. The readiness cache's odds evidence now points at the real pull. The old "two disagreeing caches"
-explanation and the second snapshot banner are gone from the page; raw evidence, the old cache and job health are on Diagnostics. Reloading the page reads the published state and spends no credits. 10 tests (`tests/test_source_status.py`).
+| Item | Status |
+|---|---|
+| Ticket ids / frozen entry / provenance preserved; exact $10; atomic funds; no duplicate on refresh/restart; invalid stakes rejected without writes; alerts never refund | WORKS (existing test suites, unchanged and green) |
+| Official results with documented rules; unresolved stays visible; cash/open/payouts/equity/P&L reconcile independently | WORKS (`audit_evidence/model_vs_personal_reconciliation.json`: cash by P&L = cash by stake/return flows) |
+| Model and personal bookkeeping separate | WORKS (section 6) |
+| Postmortems from stored predictions + actual settlement, variance vs defect | WORKS (`audit_evidence/postmortems/`) |
 
-**Timestamp agreement after a real update (published 2026-10-09 00:24:41Z, hosted page evaluated 00:32:23Z):**
+## 8. Model health, coverage, operations
 
-| Source | Engine evidence | Published status document | Hosted page |
-|---|---|---|---|
-| Moneyline prices | `moneyline_snapshot_cache.json`: newest quote `00:20:59Z` | basis `00:20:59Z` | "newest quote 2026-10-09T00:20:59Z", fetched 8:21 PM ET, age 11 min, policy ≤ 90 min |
-| NHL schedule/results | `ingestion_health_cache.json`: pregame refresh success `00:06:05Z` | basis `00:06:05Z` | fetched 8:06 PM ET, age 26 min, next 8:36 PM ET |
-| Player prop prices | credit-plan ledger: capture `2026-10-08T23:38:57Z` (archive header `23:38:58Z`) | basis `23:38:58Z` | newest capture …23:38:58Z, "Not due" (all 3 planned games captured; 7 of 10 games not priced under the credit plan) |
-| MoneyPuck | manifest accepted `2026-10-08T11:01:19Z` | basis `11:01:19Z` | 7:01 AM ET, age 13.5 h, ≤ 36 h, next 7:00 AM ET |
-| Starting-goalie confirmations; reported lines | feed switched off | fixed state Disabled, limiter PERMISSION | Disabled, with the reason |
+| Item | Status | Evidence |
+|---|---|---|
+| Freshness, market support, predictive validation, calibration and betting-value evidence kept apart | WORKS | Model Health → "What the evidence does and does not say". The betting-value row says "none yet" on purpose. |
+| Odds budget and every paid job audited; trade-offs shown; no claim of full coverage | WORKS | `docs/ODDS_BUDGET_CONFIGURATIONS.md`, `docs/ODDS_CREDIT_AUDIT.md`, Diagnostics credit plan. Nothing purchased. |
+| Scheduled jobs run from the clean release, refresh, settle, publish compatible snapshots, report failures | WORKS | 13 launchd jobs from `~/nhl_engine_release`; new **watchdog** job (every 30 min) checks jobs loaded, release == origin/master, trader and publication recency, database path; shown on Diagnostics and re-aged there (it turns FAIL by itself if it stops); one macOS notification when something turns FAIL. |
+| Credential rotation | **BLOCKED** | The exposed Odds API key is not resolved until the owner rotates it (`docs/CREDENTIAL_ROTATION.md`, then `python3 deploy/verify_odds_key.py`). No credential is printed anywhere. |
 
-**Stale status when updates stop (real, not simulated):** I set `NHL_ENGINE_CLOUD_PUBLISH=OFF` from 23:25Z to 00:24Z (the engine kept running; only publication stopped; restored afterwards, key set verified against a backup). At 00:23Z the hosted page showed the red "STATUS SNAPSHOT IS STALE: the engine last published this status 63 min ago", the NHL rows aged by themselves to 78 min and showed "next refresh … (overdue)", the moneyline row aged 64 min, and the prop-price row went Stale (2.9 h) —
-none of them green by default; after the publication resumed, the banner cleared on the next page load. Publication-to-page lag is up to about 8 minutes (GitHub raw cache about 5 minutes plus the app's 180-second snapshot cache). Hosted QA on the final code (`95af5ae`): all 13 navigation items load without an exception.
+## 9. Visual upgrade and Eggy
 
-**Incidents found and fixed while doing this:** (1) the T-35 moneyline decision pull was still on the old soft daily budget and was **deferred for the 7 PM cluster (6 games)** on 2026-10-08 — those games had no moneyline decision quote that evening; it now obeys the hard reserve only (the next cluster was captured at 22:50Z); (2) a goals capture was accounted as a base capture and starved the third planned game; goals now have their own class and legacy ledger rows are split (the third game was captured at 23:38Z); (3) one 15-minute publish failure earlier (forbidden key) — fixed.
+| Item | Status | Evidence |
+|---|---|---|
+| Layered slate theme (not black), consistent cards/metrics/tables/buttons/badges, clear active navigation | WORKS | Hosted screenshots (desktop, 390 px mobile); no horizontal overflow on any of the 14 pages; metric values scale instead of truncating (defect found and fixed in QA). |
+| Eggy, the supplied artwork, unmodified | WORKS | `dashboard/assets/eggy/eggy_original.webp` is byte-identical to the supplied file; other files are plain resized copies (`README.md` there). Used as the sidebar logo, browser-tab icon, brand block and in empty states (Today empty slots, My Bets empty log). |
+
+## 10. QA
+
+Every page was opened on the hosted app by direct link at 390 px width: no exception, no horizontal overflow (Today, Games, Game Detail, Best Options, My Bets, Players, Goalies, Team Intelligence, Model Health, Paper Performance, Ticket History, Morning Review, Data Status, Diagnostics); desktop views of Today, My Bets (open/create, My/Model/Both), Players (Hyry), Goalies, Data Status, Paper Performance and Diagnostics were inspected. Not yet possible: populated option cards and the real add flow (PENDING / BLOCKED above). Tests: see the delivery message.
+
+## Owner actions that remain (only these)
+
+1. **`LOG_WRITE_TOKEN`** Streamlit secret (section 6) — enables one-click adding for friends. Also invite friends to the private app.
+2. **Rotate the Odds API key** (`docs/CREDENTIAL_ROTATION.md`).
+3. **Budget decision**: stay on A (78/163 games), switch to A2 (`NHL_ENGINE_PROP_MARKETS=player_points`, 132/163, no shots), or buy the 20K tier ($30/month, not bought).
+4. **Source permissions** if lineups/starters should be automatic (Nation Network or another permitted feed — see the audit); until then confirmations are manual.
+5. **Puck line**: authorise one credit (`python3 deploy/capture_puck_line_contract.py --confirm-spend-1-credit`) if you want the contract certified; the model stays out of selection regardless.
