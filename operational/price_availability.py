@@ -217,7 +217,7 @@ def sentence(day: str, game_ids: list[str] | None = None) -> str:
 
 # ----------------------------------------------------------------- the morning update ----
 
-MORNING_DONE, MORNING_PARTIAL, MORNING_NOT_YET, MORNING_MISSED, MORNING_NO_GAMES, MORNING_BUDGET_ONLY = "DONE", "PARTIAL", "NOT_YET", "MISSED", "NO_GAMES", "BUDGET_ONLY"
+MORNING_DONE, MORNING_PARTIAL, MORNING_NOT_YET, MORNING_MISSED, MORNING_NO_GAMES, MORNING_BUDGET_ONLY, MORNING_LATE = "DONE", "PARTIAL", "NOT_YET", "MISSED", "NO_GAMES", "BUDGET_ONLY", "LATE"
 MORNING_GRACE_MIN = 45        # the first look is due at 08:00 ET; the trader runs every 15 minutes, so it should land by ~08:15; 08:45 is already late
 
 
@@ -263,6 +263,8 @@ def morning_status_from(games: dict, now: dt.datetime, day: str) -> dict:
     elif out["looked"] == out["total"]:
         # "looked at" includes games the plan could not afford; a morning in which DraftKings was never actually asked about any game is not a done morning
         out["state"] = MORNING_DONE if (out["posted"] + out["not_posted"]) else MORNING_BUDGET_ONLY
+        if out["state"] == MORNING_DONE and out["first_look_utc"] and qf.parse_utc(out["first_look_utc"]) > start + dt.timedelta(minutes=MORNING_GRACE_MIN):
+            out["state"] = MORNING_LATE        # every game has a look, but the first one came long after 08:00: that is not "the morning update"
     elif out["looked"]:
         out["state"] = MORNING_PARTIAL
     else:

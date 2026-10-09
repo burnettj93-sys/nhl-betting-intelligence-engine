@@ -133,6 +133,8 @@ class TestMorningPages(unittest.TestCase):
         games = morning_snapshot()["tickets"]["diagnostics"]["price_availability"]["today"]["games"]
         self.assertEqual(pa.morning_status_from(games, dt.datetime(2026, 10, 15, 11, 0, tzinfo=U), "2026-10-15")["state"], pa.MORNING_NOT_YET)
         self.assertEqual(pa.morning_status_from(games, dt.datetime(2026, 10, 15, 13, 0, tzinfo=U), "2026-10-15")["state"], pa.MORNING_DONE)
+        late = {"2026020900": {"markets": {"m": {"status": pa.POSTED, "checked_utc": "2026-10-15T19:44:00Z"}}, "start_utc": "2026-10-15T23:00:00Z"}}
+        self.assertEqual(pa.morning_status_from(late, dt.datetime(2026, 10, 15, 21, 0, tzinfo=U), "2026-10-15")["state"], pa.MORNING_LATE)       # a 3:44 PM first look is not the morning update
         blocked = {"2026020900": {"markets": {"m": {"status": pa.BUDGET_BLOCKED, "checked_utc": "2026-10-15T12:30:00Z"}}, "start_utc": "2026-10-15T23:00:00Z"}}
         self.assertEqual(pa.morning_status_from(blocked, dt.datetime(2026, 10, 15, 13, 0, tzinfo=U), "2026-10-15")["state"], pa.MORNING_BUDGET_ONLY)      # not asking is not a done morning
         empty = {"2026020900": {"markets": {"m": {"status": pa.NOT_FETCHED, "checked_utc": "2026-10-15T10:00:00Z"}}, "start_utc": "2026-10-15T23:00:00Z"}}

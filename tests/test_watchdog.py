@@ -109,6 +109,13 @@ class TestMorningUpdateCheck(unittest.TestCase):
         self.assertIn("could not look at any game", r["detail"])
         self.assertFalse([e for e in wd.morning_evidence() if e["state"] == "DONE"])
 
+    def test_a_first_look_in_the_afternoon_is_late_not_done(self):
+        self.seed(self.at(15, 44), start="2026-10-09T23:00:00Z")
+        r = wd.check_morning_update(self.at(17, 0))
+        self.assertEqual(r["status"], wd.WARN)
+        self.assertIn("came late", r["detail"])
+        self.assertFalse([e for e in wd.morning_evidence() if e["state"] == "DONE"])
+
     def test_a_look_before_8_does_not_count(self):
         self.seed(self.at(7, 30))
         self.assertEqual(wd.check_morning_update(self.at(9, 0))["status"], wd.WARN)
