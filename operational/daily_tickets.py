@@ -50,6 +50,7 @@ FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The 
 
 STATUS_RECOMMENDED = "RECOMMENDED"
 STATUS_RECORDED = "RECORDED"
+STATUS_PROVISIONAL = "PROVISIONAL"
 STATUS_PENDING = "PENDING"
 STATUS_WON = "WON"
 STATUS_LOST = "LOST"
@@ -260,6 +261,35 @@ def code_version() -> str:
         return "unknown"
 
 
+def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> list[str]:
+    """Reasons a selected ticket may NOT be recorded right now, judged on the clock at the moment of recording (a cycle can spend minutes capturing prices after it
+    selected). Every leg must be a fresh price: not provisional, the provider's own quote time inside the limit that applies at this distance from puck drop, and
+    the game not started. A morning price can therefore never be the basis of a recorded ticket, however good the ticket looked."""
+    from operational import best_bets, quote_freshness
+    reasons = []
+    for l in combo.legs:
+        if getattr(l, "provisional", False):
+            reasons.append(f"{rmp.leg_label(l)}: price is provisional (from an earlier look); it is re-checked on a pregame price first")
+            continue
+        start = best_bets.effective_start(l.provider_start_utc or l.game_start_utc, l.game_start_utc) if (l.provider_start_utc or l.game_start_utc) else None
+        if start is not None and start <= now:
+            reasons.append(f"{rmp.leg_label(l)}: game started")
+            continue
+        if start is None or not l.quote_updated_utc:
+            continue                      # no timestamps to re-judge: the gate that built the leg already refused a missing or malformed quote time
+        if best_bets._cp_enforced():
+            from operational import capture_schedule as sched
+            got = quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc)
+            if got is not None and got < start - dt.timedelta(hours=sched.PREGAME_HOURS + 0.05):
+                reasons.append(f"{rmp.leg_label(l)}: price was retrieved before this game's pregame window opened")
+                continue
+        hours = (start - now).total_seconds() / 3600.0
+        a = quote_freshness.assess(l.quote_updated_utc, l.retrieved_at_utc or l.captured_at_utc, now, best_bets.price_age_limit_min(hours))
+        if not a["fresh"]:
+            reasons.append(f"{rmp.leg_label(l)}: price no longer fresh at recording time ({a['status']}, {a.get('quote_age_min')} min old)")
+    return reasons
+
+
 def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.datetime) -> list[dict]:
     """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS."""
     results = []
@@ -382,7 +412,8 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
             "quote_age_min_at_entry": l.quote_age_min, "freshness_status": l.freshness_status or None, "team": l.team,
             "opponent": l.opponent, "game_start_utc": l.game_start_utc, "american_price": l.american_price,
             "decimal_price": round(rmp.leg_decimal(l), 4), "price_captured_at_utc": l.captured_at_utc,
-            "probability": l.conservative_probability, "model_version": l.model_version, "outcome": None})
+            "probability": l.conservative_probability, "model_version": l.model_version, "outcome": None,
+            "provisional": bool(getattr(l, "provisional", False))})
     stake = pb.PAPER_BET_STAKE
     return {
         "ticket_id": pb.compute_ticket_id(et_date, combo.legs), "status": STATUS_RECOMMENDED, "recorded": False,
@@ -456,7 +487,8 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
 
 
 def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.ParlayResult], singles: list[rmp.ParlayLeg],
-                empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None) -> dict:
+                empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None,
+                provisional: dict | None = None) -> dict:
     et_date = et.eastern_today(now)
     rows = recorded_today(bankroll_conn, et_date)
     alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows])
@@ -502,6 +534,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
             "stake": pb.PAPER_BET_STAKE},
         "diagnostics": diagnostics, "coverage": market_coverage.audit(diagnostics),
         "options": mark_on_book(options, bankroll_conn, et_date),
+        "provisional": provisional or {"as_of_utc": now.isoformat(), "note": PROVISIONAL_NOTE, "provisional_legs": 0, "tickets": []},
     }
 
 
@@ -542,6 +575,25 @@ def _capture_plan(nhl_conn, now: dt.datetime) -> list[dict]:
         return [{"error": f"{exc.__class__.__name__}: {exc}"}]
 
 
+def _availability_block(nhl_conn, now: dt.datetime) -> dict:
+    """Why each game's prices are or are not on file (operational/price_availability.py), today and tomorrow, plus the schedule that produced it."""
+    from operational import capture_schedule as sched, price_availability as pa
+    today = et.eastern_today(now)
+    tomorrow = (dt.date.fromisoformat(today) + dt.timedelta(days=1)).isoformat()
+    out = {"schedule": {"morning_from_et": "%02d:%02d" % sched.MORNING_START_ET, "midday_from_et": "%02d:%02d" % sched.MIDDAY_START_ET,
+                        "pregame_minutes_before_puck_drop": round(sched.PREGAME_HOURS * 60), "slot_close_hours_before": sched.SLOT_CLOSE_HOURS,
+                        "recheck_not_posted_minutes": sched.RECHECK_MINUTES, "tomorrow_check_et": "%02d:%02d" % sched.EVENING_CHECK_ET}}
+    try:
+        out["today"] = pa.summary(today)
+        out["today"]["sentence"] = pa.sentence(today)
+        out["tomorrow"] = pa.summary(tomorrow)
+        out["tomorrow"]["sentence"] = pa.sentence(tomorrow)
+        out["tomorrow_last_check_utc"] = (pa.tomorrow_last_check().isoformat() if pa.tomorrow_last_check() else None)
+    except Exception as exc:  # noqa: BLE001 - diagnostics only
+        out["error"] = f"{exc.__class__.__name__}: {exc}"
+    return out
+
+
 def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
     base = "No eligible priced legs right now (no fresh prices for games that haven't started)."
     if nhl_conn is None:
@@ -555,12 +607,18 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
     if not starts:
         return "No games left to start today."
     first = best_bets._parse_utc(starts[0] if starts[0].endswith("Z") else starts[0] + "Z")
-    opens = first - dt.timedelta(hours=best_bets.CAPTURE_HORIZON_H)
+    from operational import capture_schedule as sched, price_availability as pa
+    opens = first - dt.timedelta(hours=sched.PREGAME_HOURS)
     first_et = first.astimezone(et.EASTERN).strftime("%-I:%M %p ET")
     if now < opens:
-        return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. DraftKings player "
-                f"prices are captured within {best_bets.CAPTURE_HORIZON_H:.0f} hours of puck drop (from about "
-                f"{opens.astimezone(et.EASTERN).strftime('%-I:%M %p ET')}), so there is nothing priced to select from yet.")
+        try:
+            ids = [str(r["game_id"]) for r in nhl_conn.execute("SELECT game_id FROM games WHERE game_date = ? AND game_state = 'SCHEDULED'", (et.eastern_today(now),)).fetchall()]
+            avail = pa.sentence(et.eastern_today(now), ids)
+        except Exception:  # noqa: BLE001
+            avail = ""
+        return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. A ticket is recorded only on prices fetched within "
+                f"{sched.PREGAME_HOURS * 60:.0f} minutes of puck drop (from about {opens.astimezone(et.EASTERN).strftime('%-I:%M %p ET')} for the first game), so every "
+                f"one is re-checked at the last moment. {avail} Until then the app shows provisional options built from the morning look.").strip()
     return base
 
 
@@ -588,6 +646,39 @@ def _record_selection_audit(et_date: str, now: dt.datetime, picked: dict, slots_
     return {"recording_cycles_today": [r for r in rows if r.get("date_et") == et_date][-AUDIT_KEEP_DAYS_ROWS:], "latest_cycle": latest}
 
 
+PROVISIONAL_NOTE = ("Provisional: built from today's earlier look at DraftKings' prices. Nothing here is recorded and no slot is used. A ticket is recorded only after its prices are "
+                    "re-fetched shortly before puck drop and it still qualifies on them; prices and chances can move or disappear before then.")
+
+
+def _with_provisional_eligible(legs: list) -> list:
+    """The leg list in which a provisional price counts as usable (for DISPLAY: options and provisional tickets). The recording pool never goes through this."""
+    import dataclasses
+    return [dataclasses.replace(l, price_fresh=True) if getattr(l, "provisional", False) else l for l in legs]
+
+
+def _provisional_section(legs: list, existing: list, now: dt.datetime, et_date: str) -> dict:
+    """Up to SLOT_COUNT tickets chosen exactly as the recording selector would choose them, but allowed to use today's earlier (provisional) prices. Never recorded,
+    never counted against the five slots; exposure limits still count what is already recorded."""
+    prov_legs = [l for l in legs if getattr(l, "provisional", False)]
+    section = {"as_of_utc": now.isoformat(), "note": PROVISIONAL_NOTE, "provisional_legs": len(prov_legs), "tickets": []}
+    if not prov_legs:
+        return section
+    try:
+        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=SLOT_COUNT)
+    except Exception as exc:  # noqa: BLE001 - informational only
+        section["error"] = f"{exc.__class__.__name__}: {exc}"
+        return section
+    for combo in picked["tickets"]:
+        if not any(getattr(l, "provisional", False) for l in combo.legs):
+            continue                      # a ticket entirely on fresh prices is the recording selector's business, not a provisional one
+        card = ticket_from_combo(combo, et_date)
+        card["status"] = STATUS_PROVISIONAL
+        card["provisional"] = True
+        card["oldest_quote_age_min"] = max((l.quote_age_min or 0.0) for l in combo.legs)
+        section["tickets"].append(card)
+    return section
+
+
 def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | None = None) -> dict:
     """One selection + recording pass. Safe to repeat: recorded tickets are
     never rewritten and never staked twice."""
@@ -609,7 +700,11 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
 
     account = pb.account_state(bankroll_conn, TRACK)
-    record_results = record_tickets(bankroll_conn, picked["tickets"], now) if picked["tickets"] else []
+    revalidated, held_back = [], []
+    for combo in picked["tickets"]:
+        why = revalidate_before_recording(combo, now)
+        (held_back if why else revalidated).append((combo, why))
+    record_results = record_tickets(bankroll_conn, [c for c, _ in revalidated], now) if revalidated else []
     if slots_left == 0:
         reason = f"All {SLOT_COUNT} of today's ticket slots are recorded."
     else:
@@ -620,22 +715,24 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     recorded_now = {r["ticket_id"] for r in record_results if r["status"] == "INSERTED"}
     still_recommended = [c for c in picked["tickets"]
                          if pb.compute_ticket_id(et_date, c.legs) not in recorded_now]
+    provisional = _provisional_section(legs, existing, now, et_date)
     diagnostics = {
         "legs_considered": len(legs), "pool_after_edge_filter": picked["pool_size"],
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
-        "capture_plan": _capture_plan(nhl_conn, now), "recording_policy": wave_info,
+        "capture_plan": _capture_plan(nhl_conn, now), "recording_policy": wave_info, "price_availability": _availability_block(nhl_conn, now),
         "selection_audit": selection_audit,
+        "recording_revalidation": {"recorded_after_revalidation": len(revalidated), "held_back": [{"ticket_id": pb.compute_ticket_id(et_date, c.legs), "reasons": w} for c, w in held_back]},
     }
     from operational import player_options
     try:
-        options = player_options.build_options(legs, et_date)
+        options = player_options.build_options(_with_provisional_eligible(legs), et_date)
     except Exception as exc:  # noqa: BLE001 - options are informational; never block recording
         options = {"date_et": et_date, "options": [], "persons": {}, "error": f"{exc.__class__.__name__}: {exc}"}
     options["generated_at_utc"] = now.isoformat()
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
-                        diagnostics=diagnostics, record_results=record_results, options=options)
+                        diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional)
     changed = _write_state(state)
     return {
         "eastern_date": et_date, "qualifying_tickets_found": picked["qualifying"],
@@ -651,8 +748,9 @@ def refresh_state_only(bankroll_conn, now: dt.datetime) -> bool:
     the last recommendations/singles that were on file."""
     previous = read_state() or {}
     prev_options = previous.get("options") if previous.get("date_et") == et.eastern_today(now) else None
+    prev_prov = previous.get("provisional") if previous.get("date_et") == et.eastern_today(now) else None
     state = build_state(bankroll_conn, now, recommended=[], singles=[], empty_reason=previous.get("empty_slot_reason"),
-                        diagnostics=previous.get("diagnostics", {}), record_results=[], options=prev_options)
+                        diagnostics=previous.get("diagnostics", {}), record_results=[], options=prev_options, provisional=prev_prov)
     # Carry forward unrecorded cards and singles so a settlement pass does not blank the board.
     recorded_ids = {c["ticket_id"] for c in state["tickets"]}
     for card in previous.get("tickets", []):

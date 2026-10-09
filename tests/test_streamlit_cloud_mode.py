@@ -55,7 +55,7 @@ ADMIN_RESEARCH = {
     "Team Goals by Period", "Player Context State", "Model Performance", "Research Lab", "Fantasy Settings",
 }
 PRODUCT_PAGES = {"Today", "Games", "Game Detail", "Best Options", "Players", "Goalies", "Team Intelligence", "Model Health",
-                 "Paper Performance", "Ticket History"}
+                 "Paper Performance", "Ticket History", "Tomorrow"}
 LIGHTWEIGHT = {"Morning Review", "Data Status"}
 
 # Things that must NEVER be constructed/imported by the Community Cloud path.

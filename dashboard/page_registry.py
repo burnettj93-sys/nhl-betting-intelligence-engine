@@ -50,6 +50,7 @@ PAGES: tuple[PageSpec, ...] = (
     # ---- Operate
     PageSpec("21_Today.py", "Today", "☀️", "Operate", CORE_USER, True, default=True),
     PageSpec("1_Game_Slate.py", "Games", "🗓️", "Operate", CORE_USER, True),
+    PageSpec("39_Tomorrow.py", "Tomorrow", "🌅", "Operate", CORE_USER, True),
     PageSpec("2_Game_Detail.py", "Game Detail", "🔍", "Operate", CORE_USER, True),
     PageSpec("26_Player_Props.py", "Best Options", "🎫", "Operate", CORE_USER, True),
     PageSpec("38_My_Bets.py", "My Bets", "🥚", "Operate", CORE_USER, True),

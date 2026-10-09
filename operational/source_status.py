@@ -229,12 +229,20 @@ def _odds_sources(now, starts) -> list[dict]:
         state_fixed, why = NOT_DUE, f"{len(priced)} of {n} games are planned for pricing; the next capture window opens {_iso(min(future))}"
     else:
         state_fixed, why = NOT_DUE, f"all {len(priced)} planned game(s) are captured or started; {n - len(priced)} of {n} games are not priced under the credit plan"
+    try:
+        from operational import price_availability as pa
+        ms = pa.morning_status(now, day)
+        morning = (f" Morning look: {ms['looked']} of {ms['total']} games looked at since 08:00 ET (prices posted for {ms['posted']}, not posted yet for {ms['not_posted']}, "
+                   f"not fetched for budget for {ms['budget_blocked']}).") if ms["total"] and ms["state"] != pa.MORNING_NOT_YET else ""
+    except Exception:  # noqa: BLE001
+        morning = ""
+    why = (why + morning).strip()
     prop_limit = None
     if remaining is not None and remaining - 1 < odds_quota.RESERVE:
         prop_limit = "BUDGET"
     out.append(_src("odds_props", "Player prop prices (shots, points, goals)", basis=last_props, data_through=(f"newest capture {_iso(last_props)}" if last_props else None),
                     last_success=last_props, last_attempt=last_props, max_age_min=None if state_fixed else 30.0, next_refresh=(min(future) if future else None),
-                    next_note="one capture per planned game, about 105 minutes before puck drop", fixed=state_fixed, limiter=prop_limit, reason=why,
+                    next_note="morning look from 08:00 ET, a midday look with leftover credits, and the pregame price about 105 minutes before puck drop (the one a ticket is recorded on)", fixed=state_fixed, limiter=prop_limit, reason=why,
                     detail={"games_today": n, "games_priced": len(priced), "captured_today": len(captured_events_today)}))
     # credits
     headers = [r for r in credit_allocation.read_calls(since=now - dt.timedelta(days=2)) if r.get("remaining") is not None]

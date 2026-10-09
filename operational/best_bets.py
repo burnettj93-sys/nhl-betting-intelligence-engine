@@ -62,6 +62,7 @@ SOG_K = (1, 2, 3, 4, 5)
 MODEL_VERSION = "player-rate-toi-v2+platt-2026-10"          # live probability source (validated; see docs/MODEL_VALIDATION.md)
 PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
 MIN_EXPECTED_TOI = 12.0
+from operational.pricing_policy import PROVISIONAL_MAX_AGE_MIN  # noqa: E402  (shared with the hosted pages; see that module)
 MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
 MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
 HISTORY_CACHE_NAME = "best_bets_history_2022_2025.jsonl"
@@ -421,14 +422,16 @@ def effective_start(provider_commence_utc: str, official_start_utc: str | None) 
 
 
 def planned_decision(plan: dict, game_id: str | None, hours: float, age_min: float | None, now: dt.datetime) -> tuple[str | None, str]:
-    """(decision, reason) under the day's credit plan. FIRST: one capture per priced game, inside its actionable window (a price taken
-    FIRST_CAPTURE_HOURS before puck drop is still inside the near-game freshness limit at puck drop). REFRESH only with leftover credits."""
+    """(decision, reason) for the PREGAME slot under the day's credit plan. FIRST: one capture per priced game once the slot opens, FIRST_CAPTURE_HOURS before puck
+    drop (a price taken then is still inside the near-game freshness limit at puck drop, so it is the price a ticket is recorded on). REFRESH only with leftover
+    credits. There is no upper bound on how early this OR the morning/midday slots (operational/capture_schedule.py) may buy a price: the old five-hour cut-off was
+    our own policy, not the bookmaker's."""
     from operational import credit_planner as cp
-    if hours <= 0 or hours > CAPTURE_HORIZON_H:
-        return None, "OUTSIDE_HORIZON"
+    if hours <= 0:
+        return None, "STARTED"
     if game_id is None or str(game_id) not in set(plan["games_priced"]):
         return None, "NOT_IN_CREDIT_PLAN"
-    # A capture taken BEFORE the actionable window (an older cadence, a manual pull) is not this game's planned capture: it will be stale at puck drop.
+    # A capture taken BEFORE the actionable window (a morning pull, an older cadence) is not this game's pregame capture: it will be stale at puck drop.
     in_window_capture = age_min is not None and (hours + age_min / 60.0) <= cp.FIRST_CAPTURE_HOURS + 0.05
     if not in_window_capture:
         return ("FIRST", "OK") if hours <= cp.FIRST_CAPTURE_HOURS else (None, "BEFORE_ACTIONABLE_WINDOW")
@@ -438,16 +441,69 @@ def planned_decision(plan: dict, game_id: str | None, hours: float, age_min: flo
     return ("REFRESH", "OK") if left >= EST_COST_PER_EVENT else (None, "NO_CREDITS_FOR_REFRESH")
 
 
+def _posted_in(payload: dict, market: str) -> bool:
+    for bm in (payload or {}).get("bookmakers") or []:
+        if bm.get("key") == "draftkings":
+            for m in bm.get("markets") or []:
+                if m.get("key") == market and m.get("outcomes"):
+                    return True
+    return False
+
+
+def _captured_times(event_id: str, markets: list[str], archive_dir: Path | None = None) -> dict:
+    """{market: when the newest capture that actually CONTAINED that market was retrieved}. An answer with nothing in it (the bookmaker had not posted the market)
+    is not a capture of it: that case is tracked as NOT_POSTED in operational/price_availability.py and re-asked after capture_schedule.RECHECK_MINUTES."""
+    archive_dir = archive_dir or _archive_dir()
+    out: dict = {m: None for m in markets}
+    for path in glob.glob(str(archive_dir / f"*events-{event_id}-odds*.json")):
+        try:
+            doc = json.loads(Path(path).read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+        meta = doc.get("meta") or {}
+        filt, ts = meta.get("market_filter") or "", meta.get("retrieved_at_utc")
+        if not ts:
+            continue
+        got = _parse_utc(ts)
+        for m in markets:
+            if m in filt and (out[m] is None or got > out[m]) and _posted_in(doc.get("response") or {}, m):
+                out[m] = got
+    return out
+
+
+def _availability_context(day: str, game_id: str | None) -> dict:
+    """{market: UTC time of the newest 'we asked and the bookmaker had not posted it' answer today} for one game."""
+    from operational import price_availability as pa, quote_freshness as qf
+    g = (pa.read(day).get("games") or {}).get(str(game_id)) or {}
+    return {m: qf.parse_utc(v.get("checked_utc")) for m, v in (g.get("markets") or {}).items() if v.get("status") == pa.NOT_POSTED}
+
+
+def _record_answer(day: str, gid, requested: list[str], r, now: dt.datetime, hours: float, matchup: str | None, game_date: str | None, start_utc: str | None = None) -> dict:
+    """Turn one provider answer into per-market availability (POSTED / NOT_POSTED, or FETCH_ERROR when the request failed)."""
+    from operational import price_availability as pa
+    if not r.ok:
+        for m in requested:
+            pa.record(day, gid, m, pa.FETCH_ERROR, now, hours_to_start=hours, detail=str(getattr(r, "error", None)), matchup=matchup, game_date=game_date, start_utc=start_utc)
+        return {}
+    got = pa.classify_payload(r.data if isinstance(r.data, dict) else None, requested)
+    for m, info in got.items():
+        pa.record(day, gid, m, info["status"], now, hours_to_start=hours, outcomes=info["outcomes"], last_update=info["last_update"],
+                  matchup=matchup, game_date=game_date, start_utc=start_utc)
+    return got
+
+
 def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None, games: dict | None = None, plan: dict | None = None) -> dict:
-    """Per-game DraftKings prop captures. With a day plan (production) the credit planner decides which games are priced, with which markets and
-    how often; without one (tests, manual use) the legacy cadence and the month rule for the goals market apply."""
+    """Per-game DraftKings prop captures. With a day plan (production) the credit planner decides which games are priced, with which markets and how often, and
+    operational/capture_schedule.py decides WHEN (a morning look from 08:00 ET, a midday look with leftover credits, the pregame capture a ticket is recorded
+    on); every answer, including 'the bookmaker has not posted this', is recorded in operational/price_availability.py. Without a plan (tests, manual use) the
+    legacy cadence and the month rule for the goals market apply."""
     from operational import odds_quota
     from research.live_sog_pricing import archive as _archive, client as _client
     client = client or _client
     archive_mod = archive_mod or _archive
     guard = guard or (lambda planned: odds_quota.guard(
         planned=planned, now=now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER))
-    summary = {"events_seen": 0, "events_captured": 0, "credits_spent": 0, "skipped": [], "error": None}
+    summary = {"events_seen": 0, "events_captured": 0, "credits_spent": 0, "skipped": [], "error": None, "slots": {}}
     events = client.get_nhl_events()
     if not events.ok:
         summary["error"] = events.error
@@ -462,7 +518,8 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
     else:
         summary["plan"] = {"day": plan.get("day"), "D": plan["budget"].get("D"), "games_priced": len(plan["games_priced"]),
-                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"])}
+                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]),
+                           "morning_games": len(plan.get("morning_games") or []), "morning_markets": plan.get("morning_markets")}
 
     def start_of(e):
         matched = match_game(e, games)
@@ -472,23 +529,54 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
     for e in upcoming:
         hours = (start_of(e) - now).total_seconds() / 3600.0
         from operational import credit_planner as _cp
-        age_min = decision_age_min(e["id"], now, _cp.prop_markets() if plan is not None else (SOG_MARKET_KEY, POINTS_MARKET_KEY))
         matched = match_game(e, games)
         gid = matched[0] if matched else None
+        if plan is not None and gid is None:
+            continue                                          # not one of today's games (tomorrow's are checked by check_tomorrow)
         if plan is None:
+            age_min = decision_age_min(e["id"], now, (SOG_MARKET_KEY, POINTS_MARKET_KEY))
             decision, markets, est_cost, klass = capture_decision(hours, age_min), legacy_markets, legacy_cost, None
-            why = "OK"
+            why, slot = "OK", None
         else:
-            from operational import credit_planner as cp
-            decision, why = planned_decision(plan, gid, hours, age_min, now)
-            klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
-            with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
-            base_markets = ",".join(cp.prop_markets())
-            markets = f"{base_markets},{GOALS_MARKET_KEY}" if with_goals else base_markets
-            est_cost = cp.base_cost() + (cp.GOALS_COST if with_goals else 0)
+            from operational import capture_schedule as sched, credit_planner as cp, price_availability as pa
+            day, matchup = plan.get("day"), f"{e.get('away_team')} at {e.get('home_team')}"
+            base_list = list(cp.prop_markets())
+            age_min = decision_age_min(e["id"], now, tuple(base_list))
+            gstart = start_of(e)
+            slot, why = sched.decide(now, gstart, _captured_times(e["id"], base_list), base_list, _availability_context(day, gid))
+            decision, klass, est_cost = None, None, 0
+            if slot == sched.PREGAME:
+                decision, why = planned_decision(plan, gid, hours, age_min, now)
+                klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
+                with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
+                markets = ",".join(base_list + ([GOALS_MARKET_KEY] if with_goals else []))
+                est_cost = cp.base_cost() + (cp.GOALS_COST if with_goals else 0)
+                if decision is None and why == "NOT_IN_CREDIT_PLAN":
+                    summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})
+                    for m in base_list:
+                        pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail="not in today's credit plan (the day's credits did not cover this game)",
+                                          matchup=matchup, game_date=day, start_utc=gstart.isoformat())
+            elif slot in (sched.MORNING, sched.MIDDAY):
+                if slot == sched.MORNING:
+                    if str(gid) in set(plan.get("morning_games") or []):
+                        mk = list(plan.get("morning_markets") or base_list)
+                        decision, klass, markets, est_cost = "FIRST", cp.MORNING, ",".join(mk), len(mk)
+                    else:
+                        for m in base_list:
+                            pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail="no morning credits for this game under today's plan", matchup=matchup, game_date=day, start_utc=gstart.isoformat())
+                        why = "NOT_IN_MORNING_PLAN"
+                else:                                         # midday: only with leftover credits
+                    left = plan["allowance"].get(cp.REFRESH, 0.0) - cp.spent_today(now).get(cp.REFRESH, 0.0)
+                    if left >= cp.base_cost():
+                        decision, klass, markets, est_cost = "REFRESH", cp.REFRESH, ",".join(base_list), cp.base_cost()
+                    else:
+                        why = "NO_CREDITS_FOR_MIDDAY"
+            else:
+                for m in base_list:                           # slot not open yet: say so, once, unless the provider has already answered today
+                    if m not in ((pa.read(day).get("games") or {}).get(str(gid), {}).get("markets") or {}):
+                        pa.note_unfetched(day, gid, m, pa.NOT_FETCHED, now, detail=f"{why}: the morning update opens at 08:00 ET", matchup=matchup, game_date=day, start_utc=gstart.isoformat())
+        summary["slots"][e["id"]] = {"slot": slot, "decision": decision, "why": why}
         if decision is None:
-            if why == "NOT_IN_CREDIT_PLAN":
-                summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})
             continue
         summary["events_seen"] += 1
         if plan is None and spent_today + est_cost > DAILY_CREDIT_CAP:
@@ -498,27 +586,85 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
             gate = guard(est_cost)
         else:
             # the goals market is its own class in the plan (its own allowance); a denied goals credit drops the goals market, not the game
-            gate = cp.authorize(klass, cp.base_cost(), now, plan=plan)
+            gate = cp.authorize(klass, est_cost if klass == cp.MORNING else cp.base_cost(), now, plan=plan)
             if gate.get("allow") and markets.endswith(GOALS_MARKET_KEY) and not cp.authorize(cp.GOALS, cp.GOALS_COST, now, plan=plan).get("allow"):
-                markets, est_cost = ",".join(cp.prop_markets()), cp.base_cost()
+                markets, est_cost = ",".join(base_list), cp.base_cost()
         if not gate.get("allow"):
             summary["skipped"].append({"event_id": e["id"], "reason": gate.get("reason")})
-            break
+            if plan is not None:
+                for m in markets.split(","):
+                    pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail=str(gate.get("reason")), matchup=matchup, game_date=day, start_utc=gstart.isoformat())
+            if plan is None or gate.get("reason") in ("HARD_RESERVE", "QUOTA_UNKNOWN"):
+                break
+            continue
         r = client.get_event_odds(e["id"], markets=markets)
         if not r.ok:
             summary["skipped"].append({"event_id": e["id"], "reason": f"API_ERROR: {r.error}"})
+            if plan is not None:
+                _record_answer(day, gid, markets.split(","), r, now, hours, matchup, day, gstart.isoformat())
             continue
         archive_mod.archive_result(r, event_id=e["id"], market_filter=markets, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
         if plan is not None:
+            _record_answer(day, gid, markets.split(","), r, now, hours, matchup, day, gstart.isoformat())
             goals_part = cp.GOALS_COST if markets.endswith(GOALS_MARKET_KEY) and cost > cp.base_cost() else 0
-            cp.record(klass, cost - goals_part, now, event=e["id"], game_id=gid, markets=markets)
+            cp.record(klass, cost - goals_part, now, event=e["id"], game_id=gid, markets=markets, slot=slot)
             if goals_part:
                 cp.record(cp.GOALS, goals_part, now, event=e["id"], game_id=gid, markets=markets)
         spent_today += cost
         summary["credits_spent"] += cost
         summary["events_captured"] += 1
     return summary
+
+
+def check_tomorrow(now: dt.datetime, *, client=None, archive_mod=None, plan: dict | None = None, force: bool = False, games: dict | None = None) -> dict:
+    """Once in the evening (capture_schedule.EVENING_CHECK_ET): has DraftKings posted tomorrow's player prices yet? Asks for the first market it posts (shots) for each
+    of tomorrow's games. An answer with nothing in it costs 0 credits, so the check is free until the bookmaker has posted something; the first posted answer is
+    paid for from the TOMORROW class (one credit a day), and any game after that is recorded BUDGET_BLOCKED (the provider may well have posted it; we did not look).
+    Tomorrow's moneylines need no call of their own: every league-wide moneyline pull already returns them."""
+    from operational import capture_schedule as sched, credit_planner as cp, eastern_time as et, price_availability as pa
+    from research.live_sog_pricing import archive as _archive, client as _client
+    client, archive_mod = client or _client, archive_mod or _archive
+    out = {"ran": False, "checked": 0, "posted": 0, "reason": None}
+    if not force and not sched.tomorrow_check_due(now, pa.tomorrow_last_check()):
+        out["reason"] = "NOT_DUE"
+        return out
+    events = client.get_nhl_events()
+    if not events.ok:
+        out["reason"] = f"API_ERROR: {events.error}"
+        return out
+    tomorrow = (dt.date.fromisoformat(et.eastern_today(now)) + dt.timedelta(days=1)).isoformat()
+    todays = [e for e in events.data if et.eastern_today(_parse_utc(e["commence_time"])) == tomorrow]
+    out["ran"] = True
+    out["games"] = len(todays)
+    for e in sorted(todays, key=lambda x: x["commence_time"]):
+        hours = (_parse_utc(e["commence_time"]) - now).total_seconds() / 3600.0
+        matched = match_game(e, games or {})
+        gid = str(matched[0]) if matched else f"event:{e['id']}"
+        matchup = f"{e.get('away_team')} at {e.get('home_team')}"
+        gate = cp.authorize(cp.TOMORROW, 1, now, plan=plan) if cp.enforced() else {"allow": True}
+        if not gate.get("allow"):
+            pa.note_unfetched(tomorrow, gid, SOG_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail=f"tomorrow's check allowance is used ({gate.get('reason')})",
+                              matchup=matchup, game_date=tomorrow)
+            continue
+        r = client.get_event_odds(e["id"], markets=SOG_MARKET_KEY)
+        out["checked"] += 1
+        got = _record_answer(tomorrow, gid, [SOG_MARKET_KEY], r, now, hours, matchup, tomorrow, e["commence_time"])
+        if not r.ok:
+            continue
+        archive_mod.archive_result(r, event_id=e["id"], market_filter=SOG_MARKET_KEY, bookmaker_filter="draftkings")
+        cost = int(r.requests_last or 0)
+        if cost:
+            cp.record(cp.TOMORROW, cost, now, event=e["id"], markets=SOG_MARKET_KEY)
+        if (got.get(SOG_MARKET_KEY) or {}).get("status") == pa.POSTED:
+            out["posted"] += 1
+    pa.mark_tomorrow_checked(now)
+    return out
+
+
+def _cp_enforced() -> bool:
+    from operational import credit_planner as cp
+    return cp.enforced()
 
 
 def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime,
@@ -564,6 +710,23 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
             quote = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(),
                                            now, limit)
             fresh = hours > 0 and quote["fresh"]
+            # RECORDING WINDOW (production, i.e. under the credit plan): a price is recordable only if it was retrieved inside this game's PREGAME slot
+            # (capture_schedule.PREGAME_HOURS before puck drop). The morning and midday looks are fresh by AGE for a couple of hours, but they are the first look, not the
+            # re-check, so without this rule an 8 AM capture could record all five of the day's tickets before lineups or later prices exist.
+            early = False
+            if fresh and _cp_enforced():
+                from operational import capture_schedule as _sched
+                start_eff = effective_start(payload.get("commence_time") or game["start_utc"], game["start_utc"])
+                if captured_at < start_eff - dt.timedelta(hours=_sched.PREGAME_HOURS + 0.05):
+                    fresh, early = False, True
+            # Provisional: not recordable, but the provider's own quote time is within PROVISIONAL_MAX_AGE_MIN and we retrieved it today (Eastern), so it is today's
+            # look at the market, not a leftover from yesterday. Judged by the same function as every other quote (same missing/malformed/future rules).
+            provisional = False
+            if hours > 0 and not fresh:
+                wide = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(), now, PROVISIONAL_MAX_AGE_MIN)
+                from operational import eastern_time as _et
+                provisional = bool(wide["fresh"]) and _et.eastern_today(captured_at) == _et.eastern_today(now)
+            status = "BEFORE_PREGAME_WINDOW" if early else quote["status"]
             for o in m.get("outcomes", []):
                 if m.get("key") == GOALS_MARKET_KEY:          # one-sided "Yes" prices: anytime goal == 1+ goals, no point, no "No" side
                     if o.get("name") != "Yes" or o.get("price") is None:
@@ -586,7 +749,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     american_price=float(o["price"]), conservative_probability=entry["probs"][f"{prob_prefix}{k}"],
                     sportsbook="draftkings", captured_at_utc=captured_at.isoformat(),
                     retrieved_at_utc=quote["retrieved_at_utc"], quote_updated_utc=quote["quote_updated_utc"],
-                    quote_age_min=quote["quote_age_min"], freshness_status=quote["status"],
+                    quote_age_min=quote["quote_age_min"], freshness_status=status, provisional=provisional,
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
@@ -658,7 +821,16 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
         age = decision_age_min(e["id"], now)
         decision = capture_decision(hours, age)
         fmt = lambda t: t.strftime("%b %-d %H:%M") + " UTC"  # noqa: E731
-        if age is None and now < opens:
+        slots = None
+        if _cp_enforced():
+            from operational import capture_schedule as _sched
+            w = _sched.windows(now, start)
+            opens = min(v[0] for k, v in w.items() if k != _sched.PREGAME) if len(w) > 1 else w[_sched.PREGAME][0]
+            slots = {k: {"opens_utc": v[0].isoformat().replace("+00:00", "Z"), "closes_utc": v[1].isoformat().replace("+00:00", "Z")} for k, v in w.items()}
+            slot, why = _sched.decide(now, start, _captured_times(e["id"], [SOG_MARKET_KEY, POINTS_MARKET_KEY]), [SOG_MARKET_KEY, POINTS_MARKET_KEY])
+            nxt = (f"{slot.lower()} look on the next 15-minute trader cycle ({why})" if slot else
+                   f"{why.replace('_', ' ').lower()}; next window opens {fmt(min((v[0] for v in w.values() if v[0] > now), default=start))}")
+        elif age is None and now < opens:
             nxt = f"first capture on the first 15-minute trader cycle at or after {fmt(opens)}"
         elif decision:
             nxt = f"{decision} on the next 15-minute trader cycle"
@@ -685,7 +857,7 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
             "newest_shots_price_utc": None if shots is None else shots[0].isoformat(),
             "newest_points_price_utc": None if pts is None else pts[0].isoformat(),
             "price_age_min": None if age is None else round(age, 1),
-            "prices_stop_being_fresh_utc": stale_at, "next_planned_capture": nxt})
+            "prices_stop_being_fresh_utc": stale_at, "next_planned_capture": nxt, "slots": slots})
     plan.sort(key=lambda r: r["cutoff_start_utc"])
     return plan
 
@@ -725,6 +897,15 @@ def refresh(now: dt.datetime | None = None, *, conn=None, capture: bool = True, 
     finally:
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
+
+
+def tomorrow_games(conn, now: dt.datetime) -> dict:
+    """{game_id: {"home", "away", "start_utc"}} for tomorrow's (ET) scheduled games."""
+    from operational import eastern_time as et
+    date = (dt.date.fromisoformat(et.eastern_today(now)) + dt.timedelta(days=1)).isoformat()
+    rows = conn.execute("select game_id, home_team, away_team, scheduled_start_utc from games where game_date=? and game_state='SCHEDULED'", (date,)).fetchall()
+    return {str(r["game_id"]): {"home": r["home_team"], "away": r["away_team"],
+                                "start_utc": r["scheduled_start_utc"] if r["scheduled_start_utc"].endswith("Z") else r["scheduled_start_utc"] + "Z"} for r in rows}
 
 
 def current_model(conn, now: dt.datetime, *, upcoming_only: bool = True) -> dict:
@@ -770,6 +951,14 @@ def _refresh_locked(now, *, conn, capture, client) -> dict:
         plan = _day_plan(conn, now) if (capture and snapshot["games"]) else None
         capture_summary = (capture_prices(now, client=client, games=snapshot["games"], plan=plan)
                            if (capture and snapshot["games"]) else None)
+        from operational import credit_planner as _cpl
+        if capture and _cpl.enforced():
+            try:
+                tomorrow_summary = check_tomorrow(now, client=client, plan=plan, games=tomorrow_games(conn, now))
+            except Exception as exc:  # noqa: BLE001 - a failed look at tomorrow must never stop today's captures or recording
+                tomorrow_summary = {"ran": False, "reason": f"{exc.__class__.__name__}: {exc}"}
+            if capture_summary is not None:
+                capture_summary["tomorrow"] = tomorrow_summary
         state = {
             "status": "OK" if snapshot["games"] else "NO_UPCOMING_GAMES",
             "date_et": snapshot["date"], "generated_at_utc": now.isoformat(),

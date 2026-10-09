@@ -308,8 +308,9 @@ class TestTodayScreen(unittest.TestCase):
 
     def test_account_header_cards_and_badges(self):
         now = dt.datetime.now(dt.timezone.utc)
+        stamp = (now - dt.timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")          # quotes must be fresh on the real clock: recording re-judges them
         legs = [dataclasses_replace(l, model_version="EXPERIMENTAL-test-v1")
-                for l in board(8, start=(now + dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ"))]
+                for l in board(8, start=(now + dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ"), captured=stamp)]
         state = self._state(legs, now=now)
         at = self._page(state)
         metrics = {m.label: m.value for m in at.metric}

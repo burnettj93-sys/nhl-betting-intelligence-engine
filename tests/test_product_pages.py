@@ -63,7 +63,7 @@ def text(at):
 
 
 CORE = ["38_My_Bets.py", "21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "26_Player_Props.py", "30_Players.py", "27_Goalies.py", "31_Team_Intelligence.py",
-        "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py"]
+        "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py", "39_Tomorrow.py"]
 
 
 class TestPagesRender(unittest.TestCase):

@@ -115,7 +115,7 @@ class TestTraderRun(unittest.TestCase):
     def test_a_new_eastern_day_is_not_blocked(self):
         nhl_path, bankroll = _fresh_nhl_db_with_games(GAMES), _bankroll()
         _run_with(nhl_path, bankroll, _legs(8), NOW1)
-        day2 = _run_with(nhl_path, bankroll, _legs(8), dt.datetime(2026, 9, 30, 17, 0, tzinfo=dt.timezone.utc))
+        day2 = _run_with(nhl_path, bankroll, _legs(8, start="2026-09-30T23:00:00Z"), dt.datetime(2026, 9, 30, 17, 0, tzinfo=dt.timezone.utc))
         self.assertEqual(day2["stake_result"]["newly_recorded"], 5)
         conn = pb.init_db(Path(bankroll))
         self.assertEqual(pb.account_state(conn, "REAL_MARKET_PAPER")["available_cash"], 400.0)
@@ -124,7 +124,8 @@ class TestTraderRun(unittest.TestCase):
         nhl_path, bankroll = _fresh_nhl_db_with_games(GAMES), _bankroll()
         result = _run_with(nhl_path, bankroll, [], NOW1)
         self.assertEqual(result["stake_result"]["newly_recorded"], 0)
-        self.assertIn("No eligible priced legs", result["stake_result"]["reason"])
+        self.assertIn("still to start today", result["stake_result"]["reason"])
+        self.assertIn("re-checked at the last moment", result["stake_result"]["reason"])
 
     def test_revalidation_alerts_never_change_the_account(self):
         nhl_path, bankroll = _fresh_nhl_db_with_games(GAMES), _bankroll()

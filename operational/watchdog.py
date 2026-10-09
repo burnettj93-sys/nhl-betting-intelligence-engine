@@ -42,7 +42,7 @@ EXPECTED_JOBS = (
     "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.manual-order-job", "com.nhlengine.moneyline-pregame", "com.nhlengine.moneyline-snapshot",
     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second", "com.nhlengine.daily-props-pull", "com.nhlengine.daily-nhl-sync",
     "com.nhlengine.midday-schedule-refresh", "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement", "com.nhlengine.daily-postmortem",
-    "com.nhlengine.database-backup",
+    "com.nhlengine.database-backup", "com.nhlengine.morning-update",
 )
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
@@ -276,10 +276,25 @@ def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) ->
         if opts:
             add("Best Options board (populated option cards)", "WORKING", f"{len(opts)} option(s) published (built {built}); first-ever populated board: {_first_board_evidence() or 'now'}")
         else:
-            add("Best Options board (populated option cards)", "LIMITED", "no option is published yet: player prices are captured about 100 minutes before puck drop, so the board is empty until then",
+            add("Best Options board (populated option cards)", "LIMITED", "no option is published yet: the morning look has not produced one (prices not posted, or not covered by the credit plan) and no pregame price has arrived",
                 "None — it fills by itself when the day's captures arrive")
     except Exception:  # noqa: BLE001
         pass
+    # the morning workflow and the refresh cadence: stated plainly, and judged only on what the engine has actually recorded
+    ev = [e for e in morning_evidence() if e.get("state") == "DONE"]
+    scheduled = [e for e in ev if e.get("first_look_utc") and e.get("starts_at_utc") and
+                 (dt.datetime.fromisoformat(e["first_look_utc"].replace("Z", "+00:00")) - dt.datetime.fromisoformat(e["starts_at_utc"].replace("Z", "+00:00"))).total_seconds() <= 45 * 60]
+    if scheduled:
+        add("Morning update (about 8 AM ET: games, statistics, prices, provisional picks)", "WORKING",
+            f"observed on {scheduled[-1]['day']}: first look at {scheduled[-1]['first_look_utc']}, {scheduled[-1]['looked']} of {scheduled[-1]['total']} games; "
+            "the hosted-app check is recorded in docs/MORNING_WORKFLOW.md")
+    else:
+        add("Morning update (about 8 AM ET: games, statistics, prices, provisional picks)", "NOT_VERIFIED",
+            "built and tested, but no day on record shows a first look within 45 minutes of 08:00 ET; this requirement is UNMET until one does and the hosted app has been checked",
+            "None — the first scheduled morning after the release proves it")
+    add("Several price refreshes a day", "LIMITED",
+        "NOT MET under the free 500-credit allowance: the plan buys a morning look for part of the slate and the pregame price for fewer games; it cannot also refresh every game midday. "
+        "Meeting it for every game needs about 60 credits a day (1,812 a month; docs/MORNING_WORKFLOW.md)", "Budget decision: the provider's 20K tier is the smallest above the free allowance (not purchased)")
     add("Automatic starting-goalie confirmation", "BLOCKED", df.get("disabled_reason") or "no permitted automatic source is connected",
         "Grant or choose a permitted source (docs/STARTING_GOALIE_SOURCE_AUDIT.md); until then confirmations are recorded by hand")
     add("Reported lines and power-play units", "BLOCKED", "same source; the app shows only the inferred estimate, labelled as such", "same as above")
@@ -304,6 +319,56 @@ def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) ->
     counts = {k: sum(1 for f in feats if f["status"] == k) for k in ("WORKING", "LIMITED", "NOT_VERIFIED", "BLOCKED", "OWNER_ACTION")}
     return {"features": feats, "counts": counts,
             "note": "Operational health OK means the machinery runs and the books agree. It does not mean a blocked, limited or unverified feature works."}
+
+
+MORNING_EVIDENCE = "morning_update_evidence.jsonl"
+
+
+def check_morning_update(now: dt.datetime) -> dict:
+    """The 08:00 ET update (first look at today's games and prices) must happen on its own. Late = WARN from 08:45 ET, FAIL from 10:00 ET; it is judged from the engine's own
+    availability record, and each day's outcome is appended to a persistent evidence file, so 'it ran every morning' does not depend on anyone watching."""
+    from operational import price_availability as pa
+    try:
+        m = pa.morning_status(now)
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "morning_update", "status": WARN, "detail": f"could not evaluate the morning update: {type(exc).__name__}"}
+    _log_morning_evidence(m, now)
+    state = m["state"]
+    if state in (pa.MORNING_NO_GAMES, pa.MORNING_NOT_YET):
+        return {"name": "morning_update", "status": OK, "detail": "no morning update is due yet" if state == pa.MORNING_NOT_YET else "no games today"}
+    if state == pa.MORNING_DONE:
+        return {"name": "morning_update", "status": OK, "detail": f"morning update done: {m['looked']} of {m['total']} games looked at (first look {m['first_look_utc']}); "
+                                                                f"prices posted for {m['posted']}, not posted yet for {m['not_posted']}, not fetched for budget for {m['budget_blocked']}"}
+    from operational import capture_schedule as sched
+    ten = sched._localize(dt.date.fromisoformat(m["day"]), 10, 0)
+    status = FAIL if now >= ten else WARN
+    return {"name": "morning_update", "status": status, "detail": f"morning update {state.lower()}: {m['looked']} of {m['total']} games looked at since 08:00 ET"}
+
+
+def _log_morning_evidence(m: dict, now: dt.datetime) -> None:
+    """One line per day, the last state seen once the first look has happened (appended again only when the state or counts change)."""
+    try:
+        if m["state"] in ("NOT_YET", "NO_GAMES"):
+            return
+        p = state_paths.path(MORNING_EVIDENCE)
+        last = None
+        if p.exists():
+            rows = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+            last = next((r for r in reversed(rows) if r.get("day") == m["day"]), None)
+        key = (m["state"], m["looked"], m["total"], m["posted"], m["not_posted"], m["budget_blocked"])
+        if last and (last["state"], last["looked"], last["total"], last["posted"], last["not_posted"], last["budget_blocked"]) == key:
+            return
+        with open(p, "a") as f:
+            f.write(json.dumps({**m, "logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")}) + "\n")
+    except Exception:  # noqa: BLE001 - evidence logging must never break a check
+        pass
+
+
+def morning_evidence() -> list[dict]:
+    try:
+        return [json.loads(x) for x in state_paths.path(MORNING_EVIDENCE).read_text().splitlines() if x.strip()]
+    except (OSError, json.JSONDecodeError):
+        return []
 
 
 def check_publishing_enabled() -> dict:
@@ -361,6 +426,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_age("publish_recent", (health.get("cloud_snapshot_publish") or {}).get("last_success_utc"), PUBLISH_MAX_AGE_MIN, now, "the hosted snapshot publication"))
     checks.append(check_database())
     checks.append(check_publishing_enabled())
+    checks.append(check_morning_update(now))
     ready = None
     if deep:
         try:

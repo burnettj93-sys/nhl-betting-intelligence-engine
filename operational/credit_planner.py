@@ -33,6 +33,9 @@ PLAN_NAME = "credit_plan_state.json"
 
 MONEYLINE_DECISION, MONEYLINE_UI, PROPS, SAVES, GOALS, REFRESH = ("MONEYLINE_DECISION", "MONEYLINE_UI", "PROPS_PREGAME", "SAVES_CONFIRMED",
                                                                    "GOALS", "REFRESH")
+MORNING, TOMORROW = "PROPS_MORNING", "TOMORROW_CHECK"
+PREGAME_MIN_GAMES = 2         # two priced games are the least that makes a cross-game ticket possible, so they are funded before any morning breadth
+TOMORROW_COST = 1             # the evening availability check of tomorrow's games: at most one market, and a market not yet posted costs 0
 DECISION_RESERVE = 3          # T-35 pulls per day the plan always funds (typical day: 2-3 start clusters)
 UI_FIRST, UI_SECOND = 1, 1
 SHOTS_KEY, POINTS_KEY, GOALS_KEY, SAVES_KEY = "player_shots_on_goal_alternate", "player_points", "player_goal_scorer_anytime", "player_total_saves"
@@ -152,13 +155,36 @@ def prop_markets() -> tuple[str, ...]:
     return chosen or DEFAULT_PROP_MARKETS
 
 
+MORNING_ENV = "NHL_ENGINE_MORNING_LOOK"
+
+
+def morning_enabled() -> bool:
+    """The morning first look is on by default. `NHL_ENGINE_MORNING_LOOK=off` (environment or .env) spends nothing on it and gives every credit to the pregame price, which
+    is the allocation used before 2026-10-09: more games priced before puck drop, nothing before about 105 minutes ahead of the first game."""
+    import os
+    raw = os.environ.get(MORNING_ENV) or ""
+    if not raw:
+        env = state_paths.REPO_ROOT / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                k, sep, v = line.strip().partition("=")
+                if sep and k.strip() == MORNING_ENV:
+                    raw = v.strip().strip("\"'")
+    return raw.strip().lower() not in ("off", "0", "false", "no")
+
+
 def base_cost() -> int:
     return len(prop_markets())
 
 
 def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str] | None = None, spent_by_class: dict | None = None,
              base: int | None = None) -> dict:
-    """The waterfall. `starts` = today's games {game_id: puck drop}; returns what each class may spend and which games are priced."""
+    """The waterfall. `starts` = today's games {game_id: puck drop}; returns what each class may spend and which games are priced.
+
+    Order of purchase (after the two moneyline classes): 1. the pregame capture, the price a ticket is recorded on, for the first PREGAME_MIN_GAMES
+    games; 2. the MORNING first look at every game (shots; points too only if every game can afford both); 3. the pregame capture for the rest;
+    4. confirmed-starter saves; 5. a second display refresh; 6. tomorrow's availability check; 7. anytime goals; 8. leftover refreshes.
+    A price the bookmaker has not posted costs nothing, so the morning allowance is a ceiling and the credits it does not use stay in the month."""
     spent_by_class = spent_by_class or {}
     confirmed_games = confirmed_games or set()
     n = len(starts)
@@ -168,24 +194,34 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     decision = take(DECISION_RESERVE); left -= decision
     ui = take(UI_FIRST); left -= ui
     order = rank_games(starts)
-    k_base = min(n, int(max(left, 0.0) // BASE_COST))
-    props_games = _take(order, k_base)
-    props = k_base * BASE_COST; left -= props
+    k_pre = min(n, PREGAME_MIN_GAMES, int(max(left, 0.0) // BASE_COST)); left -= k_pre * BASE_COST
+    both = left - n * 1 - (n - k_pre) * BASE_COST >= n            # can every game afford shots AND points this morning, with the pregame still funded?
+    owner_markets = list(prop_markets())[:max(BASE_COST, 1)]       # the owner's market choice also bounds the morning look
+    morning_markets = tuple(owner_markets) if (both and n) else tuple(owner_markets[:1])
+    mcost = len(morning_markets)
+    k_morn = min(n, int(max(left, 0.0) // mcost)) if morning_enabled() else 0; left -= k_morn * mcost
+    extra_pre = min(n - k_pre, int(max(left, 0.0) // BASE_COST)); k_pre += extra_pre; left -= extra_pre * BASE_COST
+    props_games = _take(order, k_pre)
+    morning_games = _take(order, k_morn)
     saves_games = _take([g for g in order if g in confirmed_games], SAVES_MAX_PER_DAY)
     k_saves = min(len(saves_games), int(max(left, 0.0) // SAVES_COST))
     saves_games = _take(saves_games, k_saves); left -= k_saves * SAVES_COST
-    ui_extra = take(UI_SECOND) if k_base == n else 0.0; left -= ui_extra
+    ui_extra = take(UI_SECOND) if k_pre == n else 0.0; left -= ui_extra
+    tomorrow = take(TOMORROW_COST); left -= tomorrow
     k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))
     goals_games = _take(props_games, k_goals); left -= k_goals * GOALS_COST
     refresh = max(left, 0.0)
-    full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + n * (BASE_COST + GOALS_COST) + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
+    full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + TOMORROW_COST + n * (BASE_COST + GOALS_COST) + n * 2 + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
     base_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST
+    morning_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST + n * 1
     return {"D": D, "games_today": n, "games_priced": props_games, "games_not_priced": [g for g in order if g not in props_games],
+            "morning_games": morning_games, "morning_markets": list(morning_markets),
             "goals_games": goals_games, "saves_games": saves_games,
-            "allowance": {MONEYLINE_DECISION: decision, MONEYLINE_UI: ui + ui_extra, PROPS: float(props), SAVES: float(k_saves * SAVES_COST),
-                          GOALS: float(k_goals * GOALS_COST), REFRESH: round(refresh, 2)},
-            "need_for_all_games_and_markets": full_need, "need_for_required_only": base_need,
-            "shortfall_per_day_required_only": round(max(base_need - D, 0.0), 1), "shortfall_per_day_everything": round(max(full_need - D, 0.0), 1)}
+            "allowance": {MONEYLINE_DECISION: decision, MONEYLINE_UI: ui + ui_extra, PROPS: float(k_pre * BASE_COST), SAVES: float(k_saves * SAVES_COST),
+                          MORNING: float(k_morn * mcost), TOMORROW: float(tomorrow), GOALS: float(k_goals * GOALS_COST), REFRESH: round(refresh, 2)},
+            "need_for_all_games_and_markets": full_need, "need_for_required_only": base_need, "need_for_morning_and_pregame": morning_need,
+            "shortfall_per_day_required_only": round(max(base_need - D, 0.0), 1), "shortfall_per_day_everything": round(max(full_need - D, 0.0), 1),
+            "shortfall_per_day_morning_and_pregame": round(max(morning_need - D, 0.0), 1)}
 
 
 # ---------------------------------------------------------------- state ----
@@ -215,6 +251,10 @@ def day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *, rema
         return plan
     # keep the chosen priced set and goals subset; update everything that legitimately changes during the day
     plan = {**saved, "saves_games": fresh["saves_games"], "budget": budget, "allowance": {**saved["allowance"], SAVES: fresh["allowance"][SAVES]}}
+    for key in ("morning_games", "morning_markets", "need_for_morning_and_pregame", "shortfall_per_day_morning_and_pregame"):
+        plan.setdefault(key, fresh[key])                       # a plan saved before the morning slot existed gains it; the priced set above never changes
+    for klass in (MORNING, TOMORROW):
+        plan["allowance"].setdefault(klass, fresh["allowance"][klass])
     _persist(plan)
     return plan
 
@@ -249,6 +289,8 @@ def authorize(klass: str, planned: float, now: dt.datetime, *, remaining: int | 
         allow = budget["D"] - DECISION_RESERVE if klass == MONEYLINE_UI else 0.0
         if klass == MONEYLINE_UI:
             allow = min(UI_FIRST + UI_SECOND, max(budget["D"] - DECISION_RESERVE, 0.0))
+        if klass == TOMORROW:                       # no game today, so no saved plan: tomorrow's check still gets its one credit
+            allow = float(TOMORROW_COST) if budget["D"] - DECISION_RESERVE >= TOMORROW_COST else 0.0
     if spent.get(klass, 0.0) + planned > allow + 1e-9:
         return {"allow": False, "reason": f"{klass}_DAILY_ALLOWANCE", "allowance": allow, "spent": spent.get(klass, 0.0)}
     return {"allow": True, "reason": "OK", "allowance": allow, "spent": spent.get(klass, 0.0), "remaining": remaining}

@@ -31,30 +31,50 @@ class TestWaterfall(unittest.TestCase):
         a = cp.allocate(11.5, SEVEN)
         self.assertEqual(a["allowance"][cp.MONEYLINE_DECISION], 3)
         self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 1)
-        self.assertEqual(len(a["games_priced"]), 3)                       # (11.5 - 3 - 1) // 2
+        # 11.5 - 3 (decisions) - 1 (display) = 7.5: two pregame captures (4) are funded first, then the morning first look (shots, 1 each) for three games
+        self.assertEqual(len(a["games_priced"]), 2)
+        self.assertEqual(a["morning_games"], cp.rank_games(SEVEN)[:3])
+        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])
         self.assertIn("a", a["games_priced"])
         self.assertIn("e", a["games_priced"])                              # the later wave is not starved
-        self.assertEqual(len(a["goals_games"]), 1)                         # the 1.5 credits left cannot buy another game; they buy one goals market
+        self.assertEqual(a["goals_games"], [])                             # nothing is left for goals
         self.assertGreater(a["shortfall_per_day_required_only"], 0)
 
     def test_goals_come_after_every_game_is_priced(self):
-        a = cp.allocate(20.0, starts(("a", 0), ("b", 0), ("c", 15)), confirmed_games={"a"})
+        a = cp.allocate(30.0, starts(("a", 0), ("b", 0), ("c", 15)), confirmed_games={"a"})
         self.assertEqual(len(a["games_priced"]), 3)
+        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY, cp.POINTS_KEY])   # affordable for every game: shots and points both
         self.assertEqual(a["saves_games"], ["a"])
         self.assertEqual(len(a["goals_games"]), 3)
         self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 2)
 
     def test_saves_only_for_confirmed_games_and_only_after_games_are_priced(self):
-        a = cp.allocate(11.5, SEVEN, confirmed_games={"a"})
-        self.assertEqual(len(a["games_priced"]), 3)                        # breadth of pricing comes first
+        a = cp.allocate(16.0, SEVEN, confirmed_games={"a"})
+        self.assertEqual(len(a["games_priced"]), 2)                        # pregame for two games and the morning look come first
         self.assertEqual(a["saves_games"], ["a"])                          # the leftover credit goes to saves before goals
         self.assertEqual(a["goals_games"], [])
-        self.assertEqual(cp.allocate(11.5, SEVEN)["saves_games"], [])      # no confirmed starter, no saves purchase
+        self.assertEqual(cp.allocate(16.0, SEVEN)["saves_games"], [])      # no confirmed starter, no saves purchase
+        self.assertEqual(cp.allocate(11.5, SEVEN, confirmed_games={"a"})["saves_games"], [])   # and none when the morning look has used the credit
 
     def test_decision_pulls_are_never_starved(self):
         a = cp.allocate(2.0, SEVEN)
         self.assertEqual(a["allowance"][cp.MONEYLINE_DECISION], 2.0)
         self.assertEqual(a["games_priced"], [])
+
+
+class TestMorningSwitch(unittest.TestCase):
+    def test_turning_the_morning_look_off_restores_the_pregame_only_allocation(self):
+        with mock.patch.object(cp, "morning_enabled", return_value=False):
+            a = cp.allocate(11.5, SEVEN)
+        self.assertEqual(a["morning_games"], [])
+        self.assertEqual(len(a["games_priced"]), 3)                        # the allocation that applied before the morning look existed
+        self.assertEqual(a["allowance"][cp.MORNING], 0.0)
+
+    def test_the_switch_reads_the_environment(self):
+        with mock.patch.dict("os.environ", {cp.MORNING_ENV: "off"}):
+            self.assertFalse(cp.morning_enabled())
+        with mock.patch.dict("os.environ", {cp.MORNING_ENV: "on"}):
+            self.assertTrue(cp.morning_enabled())
 
 
 class TestPlanState(unittest.TestCase):
@@ -93,7 +113,7 @@ class TestAuthorize(unittest.TestCase):
 
     def test_month_view_states_the_shortfall(self):
         v = cp.month_view(NOW, 297, 7.0)
-        self.assertEqual(v["games_priced_per_day"], 3)
+        self.assertEqual(v["games_priced_per_day"], 2)
         self.assertGreater(v["shortfall_month_required_only"], 100)
         self.assertGreater(v["shortfall_month_everything"], v["shortfall_month_required_only"])
 
@@ -107,7 +127,7 @@ class TestCaptureDecisions(unittest.TestCase):
         self.assertEqual(bb.planned_decision(PLAN, "1", 1.5, None, NOW), ("FIRST", "OK"))
         self.assertEqual(bb.planned_decision(PLAN, "1", 3.0, None, NOW), (None, "BEFORE_ACTIONABLE_WINDOW"))
         self.assertEqual(bb.planned_decision(PLAN, "2", 1.0, None, NOW), (None, "NOT_IN_CREDIT_PLAN"))
-        self.assertEqual(bb.planned_decision(PLAN, "1", 6.0, None, NOW), (None, "OUTSIDE_HORIZON"))
+        self.assertEqual(bb.planned_decision(PLAN, "1", 6.0, None, NOW), (None, "BEFORE_ACTIONABLE_WINDOW"))      # no five-hour cut-off any more: the morning slot buys earlier
 
     def test_an_earlier_capture_before_the_window_does_not_count_as_the_planned_capture(self):
         # captured 3.5 hours ago when the game was 5.1 hours away; now 1.6 hours out: that price will be stale at puck drop
@@ -191,7 +211,9 @@ class TestOwnerMarketChoice(unittest.TestCase):
     def test_one_market_prices_twice_the_games_for_the_same_credits(self):
         two = cp.allocate(11.5, SEVEN, base=2)
         one = cp.allocate(11.5, SEVEN, base=1)
-        self.assertEqual((len(two["games_priced"]), len(one["games_priced"])), (3, 7))
+        # one market halves every capture's price, so the same credits fund twice the morning breadth (the pregame minimum is two games either way)
+        self.assertEqual((len(two["morning_games"]), len(one["morning_games"])), (3, 5))
+        self.assertEqual(one["morning_markets"], [cp.SHOTS_KEY])
 
     def test_the_age_check_follows_the_markets_actually_bought(self):
         calls = []

@@ -1,4 +1,4 @@
-# Product completion checklist (revision 7, 2026-10-09)
+# Product completion checklist (revision 8, 2026-10-09)
 
 Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
 **BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
@@ -10,6 +10,20 @@ Earlier "finished" claims were not used as evidence: every row below was re-chec
 |---|---|---|
 | Pre-change audit ZIP (before any work in this round) | `475bcbf0bc` | `nhl_engine_audit_PRE_475bcbf0bc.zip`, exported 2026-10-09T02:13Z |
 | Repository `master` = pinned release checkout the scheduled jobs run from = hosted app = published data | see the delivery message (`FINAL_COMMIT`) | Diagnostics → "Versions and the unattended engine" shows the hosted app's commit and the data's commit; the watchdog's `release_pinned` check compares release to `origin/master` every 30 minutes |
+
+## 0. Morning workflow (owner requirement 2026-10-09) — `docs/MORNING_WORKFLOW.md`
+
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| Initial update about 8 AM ET: games, statistics, available DraftKings prices, provisional recommendations | **UNMET until observed** (built, tested, deployed; not yet seen on a scheduled morning or on the hosted app) | `com.nhlengine.morning-update` (08:00) → `operational/morning_update.py`; watchdog `morning_update` check (warn 08:45, fail 10:00) and a persistent per-day record; product readiness says NOT VERIFIED until a day shows a first look within 45 min of 08:00 |
+| Remove the late capture window where it is only our policy; check provider availability | Done in code (slots replace the five-hour/105-minute horizon); availability **checked**: shots posted on game-day morning (observed 08:15 ET), points and goals by midday (not yet observed at 8 AM), saves late, **nothing a day ahead** (live probe 23.6 h ahead: nothing, 0 credits) | `operational/capture_schedule.py`; evidence table in the doc |
+| Distinguish "not posted" / "not fetched" / "budget prevented" | Done | `operational/price_availability.py`: POSTED, NOT_POSTED, NOT_FETCHED, BUDGET_BLOCKED, FETCH_ERROR; shown on Today, Best Options, Tomorrow, Diagnostics |
+| Refresh during the day; revalidate before recording | Morning + midday (leftover credits only) + pregame; **several refreshes for every game: NOT MET under the free allowance** | recording re-judges every leg on the clock at the moment of recording and requires a price retrieved inside the pregame window |
+| Morning picks must not consume the five slots | Done and tested | provisional tickets: not recorded, no slot, no money; a personal log cannot add a provisional option |
+| Frozen tickets and model/personal separation preserved | Unchanged; full suite | |
+| Separate Tomorrow view with early prices, refreshed, yesterday's never fresh | Built (page `Tomorrow`); early prices STALE after 12 h or from an earlier Eastern day | tomorrow's props are not posted a day ahead; one evening check says so |
+| Credits for morning coverage plus daytime and pregame refreshes; minimum budget; reduced service | **Minimum for every game: 60 credits/day (1,812/month); smallest provider tier above the free one is 20K ($30/month, 11× the need), not purchased.** Reduced service under the existing allowance: morning look at 3 games, pregame price for 2 (any slate size) | `operational/service_plan.py`, Diagnostics, doc |
+| Verified on the hosted app | **UNMET until the first scheduled morning** | listed as an owner-visible gap, not as done |
 
 ## 1. Core engine
 

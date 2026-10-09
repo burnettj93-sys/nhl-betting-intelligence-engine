@@ -135,6 +135,8 @@ class ParlayLeg:
     quote_updated_utc: str | None = None     # the provider's last_update for this bookmaker market
     quote_age_min: float | None = None       # quote age when the leg was built
     freshness_status: str = ""               # FRESH or the specific reason the quote is not fresh
+    provisional: bool = False                # a price older than the recording limit but from today's morning/midday look (operational/best_bets.py
+                                             # PROVISIONAL_MAX_AGE_MIN): may be SHOWN as a provisional recommendation, can never be the basis of a recorded ticket
 
 
 def leg_is_eligible(leg: ParlayLeg) -> bool:
