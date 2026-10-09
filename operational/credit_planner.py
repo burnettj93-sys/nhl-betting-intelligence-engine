@@ -251,12 +251,26 @@ def day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *, rema
         return plan
     # keep the chosen priced set and goals subset; update everything that legitimately changes during the day
     plan = {**saved, "saves_games": fresh["saves_games"], "budget": budget, "allowance": {**saved["allowance"], SAVES: fresh["allowance"][SAVES]}}
-    for key in ("morning_games", "morning_markets", "need_for_morning_and_pregame", "shortfall_per_day_morning_and_pregame"):
-        plan.setdefault(key, fresh[key])                       # a plan saved before the morning slot existed gains it; the priced set above never changes
-    for klass in (MORNING, TOMORROW):
-        plan["allowance"].setdefault(klass, fresh["allowance"][klass])
+    if "morning_games" not in plan:
+        # A plan saved before the morning slot existed (the transition day) already commits the whole day budget to its other classes. The morning look may only use what
+        # those classes leave over, so introducing it can never push the day past its budget.
+        committed = sum(v for k, v in plan["allowance"].items() if k != REFRESH)
+        room = max(D_of(plan) - committed, 0.0)
+        fresh_markets = fresh["morning_markets"]
+        k = min(len(fresh["morning_games"]), int(room // max(len(fresh_markets), 1))) if morning_enabled() else 0
+        plan["morning_games"], plan["morning_markets"] = fresh["morning_games"][:k], fresh_markets
+        plan["allowance"][MORNING] = float(k * len(fresh_markets))
+        plan["allowance"][REFRESH] = round(max(room - plan["allowance"][MORNING], 0.0), 2)
+        for key in ("need_for_morning_and_pregame", "shortfall_per_day_morning_and_pregame"):
+            plan.setdefault(key, fresh[key])
+    plan["allowance"].setdefault(TOMORROW, fresh["allowance"][TOMORROW])
+    plan["allowance"].setdefault(MORNING, 0.0)
     _persist(plan)
     return plan
+
+
+def D_of(plan: dict) -> float:  # noqa: N802
+    return float((plan.get("budget") or {}).get("D") or plan.get("D") or 0.0)
 
 
 def _persist(plan: dict) -> None:
