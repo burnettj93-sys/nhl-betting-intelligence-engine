@@ -28,11 +28,28 @@ _TONE = {"ok": ("#1f3d2b", "#2f6a48", "#8fe0b0"), "warn": ("#3a2f12", "#6b5417",
          "bad": ("#3d1d1d", "#7a2f2f", "#f0a0a0")}
 
 
-def cloud_banner_model(fr: dict, meta: dict) -> dict:
+PUBLICATION_STALE_AFTER_MIN = 60.0     # the same limit Data Status uses for the status snapshot
+
+
+def cloud_banner_model(fr: dict, meta: dict, now=None) -> dict:
     """Pure: everything the banner says, derived only from factual timestamps and
-    fetch state (Cloud live-data sprint, Parts 9/10/22). Testable without Streamlit."""
+    fetch state (Cloud live-data sprint, Parts 9/10/22). Testable without Streamlit.
+    The headline can only say CURRENT while the PUBLICATION itself is recent: a snapshot the engine published more than
+    PUBLICATION_STALE_AFTER_MIN ago is reported as not recently published, whatever its newest data timestamp says."""
+    import datetime as _dt
+    from operational import cloud_snapshot_schema as _schema
     headline, tone = _STATE_HEADLINE.get(fr.get("state"), _STATE_HEADLINE["UNAVAILABLE"])
     notices = []
+    published = _schema.parse_utc(fr.get("last_updated"))
+    pub_age = None
+    if published is not None:
+        pub_age = ((now or _dt.datetime.now(_dt.timezone.utc)) - published).total_seconds() / 60.0
+    if fr.get("state") == "CURRENT" and pub_age is not None:
+        if pub_age > PUBLICATION_STALE_AFTER_MIN:
+            headline, tone = (f"⚠️ SNAPSHOT NOT RECENTLY PUBLISHED — the engine last published {pub_age:.0f} min ago (it normally publishes every ~25 min); "
+                              "prices and results here may have moved", "warn")
+        else:
+            headline = f"☁️ COMMUNITY CLOUD — SNAPSHOT PUBLISHED {max(pub_age, 0):.0f} MIN AGO (odds freshness is judged separately)"
     if fr.get("source") == "REMOTE_LAST_KNOWN_GOOD":
         notices.append(f"REMOTE UPDATE FAILED ({fr.get('last_error') or 'unknown error'}) — showing the "
                        f"last-known-good snapshot, not a fresh one.")
