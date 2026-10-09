@@ -94,6 +94,7 @@ MAX_TICKETS_PER_GAME = 3
 MAX_TICKETS_PER_PLAYER = 2      # one player (any market) on at most two tickets: his bad night must not sink most of the day's book (2026-10-08: Bourque was on 3 of 5)
 MAX_POOL_FOR_LONG_TICKETS = 24      # bounds the 3-4 leg search; best legs by edge are kept
 MAX_SINGLES = 5
+CONSIDERED_LIMIT = 40            # qualifying tickets listed, best hit chance first, in the selection report
 
 
 @dataclass(frozen=True)
@@ -413,6 +414,13 @@ def select_singles(candidate_legs: list[ParlayLeg], limit: int = MAX_SINGLES) ->
     return singles[:limit]
 
 
+def _ident_label(combo, ident) -> str:
+    for l in combo.legs:
+        if leg_identity(l) == ident:
+            return leg_label(l)
+    return "a leg"
+
+
 def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegIdentity]] | None = None,
                    max_tickets: int = MAX_TICKETS_PER_DAY, ticket_filter=None) -> dict:
     """Pick up to `max_tickets` NEW tickets, given the leg sets already
@@ -425,7 +433,7 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
     recording-window reservation in operational/daily_tickets.py); it can only remove tickets, never admit one."""
     existing = existing or []
     pool = _prepare_pool(candidate_legs)
-    result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None}
+    result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None, "considered": []}
     if max_tickets <= 0:
         result["reason"] = "all of today's ticket slots are already used"
         return result
@@ -456,29 +464,52 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
 
     qualifying.sort(key=lambda c: (-c.joint_probability, -c.ev_estimated, len(c.legs)))
     blocked = 0
+    considered: list[dict] = []
+
+    def note(combo, status, reason=None):
+        if len(considered) < CONSIDERED_LIMIT:
+            considered.append({"legs": [leg_label(l) for l in combo.legs], "leg_prices": [l.american_price for l in combo.legs],
+                               "hit_probability": round(combo.joint_probability, 4), "estimated_price": round(combo.estimated_combo_price),
+                               "ev_estimated": round(combo.ev_estimated, 4), "ev_after_haircut": round(combo.ev_conservative, 4),
+                               "status": status, "reason": reason})
+
     for combo in qualifying:
         if len(result["tickets"]) >= max_tickets:
-            break
+            note(combo, "NOT_REACHED", "every slot was already filled by a ticket with a higher estimated hit chance")
+            continue
         idents = [leg_identity(l) for l in combo.legs]
         if frozenset(idents) in taken_sets:
+            note(combo, "ALREADY_RECORDED", "this exact ticket is already on the book today")
             continue
-        if ticket_filter is not None and ticket_filter(combo, result["tickets"]) is not None:
+        if ticket_filter is not None:
+            veto = ticket_filter(combo, result["tickets"])
+            if veto is not None:
+                blocked += 1
+                note(combo, "BLOCKED_RECORDING_WINDOW", str(veto))
+                continue
+        over = next((i for i in idents if leg_use.get(i, 0) >= MAX_TICKETS_PER_LEG), None)
+        if over is not None:
             blocked += 1
+            note(combo, "BLOCKED_LEG_LIMIT", f"{_ident_label(combo, over)} is already on {MAX_TICKETS_PER_LEG} tickets")
             continue
-        if any(leg_use.get(i, 0) >= MAX_TICKETS_PER_LEG for i in idents):
+        over = next((i for i in idents if game_use.get(i[0], 0) >= MAX_TICKETS_PER_GAME), None)
+        if over is not None:
             blocked += 1
-            continue
-        if any(game_use.get(i[0], 0) >= MAX_TICKETS_PER_GAME for i in idents):
-            blocked += 1
+            note(combo, "BLOCKED_GAME_LIMIT", f"that game is already on {MAX_TICKETS_PER_GAME} tickets")
             continue
         players = {i[:2] for i in idents if i[2] != "MONEYLINE"}
-        if any(player_use.get(pl, 0) >= MAX_TICKETS_PER_PLAYER for pl in players):
+        over_pl = next((pl for pl in players if player_use.get(pl, 0) >= MAX_TICKETS_PER_PLAYER), None)
+        if over_pl is not None:
             blocked += 1
+            name = next((l.participant_name for l in combo.legs if (l.game_id, l.participant_id) == over_pl), "a player")
+            note(combo, "BLOCKED_PLAYER_LIMIT", f"{name} is already on {MAX_TICKETS_PER_PLAYER} tickets")
             continue
         if any(i[2] == "MONEYLINE" and ml_side.get(i[0], i[1]) != i[1] for i in idents):
             blocked += 1
+            note(combo, "BLOCKED_OPPOSITE_SIDE", "the opposite moneyline side of that game is already held")
             continue
         result["tickets"].append(combo)
+        note(combo, "SELECTED", None)
         taken_sets.add(frozenset(idents))
         for pl in players:
             player_use[pl] = player_use.get(pl, 0) + 1
@@ -487,6 +518,7 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
             game_use[i[0]] = game_use.get(i[0], 0) + 1
             if i[2] == "MONEYLINE":
                 ml_side[i[0]] = i[1]
+    result["considered"] = considered
     if len(result["tickets"]) < max_tickets:
         if result["tickets"]:
             result["reason"] = (f"only {len(result['tickets'])} more ticket(s) qualified; the other qualifying "

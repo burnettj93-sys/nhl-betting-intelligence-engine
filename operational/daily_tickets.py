@@ -564,6 +564,30 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
     return base
 
 
+AUDIT_NAME = "selection_audit.jsonl"
+AUDIT_KEEP_DAYS_ROWS = 6
+
+
+def _record_selection_audit(et_date: str, now: dt.datetime, picked: dict, slots_left: int) -> dict:
+    """Why these tickets and not others: the qualifying tickets in hit-chance order, each marked SELECTED, or blocked and by which exposure limit.
+    A cycle that recorded something is appended to a small per-day log (so the reasoning behind a recorded ticket is not lost when later cycles have nothing
+    left to pick); the published document carries today's recording cycles plus the latest cycle."""
+    import json as _json
+    from operational import state_paths
+    path = state_paths.path(AUDIT_NAME)
+    latest = {"date_et": et_date, "at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "slots_open": slots_left, "pool_legs": picked["pool_size"],
+              "qualifying": picked["qualifying"], "considered": picked.get("considered") or [], "selected": len(picked["tickets"])}
+    try:
+        if picked["tickets"]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "a") as f:
+                f.write(_json.dumps(latest, sort_keys=True) + "\n")
+        rows = [_json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+    except (OSError, ValueError):
+        rows = []
+    return {"recording_cycles_today": [r for r in rows if r.get("date_et") == et_date][-AUDIT_KEEP_DAYS_ROWS:], "latest_cycle": latest}
+
+
 def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | None = None) -> dict:
     """One selection + recording pass. Safe to repeat: recorded tickets are
     never rewritten and never staked twice."""
@@ -582,6 +606,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     ticket_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
     picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
     singles = rmp.select_singles(legs)
+    selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
 
     account = pb.account_state(bankroll_conn, TRACK)
     record_results = record_tickets(bankroll_conn, picked["tickets"], now) if picked["tickets"] else []
@@ -601,6 +626,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         "sources": collected["sources"],
         "second_opinion": collected["second_opinion"], "starting_cash": account["available_cash"],
         "capture_plan": _capture_plan(nhl_conn, now), "recording_policy": wave_info,
+        "selection_audit": selection_audit,
     }
     from operational import player_options
     try:

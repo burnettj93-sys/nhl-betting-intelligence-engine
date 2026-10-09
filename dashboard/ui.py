@@ -64,6 +64,45 @@ def et_time(s: str | None, with_date: bool = False) -> str:
     return t.astimezone(et.EASTERN).strftime("%b %-d, %-I:%M %p ET" if with_date else "%-I:%M %p ET")
 
 
+def _utcnow() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def price_staleness(quoted_at: str | None, game_start_utc: str | None, now: dt.datetime | None = None) -> dict:
+    """Is a displayed price past its freshness limit RIGHT NOW (judged when the page is opened, from the provider's quote time, not when the engine last ran)?
+    The limit is the engine's own: 180 minutes, 90 minutes within 4 hours of puck drop (operational/source_status.moneyline_limit_min). A price with no
+    quote time is treated as stale. Stale prices are never used for tickets; this only makes that visible."""
+    from operational import source_status as ss
+    now = now or _utcnow()
+    t, start = parse_utc(quoted_at), parse_utc(game_start_utc)
+    if t is None:
+        return {"stale": True, "age_min": None, "limit_min": None}
+    limit = ss.moneyline_limit_min(now, [start] if start else [])
+    age = (now - t).total_seconds() / 60.0
+    return {"stale": age > limit, "age_min": age, "limit_min": limit}
+
+
+def age_short(minutes: float | None) -> str:
+    if minutes is None:
+        return "age unknown"
+    return f"{minutes:.0f} min" if minutes < 120 else f"{minutes / 60:.1f} h"
+
+
+def moneyline_text(g: dict, now: dt.datetime | None = None) -> tuple[str, bool]:
+    """(text, stale) for a game's DraftKings moneyline: the last quote, plainly marked STALE with its age when it is past its limit."""
+    ml = g.get("moneyline") or {}
+    a, h = ml.get("away") or {}, ml.get("home") or {}
+    if not a or not h:
+        return "no quote on file", False
+    sa = price_staleness(a.get("quote_captured_at_utc"), g.get("start_utc"), now)
+    sh = price_staleness(h.get("quote_captured_at_utc"), g.get("start_utc"), now)
+    stale = sa["stale"] or sh["stale"]
+    text = f"{american(a.get('american'))} / {american(h.get('american'))}"
+    if stale:
+        text += f"  ⚠ STALE — quoted {age_short(max(x for x in (sa['age_min'], sh['age_min']) if x is not None) if any(x is not None for x in (sa['age_min'], sh['age_min'])) else None)} ago"
+    return text, stale
+
+
 def age_text(s: str | None, now: dt.datetime | None = None) -> str:
     t = parse_utc(s)
     if t is None:
@@ -163,7 +202,9 @@ def _card_head(title: str, chips: str) -> None:
     st.markdown(f"<div class='card-head'><div class='card-title'>{_h(title)}</div><div class='card-chips'>{chips}</div></div>", unsafe_allow_html=True)
 
 
-def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> None:
+def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
+    """Renders the slip; returns True when any displayed price is past its freshness limit at this moment (never true for a recorded ticket's frozen prices)."""
+    any_stale = False
     """The bet slip: one row per selection (what, which game, the price as a pill, the model's chance and the edge it implies) and a stat strip."""
     rows = []
     for l in legs:
@@ -172,16 +213,23 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> None:
         edge = (l.get("probability") - implied) * 100 if l.get("probability") is not None else None
         game = " vs ".join(x for x in (l.get("team"), l.get("opponent")) if x)
         when = et_time(l.get("game_start_utc"))
-        quote = l.get("quote_updated_utc") or l.get("price_captured_at_utc")
-        meta = " · ".join(x for x in (game, when if when != "—" else None, f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None) if x)
+        quote = l.get("quote_updated_utc") or l.get("retrieved_at_utc") or l.get("price_captured_at_utc")
+        stale = price_staleness(quote, l.get("game_start_utc")) if not outcomes else {"stale": False}
+        any_stale = any_stale or stale["stale"]
+        meta = " · ".join(x for x in (game, when if when != "—" else None,
+                                      (f"⚠ STALE — quoted {age_short(stale['age_min'])} ago, past its {age_short(stale['limit_min'])} limit" if stale["stale"] else
+                                       f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None)) if x)
         res = {"WIN": ("won", "Won"), "LOSS": ("lost", "Lost"), "VOID": ("void", "Void")}.get(l.get("outcome") or "") if outcomes else None
         chance = f"Model {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
-        rows.append(f"<div class='leg {res[0] if res else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"
+        if edge is not None and edge < 1.0:
+            chance += " <span class='edge flat'>· no edge of its own</span>"
+        rows.append(f"<div class='leg {res[0] if res else ''}{' stale' if stale['stale'] else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"
                     f"<div class='leg-right'><span class='odds'>{american(l['american_price'])}</span><span class='chance'>{chance}</span>"
                     + (f"<span class='res {res[0]}'>{res[1]}</span>" if res else "") + "</div></div>")
     cells = "".join(f"<div class='stat {tone}'><span class='k'>{_h(k)}</span><span class='v'>{_h(v)}</span>" + (f"<span class='sub'>{_h(sub)}</span>" if sub else "") + "</div>"
                     for k, v, sub, tone in stats)
     st.markdown(f"<div class='slip'>{''.join(rows)}<div class='stats'>{cells}</div></div>", unsafe_allow_html=True)
+    return any_stale
 
 
 def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
@@ -213,6 +261,32 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                 st.warning(esc(a["detail"]))
 
 
+STATUS_WORDS = {"SELECTED": "Taken", "BLOCKED_LEG_LIMIT": "Skipped — leg limit", "BLOCKED_PLAYER_LIMIT": "Skipped — player limit", "BLOCKED_GAME_LIMIT": "Skipped — game limit",
+                "BLOCKED_RECORDING_WINDOW": "Held — recording window", "BLOCKED_OPPOSITE_SIDE": "Skipped — opposite side held", "ALREADY_RECORDED": "Already on the book",
+                "NOT_REACHED": "Not needed — slots full"}
+
+
+def selection_report(tk: dict) -> None:
+    """Why these tickets and not the others: every qualifying ticket in hit-chance order with what happened to it. Estimates, not findings."""
+    audit = ((tk.get("diagnostics") or {}).get("selection_audit") or {})
+    cycles = audit.get("recording_cycles_today") or []
+    cyc = cycles[-1] if cycles else audit.get("latest_cycle")
+    if not cyc or not cyc.get("considered"):
+        return
+    with st.expander("Why these tickets — and the higher-hit alternatives that were not taken"):
+        st.caption(f"{cyc['qualifying']} tickets qualified from {cyc['pool_legs']} eligible legs ({et_time(cyc['at_utc'], True)}). They are ranked by **estimated hit chance** (then value), "
+                   "so a longer-priced ticket is taken only when every higher-hit one is already taken or would put too much on one leg, player or game. "
+                   "Nothing is lowered to fill a slot, and a slot with no qualifying ticket stays empty.")
+        rows = ["| Hit chance | Price | Value | After haircut | Ticket | What happened |", "|---|---|---|---|---|---|"]
+        for c in cyc["considered"][:18]:
+            what = STATUS_WORDS.get(c["status"], c["status"]) + (f": {c['reason']}" if c.get("reason") and c["status"] != "SELECTED" else "")
+            legs = " + ".join(f"{l} ({american(p)})" for l, p in zip(c["legs"], c["leg_prices"]))
+            rows.append(f"| **{pct(c['hit_probability'], 1)}** | {american(c['estimated_price'])} | {c['ev_estimated'] * 100:+.0f}% | {c['ev_after_haircut'] * 100:+.1f}% | {_h(legs)} | {_h(what)} |")
+        st.markdown("\n".join(rows))
+        st.caption("Value = estimated return per dollar; After haircut = the same with every leg's chance lowered 3 points. Individual-player model error in testing was about 8 points, "
+                   "so small differences in value between tickets are not reliable; hit chance is the ranking.")
+
+
 def leg_why(legs: list[dict]) -> None:
     """Short per-selection rationale (role, recent production and sample, expected output, main uncertainty) from the published product state."""
     from operational import leg_context
@@ -240,11 +314,13 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         quoted = opt["price_basis"] == "SPORTSBOOK_QUOTE"
         decimal = opt.get("combined_decimal") or 1.0
         ev = opt["ev_after_haircut"] * 100
-        _slip(opt["legs"], [("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]), "DraftKings quote" if quoted else "product of leg prices", "accent"),
+        stale_any = _slip(opt["legs"], [("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]), "DraftKings quote" if quoted else "product of leg prices", "accent"),
                             ("Stake", money(opt["stake"]), None, ""),
                             ("To return", money(opt["potential_return"]), f"profit {money(opt['potential_profit'])}", ""),
                             ("Model chance", pct(opt["hit_probability"]), f"price implies {pct(1.0 / decimal)}", ""),
                             ("Value after haircut", f"{ev:+.0f}%", "3-pt policy margin", "good" if ev > 0 else "bad")], outcomes=False)
+        if stale_any:
+            banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation, and it cannot be added.", "bad")
         st.caption(esc(opt["rationale"]))
         leg_why(opt["legs"])
         if show_people and opt.get("best_for"):
@@ -252,7 +328,8 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
             st.caption(f"Best option for: {names}")
         st.caption(f"{opt['price_label']}. Prices are DraftKings US-feed quotes; they have not been verified against DraftKings Ontario.")
         ontario_check(opt, key=key)
-        add_control(opt, key=key, cash=cash, page_generated_at=page_generated_at)
+        if not stale_any:
+            add_control(opt, key=key, cash=cash, page_generated_at=page_generated_at)
 
 
 def ontario_check(opt: dict, *, key: str) -> None:

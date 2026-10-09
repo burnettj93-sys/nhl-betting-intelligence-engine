@@ -73,6 +73,7 @@ a { color: #8db4ff; }
 .slip { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 4px 0; }
 .leg { display: flex; justify-content: space-between; align-items: center; gap: 14px; background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent);
     border-radius: 10px; padding: 9px 14px; }
+.leg.stale { border-left-color: var(--warn); background: rgba(232,184,74,.06); } .leg.stale .leg-sel, .leg.stale .odds { opacity: .6; } .leg.stale .leg-meta { color: var(--warn); font-weight: 600; }
 .leg.won { border-left-color: var(--good); } .leg.lost { border-left-color: var(--bad); } .leg.void { border-left-color: var(--muted); }
 .leg-main { min-width: 0; flex: 1 1 auto; }
 .leg-sel { font-weight: 650; font-size: .98rem; color: var(--text); line-height: 1.3; }

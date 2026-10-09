@@ -11,6 +11,7 @@ from unittest import mock
 from streamlit.testing.v1 import AppTest
 
 from dashboard import order_client
+from dashboard import ui
 from dashboard import page_registry
 from dashboard import snapshot_source as ss
 from operational import runtime_mode as rm
@@ -21,6 +22,7 @@ from operational import personal_logs as pl
 from tests.product_fixture import GEN, LOG_CODE, LOG_KEY, snapshot
 
 PAGES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "pages")
+FIXTURE_NOW = __import__("datetime").datetime(2026, 10, 15, 17, 5, tzinfo=__import__("datetime").timezone.utc)      # five minutes after the fixture option prices (tests.test_daily_tickets.NOW is 17:00 UTC on 2026-10-15)
 BANNED = re.compile(r"(?i)\b(simulated|demo|fixture|sample data|lorem)\b")
 
 
@@ -30,7 +32,7 @@ def run_page(file, snap, *, setup=None, timeout=120):
         ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=None, source="NONE", fetch_status="FAILED", last_error="network error: URLError",
                                                                                   last_success_utc=None, freshness="UNAVAILABLE")
     with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
-            mock.patch.object(ss, "current", return_value=state):
+            mock.patch.object(ss, "current", return_value=state), mock.patch.object(ui, "_utcnow", return_value=FIXTURE_NOW):
         at = AppTest.from_file(os.path.join(PAGES, file), default_timeout=timeout)
         if setup:
             setup(at)
@@ -42,7 +44,7 @@ def rerun(at, snap):
     """at.run() inside the same hosted-mode patches run_page uses (a bare at.run() would fall back to local mode)."""
     state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snap, source="REMOTE", fetch_status="OK", freshness="CURRENT", schema_version=2)
     with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
-            mock.patch.object(ss, "current", return_value=state):
+            mock.patch.object(ss, "current", return_value=state), mock.patch.object(ui, "_utcnow", return_value=FIXTURE_NOW):
         at.run()
     return at
 
@@ -227,9 +229,15 @@ class TestMyBetsPage(unittest.TestCase):
         self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
         t = text(at)
         flat = t.replace("<b>", "").replace("</b>", "")
-        self.assertIn("What is public, and what is protected", flat)
-        self.assertIn("Reading is therefore not private. Writing is protected", flat)
-        self.assertIn("public repository", t)
+        self.assertIn("Code", flat)
+        self.assertIn("Write key", flat)
+        self.assertIn("can read a log but not add to it", flat)
+        self.assertTrue(any("how it works" in e.label.lower() for e in at.expander))
+        details = " ".join(m.value for m in at.markdown)
+        self.assertIn("Reading is not private.", details)
+        self.assertIn("Writing is protected.", details)
+        self.assertIn("public GitHub repository", details)
+        self.assertIn("Ed25519", details)
         self.assertFalse(BANNED.search(t))
 
     def test_opening_a_published_code_selects_the_log_and_an_unknown_code_is_refused(self):
@@ -303,6 +311,53 @@ class TestMyBetsPage(unittest.TestCase):
         self.assertIn("Best qualifying +100 option", t)
         self.assertIn("No qualifying option for this goalie right now", t)
         self.assertIn("not a substitute for his own line", t)
+
+    def test_today_explains_the_selection_when_the_board_carries_an_audit(self):
+        snap = snapshot()
+        snap["tickets"].setdefault("diagnostics", {})["selection_audit"] = {"recording_cycles_today": [{
+            "date_et": "2026-10-08", "at_utc": "2026-10-08T18:07:56Z", "slots_open": 5, "pool_legs": 27, "qualifying": 106, "selected": 2,
+            "considered": [{"legs": ["A 2+ shots on goal", "B 2+ shots on goal"], "leg_prices": [-135.0, -140.0], "hit_probability": 0.387, "estimated_price": 198, "ev_estimated": 0.155,
+                            "ev_after_haircut": 0.047, "status": "SELECTED", "reason": None},
+                           {"legs": ["A 2+ shots on goal", "C 1+ point"], "leg_prices": [-135.0, 145.0], "hit_probability": 0.285, "estimated_price": 326, "ev_estimated": 0.214,
+                            "ev_after_haircut": 0.079, "status": "BLOCKED_LEG_LIMIT", "reason": "A 2+ shots on goal is already on 2 tickets"}]}]}
+        at = run_page("21_Today.py", snap)
+        self.assertEqual(len(at.exception), 0)
+        self.assertTrue(any("higher-hit alternatives" in e.label for e in at.expander))
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("Skipped — leg limit", body)
+        self.assertIn("already on 2 tickets", body)
+
+    def test_a_stale_moneyline_is_marked_on_the_board_not_just_on_diagnostics(self):
+        at = run_page("21_Today.py", snapshot())                       # the fixture's moneyline quotes are a week older than the page's clock
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("moneyline prices below are stale", body.replace("<b>", "").replace("</b>", ""))
+        cells = " ".join(str(d.value.to_dict()) for d in at.dataframe)
+        self.assertIn("STALE", cells)
+        self.assertIn("never used for a ticket", body)
+
+    def test_a_fresh_moneyline_is_not_marked(self):
+        snap = snapshot()
+        for g in snap["product_games"]["games"]:
+            for side in ("home", "away"):
+                if (g.get("moneyline") or {}).get(side):
+                    g["moneyline"][side]["quote_captured_at_utc"] = "2026-10-15T17:00:00Z"
+        at = run_page("21_Today.py", snap)
+        self.assertNotIn("STALE", " ".join(str(d.value.to_dict()) for d in at.dataframe))
+        self.assertNotIn("moneyline prices below are stale", " ".join(m.value for m in at.markdown).replace("<b>", "").replace("</b>", ""))
+
+    def test_an_option_card_whose_prices_have_aged_out_is_marked_and_cannot_be_added(self):
+        late = FIXTURE_NOW.replace(hour=21, minute=0)                    # four hours later: still before the game, long past the 90/180-minute limits
+        with mock.patch.object(ui, "_utcnow", return_value=late):
+            state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snapshot(), source="REMOTE", fetch_status="OK", freshness="CURRENT", schema_version=2)
+            with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+                    mock.patch.object(ss, "current", return_value=state):
+                at = AppTest.from_file(os.path.join(PAGES, "26_Player_Props.py"), default_timeout=120)
+                choose_log(at)
+                at.run()
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("STALE", body)
+        self.assertIn("Stale price.", body)
+        self.assertFalse(any(b.label.startswith("Add to ") for b in at.button))
 
     def test_model_health_states_validation_and_blocked_markets_without_relabelling(self):
         at = run_page("22_Model_Health.py", snapshot())

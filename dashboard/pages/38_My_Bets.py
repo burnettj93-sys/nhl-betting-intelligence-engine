@@ -102,13 +102,23 @@ def model_section(compact: bool = False) -> None:
 
 # ---------------------------------------------------------------- choosing a log ----
 log = ui.selected_log()
-TRADE_OFF = ("<b>What is public, and what is protected.</b> The engine publishes its data to a public repository, so anyone can read any log's bets (they are filed under a one-way hash "
-             "of the log's code and the display name you choose, never the code itself). That is the price of a free, always-on app with no account system. "
-             "<b>Reading is therefore not private. Writing is protected:</b> each log has a separate <b>write key</b>, made when the log is created and shown once. "
-             "Only a signature made with it can add a bet, so knowing someone's code lets you read their log, not add to it. A lost write key cannot be recovered "
-             "(the log stays readable; make a new one). Paper bets only; keep nothing personal in a log.")
+SHORT = ("<b>Code</b> — your log's name. Enter it to open the log. &nbsp; <b>Write key</b> — the secret that lets you add bets; it is shown once when you create the log. "
+         "Without the key you can read a log but not add to it.")
+DETAILS = """**What is public and what is protected**
+
+* **Reading is not private.** The engine publishes its data to a public GitHub repository (that is what lets this free app read it), so anyone can read any log's bets. A log is filed under a
+  one-way hash of its code and the display name you chose — never the code itself — but the bets themselves are visible. Keep nothing personal in a log or its name. Paper bets only; no money moves.
+* **Writing is protected.** Each order (create a log, add a bet) is signed with a key derived from your write key, using the standard Ed25519 signature scheme. The engine stores only the
+  *public* half and refuses any order whose signature does not verify. Knowing someone's code therefore lets you read their log, not add to it.
+* **The order queue is public too**, but a signature in it cannot be reused to write anything else: the signature covers the whole order, and each order id is answered once.
+* **The write key never leaves your browser session.** It is not stored or sent; only signatures are. Close the page and you will need it again.
+* **Lost key:** it cannot be recovered (the engine never has it). The log stays readable; make a new one.
+* **Why not a password?** A password would have to travel inside the public order. A signature does not.
+"""
 with st.expander("Open or create a log", expanded=log is None):
-    ui.banner(TRADE_OFF, "warn")
+    ui.banner(SHORT, "info")
+    with st.expander("How it works — and what is public"):
+        st.markdown(DETAILS)
     tab_open, tab_new = st.tabs(["Open my log", "Create a log"])
     with tab_open:
         code = st.text_input("Your log code (its name)", key="mb_open_code", placeholder="for example otter-maple-puck-4821")
