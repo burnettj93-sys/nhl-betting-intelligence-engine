@@ -207,8 +207,10 @@ def check_sources(now: dt.datetime, evaluated: dict | None = None) -> dict:
 BOARD_LOG = "board_evidence.jsonl"
 
 
-def _log_board_evidence(options: int, tickets: int, built: str | None, now: dt.datetime) -> None:
-    """Appends a line when the published board's option count changes (persistent evidence that cards were populated, and when)."""
+def _log_board_evidence(options: int, tickets: int, built: str | None, now: dt.datetime) -> bool:
+    """Appends a line when the published board's option count changes (persistent evidence that cards were populated, and when).
+    Returns True when the board has just gone from empty to populated; the watchdog then sends one macOS notification, so the moment prices
+    arrive does not depend on anyone (or any session) watching."""
     p = state_paths.path(BOARD_LOG)
     try:
         last = json.loads(p.read_text().splitlines()[-1]) if p.exists() and p.read_text().strip() else None
@@ -218,6 +220,14 @@ def _log_board_evidence(options: int, tickets: int, built: str | None, now: dt.d
         p.parent.mkdir(parents=True, exist_ok=True)
         with open(p, "a") as f:
             f.write(json.dumps({"at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "options": options, "tickets": tickets, "options_built_utc": built}, sort_keys=True) + "\n")
+        if options > 0 and not (last or {}).get("options"):
+            try:
+                from operational import notify as _n
+                _n.send("NHL board populated", f"{options} option card(s) are now published - time to check the hosted Best Options page.")
+            except Exception:  # noqa: BLE001
+                pass
+            return True
+    return False
 
 
 def _first_board_evidence() -> str | None:
