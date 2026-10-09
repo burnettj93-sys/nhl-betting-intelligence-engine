@@ -430,6 +430,30 @@ def reported_pp(p: dict) -> str:
     return (r.get("pp") or "—") if r else "—"
 
 
+def app_version() -> dict:
+    """The commit this running app was deployed from, read from its checkout's .git (no subprocess), or 'unknown'. Shown on Diagnostics so a stale deploy is visible."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    try:
+        git = root / ".git"
+        if git.is_file():                                      # a worktree: ".git" is a pointer file
+            git = Path(git.read_text().split("gitdir:", 1)[1].strip())
+        ref = (git / "HEAD").read_text().strip()
+        if len(ref) == 40:
+            return {"commit": ref, "source": ".git/HEAD"}
+        target = git / ref.split(" ", 1)[1]
+        if target.exists():
+            return {"commit": target.read_text().strip(), "source": ".git ref"}
+        packed = git / "packed-refs"
+        if packed.exists():
+            for line in packed.read_text().splitlines():
+                if line.endswith(" " + ref.split(" ", 1)[1]):
+                    return {"commit": line.split()[0], "source": "packed-refs"}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"commit": "unknown", "source": None}
+
+
 # ---- order-path check: proves the click-to-queue path end to end without staking anything ----
 
 def signed_in_email() -> str | None:

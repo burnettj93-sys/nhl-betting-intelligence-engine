@@ -170,7 +170,12 @@ def _health() -> dict:
         ops["prop_discovery"] = {"mode": ps["mode"], "market_states": ps["market_states"], "daily_budget": ps["daily_budget"]}
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never fail the snapshot
         ops["error"] = type(exc).__name__
-    return {"items": items, "production": summary, "odds_status": odds_status, "operations": ops}
+    try:
+        from operational import watchdog
+        wd_state = watchdog.load_state()
+    except Exception:  # noqa: BLE001
+        wd_state = None
+    return {"items": items, "production": summary, "odds_status": odds_status, "operations": ops, "watchdog": wd_state}
 
 
 def _tickets() -> dict:
