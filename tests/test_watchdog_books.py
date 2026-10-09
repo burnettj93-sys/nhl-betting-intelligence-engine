@@ -3,6 +3,7 @@ import datetime as dt
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from operational import log_signing
@@ -132,6 +133,15 @@ class TestReadinessIsSeparateFromHealth(unittest.TestCase):
         log = [json.loads(l) for l in state_paths.path(wd.BOARD_LOG).read_text().splitlines()]
         self.assertEqual([r["options"] for r in log][-2:], [0, 1])               # one line per change, not per run
         self.assertEqual(len([r for r in log if r["options"] == 1]), 1)
+
+    def test_going_from_empty_to_populated_notifies_exactly_once(self):
+        sent = []
+        with mock.patch("operational.notify.send", side_effect=lambda *a, **k: sent.append(a)):
+            self.assertFalse(wd._log_board_evidence(0, 0, None, NOW))
+            self.assertTrue(wd._log_board_evidence(3, 0, "t", NOW))
+            self.assertFalse(wd._log_board_evidence(3, 0, "t", NOW))
+            self.assertFalse(wd._log_board_evidence(4, 0, "t", NOW))                 # more options later: no second notification
+        self.assertEqual(len(sent), 1)
 
     def test_run_reports_health_and_readiness_as_separate_parts(self):
         def runner(cmd, cwd=None, timeout=30):
