@@ -23,7 +23,16 @@ from operational import ed25519_pure
 
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"        # no 0/O/1/I
 SALT = b"nhl-engine/personal-log/write-v1|"
+SALT_PASSCODE = b"nhl-engine/personal-account/passcode-v2|"
 KEY_GROUPS, GROUP_LEN = 5, 4
+PASSCODE_LEN = 8                                     # 8 characters of a 32-letter alphabet = 40 bits, written XXXX-XXXX
+
+
+def new_passcode() -> str:
+    """The everyday write secret of a personal account: 8 characters from a 32-letter alphabet (40 bits), grouped XXXX-XXXX. Short enough to type from a phone; the key pair derived from it
+    uses a much slower derivation than the long key (see _seed), because the public half is published and an attacker may try passcodes offline."""
+    chars = "".join(secrets.choice(ALPHABET) for _ in range(PASSCODE_LEN))
+    return f"{chars[:4]}-{chars[4:]}"
 
 
 def new_write_key() -> str:
@@ -37,12 +46,21 @@ def normalize_key(key) -> str:
 
 
 def valid_key_shape(key) -> bool:
+    """A 20-character write key (earlier logs and the owner's claim phrase) or an 8-character account passcode."""
     k = normalize_key(key)
-    return len(k) == KEY_GROUPS * GROUP_LEN and all(c in ALPHABET for c in k)
+    return len(k) in (KEY_GROUPS * GROUP_LEN, PASSCODE_LEN) and all(c in ALPHABET for c in k)
+
+
+def is_passcode(key) -> bool:
+    return len(normalize_key(key)) == PASSCODE_LEN
 
 
 def _seed(write_key: str, log_hash: str) -> bytes:
-    return hashlib.scrypt(normalize_key(write_key).encode(), salt=SALT + log_hash.encode(), n=2 ** 14, r=8, p=1, dklen=32)
+    k = normalize_key(write_key)
+    if len(k) == PASSCODE_LEN:
+        # 40 bits is too few to resist a determined offline search at ordinary speed, so each guess costs about 0.15-0.3 s and 32 MiB (n=2^15): about 10^3 CPU-years to try them all.
+        return hashlib.scrypt(k.encode(), salt=SALT_PASSCODE + log_hash.encode(), n=2 ** 15, r=8, p=1, dklen=32, maxmem=96 * 1024 * 1024)
+    return hashlib.scrypt(k.encode(), salt=SALT + log_hash.encode(), n=2 ** 14, r=8, p=1, dklen=32)
 
 
 def public_key_hex(write_key: str, log_hash: str) -> str:

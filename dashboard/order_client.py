@@ -48,7 +48,7 @@ def build_personal_order(option: dict | None, *, order_id: str, log_hash: str, p
     signed afterwards with `operational.log_signing.sign` (the signature is what authorises it)."""
     log = {"hash": log_hash}
     if create:
-        log["create"] = {"creation_id": create["creation_id"], "display_name": create["display_name"], "write_pub": create["write_pub"]}
+        log["create"] = {k: create[k] for k in ("creation_id", "display_name", "write_pub", "slug") if create.get(k) is not None}
     doc = {"schema": SCHEMA, "type": kind, "order_id": order_id, "log": log, "page_generated_at_utc": page_generated_at}
     if kind == "PERSONAL_BET":
         doc["option_id"] = option["option_id"]
@@ -58,6 +58,18 @@ def build_personal_order(option: dict | None, *, order_id: str, log_hash: str, p
             "combined_american": option["combined_american"], "hit_probability": option["hit_probability"], "stake": float(stake),
             "price_basis": option.get("price_basis")}
     return doc
+
+
+def build_builder_order(legs: list[dict], *, order_id: str, log_hash: str, page_generated_at: str | None, stake: float, same_game_ack: bool,
+                        combined_american: int | None, create: dict | None = None) -> dict:
+    """An order to add a slip the person built on the Paper Parlay Builder to the account `log_hash`. It carries the prices the person saw; the engine rechecks them against its current
+    price list and records nothing if any moved, went stale, or the game started. Signed afterwards (the signature is what authorises it)."""
+    log = {"hash": log_hash}
+    if create:
+        log["create"] = {k: create[k] for k in ("creation_id", "display_name", "write_pub", "slug") if create.get(k) is not None}
+    return {"schema": SCHEMA, "type": "PERSONAL_BET", "order_id": order_id, "log": log, "page_generated_at_utc": page_generated_at,
+            "accepted": {"kind": "BUILDER", "legs": [{k: l.get(k) for k in ("game_id", "participant_id", "participant_name", "market_family", "threshold", "side", "american_price")} for l in legs],
+                         "stake": float(stake), "same_game_ack": bool(same_game_ack), "combined_american": combined_american}}
 
 
 def build_claim_order(*, order_id: str, log_hash: str, claim_proof: str, page_generated_at: str | None) -> dict:

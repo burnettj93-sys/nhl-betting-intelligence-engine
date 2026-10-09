@@ -333,7 +333,7 @@ def _personal_answer_text(row: dict) -> str:
 
 
 def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp.ParlayLeg] | None = None,
-                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None, personal_conn=None, personal_fetch=None) -> dict:
+                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None, personal_conn=None, personal_fetch=None, builder_pool=None) -> dict:
     """One pass of the engine-side queue. Serialised by a lock file so overlapping runs cannot race."""
     lock_path = state_paths.path(LOCK_NAME)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -374,16 +374,21 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
             ignored = ignored + p_ignored
             if p_orders:
                 own = personal_conn or personal_logs.connect()
+                if builder_pool is None:
+                    from operational import builder_pool as _bp
+                    builder_pool = _bp.load()
+                pool = builder_pool
                 try:
                     for o in p_orders:
-                        if legs is None:
-                            from operational import daily_tickets
-                            legs = daily_tickets.collect_candidate_legs(nhl_conn, now)["legs"]
                         try:
                             parsed = json.loads(o["body"])
                         except (json.JSONDecodeError, TypeError):
                             parsed = o["body"]
-                        row = personal_logs.process_order(own, parsed, current_legs=legs, now=now, source=f"github-issue:{o['issue']}", received_at=o.get("created_at"))
+                        is_builder = isinstance(parsed, dict) and isinstance(parsed.get("accepted"), dict) and parsed["accepted"].get("kind") == "BUILDER"
+                        if legs is None and not is_builder:          # a builder slip is checked against the builder price list, not the model's candidate legs
+                            from operational import daily_tickets
+                            legs = daily_tickets.collect_candidate_legs(nhl_conn, now)["legs"]
+                        row = personal_logs.process_order(own, parsed, current_legs=legs, now=now, source=f"github-issue:{o['issue']}", received_at=o.get("created_at"), builder_pool=pool)
                         personal_results.append({"issue": o["issue"], **{k: row[k] for k in ("order_id", "status", "reason", "bet_id")}})
                         if personal_fetch is None:
                             try:

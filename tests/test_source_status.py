@@ -130,13 +130,14 @@ class TestPage(unittest.TestCase):
              "next_refresh_utc": None, "next_refresh_note": None, "fixed_state": "DISABLED", "limiter": "PERMISSION", "reason": "switched off", "detail": {}}]}
         snap = snapshot()
         snap["data_status"] = {"sources": fresh}
-        at = run_page("9_Data_Status.py", snap)
+        unlock = lambda a: a.session_state.__setitem__("_owner_unlocked", True)          # Data Status is an owner page on the public app
+        at = run_page("9_Data_Status.py", snap, setup=unlock)
         rows = at.dataframe[0].value.to_dict("records")
         self.assertEqual({r["Source"]: r["Status"] for r in rows}, {"NHL schedule": "Current", "Moneyline prices (DraftKings)": "Stale", "Reported lines": "Disabled"})
         self.assertFalse(at.error)
         stale = dict(fresh, generated_at_utc=iso(now - dt.timedelta(hours=3)))
         snap["data_status"] = {"sources": stale}
-        at2 = run_page("9_Data_Status.py", snap)
+        at2 = run_page("9_Data_Status.py", snap, setup=unlock)
         self.assertTrue(any("STATUS SNAPSHOT IS STALE" in e.value for e in at2.error))
         self.assertNotIn("different cache", text(at2))
         self.assertNotIn("SNAPSHOT CURRENT", " ".join(str(m.value) for m in at2.markdown) + text(at2))    # no second, disagreeing banner on this page                                               # no implementation-heavy cache explanation on the normal view

@@ -81,6 +81,13 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             price_refresh = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
 
+        # The Paper Parlay Builder's price list (every priced line for today's games, for people to pick from), written before the order queue is answered.
+        try:
+            from operational import builder_pool
+            builder_summary = builder_pool.refresh(nhl_conn, now)
+        except Exception as exc:  # noqa: BLE001 - the builder is informational; the model book never waits on it
+            builder_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+
         # Starting-goalie reports and reported lineups (Daily Faceoff, rate-limited inside the module). A failure never blocks the cycle.
         try:
             from operational import dailyfaceoff
@@ -107,6 +114,7 @@ def run(now: dt.datetime | None = None) -> dict:
             from operational import personal_logs
             _pconn = personal_logs.connect()
             try:
+                personal_logs.migrate_bankrolls(_pconn, now)               # idempotent: gives any log that predates bankrolls its own $500 once, and records the state
                 personal_summary = personal_logs.settle_open(_pconn, nhl_conn, now)
             finally:
                 _pconn.close()
@@ -125,7 +133,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "manual_orders": manual_summary, "personal_logs": personal_summary, "product_state": product_summary, "starter_feed": df_summary}
+              "manual_orders": manual_summary, "personal_logs": personal_summary, "builder_pool": builder_summary, "product_state": product_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

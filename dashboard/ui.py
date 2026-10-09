@@ -580,6 +580,17 @@ def select_log(code: str, name: str | None = None, *, creation: dict | None = No
     st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation, "write_key": write_key or None}
 
 
+def select_account(surname: str, number: int = 1, *, creation: dict | None = None, write_key: str | None = None) -> None:
+    """Works in the personal ACCOUNT filed under this last name (and number for a duplicate surname). The passcode, if given, is held only in this browser session."""
+    from operational import personal_logs as pl
+    slug = pl.surname_slug(surname, number)
+    st.session_state["_personal_log"] = {"hash": pl.account_key(slug), "name": pl.display_for(surname, number), "creation": creation, "write_key": write_key or None, "slug": slug}
+
+
+def account_bankroll(log: dict | None) -> dict | None:
+    return ((log or {}).get("doc") or {}).get("bankroll")
+
+
 def forget_log() -> None:
     st.session_state.pop("_personal_log", None)
 
@@ -591,13 +602,23 @@ def _log_order(order_id: str, log_hash: str) -> dict | None:
     return None
 
 
+SESSION_ORDER_LIMIT, SESSION_ORDER_WINDOW_S = 20, 3600
+
+
 def file_order(order: dict) -> dict:
-    """Creates the order in the queue. {"ok", "via", "issue"|"url"|"error"}; the credential never leaves this function."""
+    """Creates the order in the queue. {"ok", "via", "issue"|"url"|"error"}; the credential never leaves this function. A public app must not let one browser session flood the queue, so a
+    session may file at most SESSION_ORDER_LIMIT orders an hour (the engine applies its own per-account and per-day limits on top)."""
+    import time
+    now = time.time()
+    sent = [t for t in st.session_state.get("_orders_sent", []) if now - t < SESSION_ORDER_WINDOW_S]
+    if len(sent) >= SESSION_ORDER_LIMIT:
+        return {"ok": False, "via": "direct", "error": "That is a lot of orders in the last hour. Please wait a little before sending more."}
+    st.session_state["_orders_sent"] = sent + [now]
     token = order_client.personal_write_token(getattr(st, "secrets", {}))
-    if token:
-        res = order_client.submit_direct(order, token)
-        return {"ok": res["ok"], "via": "direct", "issue": res.get("issue"), "error": res.get("error")}
-    return {"ok": True, "via": "link", "url": order_client.prefilled_issue_url(order)}
+    if not token:
+        return {"ok": False, "via": "none", "error": "Adding is not switched on yet: the app has no write credential."}
+    res = order_client.submit_direct(order, token)
+    return {"ok": res["ok"], "via": "direct", "issue": res.get("issue"), "error": res.get("error")}
 
 
 def add_control(opt: dict, *, key: str, cash: float | None = None, page_generated_at: str | None = None) -> None:
@@ -639,9 +660,6 @@ def add_control(opt: dict, *, key: str, cash: float | None = None, page_generate
         return
     if mine:
         banner("Order sent — waiting for the engine to revalidate and record it (usually a few minutes).", "info")
-        if mine.get("url"):
-            st.link_button("Open GitHub to finish filing this order", mine["url"])
-            st.caption("Repository owner only: the order exists once you press “Submit new issue” on GitHub.")
         if st.button("Check status", key=f"{key}_check"):
             from dashboard import snapshot_source
             snapshot_source.current(force_refresh=True)
@@ -649,11 +667,19 @@ def add_control(opt: dict, *, key: str, cash: float | None = None, page_generate
         return
     rules = personal_logs_doc().get("rules") or {}
     lo, hi, default = rules.get("stake_min", pl.MIN_STAKE), rules.get("stake_max", pl.MAX_STAKE), rules.get("stake_default", pl.DEFAULT_STAKE)
-    stake = st.number_input("Stake (paper $)", min_value=float(lo), max_value=float(hi), value=float(default), step=5.0, key=f"{key}_stake")
+    bank = account_bankroll(log)
+    cash = bank["available_cash"] if bank else None
+    if cash is not None:
+        hi = max(min(float(hi), float(cash)), float(lo))
+        st.caption(f"Available cash in {esc(log['name'])}: {money(cash)} (a stake cannot exceed it).")
+    stake = st.number_input("Stake (paper $)", min_value=float(lo), max_value=float(hi), value=min(float(default), float(hi)), step=5.0, key=f"{key}_stake")
+    broke = cash is not None and cash < float(lo)
+    if broke:
+        st.warning("This account has less than the minimum stake available. Open bets settle and return cash; nothing can be added until then.")
     if not order_client.personal_write_token(getattr(st, "secrets", {})):
-        st.caption("Adding bets from this page is not switched on yet (the app has no write credential). The button below makes a pre-filled GitHub issue that only the repository owner can submit.")
-    if st.button(f"Add to {log['name']} — {money(stake)}", key=f"{key}_add", type="primary",
-                 help="Files one order. The engine rechecks the price first, and tells you if it moved. Nothing is added by browsing or refreshing."):
+        st.caption("Adding bets from this page is not switched on yet (the app has no write credential), so nothing can be added for now.")
+    elif st.button(f"Add to {log['name']} — {money(stake)}", key=f"{key}_add", type="primary", disabled=broke,
+                   help="Files one order. The engine rechecks the price and your cash first, and tells you if either changed. Nothing is added by browsing or refreshing."):
         _submit_personal(opt, key, sess, log, float(stake), page_generated_at)
 
 
@@ -663,7 +689,7 @@ def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, p
     order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
                                               stake=stake, create=None if log["exists"] else log["creation"])
     from operational import log_signing
-    order["via"] = "direct" if order_client.personal_write_token(getattr(st, "secrets", {})) else "link"      # signed with the order; lets the engine tell a one-click order from a hand-filed one
+    order["via"] = "direct"                                      # signed with the order; lets the engine tell a one-click order from a hand-filed one
     order = log_signing.sign(order, log["write_key"], log["hash"])
     res = file_order(order)
     if not res["ok"]:

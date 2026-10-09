@@ -1,6 +1,35 @@
 # Personal bet logs
 
-Friends can keep their own paper bets under a code they choose, on the **My Bets** page. A log is completely separate from the model's $500 book.
+Friends keep their own paper bets in a **personal account named by their last name**, on the **My Bets** page, and build their own parlays on the **Parlay Builder** page. An account is completely
+separate from the model's $500 book and from every other account. (The earlier code-based logs still work; see the end of this page.)
+
+## Accounts, bankrolls and the Paper Parlay Builder
+
+* **Open an account:** type your last name on My Bets. The account is filed as the lowercase letters of the name (`Burnett` → `burnett`). If someone already has it, the page tells you and offers
+  the next numbered one (`Burnett 2`, `Burnett 3`…); to open an existing account you type the same name (and number) and your passcode. Nobody can take over a name that exists: a creation
+  order for it is refused (`NAME_TAKEN`), and an order for it signed with a different passcode is refused (`BAD_SIGNATURE`).
+* **Passcode, not a long key:** creating an account generates an 8-character passcode (`XXXX-XXXX`, 40 bits, shown once). You type your last name and the passcode to open the account on any
+  device. The passcode never travels: the browser derives an Ed25519 key pair from it, only the **public** half is stored and published, and every order is **signed**. Because the public half
+  is published, an attacker could try passcodes offline, so the derivation is deliberately slow (scrypt, 32 MiB, roughly 0.2 s per guess; about a thousand CPU-years for all 2^40). A lost passcode cannot be recovered.
+* **Your own $500:** every account starts with a **paper balance of $500** that belongs to it alone. The page shows **available cash**, **open stakes**, **payouts received**, **settled P&L**
+  and **equity**. Cash is *recomputed from the account's own bets* (`500 + settled P&L − open stakes`), never stored, so reopening the page, the database or the account cannot reset it.
+  A stake larger than the available cash is refused (`INSUFFICIENT_FUNDS`) in the same transaction that would have recorded it. A win pays stake plus profit, a loss costs the stake, a void returns it.
+* **Separate from everything else:** the model's book is `paper_bankroll.db`; accounts live in `personal_logs.db`. `tests/test_personal_accounts.py` creates two accounts, builds, adds and settles bets,
+  and proves a hash of every table of the model ledger is identical before and after; `deploy/qa_two_logs.py` does the same against a copy of the real ledger. One account cannot write to another
+  (a forged order is `BAD_SIGNATURE`) and a refused order from a stranger does not use up an account's daily limit. The watchdog re-derives every account's cash a second way each half hour.
+* **Paper Parlay Builder** (page *Parlay Builder*): search a player → choose a market (shots on goal, points, anytime goal; saves only for a confirmed starter) → choose a line from DraftKings'
+  current price list → **Add** → browse other players (the slip is kept) → edit (a new line for the same player and market replaces the old one) or remove legs → choose a stake → **Submit to
+  *your account***. Browsing never files anything. The slip shows each leg's actual price and quote age, the combined price, the possible return, and the destination account and its cash.
+* **What the combined price is:** one leg is a real DraftKings price. Legs from different games are shown as an **estimate** (the product of each leg's price). Legs from the **same game** are
+  shown as **multiplied, not a DraftKings quote** — DraftKings prices same-game combinations together with its own adjustment — and need a tick-box acknowledgement. The estimate is never described
+  as a sportsbook quote, and the record stores which of the three it was.
+* **Builder bets are your choices:** no model edge and no +100 requirement. They still need, checked **by the engine when it processes the order**: a real DraftKings price for every leg that is
+  fresh (judged from the provider's quote time), a game that has not started, a player who can be identified, sufficient cash, and no duplicate of the same slip in the same account the same day.
+  If a price moved nothing is recorded and the new prices are returned (`NEEDS_ACCEPTANCE`). Settlement uses the same resolver and rules as the model book; a leg whose player did not play leaves the bet open (`UNRESOLVED`)
+  until the sportsbook's void/parlay-reduction rule is verified for Ontario (it is not yet).
+* **Existing logs are migrated once, idempotently** (`python3 -m operational.personal_logs migrate-bankrolls`, also run by each trader cycle): every log gets its own $500 starting balance and its
+  current state is recorded in `migrations`/`audit`; open stakes are counted once (cash is derived from the bets, which are never copied), settled history is untouched, and the unclaimed
+  earlier-ticket bucket has no bankroll.
 
 ## What it is
 
@@ -18,7 +47,7 @@ Friends can keep their own paper bets under a code they choose, on the **My Bets
 | Database file | `operational/paper_bankroll.db` | `operational/runtime/personal_logs.db` |
 | Written by | the 15-minute trader only | the order processor (`operational/personal_logs.py`) |
 | Cash, exposure, daily slots, P&L, win rate, performance reviews | yes | **no** — a personal bet never reaches any of them |
-| Stake | exactly $10, atomic funds check | your own paper amount, no bankroll limit |
+| Stake | exactly $10, atomic funds check against the $500 book | your own paper amount ($1–$1,000), checked against **your own** $500 account |
 
 `operational/personal_logs.py` never calls the model ledger's writers (a test fails if it ever mentions them). `tests/test_personal_logs.py` adds and settles bets in two
 different logs and proves a hash of **every table** of the model ledger and its account state is identical before and after.
@@ -75,6 +104,10 @@ On the hosted app: **My Bets → Create a log** (name "QA test", the suggested c
 (≤ ~10 minutes) and confirm it appears under *Open bets* → reload and reopen on another browser (durability) → after the game finishes confirm it moves to *Settled* with the right result. Also: open the same log
 with the code only and confirm there is no add button; try the wrong key and confirm it is refused. The test log is a personal log: it never touches the model book (Today / Paper Performance are compared before
 and after). Product readiness on Diagnostics changes from NOT VERIFIED to WORKING only when an order sent by the app's own write path has been processed. The engine-side proof is `python3 deploy/verify_personal_workflow.py`: it reports PENDING until two logs were created through the app's write path and one bet has settled, and FAIL if a personal bet ever appears in the model ledger or a book does not reconcile.
+
+## The earlier code-based logs
+
+Logs created before last-name accounts keep working unchanged (a code names the log, a 20-character write key signs; their bets, history and totals are kept, and each got its own $500 by the migration above).
 
 ## The earlier manual ticket
 
