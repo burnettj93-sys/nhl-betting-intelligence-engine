@@ -100,6 +100,18 @@ This trades pregame coverage (a 4-game day used to price 3 games before puck dro
 the credits all go to the pregame price). Anytime goals and saves are funded only after those, so they are rarely bought on the free allowance. The month does not balance even so: the trailing seven-day burn
 before this change was 27 a day against a 12 a day pace.
 
+## The release day (2026-10-09, afternoon) — what was and was not observed
+
+* Deployed at about 2:40 PM ET with the 08:00 job installed (`com.nhlengine.morning-update`, 15 jobs loaded). The day's credit plan had been saved that morning under the old rules and already committed its whole
+  11.43 credits, so the morning look was funded with **nothing** (a guard stops a new class from pushing a saved plan over budget). All four of today's games were recorded **BUDGET_BLOCKED** (not "not posted").
+* That exposed a defect, fixed the same afternoon: the check called it "morning update done: 4 of 4 games looked at" although DraftKings had been asked about none. A morning with no real answer is now
+  `BUDGET_ONLY` (watchdog WARN; Today says "ran, but today's credit plan left nothing for an early look"), and only a morning with at least one provider answer can count as done.
+* Hosted app (Chrome, desktop): Today shows the morning strip, Best Options shows the per-game availability table when empty, **Tomorrow** shows 14 games for 2026-10-10 with early moneylines (13 of 14 not posted; one
+  14.9 hours old, marked STALE), Diagnostics shows the minimum budget and the reduced-service table.
+* A live probe of tomorrow's first game (23.6 hours ahead, four markets) returned nothing and cost 0 credits; one availability row per probe is in the credit ledger (`AVAILABILITY_PROBE`).
+* **Not observed**: a scheduled 08:00 run; points and goals at 8 AM; any provisional option or ticket on the hosted app (none could exist: no early price was bought today); the Tomorrow evening check
+  (due 8:15 PM ET today). On 2026-10-10 the budget (about 11.9 credits for 14 games) buys a shots look at 3 games.
+
 ## Verification still owed
 
 1. **A scheduled morning on the hosted app**: first look within 45 minutes of 08:00 ET, the strip on Today ("Morning update done"), provisional options labelled and not addable, availability words per game.
