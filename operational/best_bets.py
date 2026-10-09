@@ -643,6 +643,8 @@ def check_tomorrow(now: dt.datetime, *, client=None, archive_mod=None, plan: dic
         gid = str(matched[0]) if matched else f"event:{e['id']}"
         matchup = f"{e.get('away_team')} at {e.get('home_team')}"
         gate = cp.authorize(cp.TOMORROW, 1, now, plan=plan) if cp.enforced() else {"allow": True}
+        if (not gate.get("allow") and str(gate.get("reason", "")).endswith("_DAILY_ALLOWANCE") and cp.spent_today(now).get(cp.TOMORROW, 0.0) < cp.TOMORROW_COST):
+            gate = {"allow": True, "reason": "OK_FIRST_TOMORROW_CREDIT"}   # a day whose plan left nothing over still asks; asking costs 0 unless DraftKings has posted, and one credit a day at most
         if not gate.get("allow"):
             pa.note_unfetched(tomorrow, gid, SOG_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail=f"tomorrow's check allowance is used ({gate.get('reason')})",
                               matchup=matchup, game_date=tomorrow)
