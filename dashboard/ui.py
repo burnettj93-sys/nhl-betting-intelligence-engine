@@ -182,6 +182,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
         res = t.get("result")
         c[4].metric("Result", signed_money(res["profit_loss"]) if res and res.get("profit_loss") is not None else "Open")
         st.caption(esc(t["rationale"]))
+        leg_why(legs)
         if t.get("recorded_at_utc"):
             st.caption(f"Recorded {et_time(t['recorded_at_utc'], True)} · ticket {t['ticket_id']} · prices and probabilities are frozen at that moment.")
         prov = t.get("provenance")
@@ -190,6 +191,24 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                        f"revalidated {et_time(prov.get('revalidated_at_utc'), True)}). {prov.get('jurisdiction_note', '')}")
         for a in t.get("alerts") or []:
             st.warning(esc(a["detail"]))
+
+
+def leg_why(legs: list[dict]) -> None:
+    """Short per-selection rationale (role, recent production and sample, expected output, main uncertainty) from the published product state."""
+    from operational import leg_context
+    try:
+        players, goalies = product_source.players(), product_source.goalies()
+    except Exception:  # noqa: BLE001 - the card stays valid without the extra context
+        return
+    shown = [(l, leg_context.for_leg(l, players, goalies)) for l in legs if l.get("market_family") != "MONEYLINE"]
+    shown = [(l, c) for l, c in shown if c]
+    if not shown:
+        return
+    with st.expander("Why this selection"):
+        for l, c in shown:
+            st.markdown(f"**{esc(l['label'])}**")
+            st.caption(esc(" · ".join(c["lines"])))
+            (st.warning if c["low_sample"] else st.caption)(esc(c["uncertainty"]))
 
 
 # ------------------------------------------------------------------ best options ----
@@ -215,6 +234,7 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         c[4].metric("Value after haircut", f"{opt['ev_after_haircut'] * 100:+.0f}%",
                     help="Expected return per dollar after lowering every leg's probability by 3 points — a policy margin, not a calibration.")
         st.caption(esc(opt["rationale"]))
+        leg_why(opt["legs"])
         if show_people and opt.get("best_for"):
             names = ", ".join(p["name"] for p in opt["best_for"])
             st.caption(f"Best option for: {names}")

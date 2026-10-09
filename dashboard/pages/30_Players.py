@@ -14,6 +14,7 @@ import streamlit as st
 
 from dashboard import product_source as ps
 from dashboard import ui
+from operational.pricing_policy import MIN_GAMES_FOR_PRICING
 
 ui.header("Players", "Skaters who have played this season. Pick a player for the full picture.")
 players = ui.load(ps.players, "Player data")
@@ -132,7 +133,7 @@ else:
     st.dataframe([{"Event": k.replace(">=", " ") + "+", "Calibrated chance": ui.pct(v, 1)} for k, v in pb.items()], hide_index=True, width="stretch")
     note = f"Model {pr['model_version']}, {pr['games_observed']} prior games."
     if pr["limited_history"]:
-        note += " Limited history: probabilities for players with fewer than 20 prior games over-predicted in testing and are not used for pricing."
+        note += f" Limited history: with fewer than {MIN_GAMES_FOR_PRICING} prior games the model over-predicted in testing (docs/validation/low_sample_calibration.json), so no recommendation is made for this player."
     st.caption(note + " Expected values and chances are projections for this matchup, not past results. Validation: docs/validation/skater_projection_validation.json.")
 
 st.markdown("#### Best qualifying +100 option")
