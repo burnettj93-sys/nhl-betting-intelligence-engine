@@ -51,7 +51,7 @@ moneyline quotes were minutes old (e.g. quote `2026-10-08T21:04:04Z`, fetched 21
 
 **Fix** (`operational/source_status.py`, `dashboard/pages/9_Data_Status.py`): the engine records, at every publication (the trader at least every ~25 minutes; also after the daily and midday NHL syncs), the **timestamps** of each source's own evidence — data-through, last successful fetch, last attempt, freshness policy, next refresh, limiter —
 never ages; the page derives each state from those timestamps and the current time when it is opened, with source-specific policies (daily files in hours, prices in minutes and tighter near puck drop). Separate states: Current, Stale (past policy), Not due, Disabled (a switched-off feed, with the reason), Budget-limited, Blocked, Unavailable, Estimate; a stale **status snapshot** (the engine stopped publishing) is a separate red banner. The readiness cache's odds evidence now points at the real pull. The old "two disagreeing caches"
-explanation and the second snapshot banner are gone from the page; raw evidence, the old cache and job health are on Diagnostics. Reloading the page reads the published state and spends no credits. 18 tests (`tests/test_source_status.py`).
+explanation and the second snapshot banner are gone from the page; raw evidence, the old cache and job health are on Diagnostics. Reloading the page reads the published state and spends no credits. 10 tests (`tests/test_source_status.py`).
 
 **Timestamp agreement after a real update (published 2026-10-09 00:24:41Z, hosted page evaluated 00:32:23Z):**
 
