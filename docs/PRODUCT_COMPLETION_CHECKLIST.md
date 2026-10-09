@@ -33,7 +33,7 @@ Duplicate/unnecessary calls removed (see the document). A defect found and fixed
 * **Contract certification — needs one user action:** one real DraftKings `spreads` payload, which costs **one Odds API credit**. My capture was rejected by the approval layer ("Real-World Transactions") and was not bypassed. The exact action: run `python3 deploy/capture_puck_line_contract.py --confirm-spend-1-credit` yourself, or tell me in chat that you authorise spending one credit on it. Then the fixture, a parity test and the contract entry follow. This is **separate from** validation.
 * **Model validation — separate requirement, unmet:** the Skellam result stays on record (0.52926 vs base rate 0.52751); `puck-line-direct-v1` is frozen and scored only on untouched 2026-27 games (see Model Health: 0 of its logged games finished; a review needs 300). Nothing unvalidated is in selection.
 
-## 5. Data Status defect — see the section at the end (VERIFIED after the evidence below)
+## 5. Data Status defect (7:01 AM badges still showing at 6 PM ET) — VERIFIED; evidence at the end
 
 ## Unchanged VERIFIED items (release carried forward, tests green)
 
@@ -43,6 +43,27 @@ Today / ET dates / current games; best +100 option per person; shared account an
 
 The exposed Odds API key must be rotated by the owner (`docs/CREDENTIAL_ROTATION.md`), then `python3 deploy/verify_odds_key.py`.
 
-## Data Status defect (2026-10-08) — evidence
+## Data Status defect (2026-10-08) — trace, fix and evidence
 
-*(filled in below from the hosted checks)*
+**Where updates stopped.** Source updates → readiness/status → publication → hosted page: the page rendered `operational/data_readiness_cache.json` verbatim, a file written **once a day** by the 07:00 ET sync (`sync_daily.py`), so every badge was frozen at that
+moment (11:01Z) and the age fields ("0.0 h") never grew; nothing re-published after the sync either. Its **odds entry was wrong evidence, not stale odds**: `operational/readiness.py` read `research/live_sog_board_cache.json`, a retired research file last touched 2026-08-27 ("1000 hours"), while real
+moneyline quotes were minutes old (e.g. quote `2026-10-08T21:04:04Z`, fetched 21:04:32Z). So Odds read STALE for two reasons at once: wrong file, and a status that could never change.
+
+**Fix** (`operational/source_status.py`, `dashboard/pages/9_Data_Status.py`): the engine records, at every publication (the trader at least every ~25 minutes; also after the daily and midday NHL syncs), the **timestamps** of each source's own evidence — data-through, last successful fetch, last attempt, freshness policy, next refresh, limiter —
+never ages; the page derives each state from those timestamps and the current time when it is opened, with source-specific policies (daily files in hours, prices in minutes and tighter near puck drop). Separate states: Current, Stale (past policy), Not due, Disabled (a switched-off feed, with the reason), Budget-limited, Blocked, Unavailable, Estimate; a stale **status snapshot** (the engine stopped publishing) is a separate red banner. The readiness cache's odds evidence now points at the real pull. The old "two disagreeing caches"
+explanation and the second snapshot banner are gone from the page; raw evidence, the old cache and job health are on Diagnostics. Reloading the page reads the published state and spends no credits. 18 tests (`tests/test_source_status.py`).
+
+**Timestamp agreement after a real update (published 2026-10-09 00:24:41Z, hosted page evaluated 00:32:23Z):**
+
+| Source | Engine evidence | Published status document | Hosted page |
+|---|---|---|---|
+| Moneyline prices | `moneyline_snapshot_cache.json`: newest quote `00:20:59Z` | basis `00:20:59Z` | "newest quote 2026-10-09T00:20:59Z", fetched 8:21 PM ET, age 11 min, policy ≤ 90 min |
+| NHL schedule/results | `ingestion_health_cache.json`: pregame refresh success `00:06:05Z` | basis `00:06:05Z` | fetched 8:06 PM ET, age 26 min, next 8:36 PM ET |
+| Player prop prices | credit-plan ledger: capture `2026-10-08T23:38:57Z` (archive header `23:38:58Z`) | basis `23:38:58Z` | newest capture …23:38:58Z, "Not due" (all 3 planned games captured; 7 of 10 games not priced under the credit plan) |
+| MoneyPuck | manifest accepted `2026-10-08T11:01:19Z` | basis `11:01:19Z` | 7:01 AM ET, age 13.5 h, ≤ 36 h, next 7:00 AM ET |
+| Starting-goalie confirmations; reported lines | feed switched off | fixed state Disabled, limiter PERMISSION | Disabled, with the reason |
+
+**Stale status when updates stop (real, not simulated):** I set `NHL_ENGINE_CLOUD_PUBLISH=OFF` from 23:25Z to 00:24Z (the engine kept running; only publication stopped; restored afterwards, key set verified against a backup). At 00:23Z the hosted page showed the red "STATUS SNAPSHOT IS STALE: the engine last published this status 63 min ago", the NHL rows aged by themselves to 78 min and showed "next refresh … (overdue)", the moneyline row aged 64 min, and the prop-price row went Stale (2.9 h) —
+none of them green by default; after the publication resumed, the banner cleared on the next page load. Publication-to-page lag is up to about 8 minutes (GitHub raw cache about 5 minutes plus the app's 180-second snapshot cache). Hosted QA on the final code (`95af5ae`): all 13 navigation items load without an exception.
+
+**Incidents found and fixed while doing this:** (1) the T-35 moneyline decision pull was still on the old soft daily budget and was **deferred for the 7 PM cluster (6 games)** on 2026-10-08 — those games had no moneyline decision quote that evening; it now obeys the hard reserve only (the next cluster was captured at 22:50Z); (2) a goals capture was accounted as a base capture and starved the third planned game; goals now have their own class and legacy ledger rows are split (the third game was captured at 23:38Z); (3) one 15-minute publish failure earlier (forbidden key) — fixed.
