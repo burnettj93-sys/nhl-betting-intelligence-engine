@@ -336,6 +336,9 @@ def check_morning_update(now: dt.datetime) -> dict:
     state = m["state"]
     if state in (pa.MORNING_NO_GAMES, pa.MORNING_NOT_YET):
         return {"name": "morning_update", "status": OK, "detail": "no morning update is due yet" if state == pa.MORNING_NOT_YET else "no games today"}
+    if state == pa.MORNING_BUDGET_ONLY:
+        return {"name": "morning_update", "status": WARN, "detail": f"the morning update ran but could not look at any game: today's credit plan left no credits for it ({m['budget_blocked']} of {m['total']} games budget-blocked); "
+                                                                   "a pregame price still follows for the games the plan covers"}
     if state == pa.MORNING_DONE:
         return {"name": "morning_update", "status": OK, "detail": f"morning update done: {m['looked']} of {m['total']} games looked at (first look {m['first_look_utc']}); "
                                                                 f"prices posted for {m['posted']}, not posted yet for {m['not_posted']}, not fetched for budget for {m['budget_blocked']}"}

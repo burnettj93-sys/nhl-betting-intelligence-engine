@@ -102,6 +102,13 @@ class TestMorningUpdateCheck(unittest.TestCase):
         self.assertEqual(wd.check_morning_update(self.at(8, 50))["status"], wd.WARN)
         self.assertEqual(wd.check_morning_update(self.at(10, 5))["status"], wd.FAIL)
 
+    def test_a_morning_where_every_game_was_budget_blocked_is_a_warning_not_done(self):
+        self.pa.note_unfetched("2026-10-09", "g1", "m", self.pa.BUDGET_BLOCKED, self.at(8, 5), start_utc="2026-10-09T23:00:00Z")
+        r = wd.check_morning_update(self.at(9, 0))
+        self.assertEqual(r["status"], wd.WARN)
+        self.assertIn("could not look at any game", r["detail"])
+        self.assertFalse([e for e in wd.morning_evidence() if e["state"] == "DONE"])
+
     def test_a_look_before_8_does_not_count(self):
         self.seed(self.at(7, 30))
         self.assertEqual(wd.check_morning_update(self.at(9, 0))["status"], wd.WARN)

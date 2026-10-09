@@ -337,6 +337,8 @@ def morning_strip(tk: dict, now: dt.datetime | None = None) -> None:
             f"not fetched for budget for {m['budget_blocked']} · {len(opts)} option(s), {len(prov)} provisional ticket(s).")
     if m["state"] == pa.MORNING_DONE:
         banner(f"<b>Morning update done.</b> {esc(body)}", "good")
+    elif m["state"] == pa.MORNING_BUDGET_ONLY:
+        banner(f"<b>Morning update ran, but today's odds-credit plan left nothing for an early look.</b> {esc(body)} The pregame price (about 105 minutes before puck drop) still follows for the games the plan covers.", "warn")
     else:
         banner(f"<b>Morning update {m['state'].lower()}.</b> {esc(body)} The engine looks again every 15 minutes.", "warn")
 
