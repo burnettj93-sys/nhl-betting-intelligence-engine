@@ -100,7 +100,11 @@ def snapshot(with_options=True) -> dict:
         doc["generated_at_utc"] = GEN
         tickets["options"] = doc
         p["P1"]["option_id"] = doc["options"][0]["option_id"]
-    mh = {"generated_at_utc": GEN, "models": [{"id": "skater-projection", "name": "Skater matchup projection", "version": "player-rate-toi-v2", "role": "LIVE", "purpose": "x",
+    mh = {"generated_at_utc": GEN, "market_matrix": [
+        {"market": "Shots on goal (alternate ladder)", "status": "WORKS (priced, limited coverage)", "data": "d", "contract": "VERIFIED", "validation": "beats baselines on 5 of 5", "calibration": "c",
+         "betting_value": "None. There are no historical sportsbook prices to test against.", "live": "14 leg(s)"},
+        {"market": "Puck line / spread", "status": "BLOCKED (never selected)", "data": "d", "contract": "NOT VERIFIED", "validation": "v", "calibration": "None.", "betting_value": "None.", "live": "Never used on a ticket."}],
+          "models": [{"id": "skater-projection", "name": "Skater matchup projection", "version": "player-rate-toi-v2", "role": "LIVE", "purpose": "x",
                                                "data": {"source": "MoneyPuck", "through": "2026-10-06", "age_days": 2, "players_projected": 2},
                                                "validation": {"split": {"train": [2022, 2023]}, "rows": {"final": 10}, "summary": {"markets_scored": 14, "beating_baselines": 13, "not_beating": ["hits>=1"]},
                                                               "report": "docs/validation/skater_projection_validation.json", "method": "m"},

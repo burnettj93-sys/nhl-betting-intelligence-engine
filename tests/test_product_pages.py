@@ -312,6 +312,15 @@ class TestMyBetsPage(unittest.TestCase):
         self.assertIn("No qualifying option for this goalie right now", t)
         self.assertIn("not a substitute for his own line", t)
 
+    def test_model_health_has_the_market_by_market_audit_with_the_evidence_kinds_separated(self):
+        at = run_page("22_Model_Health.py", snapshot())
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        labels = " ".join(e.label for e in at.expander)
+        self.assertIn("Puck line / spread — BLOCKED", labels)
+        body = " ".join(m.value for m in at.markdown)
+        for kind in ("Provider contract", "Predictive validation", "Evidence of betting value", "Live performance"):
+            self.assertIn(kind, body)
+
     def test_today_explains_the_selection_when_the_board_carries_an_audit(self):
         snap = snapshot()
         snap["tickets"].setdefault("diagnostics", {})["selection_audit"] = {"recording_cycles_today": [{

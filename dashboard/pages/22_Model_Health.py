@@ -39,6 +39,16 @@ _rows = [
 ]
 st.markdown("| Kind of evidence | Status | What it says |\n|---|---|---|\n" + "\n".join(f"| **{a}** | {ui.esc(b)} | {ui.esc(c)} |" for a, b, c in _rows))
 
+_mm = mh.get("market_matrix") or []
+if _mm:
+    st.subheader("Market by market: what works, what is partial, what is blocked")
+    st.caption("Six different kinds of evidence, kept apart: passing a payload parse is not validation, beating a baseline is not a betting edge, and a few wins prove nothing.")
+    for r in _mm:
+        with st.expander(f"{r['market']} — {r['status']}"):
+            st.markdown("| | |\n|---|---|\n" + "\n".join(f"| **{k}** | {ui.esc(r[key]).replace('|', '/')} |" for k, key in (
+                ("Data", "data"), ("Provider contract", "contract"), ("Predictive validation", "validation"), ("Calibration", "calibration"),
+                ("Evidence of betting value", "betting_value"), ("Live performance", "live"))))
+
 st.subheader("Data pipelines")
 st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " "), "Detail": p.get("detail") or ""} for p in mh["pipelines"]], hide_index=True, width="stretch")
 
