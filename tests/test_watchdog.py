@@ -46,7 +46,7 @@ class TestRun(unittest.TestCase):
         raise AssertionError(cmd)
 
     def test_run_writes_state_and_view_reages_it(self):
-        state = wd.run(NOW, runner=self.runner, notify=False)
+        state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
         self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path"})
         stored = wd.load_state()
@@ -58,7 +58,7 @@ class TestRun(unittest.TestCase):
         self.assertEqual(wd.view(None)["status"], "UNKNOWN")
 
     def test_state_contains_no_secret_like_keys(self):
-        wd.run(NOW, runner=self.runner, notify=False)
+        wd.run(NOW, runner=self.runner, notify=False, deep=False)
         from operational import cloud_snapshot_schema as schema
         blob = json.dumps(wd.load_state())
         self.assertIsNone(schema._ABSOLUTE_PATH_RE.search(blob))

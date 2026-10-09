@@ -16,6 +16,7 @@ from unittest import mock
 
 from dashboard import order_client
 from operational import cloud_snapshot_schema as schema
+from operational import log_signing
 from operational import paper_bankroll as pb
 from operational import paper_bet_settlement_driver as drv
 from operational import personal_logs as pl
@@ -24,6 +25,9 @@ from tests.test_daily_tickets import NOW, board, fresh_ledger
 from tests.test_manual_orders import DATE
 
 CODE_A, CODE_B = "otter-maple-puck-4821", "blue-line-crease-7310"
+KEY_A, KEY_B = "ABCD-EFGH-JKLM-NPQR-STUV", "WXYZ-2345-6789-ABCD-EFGH"
+KEYS = {CODE_A: KEY_A, CODE_B: KEY_B}
+OTHER_KEY = "ZZZZ-YYYY-XXXX-WWWW-VVVV"
 
 
 def fresh_logs():
@@ -43,9 +47,13 @@ def ledger_fingerprint(conn) -> str:
     return h.hexdigest()
 
 
-def order(opt: dict, oid: str, code: str, *, create: str | None = None, stake: float = 10.0, kind=pl.TYPE_BET) -> dict:
-    return order_client.build_personal_order(opt, order_id=oid, log_hash=pl.code_hash(code), page_generated_at=NOW.isoformat(), stake=stake,
-                                             create={"creation_id": create, "display_name": "Casey"} if create else None, kind=kind)
+def order(opt: dict, oid: str, code: str, *, create: str | None = None, stake: float = 10.0, kind=pl.TYPE_BET, key: str | None = None) -> dict:
+    """A SIGNED order (signed with the log's write key unless `key` says otherwise)."""
+    h = pl.code_hash(code)
+    key = key or KEYS[code]
+    doc = order_client.build_personal_order(opt, order_id=oid, log_hash=h, page_generated_at=NOW.isoformat(), stake=stake, kind=kind,
+                                            create={"creation_id": create, "display_name": "Casey", "write_pub": log_signing.public_key_hex(KEYS[code], h)} if create else None)
+    return log_signing.sign(doc, key, h)
 
 
 class Base(unittest.TestCase):
@@ -59,8 +67,10 @@ class Base(unittest.TestCase):
         return pl.process_order(self.logs, doc, current_legs=legs or self.legs, now=now, source="test:1")
 
     def create(self, code=CODE_A, cid="crt_" + "a" * 10, oid=None):
-        doc = {"schema": 1, "type": pl.TYPE_CREATE, "order_id": oid or "ord_" + "c" * 12, "log": {"hash": pl.code_hash(code), "create": {"creation_id": cid, "display_name": "Casey"}}}
-        return self.go(doc)
+        h = pl.code_hash(code)
+        doc = {"schema": 1, "type": pl.TYPE_CREATE, "order_id": oid or "ord_" + "c" * 12,
+               "log": {"hash": h, "create": {"creation_id": cid, "display_name": "Casey", "write_pub": log_signing.public_key_hex(KEYS.get(code, KEY_A), h)}}}
+        return self.go(log_signing.sign(doc, KEYS.get(code, KEY_A), h))
 
 
 class TestCodes(unittest.TestCase):
@@ -318,7 +328,7 @@ class TestLegacyMigration(Base):
         self.assertEqual((moved["result_status"], moved["profit_loss"], moved["stake"]), ("LOSS", -10.0, 10.0))
         self.assertEqual(json.loads(moved["provenance_json"])["migrated_from"]["paper_bet_id"], tid)
         self.assertEqual(pl.section(self.logs, NOW)["logs"], {})                                    # not visible in any log until claimed
-        claimed = pl.claim_legacy(self.logs, CODE_A, "Owner", NOW)
+        claimed = pl.claim_legacy(self.logs, CODE_A, "Owner", NOW, KEY_A)
         self.assertEqual((claimed["status"], claimed["moved"]), ("CLAIMED", 1))
         self.assertEqual(pl.section(self.logs, NOW)["logs"][pl.code_hash(CODE_A)]["summary"]["settled_pnl"], -10.0)
         import sqlite3
@@ -352,7 +362,7 @@ class TestQueueAndClient(Base):
         self.assertEqual(order_client.issue_label(doc), "personal-bet")
         self.assertTrue(order_client.issue_title(doc).startswith("personal-bet "))
         self.assertEqual(order_client.build_personal_order(None, order_id="ord_" + "s" * 12, log_hash=pl.code_hash(CODE_A), page_generated_at=None, stake=10,
-                                                           create={"creation_id": "crt_" + "a" * 10, "display_name": "Casey"}, kind=pl.TYPE_CREATE)["type"], pl.TYPE_CREATE)
+                                                           create={"creation_id": "crt_" + "a" * 10, "display_name": "Casey", "write_pub": "0" * 64}, kind=pl.TYPE_CREATE)["type"], pl.TYPE_CREATE)
 
     def test_write_credential_lookup_prefers_the_new_name_and_reads_nothing_else(self):
         self.assertEqual(order_client.personal_write_token({"LOG_WRITE_TOKEN": " a ", "PAPER_ORDER_TOKEN": "b"}), "a")
@@ -360,6 +370,86 @@ class TestQueueAndClient(Base):
         self.assertIsNone(order_client.personal_write_token({}))
         self.assertFalse(order_client.path_status({}, None)["personal_log_writes_ready"])
         self.assertTrue(order_client.path_status({"LOG_WRITE_TOKEN": "x"}, None)["personal_log_writes_ready"])
+
+
+
+class TestWriteProtection(Base):
+    """Knowing a log's code (or reading the public queue and data) must not let anyone write to it."""
+
+    def setUp(self):
+        super().setUp()
+        self.go(order(self.opt, "ord_" + "w" * 12, CODE_A, create="crt_" + "a" * 10))
+        self.bets = lambda: self.logs.execute("SELECT COUNT(*) FROM bets").fetchone()[0]
+
+    def test_the_owner_of_the_write_key_can_add(self):
+        self.assertEqual(self.go(order(self.doc["options"][1], "ord_" + "x" * 12, CODE_A))["status"], pl.RECORDED)
+        self.assertEqual(self.bets(), 2)
+
+    def test_someone_who_knows_the_code_but_not_the_write_key_cannot_add(self):
+        res = self.go(order(self.opt, "ord_" + "y" * 12, CODE_A, key=OTHER_KEY))
+        self.assertEqual(res["status"], pl.REJECTED)
+        self.assertIn("BAD_SIGNATURE", res["reason"])
+        self.assertEqual(self.bets(), 1)
+
+    def test_an_unsigned_order_is_refused(self):
+        doc = order(self.opt, "ord_" + "z" * 12, CODE_A)
+        doc.pop("sig")
+        self.assertIn("BAD_SIGNATURE", self.go(doc)["reason"])
+        self.assertEqual(self.bets(), 1)
+
+    def test_changing_a_signed_order_breaks_it(self):
+        doc = order(self.opt, "ord_" + "t" * 12, CODE_A, stake=10)
+        doc["accepted"]["stake"] = 900.0
+        self.assertIn("BAD_SIGNATURE", self.go(doc)["reason"])
+        doc2 = order(self.opt, "ord_" + "u" * 12, CODE_A)
+        doc2["log"]["hash"] = pl.code_hash(CODE_B)                # redirecting a signed order to another log
+        self.assertEqual(self.go(doc2)["status"], pl.REJECTED)
+        self.assertEqual(self.bets(), 1)
+
+    def test_a_published_creation_id_cannot_be_used_to_take_over_an_existing_log(self):
+        """The creation id is not published any more, and even if it were, the takeover order would be signed with the wrong key."""
+        sec = pl.section(self.logs, NOW)
+        self.assertNotIn("crt_" + "a" * 10, json.dumps(sec))
+        h = pl.code_hash(CODE_A)
+        doc = {"schema": 1, "type": pl.TYPE_BET, "order_id": "ord_" + "v" * 12, "page_generated_at_utc": None, "option_id": self.opt["option_id"],
+               "accepted": order_client.build_personal_order(self.opt, order_id="ord_" + "v" * 12, log_hash=h, page_generated_at=None, stake=10)["accepted"],
+               "log": {"hash": h, "create": {"creation_id": "crt_" + "a" * 10, "display_name": "Mallory", "write_pub": log_signing.public_key_hex(OTHER_KEY, h)}}}
+        res = self.go(log_signing.sign(doc, OTHER_KEY, h))
+        self.assertIn("BAD_SIGNATURE", res["reason"])
+        self.assertEqual(pl.log_row(self.logs, h)["display_name"], "Casey")
+
+    def test_a_replayed_order_changes_nothing(self):
+        doc = order(self.opt, "ord_" + "r" * 12, CODE_A)
+        first, again = self.go(doc), self.go(doc)
+        self.assertEqual(first, again)
+        self.assertEqual(self.bets(), 1)
+
+    def test_the_published_view_carries_only_the_public_half(self):
+        sec = pl.section(self.logs, NOW)
+        pub = sec["logs"][pl.code_hash(CODE_A)]["write_pub"]
+        self.assertEqual(pub, log_signing.public_key_hex(KEY_A, pl.code_hash(CODE_A)))
+        self.assertNotIn(KEY_A, json.dumps(sec))
+        self.assertNotIn(KEY_A.replace("-", ""), json.dumps(sec))
+
+    def test_the_page_can_tell_a_wrong_key_before_filing(self):
+        h = pl.code_hash(CODE_A)
+        pub = pl.section(self.logs, NOW)["logs"][h]["write_pub"]
+        self.assertEqual(log_signing.public_key_hex(KEY_A, h), pub)
+        self.assertNotEqual(log_signing.public_key_hex(OTHER_KEY, h), pub)
+
+    def test_a_creation_without_a_public_key_is_refused(self):
+        h = pl.code_hash(CODE_B)
+        doc = {"schema": 1, "type": pl.TYPE_CREATE, "order_id": "ord_" + "n" * 12, "log": {"hash": h, "create": {"creation_id": "crt_" + "b" * 10, "display_name": "No Key"}}}
+        self.assertEqual(self.go(log_signing.sign(doc, KEY_B, h))["status"], pl.REJECTED)
+        self.assertIsNone(pl.log_row(self.logs, h))
+
+    def test_key_helpers(self):
+        k = log_signing.new_write_key()
+        self.assertTrue(log_signing.valid_key_shape(k))
+        self.assertEqual(len(log_signing.normalize_key(k)), 20)
+        self.assertNotEqual(k, log_signing.new_write_key())
+        self.assertFalse(log_signing.valid_key_shape("short"))
+        self.assertEqual(log_signing.normalize_key("abcd-efgh"), "ABCDEFGH")
 
 
 if __name__ == "__main__":

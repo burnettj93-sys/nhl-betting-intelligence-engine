@@ -94,6 +94,16 @@ class TestSelectionPolicy(unittest.TestCase):
                 use[rmp.leg_identity(l)] = use.get(rmp.leg_identity(l), 0) + 1
         self.assertLessEqual(max(use.values()), rmp.MAX_TICKETS_PER_LEG)
 
+    def test_one_player_is_on_at_most_two_tickets_whatever_the_market(self):
+        """2026-10-08: one player's 8-minute night lost three of the day's five tickets. A player may sit on at most MAX_TICKETS_PER_PLAYER."""
+        star = [leg(1, "A", price=100, p=0.75, thr=t) for t in (1, 2, 3)]
+        partners = [leg(g, f"P{g}", price=-105, p=0.62) for g in (2, 3, 4, 5, 6)]
+        picked = rmp.select_tickets(star + partners, max_tickets=5)
+        with_a = [t for t in picked["tickets"] if any(l.participant_id == "A" for l in t.legs)]
+        self.assertEqual(rmp.MAX_TICKETS_PER_PLAYER, 2)
+        self.assertGreaterEqual(len(picked["tickets"]), 3)
+        self.assertLessEqual(len(with_a), 2)
+
     def test_games_can_appear_on_more_than_one_ticket(self):
         picked = rmp.select_tickets(board(4))
         games = [l.game_id for t in picked["tickets"] for l in t.legs]
@@ -286,9 +296,10 @@ class TestTodayScreen(unittest.TestCase):
             self.assertIn(ticket["ticket_id"], text)
         text = " ".join(m.value for m in at.markdown)
         self.assertEqual(text.count("Recorded</span>"), 5)
-        self.assertGreaterEqual(len(at.dataframe), 5)                   # one leg table per ticket (+ exposure tables)
+        self.assertEqual(text.count("class='slip'"), 5)                  # one bet slip per ticket: a row per selection, then the stat strip
+        self.assertGreaterEqual(text.count("class='odds'"), 10)
         self.assertTrue(any('Exposure across' in e.label for e in at.expander))
-        self.assertTrue(any(m.label == "Estimated combined price" for m in at.metric))
+        self.assertIn("<span class='k'>Estimated price</span>", text)
         self.assertFalse(any("Market coverage" in m.value for m in at.markdown))
 
     def test_recommended_tickets_are_badged_and_the_cash_notice_is_shown(self):

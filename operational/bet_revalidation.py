@@ -23,12 +23,12 @@ already-existing data sources -- it invents no new ingestion:
   - (2) new/changed goalie: goalie_status_events' CHANGED status -- same
     "real mechanism, no live source yet" situation as above (see
     config.REQUIRE_GOALIE_CONFIRMATION's docstring).
-  - (3) trade: re-resolves the player's current most-recent team from the
-    SAME real SOG identity corpus every leg-builder already uses. The
-    corpus is a frozen file in this environment, so this is also inert
-    today, but will reflect a real trade automatically the moment the
-    corpus (or whatever live roster source eventually feeds player_mapping.
-    build_player_index()) is ever refreshed with the trade.
+  - (3) trade: compares the player's CURRENT team with the two teams in the
+    game. The current team comes from the engine's own roster sync (nhl.db,
+    features/point_in_time.team_of_player); the archived SOG identity corpus
+    is only a fallback for a player the sync has never seen. (The corpus used
+    to be the only source and raised false "traded" alerts, because it is
+    frozen at the last season it covers.)
 
 A trigger firing for ANY leg writes an ALERT (operational/paper_bankroll.py::
 record_ticket_alert, shown on the Today ticket card) and nothing else. A
@@ -133,8 +133,16 @@ def _invalidation_reasons_for_leg(nhl_conn, leg: dict, since_utc: str, now_iso: 
                     reasons.append(f"GOALIE_STATUS_CHANGED: {leg.get('participant_name')}'s status changed "
                                     f"(observed {goalie_change['observed_at_utc']})")
 
-        if player_index is not None:
-            current_team = _current_team_for_player(player_index, player_id)
+        if player_index is not None or nhl_conn is not None:
+            # The engine's own roster sync (nhl.db, refreshed daily from the NHL API) is the authority on where a player is NOW. The archived identity
+            # corpus only knows where he last played in the seasons it covers, so it is consulted only when the roster sync has never seen him: using it
+            # first reported "Mavrik Bourque is now on DAL (trade)" for a player who had been on NSH all season.
+            try:
+                current_team = pit.team_of_player(nhl_conn, str(player_id), now_iso)
+            except Exception:  # noqa: BLE001
+                current_team = None
+            if current_team is None and player_index is not None:
+                current_team = _current_team_for_player(player_index, player_id)
             if current_team is not None and current_team not in (home_abbrev, away_abbrev):
                 reasons.append(f"TEAM_CHANGED: {leg.get('participant_name')} is now on {current_team}, "
                                 f"no longer {home_abbrev}/{away_abbrev} (trade)")

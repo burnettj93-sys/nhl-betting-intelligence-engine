@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 import streamlit as st
 
 from dashboard import order_client
+from operational import log_signing
 from dashboard import product_source as ps
 from dashboard import theme, ui
 from operational import personal_logs as pl
@@ -101,25 +102,32 @@ def model_section(compact: bool = False) -> None:
 
 # ---------------------------------------------------------------- choosing a log ----
 log = ui.selected_log()
+TRADE_OFF = ("<b>What is public, and what is protected.</b> The engine publishes its data to a public repository, so anyone can read any log's bets (they are filed under a one-way hash "
+             "of the log's code and the display name you choose, never the code itself). That is the price of a free, always-on app with no account system. "
+             "<b>Reading is therefore not private. Writing is protected:</b> each log has a separate <b>write key</b>, made when the log is created and shown once. "
+             "Only a signature made with it can add a bet, so knowing someone's code lets you read their log, not add to it. A lost write key cannot be recovered "
+             "(the log stays readable; make a new one). Paper bets only; keep nothing personal in a log.")
 with st.expander("Open or create a log", expanded=log is None):
-    ui.banner("<b>A code is a name, not a password.</b> Anyone who knows it can open and add to your log. The engine's data is published to a public repository, so the bets in a log "
-              "can be read by anyone who looks (filed under a one-way hash of your code and the display name you choose, never the code itself). Paper bets only; keep nothing personal in a log.", "warn")
+    ui.banner(TRADE_OFF, "warn")
     tab_open, tab_new = st.tabs(["Open my log", "Create a log"])
     with tab_open:
-        code = st.text_input("Your log code", key="mb_open_code", placeholder="for example otter-maple-puck-4821")
+        code = st.text_input("Your log code (its name)", key="mb_open_code", placeholder="for example otter-maple-puck-4821")
+        wkey = st.text_input("Write key (leave empty to open it view-only)", key="mb_open_key", type="password", placeholder="ABCD-EFGH-JKLM-NPQR-STUV")
         if st.button("Open log", key="mb_open", disabled=not code.strip()):
             h = ui._code_hash(code)
             found = logs.get(h)
-            if found:
-                ui.select_log(code, found["display_name"])
-                st.rerun()
-            else:
+            if not found:
                 st.error("No log uses that code yet. Check the spelling, or create it on the next tab. A log created in the last few minutes may not be published yet.")
+            elif wkey.strip() and not (log_signing.valid_key_shape(wkey) and ui._write_pub(log_signing.normalize_key(wkey), h) == found.get("write_pub")):
+                st.error("That write key does not belong to this log. Check it, or open the log view-only by leaving the key empty.")
+            else:
+                ui.select_log(code, found["display_name"], write_key=log_signing.normalize_key(wkey) if wkey.strip() else None)
+                st.rerun()
     with tab_new:
         if "mb_new_code" not in st.session_state:
             st.session_state["mb_new_code"] = pl.suggest_code()
         name = st.text_input("Display name (letters, numbers, spaces only)", key="mb_new_name", max_chars=pl.MAX_NAME_LEN, placeholder="for example Casey's picks")
-        st.text_input("Choose a code (or keep the suggestion) — write it down; it cannot be recovered", key="mb_new_code")
+        st.text_input("Choose a code (or keep the suggestion): the log's name, not a password", key="mb_new_code")
         if st.button("Suggest another code", key="mb_suggest"):
             st.session_state["mb_new_code"] = pl.suggest_code()
             st.rerun()
@@ -133,25 +141,40 @@ with st.expander("Open or create a log", expanded=log is None):
             if h in logs:
                 st.error("That code is already in use. Choose a different code.")
             else:
-                creation = {"creation_id": order_client.new_order_id().replace("ord_", "crt_"), "display_name": clean}
+                write_key = log_signing.new_write_key()
+                creation = {"creation_id": order_client.new_order_id().replace("ord_", "crt_"), "display_name": clean, "write_pub": ui._write_pub(log_signing.normalize_key(write_key), h)}
                 order = order_client.build_personal_order(None, order_id=order_client.new_order_id(), log_hash=h, page_generated_at=doc.get("generated_at_utc"),
                                                           stake=pl.DEFAULT_STAKE, create=creation, kind=pl.TYPE_CREATE)
-                res = ui.file_order(order)
+                order["via"] = "direct" if order_client.personal_write_token(getattr(st, "secrets", {})) else "link"
+                res = ui.file_order(log_signing.sign(order, log_signing.normalize_key(write_key), h))
                 if not res["ok"]:
                     st.error(res["error"])
                 else:
-                    st.session_state["_personal_pending_creation"] = {"url": res.get("url"), "order_id": order["order_id"]}
-                    ui.select_log(new_code, clean, creation=creation)
+                    st.session_state["_personal_pending_creation"] = {"url": res.get("url"), "order_id": order["order_id"], "write_key": write_key, "code": new_code}
+                    ui.select_log(new_code, clean, creation=creation, write_key=log_signing.normalize_key(write_key))
                     st.rerun()
     if not order_client.personal_write_token(getattr(st, "secrets", {})):
         st.caption("This app has no write credential configured yet, so creating a log or adding a bet makes a GitHub issue link that only the repository owner can submit. "
                    "The owner enables one-click adding by adding a Streamlit secret (see docs/PERSONAL_LOGS.md).")
+
+fresh = st.session_state.get("_personal_pending_creation")
+if fresh and fresh.get("write_key"):
+    ui.banner("<b>Save these now — this is the only time they are shown.</b> Your log's <b>code</b> opens it; your <b>write key</b> is the only thing that lets you add bets. "
+              "If the page is closed before you save them, the key cannot be recovered.", "warn")
+    st.code(f"Code: {fresh['code']}\nWrite key: {fresh['write_key']}", language=None)
+    if st.button("I have saved both", key="mb_saved"):
+        fresh.pop("write_key", None)
+        fresh.pop("code", None)
+        st.rerun()
 
 if log is None:
     st.subheader("Model book at a glance")
     model_section()
     st.stop()
 
+if not log["can_write"]:
+    ui.banner("This log is open <b>view-only</b>: " + ("the write key does not match. " if log["key_given"] else "no write key was entered. ")
+              + "You can read it, but adding bets needs its write key (open it again with the key).", "info")
 top = st.columns([4, 1])
 top[0].markdown(f"### {ui.esc(log['name'])}")
 if top[1].button("Switch log", key="mb_switch"):

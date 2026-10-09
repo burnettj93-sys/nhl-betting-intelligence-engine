@@ -30,7 +30,8 @@ TICKET POLICY (all constants below, all documented, none tuned to fill a board):
     separate, informational list and do not count toward it.
   * No blanket "a game can be used once" rule across tickets. Instead:
     identical leg sets are duplicates, one leg may sit on at most
-    MAX_TICKETS_PER_LEG tickets, one game on at most MAX_TICKETS_PER_GAME
+    MAX_TICKETS_PER_LEG tickets, one player (in any market) on at most
+    MAX_TICKETS_PER_PLAYER, one game on at most MAX_TICKETS_PER_GAME
     tickets, and opposite moneyline sides of one game are never both held.
 
 Everything else below (ParlayLeg, leg_is_eligible, etc.) is the original
@@ -90,6 +91,7 @@ LEG_PROBABILITY_MARGIN = 0.03       # absolute haircut per leg for the uncertain
 MAX_TICKETS_PER_DAY = 5
 MAX_TICKETS_PER_LEG = 2
 MAX_TICKETS_PER_GAME = 3
+MAX_TICKETS_PER_PLAYER = 2      # one player (any market) on at most two tickets: his bad night must not sink most of the day's book (2026-10-08: Bourque was on 3 of 5)
 MAX_POOL_FOR_LONG_TICKETS = 24      # bounds the 3-4 leg search; best legs by edge are kept
 MAX_SINGLES = 5
 
@@ -441,8 +443,11 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
     taken_sets = {frozenset(e) for e in existing}
     leg_use: dict = {}
     game_use: dict = {}
+    player_use: dict = {}
     ml_side: dict = {}
     for e in existing:
+        for ident in set(i[:2] for i in e if i[2] != 'MONEYLINE'):
+            player_use[ident] = player_use.get(ident, 0) + 1
         for ident in e:
             leg_use[ident] = leg_use.get(ident, 0) + 1
             game_use[ident[0]] = game_use.get(ident[0], 0) + 1
@@ -466,11 +471,17 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
         if any(game_use.get(i[0], 0) >= MAX_TICKETS_PER_GAME for i in idents):
             blocked += 1
             continue
+        players = {i[:2] for i in idents if i[2] != "MONEYLINE"}
+        if any(player_use.get(pl, 0) >= MAX_TICKETS_PER_PLAYER for pl in players):
+            blocked += 1
+            continue
         if any(i[2] == "MONEYLINE" and ml_side.get(i[0], i[1]) != i[1] for i in idents):
             blocked += 1
             continue
         result["tickets"].append(combo)
         taken_sets.add(frozenset(idents))
+        for pl in players:
+            player_use[pl] = player_use.get(pl, 0) + 1
         for i in idents:
             leg_use[i] = leg_use.get(i, 0) + 1
             game_use[i[0]] = game_use.get(i[0], 0) + 1

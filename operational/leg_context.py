@@ -25,9 +25,20 @@ def skater_context(player: dict, leg: dict) -> dict | None:
     season = player.get("season") or {}
     recent = player.get("recent_games") or []
     recent_n = len(recent)
-    role = f"Estimated {('defense' if player.get('position') == 'D' else 'forward')} usage tier {player['usage_tier']}" if player.get("usage_tier") else "Role not established"
-    role += ", regular power-play time" if player.get("pp_usage") else ", no regular power-play time"
-    lines = [role + (" (inferred from ice time, not a reported lineup)" if not (player.get("reported") or {}).get("line") else "")]
+    reported = player.get("reported") or {}
+    pp_word = {1: "high", 2: "some"}.get(player.get("pp_usage"))
+    games_used = player.get("role_games")
+    basis = f"inferred from ice time in his last {games_used} game(s)" if games_used else "inferred from ice time"
+    if player.get("usage_tier"):
+        role = (f"Estimated {('defense' if player.get('position') == 'D' else 'forward')} usage tier {player['usage_tier']}, "
+                + (f"estimated power-play usage: {pp_word}" if pp_word else "no regular power-play time") + f" ({basis}; an estimate, not an assigned line or PP unit)")
+    else:
+        role = "Role not established"
+    lines = [role]
+    if reported.get("status", "REPORTED") == "REPORTED" and (reported.get("line") or reported.get("pp")):
+        lines.append(f"Reported by {reported.get('reported_by') or reported.get('source') or 'a lineup source'}: line {reported.get('line') or '—'}, PP unit {reported.get('pp') or '—'}")
+    else:
+        lines.append("No reported line or PP unit (no permitted lineup source is connected)")
     if season.get("games"):
         lines.append(f"This season {season['games']} GP: {int(season.get('goals', 0))} G, {int(season.get('assists', 0))} A, {int(season.get('shots', 0))} shots")
     if recent_n:

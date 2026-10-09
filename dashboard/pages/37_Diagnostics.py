@@ -39,11 +39,21 @@ _vc = st.columns(3)
 _vc[0].metric("This hosted app is running commit", (_ver["commit"] or "unknown")[:10])
 _vc[1].metric("Published data was built from commit", ((_sm or {}).get("source_master_commit") or "unknown")[:10])
 _wv = _wd.view((_hs or {}).get("watchdog"))
-_vc[2].metric("Watchdog", _wv["status"], f"checked {(_wv['age_min'] or 0):.0f} min ago" if _wv["age_min"] is not None else None, delta_color="off")
+_vc[2].metric("Operational health", _wv["status"], f"checked {(_wv['age_min'] or 0):.0f} min ago" if _wv["age_min"] is not None else None, delta_color="off")
 if _wv["message"]:
     st.warning(_wv["message"])
+st.markdown("**Operational health** — is the machinery running the right code on the right data, and do the books agree?")
 if _wv["checks"]:
     st.dataframe([{"Check": c["name"].replace("_", " "), "Status": c["status"], "Evidence": c["detail"]} for c in _wv["checks"]], hide_index=True, width="stretch")
+_ready = ((_hs or {}).get("watchdog") or {}).get("readiness")
+st.markdown("**Product readiness** — which features actually work end to end? (Separate from the table above.)")
+if _ready:
+    st.dataframe([{"Feature": f["feature"], "Status": f["status"].replace("_", " "), "Why": f["detail"], "Owner action": f.get("owner_action") or "—"} for f in _ready["features"]],
+                 hide_index=True, width="stretch")
+    c = _ready["counts"]
+    st.caption(f"{c['WORKING']} working · {c['LIMITED']} limited · {c['NOT_VERIFIED']} not verified · {c['BLOCKED']} blocked · {c['OWNER_ACTION']} waiting on an owner action. " + _ready["note"])
+else:
+    st.caption("The readiness list is published with the next watchdog run.")
 st.caption("The watchdog runs on the engine's Mac every 30 minutes (launchd) and is re-aged here when the page opens: if it stops, this turns FAIL by itself. "
            "If the two commits differ, a deploy is pending or the hosted app has not been rebooted.")
 

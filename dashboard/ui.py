@@ -153,34 +153,51 @@ def team_label(code: str) -> str:
 
 # ------------------------------------------------------------------ tickets ----
 
+def _h(text) -> str:
+    """Text for inside a raw-HTML block: HTML-escaped, and `$` as an entity so Streamlit's markdown never reads a pair of prices as maths."""
+    import html
+    return html.escape(str(text)).replace("$", "&#36;")
+
+
+def _card_head(title: str, chips: str) -> None:
+    st.markdown(f"<div class='card-head'><div class='card-title'>{_h(title)}</div><div class='card-chips'>{chips}</div></div>", unsafe_allow_html=True)
+
+
+def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> None:
+    """The bet slip: one row per selection (what, which game, the price as a pill, the model's chance and the edge it implies) and a stat strip."""
+    rows = []
+    for l in legs:
+        d = 1.0 + (l["american_price"] / 100.0 if l["american_price"] > 0 else 100.0 / abs(l["american_price"]))
+        implied = 1.0 / d
+        edge = (l.get("probability") - implied) * 100 if l.get("probability") is not None else None
+        game = " vs ".join(x for x in (l.get("team"), l.get("opponent")) if x)
+        when = et_time(l.get("game_start_utc"))
+        quote = l.get("quote_updated_utc") or l.get("price_captured_at_utc")
+        meta = " · ".join(x for x in (game, when if when != "—" else None, f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None) if x)
+        res = {"WIN": ("won", "Won"), "LOSS": ("lost", "Lost"), "VOID": ("void", "Void")}.get(l.get("outcome") or "") if outcomes else None
+        chance = f"Model {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
+        rows.append(f"<div class='leg {res[0] if res else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"
+                    f"<div class='leg-right'><span class='odds'>{american(l['american_price'])}</span><span class='chance'>{chance}</span>"
+                    + (f"<span class='res {res[0]}'>{res[1]}</span>" if res else "") + "</div></div>")
+    cells = "".join(f"<div class='stat {tone}'><span class='k'>{_h(k)}</span><span class='v'>{_h(v)}</span>" + (f"<span class='sub'>{_h(sub)}</span>" if sub else "") + "</div>"
+                    for k, v, sub, tone in stats)
+    st.markdown(f"<div class='slip'>{''.join(rows)}<div class='stats'>{cells}</div></div>", unsafe_allow_html=True)
+
+
 def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
     status = t["status"]
     with st.container(border=True):
-        top = st.columns([5, 2])
         legs = t["legs"]
         title = " + ".join(l["label"] for l in legs) if len(legs) <= 2 else f"{len(legs)}-leg ticket"
-        top[0].markdown(f"**{esc(title)}**")
-        top[1].markdown(f"<div style='text-align:right'>{status_chip(status)}{status_chip(t.get('origin') or 'AUTOMATIC')}</div>",
-                        unsafe_allow_html=True)
-        rows = []
-        for l in legs:
-            matchup = " vs ".join(x for x in (l.get("team"), l.get("opponent")) if x)
-            rows.append({"Selection": l["label"], "Game": matchup, "Starts": et_time(l.get("game_start_utc")),
-                         "Price": american(l["american_price"]),
-                         "Quote updated": et_time(l.get("quote_updated_utc") or l.get("price_captured_at_utc"), True),
-                         "Model chance": pct(l.get("probability")),
-                         "Result": {"WIN": "Won", "LOSS": "Lost", "VOID": "Void"}.get(l.get("outcome") or "", "—")})
-        st.dataframe(rows, hide_index=True, width="stretch")
-        c = st.columns(5)
-        basis = "Estimated combined price" if len(legs) > 1 else "DraftKings quote"
-        c[0].metric(basis, american(t["combined_american"]),
-                    help="Product of each leg's own price, not a quoted parlay price." if len(legs) > 1 else
-                    "The sportsbook's own price for this single (US feed).")
-        c[1].metric("Stake", money(t["stake"]))
-        c[2].metric("Return if it hits", money(t["potential_return"]))
-        c[3].metric("Model hit chance", pct(t.get("hit_probability")))
+        _card_head(title, status_chip(status) + status_chip(t.get("origin") or "AUTOMATIC"))
         res = t.get("result")
-        c[4].metric("Result", signed_money(res["profit_loss"]) if res and res.get("profit_loss") is not None else "Open")
+        pnl = res.get("profit_loss") if res else None
+        decimal = t.get("combined_decimal") or 1.0
+        _slip(legs, [("Estimated price" if len(legs) > 1 else "DraftKings quote", american(t["combined_american"]), "product of leg prices" if len(legs) > 1 else "US feed", "accent"),
+                     ("Stake", money(t["stake"]), None, ""),
+                     ("To return", money(t["potential_return"]), f"profit {money(t['potential_profit'])}" if t.get("potential_profit") is not None else None, ""),
+                     ("Model chance", pct(t.get("hit_probability")), f"price implies {pct(1.0 / decimal)}" if decimal else None, ""),
+                     ("Result", signed_money(pnl) if pnl is not None else "Open", None, ("good" if (pnl or 0) > 0 else "bad" if (pnl or 0) < 0 else "") if pnl is not None else "open")], outcomes=True)
         st.caption(esc(t["rationale"]))
         leg_why(legs)
         if t.get("recorded_at_utc"):
@@ -190,7 +207,10 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
             st.caption(f"Manually added from order {prov.get('order_id')} (received {et_time(prov.get('received_at_utc'), True)}, "
                        f"revalidated {et_time(prov.get('revalidated_at_utc'), True)}). {prov.get('jurisdiction_note', '')}")
         for a in t.get("alerts") or []:
-            st.warning(esc(a["detail"]))
+            if a.get("retracted"):
+                st.caption(f"Alert retracted — {esc(a['retracted'])} (original: {esc(a['detail'])})")
+            else:
+                st.warning(esc(a["detail"]))
 
 
 def leg_why(legs: list[dict]) -> None:
@@ -215,24 +235,16 @@ def leg_why(legs: list[dict]) -> None:
 
 def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: str | None, show_people: bool = True) -> None:
     with st.container(border=True):
-        top = st.columns([5, 2])
         kind = "Single" if opt["kind"] == "SINGLE" else "2-leg cross-game parlay"
-        top[0].markdown("**" + esc(" + ".join(l["label"] for l in opt["legs"])) + "**")
-        top[1].markdown(f"<div style='text-align:right'>{chip(kind, 'info')}</div>", unsafe_allow_html=True)
-        rows = [{"Selection": l["label"], "Game": " vs ".join(x for x in (l.get("team"), l.get("opponent")) if x),
-                 "Starts": et_time(l.get("game_start_utc")), "Price": american(l["american_price"]),
-                 "Quote updated": et_time(l.get("quote_updated_utc"), True), "Quote age": f"{l['quote_age_min']:.0f} min" if l.get("quote_age_min") is not None else "—",
-                 "Model chance": pct(l["probability"])} for l in opt["legs"]]
-        st.dataframe(rows, hide_index=True, width="stretch")
-        c = st.columns(5)
+        _card_head(" + ".join(l["label"] for l in opt["legs"]), chip(kind, "info"))
         quoted = opt["price_basis"] == "SPORTSBOOK_QUOTE"
-        c[0].metric("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]),
-                    help=opt["price_label"])
-        c[1].metric("Stake", money(opt["stake"]))
-        c[2].metric("Return if it hits", money(opt["potential_return"]))
-        c[3].metric("Model hit chance", pct(opt["hit_probability"]))
-        c[4].metric("Value after haircut", f"{opt['ev_after_haircut'] * 100:+.0f}%",
-                    help="Expected return per dollar after lowering every leg's probability by 3 points — a policy margin, not a calibration.")
+        decimal = opt.get("combined_decimal") or 1.0
+        ev = opt["ev_after_haircut"] * 100
+        _slip(opt["legs"], [("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]), "DraftKings quote" if quoted else "product of leg prices", "accent"),
+                            ("Stake", money(opt["stake"]), None, ""),
+                            ("To return", money(opt["potential_return"]), f"profit {money(opt['potential_profit'])}", ""),
+                            ("Model chance", pct(opt["hit_probability"]), f"price implies {pct(1.0 / decimal)}", ""),
+                            ("Value after haircut", f"{ev:+.0f}%", "3-pt policy margin", "good" if ev > 0 else "bad")], outcomes=False)
         st.caption(esc(opt["rationale"]))
         leg_why(opt["legs"])
         if show_people and opt.get("best_for"):
@@ -311,11 +323,22 @@ def selected_log() -> dict | None:
     if doc:
         sel["creation"] = None                                  # the log exists now; later bets do not need the creation details
         sel["name"] = doc["display_name"]
-    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc}
+    key = sel.get("write_key")
+    # Writing is allowed only with the log's write key; it must derive the public key the log was created with (published, so a wrong key is caught here).
+    pub = (doc or {}).get("write_pub") or (sel.get("creation") or {}).get("write_pub")
+    can_write = bool(key and pub and _write_pub(key, sel["hash"]) == pub)
+    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc, "write_key": key if can_write else None,
+            "can_write": can_write, "key_given": bool(key)}
 
 
-def select_log(code: str, name: str | None = None, *, creation: dict | None = None) -> None:
-    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation}
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
+def _write_pub(write_key: str, log_hash: str) -> str:
+    from operational import log_signing
+    return log_signing.public_key_hex(write_key, log_hash)
+
+
+def select_log(code: str, name: str | None = None, *, creation: dict | None = None, write_key: str | None = None) -> None:
+    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation, "write_key": write_key or None}
 
 
 def forget_log() -> None:
@@ -348,6 +371,11 @@ def add_control(opt: dict, *, key: str, cash: float | None = None, page_generate
     on_book = opt.get("on_book")
     if on_book:
         st.caption(f"The model book holds this exact bet as {on_book['ticket_id']} ({on_book['status'].title()}). Adding it to your own log does not change that.")
+    if not log["can_write"]:
+        banner(f"<b>{esc(log['name'])}</b> is open <b>view-only</b> in this session"
+               + (": the write key you entered does not match this log." if log["key_given"] else ": adding a bet needs the log's write key.")
+               + " Enter it on <b>My Bets</b> (sidebar). Knowing a log's code lets you read it, not write to it.", "warn")
+        return
     banner(f"Adding to your personal log <b>{esc(log['name'])}</b> — separate from the model book.", "info")
     sess = st.session_state.setdefault("_personal_orders", {})
     mine = sess.get(opt["option_id"])
@@ -395,6 +423,9 @@ def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, p
         return                                                  # a repeated click while an order is outstanding
     order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
                                               stake=stake, create=None if log["exists"] else log["creation"])
+    from operational import log_signing
+    order["via"] = "direct" if order_client.personal_write_token(getattr(st, "secrets", {})) else "link"      # signed with the order; lets the engine tell a one-click order from a hand-filed one
+    order = log_signing.sign(order, log["write_key"], log["hash"])
     res = file_order(order)
     if not res["ok"]:
         banner(esc(res["error"]), "bad")
