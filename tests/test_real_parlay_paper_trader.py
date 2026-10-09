@@ -125,7 +125,7 @@ class TestTraderRun(unittest.TestCase):
         result = _run_with(nhl_path, bankroll, [], NOW1)
         self.assertEqual(result["stake_result"]["newly_recorded"], 0)
         self.assertIn("still to start today", result["stake_result"]["reason"])
-        self.assertIn("re-checked at the last moment", result["stake_result"]["reason"])
+        self.assertIn("No fresh price qualifies right now", result["stake_result"]["reason"])
 
     def test_revalidation_alerts_never_change_the_account(self):
         nhl_path, bankroll = _fresh_nhl_db_with_games(GAMES), _bankroll()

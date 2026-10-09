@@ -21,7 +21,7 @@ def iso(t):
 
 
 class TestProvisionalLegs(unittest.TestCase):
-    """_SNAPSHOT game: starts 2026-10-06 23:00Z (7 PM ET). Production mode (the credit plan governs): a price is recordable only if retrieved inside the pregame window."""
+    """_SNAPSHOT game: starts 2026-10-06 23:00Z (7 PM ET)."""
 
     def setUp(self):
         p = mock.patch.object(bb, "_cp_enforced", return_value=True)
@@ -33,21 +33,22 @@ class TestProvisionalLegs(unittest.TestCase):
         upd = iso(now - dt.timedelta(hours=last_update_hours_before))
         return bb._legs_from_payload(_payload(shots_point=1.5, last_update=upd), now - dt.timedelta(hours=captured_hours_before), _SNAPSHOT, now)
 
-    def test_a_morning_price_is_provisional_not_fresh_eleven_hours_out(self):
-        for l in self.legs(8, 5, last_update_hours_before=0.1, captured_hours_before=0.05):      # fresh by AGE, but retrieved ~11 h before puck drop
+    def test_a_fresh_morning_price_is_fresh_and_early_not_provisional(self):
+        for l in self.legs(8, 5, last_update_hours_before=0.1, captured_hours_before=0.05):          # 11 h before puck drop, 6 minutes old
+            self.assertTrue(l.price_fresh)                       # actual freshness: usable for options, personal adds and (capped) automatic tickets
+            self.assertTrue(l.early)
+            self.assertFalse(l.provisional)
+
+    def test_the_same_price_hours_later_is_provisional_not_fresh(self):
+        for l in self.legs(13, 0, last_update_hours_before=5.0, captured_hours_before=4.9):          # quote 5 h old at 1 PM
             self.assertFalse(l.price_fresh)
             self.assertTrue(l.provisional)
-            self.assertEqual(l.freshness_status, "BEFORE_PREGAME_WINDOW")
+            self.assertFalse(l.early)
 
-    def test_without_the_credit_plan_the_legacy_cadence_still_records_early_fresh_prices(self):
-        with mock.patch.object(bb, "_cp_enforced", return_value=False):
-            for l in self.legs(8, 5, last_update_hours_before=0.1, captured_hours_before=0.05):
-                self.assertTrue(l.price_fresh)
-                self.assertFalse(l.provisional)
-
-    def test_a_price_inside_the_recording_limit_is_fresh_and_not_provisional(self):
+    def test_a_price_inside_the_pregame_window_is_fresh_and_not_early(self):
         for l in self.legs(17, 30, last_update_hours_before=0.2):
             self.assertTrue(l.price_fresh)
+            self.assertFalse(l.early)
             self.assertFalse(l.provisional)
 
     def test_a_price_older_than_the_provisional_limit_is_neither(self):
@@ -96,7 +97,7 @@ class TestProvisionalNeverRecords(unittest.TestCase):
         for t in prov["tickets"]:
             self.assertEqual(t["status"], "PROVISIONAL")
             self.assertFalse(t["recorded"])
-        self.assertIn("re-fetched shortly before puck drop", prov["note"])
+        self.assertIn("older than the freshness limit", prov["note"])
 
     def test_options_built_from_morning_prices_are_flagged_provisional(self):
         result, state, conn = self.run_cycle(self.morning_legs())
@@ -121,20 +122,55 @@ class TestProvisionalNeverRecords(unittest.TestCase):
         started = dt.datetime(2026, 10, 15, 23, 45, tzinfo=U)
         self.assertTrue(any("started" in w for w in dtk.revalidate_before_recording(combo, started)))
 
-    def test_a_fresh_looking_price_retrieved_before_the_pregame_window_cannot_be_recorded(self):
-        stamp = iso(dt.datetime(2026, 10, 15, 14, 0, tzinfo=U))          # retrieved 9.5 h before the 23:30Z start, 5 minutes old at 14:05Z
-        legs = board(2, start=self.start, captured=stamp)
-        combo = rmp.select_tickets(legs)["tickets"][0]
-        now = dt.datetime(2026, 10, 15, 14, 5, tzinfo=U)
-        self.assertEqual(dtk.revalidate_before_recording(combo, now), [])                        # legacy mode: allowed
-        with mock.patch.object(bb, "_cp_enforced", return_value=True):
-            why = dtk.revalidate_before_recording(combo, now)
-        self.assertTrue(why and all("pregame window" in w for w in why))
+    def test_a_fresh_early_price_can_be_recorded_but_only_up_to_the_early_cap(self):
+        """A fresh 8:30 AM price is a usable price: with a 5-game board all on early prices, exactly EARLY_TICKET_CAP tickets are recorded and the rest wait."""
+        early_legs = [dataclasses.replace(l, early=True) for l in board(8, start=self.start, captured=iso(self.now - dt.timedelta(minutes=5)))]
+        result, state, conn = self.run_cycle(early_legs)
+        self.assertEqual(result["newly_recorded"], dtk.EARLY_TICKET_CAP)
+        self.assertEqual(state["slots"]["used"], dtk.EARLY_TICKET_CAP)
+        held = [r for r in state["diagnostics"]["selection_audit"]["latest_cycle"]["considered"] if r["status"] == "BLOCKED_RECORDING_WINDOW"]
+        self.assertTrue(held and "early-price tickets are taken" in held[0]["reason"])
+        self.assertEqual(state["diagnostics"]["recording_policy"]["early_price_cap"], {"cap": dtk.EARLY_TICKET_CAP, "used": 0})
+
+    def test_pregame_window_tickets_are_not_counted_against_the_cap(self):
+        legs = board(8, start=self.start, captured=iso(self.now - dt.timedelta(minutes=5)))            # early=False: retrieved inside the window
+        result, state, conn = self.run_cycle(legs)
+        self.assertEqual(result["newly_recorded"], 5)
+
+    def test_the_cap_counts_early_tickets_already_recorded_today(self):
+        early_legs = [dataclasses.replace(l, early=True) for l in board(8, start=self.start, captured=iso(self.now - dt.timedelta(minutes=5)))]
+        path, conn = fresh_ledger()
+        from tests.test_daily_tickets import _fresh_nhl_conn
+        nhl = _fresh_nhl_conn()
+        first = dtk.run_cycle(nhl, conn, self.now, collected=collected(early_legs))
+        self.assertEqual(first["newly_recorded"], dtk.EARLY_TICKET_CAP)
+        again = dtk.run_cycle(nhl, conn, self.now + dt.timedelta(minutes=15), collected=collected(early_legs))
+        self.assertEqual(again["newly_recorded"], 0)
+        late = [dataclasses.replace(l, early=False) for l in board(8, start=self.start, captured=iso(self.now + dt.timedelta(minutes=10)))]
+        third = dtk.run_cycle(nhl, conn, self.now + dt.timedelta(minutes=20), collected=collected(late))
+        self.assertEqual(third["newly_recorded"], 5 - dtk.EARLY_TICKET_CAP)                                # the reserved slots go to later prices
 
     def test_a_provisional_leg_is_never_revalidated_into_a_recording(self):
         legs = [dataclasses.replace(l, provisional=True) for l in board(2, start=self.start, captured=iso(self.now))]
         combo = rmp.select_tickets(legs)["tickets"][0]
         self.assertTrue(any("provisional" in w for w in dtk.revalidate_before_recording(combo, self.now)))
+
+
+class TestPersonalAddsUseActualFreshness(unittest.TestCase):
+    """A fresh morning price is addable to a personal log; an aged one is not. The same revalidation the engine runs on every order."""
+
+    def test_fresh_early_leg_is_available_and_an_aged_provisional_leg_is_not(self):
+        from operational import manual_orders
+        start = "2026-10-15T23:30:00Z"
+        now = dt.datetime(2026, 10, 15, 12, 30, tzinfo=U)
+        fresh = [dataclasses.replace(l, early=True) for l in board(2, start=start, captured=iso(now - dt.timedelta(minutes=10)))]
+        accepted = {"legs": [{"game_id": l.game_id, "participant_id": l.participant_id, "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
+                              "american_price": l.american_price, "participant_name": l.participant_name} for l in fresh], "hit_probability": None}
+        ok = manual_orders.revalidate(accepted, fresh, now)
+        self.assertIn(ok["status"], ("OK", "CHANGED"))
+        aged = [dataclasses.replace(l, price_fresh=False, provisional=True, early=False) for l in fresh]
+        gone = manual_orders.revalidate(accepted, aged, now)
+        self.assertEqual(gone["status"], "UNAVAILABLE")
 
 
 if __name__ == "__main__":

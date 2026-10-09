@@ -6,8 +6,8 @@ Order (each step is independent; one failing never stops the next, and every out
   2. moneyline    the day's first league-wide moneyline pull, if due (one credit; it also carries tomorrow's early lines). Before 08:00 the planner refuses it, so the
                   first display refresh of the day is this one, not a midnight pull that leaves the morning on last night's price.
   3. cycle        one run of the 15-minute trader: the MORNING capture of DraftKings player prices for every game the credit plan covers (operational/capture_schedule.py),
-                  provisional options and provisional tickets, and publication to the hosted app. It records NO automatic ticket from morning prices: a ticket needs a
-                  price retrieved inside its game's pregame window (daily_tickets.revalidate_before_recording).
+                  provisional options and provisional tickets, and publication to the hosted app. A morning price that is fresh can be recorded on an automatic ticket, but at most
+                  daily_tickets.EARLY_TICKET_CAP tickets a day may rest on early prices, and each is re-judged on the clock at the moment of recording.
 The 15-minute trader keeps looking after this (a market DraftKings has not posted yet is asked again hourly), so a late or missed 08:00 run is caught by the next cycle,
 and the watchdog warns from 08:45 and fails from 10:00 if no game was looked at.
 """

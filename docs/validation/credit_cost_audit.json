@@ -1,0 +1,243 @@
+{
+ "cycle_reconciliation": {
+  "since_utc": "2026-10-01T00:04:24Z",
+  "counter_now": 218,
+  "counter_at_cycle_start": 0,
+  "sum_of_header_charges": 218,
+  "counter_change": 218,
+  "every_credit_accounted": true
+ },
+ "calls_audited": 1331,
+ "first_call_utc": "2026-09-24T20:39:56Z",
+ "last_call_utc": "2026-10-09T19:09:49Z",
+ "by_kind": {
+  "events_listing": {
+   "calls": 1105,
+   "model_matches_charge": 1105,
+   "charged": 0,
+   "modelled": 0,
+   "mismatches": []
+  },
+  "league_moneyline": {
+   "calls": 109,
+   "model_matches_charge": 109,
+   "charged": 109,
+   "modelled": 109,
+   "mismatches": []
+  },
+  "event_props": {
+   "calls": 117,
+   "model_matches_charge": 117,
+   "charged": 193,
+   "modelled": 193,
+   "mismatches": []
+  }
+ },
+ "counter_continuity": {
+  "pairs_checked": 1251,
+  "delta_equals_charge": 1168,
+  "unexplained": [
+   {
+    "at": "2026-09-25T12:15:07Z",
+    "counter_delta": 6,
+    "charged_header": 1,
+    "unexplained": 5,
+    "previous_call_at": "2026-09-25T12:15:06Z"
+   },
+   {
+    "at": "2026-09-25T12:15:08Z",
+    "counter_delta": 7,
+    "charged_header": 1,
+    "unexplained": 6,
+    "previous_call_at": "2026-09-25T12:15:07Z"
+   },
+   {
+    "at": "2026-09-25T12:15:08Z",
+    "counter_delta": 4,
+    "charged_header": 1,
+    "unexplained": 3,
+    "previous_call_at": "2026-09-25T12:15:08Z"
+   },
+   {
+    "at": "2026-09-25T12:15:08Z",
+    "counter_delta": 8,
+    "charged_header": 1,
+    "unexplained": 7,
+    "previous_call_at": "2026-09-25T12:15:08Z"
+   },
+   {
+    "at": "2026-09-25T12:15:09Z",
+    "counter_delta": 8,
+    "charged_header": 1,
+    "unexplained": 7,
+    "previous_call_at": "2026-09-25T12:15:08Z"
+   },
+   {
+    "at": "2026-09-25T12:15:09Z",
+    "counter_delta": 7,
+    "charged_header": 1,
+    "unexplained": 6,
+    "previous_call_at": "2026-09-25T12:15:09Z"
+   },
+   {
+    "at": "2026-09-25T12:15:09Z",
+    "counter_delta": 2,
+    "charged_header": 1,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-25T12:15:09Z"
+   },
+   {
+    "at": "2026-09-25T12:15:09Z",
+    "counter_delta": 5,
+    "charged_header": 1,
+    "unexplained": 4,
+    "previous_call_at": "2026-09-25T12:15:09Z"
+   },
+   {
+    "at": "2026-09-25T12:15:09Z",
+    "counter_delta": 3,
+    "charged_header": 1,
+    "unexplained": 2,
+    "previous_call_at": "2026-09-25T12:15:09Z"
+   },
+   {
+    "at": "2026-09-25T12:15:10Z",
+    "counter_delta": 10,
+    "charged_header": 1,
+    "unexplained": 9,
+    "previous_call_at": "2026-09-25T12:15:09Z"
+   },
+   {
+    "at": "2026-09-25T12:15:10Z",
+    "counter_delta": 2,
+    "charged_header": 1,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-25T12:15:10Z"
+   },
+   {
+    "at": "2026-09-25T12:24:34Z",
+    "counter_delta": 4,
+    "charged_header": 0,
+    "unexplained": 4,
+    "previous_call_at": "2026-09-25T12:15:10Z"
+   },
+   {
+    "at": "2026-09-25T21:00:20Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-25T21:00:02Z"
+   },
+   {
+    "at": "2026-09-26T17:00:19Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-26T17:00:01Z"
+   },
+   {
+    "at": "2026-09-27T00:00:34Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-27T00:00:04Z"
+   },
+   {
+    "at": "2026-09-27T12:01:11Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-27T12:00:05Z"
+   },
+   {
+    "at": "2026-09-28T00:43:37Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-27T17:00:05Z"
+   },
+   {
+    "at": "2026-09-28T12:19:23Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-28T12:01:54Z"
+   },
+   {
+    "at": "2026-09-28T17:02:43Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-28T17:00:05Z"
+   },
+   {
+    "at": "2026-09-29T17:09:31Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-29T17:01:55Z"
+   },
+   {
+    "at": "2026-09-29T18:23:59Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-29T18:18:26Z"
+   },
+   {
+    "at": "2026-09-29T18:54:37Z",
+    "counter_delta": 2,
+    "charged_header": 0,
+    "unexplained": 2,
+    "previous_call_at": "2026-09-29T18:54:00Z"
+   },
+   {
+    "at": "2026-09-29T21:40:11Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-29T21:38:55Z"
+   },
+   {
+    "at": "2026-09-29T23:24:49Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-29T23:22:13Z"
+   },
+   {
+    "at": "2026-09-30T15:51:41Z",
+    "counter_delta": 1,
+    "charged_header": 0,
+    "unexplained": 1,
+    "previous_call_at": "2026-09-30T15:48:52Z"
+   }
+  ]
+ },
+ "posted_by_hours_before_puck_drop": {
+  "over 24h before": {
+   "calls": 35,
+   "markets_requested": 35,
+   "markets_posted": 0,
+   "avg_posted_per_call": 0.0
+  },
+  "6-24h before": {
+   "calls": 6,
+   "markets_requested": 16,
+   "markets_posted": 13,
+   "avg_posted_per_call": 2.17
+  },
+  "3-6h before": {
+   "calls": 55,
+   "markets_requested": 75,
+   "markets_posted": 75,
+   "avg_posted_per_call": 1.36
+  },
+  "under 3h before": {
+   "calls": 14,
+   "markets_requested": 29,
+   "markets_posted": 29,
+   "avg_posted_per_call": 2.07
+  }
+ }
+}

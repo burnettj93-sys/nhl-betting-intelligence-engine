@@ -33,8 +33,8 @@ st.caption(f"Options built {ui.et_time(opts_doc.get('generated_at_utc') or tk['g
 if not options:
     ui.banner(ui.esc(tk.get("empty_slot_reason") or "No person has a fresh price that qualifies right now."), "muted")
     st.caption("The engine looks at DraftKings' player prices from 8:00 AM ET (a morning look at every game its odds-credit plan covers), again around midday when credits allow, and "
-               "re-fetches each game's price about 105 minutes before puck drop. Options built from the morning looks are marked Provisional; only the pregame price can be added "
-               "or recorded. Below, why each game does or does not have prices yet. Nothing is recorded by looking at this page.")
+               "again about 105 minutes before each puck drop. A price that is still fresh (150 minutes, 100 when the game is under two hours away) can be added to a personal log at "
+               "any hour; an older one is shown as Provisional until refreshed. Below, why each game does or does not have prices yet. Nothing is recorded by looking at this page.")
     ui.availability_table((ui.availability_block(tk).get("today")) or {})
     st.stop()
 
@@ -48,7 +48,7 @@ show.sort(key={"Best value": lambda o: -o["ev_after_haircut"], "Highest chance":
 d = opts_doc.get("diagnostics") or {}
 n_prov = sum(1 for o in options if o.get("provisional"))
 if n_prov:
-    st.caption(f"{n_prov} of these option(s) are provisional: built from an earlier look at DraftKings' prices today. They can be browsed but not added until their prices are re-checked shortly before puck drop.")
+    st.caption(f"{n_prov} of these option(s) are provisional: their prices come from an earlier look today and are now older than the freshness limit. They can be browsed but not added until refreshed.")
 st.caption(f"{len(show)} of {len(options)} distinct option(s) · {d.get('people_with_option', '?')} of {d.get('people_with_priced_props', '?')} people with a fresh price have an option.")
 for o in show[:60]:
     ui.option_card(o, key=f"bo_{o['option_id']}", cash=cash, page_generated_at=tk["generated_at_utc"])
