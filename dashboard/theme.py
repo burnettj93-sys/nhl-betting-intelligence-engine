@@ -61,8 +61,11 @@ a { color: #8db4ff; }
 [data-testid="stMetricLabel"] p { color: var(--muted) !important; font-size: .7rem !important; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
 [data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; font-weight: 700; }
 [data-testid="stMetricValue"] > div { font-size: clamp(1.15rem, 1.6vw, 1.7rem); white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
+[data-testid="stMetricLabel"] *, [data-testid="stMetricDelta"] *, [data-testid="stMetricValue"] * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; }
 [data-testid="stMetricDelta"], [data-testid="stMetricDelta"] > div { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; font-size: .78rem; }
 [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetric"] { background: transparent; border: 0; padding: 4px 2px; }
+[data-testid="stMarkdownContainer"] table { max-width: 100%; }
+[data-testid="stMarkdownContainer"] td, [data-testid="stMarkdownContainer"] th { overflow-wrap: anywhere; word-break: normal; vertical-align: top; }
 [data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-variant-numeric: tabular-nums; }
 [data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 [data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
@@ -121,6 +124,7 @@ button:focus-visible, a:focus-visible, [role="tab"]:focus-visible, input:focus-v
 
 /* ---- phones: two-up metrics instead of a tall stack, roomier tap targets, tighter margins */
 @media (max-width: 760px) {
+  [data-testid="stMarkdownContainer"] table { display: block; overflow-x: auto; }
   .block-container { padding: 3.6rem .9rem 2.5rem .9rem; }
   h1 { font-size: 1.55rem !important; } [data-testid="stMain"] h1::before { width: 32px; height: 32px; margin-right: 10px; }
   [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) { flex-wrap: wrap !important; gap: .5rem !important; }
