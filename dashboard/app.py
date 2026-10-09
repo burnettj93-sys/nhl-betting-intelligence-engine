@@ -92,7 +92,19 @@ with st.sidebar:
         st.caption("☁️ Hosted view — data is published by the engine every ~15 minutes")
     st.divider()
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
-        st.caption("🔒 Access is controlled by Streamlit private sharing")
+        st.caption("🌐 Public, read-only. Paper accounts are separate from the model's book.")
+        if _user["role"] == "ADMIN":
+            st.caption("Owner pages unlocked for this browser session.")
+            if st.button("Lock owner pages"):
+                auth.owner_lock()
+                st.rerun()
+        elif auth.owner_unlock_available():
+            with st.expander("Owner access"):
+                _pw = st.text_input("Owner passphrase", type="password", key="owner_pw")
+                if st.button("Unlock", key="owner_unlock"):
+                    if auth.try_owner_unlock(_pw):
+                        st.rerun()
+                    st.error("That is not the owner passphrase.")
     else:
         st.caption(f"Signed in as **{_user['username']}** ({_user['role']})")
         if st.button("Log out"):

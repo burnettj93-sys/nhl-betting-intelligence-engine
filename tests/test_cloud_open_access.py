@@ -1,4 +1,4 @@
-"""Community Cloud has NO application-level auth: Streamlit private sharing is the only access gate. LOCAL and
+"""Community Cloud has NO application-level accounts and is PUBLIC: every visitor is an anonymous read-only user, administrative pages need the owner unlock. LOCAL and
 PRODUCTION keep the account system exactly as before."""
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ class TestCloudNeedsNoAppLogin(unittest.TestCase):
             self.assertNotIn(field, labels)
         self.assertFalse([t for t in at.text_input if t.type == "password"])
         self.assertNotIn("Log out", " ".join(b.label for b in at.button))
-        self.assertIn("Streamlit private sharing", text)
+        self.assertIn("Public, read-only", text)
         self.assertIn("Today", text)                                             # the default page rendered
 
     def test_no_auth_secrets_are_required_and_stale_ones_change_nothing(self):
@@ -68,7 +68,7 @@ class TestCloudNeedsNoAppLogin(unittest.TestCase):
     def test_the_implicit_viewer_is_the_only_identity_and_the_old_platform_paths_are_gone(self):
         with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
             self.assertEqual(auth.current_user(), auth.CLOUD_VIEWER)
-            self.assertEqual(auth.require_admin()["username"], auth.CLOUD_VIEWER["username"])
+            self.assertEqual(auth.CLOUD_VIEWER["role"], "USER")                 # a visitor is never an administrator
         for gone in ("platform_viewer_email", "platform_role_for", "platform_identity_trusted", "setup_code_valid",
                      "bootstrap_requires_setup_code", "_configured_setup_code", "SETUP_CODE_ENV", "TRUST_PLATFORM_ENV", "ADMIN_EMAILS_ENV"):
             self.assertFalse(hasattr(auth, gone), gone)
@@ -82,6 +82,40 @@ class TestCloudNeedsNoAppLogin(unittest.TestCase):
     def test_the_cloud_sidebar_offers_no_logout_or_role_label(self):
         at = _run_app(rm.COMMUNITY_CLOUD_MODE)
         self.assertNotIn("Signed in as", _text(at))
+
+
+class TestPublicVisitorsAreNotAdministrators(unittest.TestCase):
+    def test_a_visitor_does_not_see_diagnostics_and_cannot_open_it(self):
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+            visitor = auth.current_user()
+            titles = {p.title for section in page_registry.pages_for(visitor["role"], rm.COMMUNITY_CLOUD_MODE).values() for p in section}
+        self.assertNotIn("Diagnostics", titles)
+        for wanted in ("Today", "Tomorrow", "Best Options", "My Bets", "Games", "Players", "Goalies", "Model Health", "Data Status"):
+            self.assertIn(wanted, titles)
+
+    def test_the_diagnostics_page_itself_refuses_a_visitor(self):
+        from streamlit.testing.v1 import AppTest
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+            at = AppTest.from_file(str(REPO / "dashboard" / "pages" / "37_Diagnostics.py"), default_timeout=60)
+            at.run()
+        self.assertIn("restricted to the administrator", " ".join(e.value for e in at.error))
+        self.assertEqual(len(at.dataframe), 0)
+
+    def test_the_owner_unlock_needs_the_secret_and_the_right_passphrase(self):
+        from dashboard import auth as a
+        with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE):
+            with mock.patch.object(a, "_setting", return_value=None):
+                self.assertFalse(a.owner_unlock_available())
+                self.assertFalse(a.try_owner_unlock("anything"))
+            with mock.patch.object(a, "_setting", return_value="correct horse"), mock.patch("time.sleep"):
+                self.assertTrue(a.owner_unlock_available())
+                self.assertFalse(a.try_owner_unlock("wrong"))
+                self.assertFalse(a.try_owner_unlock(""))
+
+    def test_no_unlock_control_is_shown_when_no_owner_secret_is_configured(self):
+        at = _run_app(rm.COMMUNITY_CLOUD_MODE)
+        self.assertNotIn("Owner access", " ".join(e.label for e in at.expander))
+        self.assertFalse([t for t in at.text_input if t.type == "password"])
 
 
 class TestTodayWithOptionalSectionsMissing(unittest.TestCase):
