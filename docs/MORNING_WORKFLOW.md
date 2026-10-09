@@ -131,6 +131,7 @@ before this change was 27 a day against a 12 a day pace.
 * Hosted app (Chrome, desktop): Today shows the morning strip, Best Options shows the per-game availability table when empty, **Tomorrow** shows 14 games for 2026-10-10 with early moneylines (13 of 14 not posted; one
   14.9 hours old, marked STALE), Diagnostics shows the minimum budget and the reduced-service table.
 * A live probe of tomorrow's first game (23.6 hours ahead, four markets) returned nothing and cost 0 credits; one availability row per probe is in the credit ledger (`AVAILABILITY_PROBE`).
+* **Evening, same day (observed on the hosted app)**: the first pregame captures arrived at 5:16 PM ET (3 games, 7 credits) and the board populated: **12 option cards** on Best Options and **3 recorded automatic tickets** on Today (all on pregame-window prices, none early), checked on the desktop and at 390 px (price, stake, return, model chance with its range, value after the haircut, "why this selection"). The add control cannot be exercised on the hosted app until `LOG_WRITE_TOKEN` exists: a visitor is told to open a log on My Bets first. Today's strip first said "done" because of that pregame capture; it now says "Morning update was late" for a first look after 8:45 AM.
 * **Not observed**: a scheduled 08:00 run; points and goals at 8 AM; any provisional option or ticket on the hosted app (none could exist: no early price was bought today); the Tomorrow evening check
   (due 8:15 PM ET today). On 2026-10-10 the budget (about 11.9 credits for 14 games) buys a shots look at 3 games.
 
