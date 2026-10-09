@@ -1,4 +1,4 @@
-# Product completion checklist (revision 4, 2026-10-09)
+# Product completion checklist (revision 5, 2026-10-09)
 
 Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
 **BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
@@ -41,7 +41,7 @@ Earlier "finished" claims were not used as evidence: every row below was re-chec
 |---|---|
 | Identity / team / schedule | Both correct (regular-season game ids; Hyry DAL, Bourque NSH; no preseason/AHL/old-season mixing in the model history). |
 | Hyry | **Defect found and fixed.** 28 NHL games, ~13–14 min, no power play, 0 points in 3 games this season; DraftKings offered +370 for 1+ point and the model said 27–29%. Walk-forward on 2025-26 shows the calibrated model **over-predicts below 40 prior games** (points 1+: 26–28% predicted vs 24% observed; shots 2+: 32–34% vs 28–30%) and is calibrated from 40 (27.5% vs 27.1%) — `docs/validation/low_sample_calibration.json`. The floor moved from 20 to 40 games; Hyry is no longer priced, and his hosted page says so ("Limited history … no recommendation is made"). The ticket that used him was a manual add of the option card. |
-| Bourque | 159 games, tier-2 usage, power-play unit 2: a legitimate shots leg. Three losses on three tickets are normal variance, not a defect. |
+| Bourque | **Re-audited in full** (`docs/BOURQUE_AUDIT.md`): identity, role (inferred from only 3 games; no reported PP unit), quote (fresh, but taken 4 h 52 min before puck drop), probability (sane) and selection (the shots leg had **no edge of its own**, +0.2 pts). The three losses came from an **8:15-minute game** (his others: 17–20 min; no play-by-play event after 11:07 of the 2nd — most likely an in-game exit, cause unknown) — not ordinary variance, and the same player was on 3 of 5 tickets. Defects found and **fixed**: false "traded to DAL" alerts (stale archived corpus; now roster-first, 6 stored alerts retracted, never deleted) and no per-player ticket cap (now ≤ 2 tickets per player). Cards separate *inferred* PP usage from a *reported* PP unit. |
 | Sample of other recommended players | Every other leg ever recommended has 62–331 prior games (Leonard 86, Kadri 325, Malkin 291, Landeskog 62, Coleman 314, Lee 331, Seguin 194, Dvorak 260). |
 | Card rationale | Every option and ticket card has "Why this selection": role (labelled inferred), season and recent production, expected output, sample size and the main uncertainty (`operational/leg_context.py`). |
 | Discarded analysis | A role-specific slice (low ice time, no power play) was dropped because it was defined by the game's actual ice time — a leak; it is not used as evidence. |
@@ -68,6 +68,7 @@ Earlier "finished" claims were not used as evidence: every row below was re-chec
 | Item | Status | Evidence |
 |---|---|---|
 | My Bets / Model Bets / Both, clearly separated; labelled "Manually added" | WORKS | Hosted My Bets (desktop and 390 px mobile). |
+| **Another person cannot write to your log** | WORKS in code and tests; hosted one-click path BLOCKED (below) | Each log has a separate **write key** (100 bits, shown once). Only the public half is stored; every order is **Ed25519-signed** (pure-Python, no new dependency), the engine refuses anything else (`BAD_SIGNATURE`). Knowing a code gives read-only access. Tested: wrong key, unsigned, altered stake, redirected order, creation-id takeover, replay (`tests/test_personal_logs.py::TestWriteProtection`, `tests/test_log_signing.py` against the RFC 8032 vectors and the `cryptography` library). **Public-data trade-off, stated on the page and in `docs/PERSONAL_LOGS.md`:** reading is not private (public repository, by design); writing is. A lost key cannot be recovered. |
 | Personal bets never affect the $500 model book | WORKS | Separate database file; the model's queries count `origin = 'AUTOMATIC'` only; `deploy/qa_two_logs.py` on a copy of the live ledger: two logs × two bets, settled WIN/LOSS — hash of every ledger table identical before/after, account identical, each log reconciles (`audit_evidence/isolated_two_log_qa.json`). |
 | Create/open by code, collision refusal, durable, no duplicate submissions | WORKS | Hash-only storage, `CODE_IN_USE` / `LOG_NOT_FOUND` refusals, order-id idempotence, same-bet-same-day refusal, rate limits (`tests/test_personal_logs.py`, 30 tests). The page and `docs/PERSONAL_LOGS.md` say a code is **not authentication** and the published data is public. |
 | Destination obvious before adding | WORKS | "Adding to your personal log *X* — separate from the model book" above every add button. |
@@ -89,15 +90,19 @@ Earlier "finished" claims were not used as evidence: every row below was re-chec
 |---|---|---|
 | Freshness, market support, predictive validation, calibration and betting-value evidence kept apart | WORKS | Model Health → "What the evidence does and does not say". The betting-value row says "none yet" on purpose. |
 | Odds budget and every paid job audited; trade-offs shown; no claim of full coverage | WORKS | `docs/ODDS_BUDGET_CONFIGURATIONS.md`, `docs/ODDS_CREDIT_AUDIT.md`, Diagnostics credit plan. Nothing purchased. |
-| Scheduled jobs run from the clean release, refresh, settle, publish compatible snapshots, report failures | WORKS | 13 launchd jobs from `~/nhl_engine_release`; new **watchdog** job (every 30 min) checks jobs loaded, release == origin/master, trader and publication recency, database path; shown on Diagnostics and re-aged there (it turns FAIL by itself if it stops); one macOS notification when something turns FAIL. |
+| Scheduled jobs run from the clean release, refresh, settle, publish compatible snapshots, report failures | WORKS | 13 launchd jobs from `~/nhl_engine_release`; the **watchdog** (every 30 min) checks, as **operational health**: jobs loaded, release == origin/master, trader and publication recency, database path, **model/personal reconciliation** (the model book re-derived three ways; every personal log vs its rows; no bet in both books; migrated ticket == original), **settlement backlog** (open > 6 h after puck drop warns, > 12 h fails) and **source freshness**. **Product readiness** is a separate table on Diagnostics (working / limited / not verified / blocked / owner action) and says in words that an operational OK does not mean a blocked feature works. Re-aged on the page; FAIL by itself if the watchdog stops. |
 | Credential rotation | **BLOCKED** | The exposed Odds API key is not resolved until the owner rotates it (`docs/CREDENTIAL_ROTATION.md`, then `python3 deploy/verify_odds_key.py`). No credential is printed anywhere. |
 
 ## 9. Visual upgrade and Eggy
 
 | Item | Status | Evidence |
 |---|---|---|
+| Premium polish pass: Inter type scale with brighter secondary text, bet-slip cards (selection, price pill, model chance and edge vs price, stake, return, result), tighter spacing, two-up metrics on phones, consistent hover/focus/disabled states, Eggy as the title mark of every page, a larger brand block and larger empty-state mascot | WORKS | Hosted desktop screenshots of Today (populated settled slips), Best Options layout is verified on fixtures only until tonight's prices (PENDING), My Bets, Players, Diagnostics; phone layout checked at 390 px width (see delivery notes for how). |
 | Layered slate theme (not black), consistent cards/metrics/tables/buttons/badges, clear active navigation | WORKS | Hosted screenshots (desktop, 390 px mobile); no horizontal overflow on any of the 14 pages; metric values scale instead of truncating (defect found and fixed in QA). |
 | Eggy, the supplied artwork, unmodified | WORKS | `dashboard/assets/eggy/eggy_original.webp` is byte-identical to the supplied file; other files are plain resized copies (`README.md` there). Used as the sidebar logo, browser-tab icon, brand block and in empty states (Today empty slots, My Bets empty log). |
+
+## 1a. Navigation
+`/Today` and `/` both work (a hidden default page forwards the root to Today), verified on the hosted app. One platform quirk remains: if the very first request after a reboot is a deep link, Streamlit briefly shows its unthemed legacy page list; loading the root first (or any reload) shows the real navigation.
 
 ## 10. QA
 
