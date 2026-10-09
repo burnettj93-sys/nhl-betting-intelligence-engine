@@ -46,6 +46,7 @@ h2, h3 { font-weight: 650; margin-top: 1.4rem; }
 [data-testid="stMetric"] { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; }
 [data-testid="stMetricLabel"] p { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; }
 [data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; font-weight: 650; }
+[data-testid="stMetricValue"] > div { font-size: clamp(1.15rem, 1.65vw, 1.85rem); white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
 [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetric"] { background: transparent; border: 0; padding: 4px 2px; }
 
 /* tables */
