@@ -256,6 +256,14 @@ class TestMyBetsPage(unittest.TestCase):
         self.assertIn("not published yet", " ".join(w.value for w in at.warning) + text(at))
 
 
+    def test_goalie_page_has_the_best_option_section_and_says_why_when_there_is_none(self):
+        at = run_page("27_Goalies.py", snapshot(), setup=lambda a: a.query_params.__setitem__("goalie", "G1"))
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        t = text(at)
+        self.assertIn("Best qualifying +100 option", t)
+        self.assertIn("No qualifying option for this goalie right now", t)
+        self.assertIn("not a substitute for his own line", t)
+
     def test_model_health_states_validation_and_blocked_markets_without_relabelling(self):
         at = run_page("22_Model_Health.py", snapshot())
         t = text(at)
