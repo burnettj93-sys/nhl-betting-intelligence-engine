@@ -119,7 +119,7 @@ def early_moneyline_text(g: dict, now: dt.datetime | None = None) -> tuple[str, 
     stale = sa["stale"] or sh["stale"]
     ages = [x["age_min"] for x in (sa, sh) if x["age_min"] is not None]
     text = f"{american(a.get('american'))} / {american(h.get('american'))}"
-    text += (f"  ⚠ STALE — quoted {age_short(max(ages) if ages else None)} ago" + (f" ({(sa if sa['stale'] else sh)['reason']})" if (sa["reason"] or sh["reason"]) else "")) if stale \
+    text += (f"  ⚠ STALE — quoted {age_short(max(ages) if ages else None)} ago") if stale \
         else f"  · early price, quoted {age_short(max(ages) if ages else None)} ago"
     return text, stale
 
