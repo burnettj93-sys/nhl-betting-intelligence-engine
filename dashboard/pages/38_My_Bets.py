@@ -13,7 +13,7 @@ import streamlit as st
 
 from dashboard import order_client
 from dashboard import product_source as ps
-from dashboard import ui
+from dashboard import theme, ui
 from operational import personal_logs as pl
 
 ui.header("My Bets", "Your own paper-bet log — kept apart from the model's \\$500 book. Nothing you add here can change the model's cash, tickets or results.")
@@ -60,7 +60,7 @@ def my_log_section(log: dict) -> None:
         for b in open_bets:
             ui.ticket_card(b)
     else:
-        st.caption("No open bets. Add one from Best Options, Players or Goalies.")
+        theme.empty_state("No open bets in this log yet.", "Add one from Best Options or a player's page — pick the option, press the add button, and it shows up here after the engine rechecks the price.")
     st.subheader("Settled bets")
     if settled:
         for b in settled:

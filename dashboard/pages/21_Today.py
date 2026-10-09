@@ -12,7 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 import streamlit as st
 
 from dashboard import product_source as ps
-from dashboard import ui
+from dashboard import theme, ui
 
 ui.header("Today", "Games, the automatic tickets, and the model's paper book — all from observed data and DraftKings quotes.")
 tk = ui.load(ps.tickets, "The ticket board")
@@ -72,7 +72,8 @@ st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket i
 for t in tk["tickets"]:
     ui.ticket_card(t)
 if slots["empty"]:
-    ui.banner("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")), "muted")
+    theme.empty_state("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")),
+                      "The engine leaves a slot empty rather than fill it with a ticket that fails the rules.")
     pol = tk.get("policy") or {}
     st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
                f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "

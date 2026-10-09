@@ -23,9 +23,13 @@ import streamlit as st
 
 from dashboard import auth
 
+from PIL import Image
+
+from dashboard import theme
+
 st.set_page_config(
     page_title="NHL Betting Intelligence",
-    page_icon="🏒",
+    page_icon=Image.open(theme.EGGY_ICON),
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -35,6 +39,7 @@ st.set_page_config(
 # fresh install with zero accounts yet) only ever sees a login/
 # bootstrap form -- st.stop() below means none of the real navigation,
 # page registration, or per-page content below this point executes.
+theme.inject()
 _user = auth.render_auth_gate()
 if _user is None:
     st.stop()
@@ -67,8 +72,7 @@ _nav_sections = {
 pg = st.navigation(_nav_sections)
 
 with st.sidebar:
-    st.markdown("### 🏒 NHL Intelligence Engine")
-    st.caption("Games, players, goalies and paper tickets")
+    theme.brand("NHL Intelligence", "Games, players, goalies and paper tickets")
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
         st.caption("☁️ Hosted view — data is published by the engine every ~15 minutes")
     st.divider()

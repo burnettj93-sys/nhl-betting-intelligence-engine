@@ -16,9 +16,9 @@ from dashboard import order_client, product_source
 from operational import eastern_time as et
 from operational import runtime_mode
 
-TONES = {"good": ("#12301e", "#2f6a48", "#8fe0b0"), "warn": ("#3a2f12", "#6b5417", "#f0cf6a"),
-         "bad": ("#3d1d1d", "#7a2f2f", "#f0a0a0"), "info": ("#14243d", "#2f4f80", "#9cc2f5"),
-         "muted": ("#1c212b", "#3a3f4b", "#aab2c5")}
+TONES = {"good": ("#16352a", "#2f7a57", "#9be8bf"), "warn": ("#3a3115", "#8a6d1f", "#f3d479"),
+         "bad": ("#3f2226", "#92404a", "#f5a9b0"), "info": ("#1b2d4d", "#3a64a8", "#a9c9ff"),
+         "muted": ("#252d3b", "#3b465a", "#b5bfd1")}
 STATUS_TONE = {"RECORDED": "info", "PENDING": "info", "WON": "good", "LOST": "bad", "VOID": "muted", "UNRESOLVED": "warn",
                "RECOMMENDED": "warn", "FINAL": "muted", "SCHEDULED": "info", "STARTED": "warn", "UNCONFIRMED": "warn",
                "CONFIRMED": "good", "AUTOMATIC": "muted", "MANUALLY_ADDED": "info"}
@@ -85,8 +85,8 @@ def esc(text) -> str:
 
 def chip(text: str, tone: str = "muted") -> str:
     bg, border, fg = TONES.get(tone, TONES["muted"])
-    return (f"<span style='display:inline-block;background:{bg};border:1px solid {border};color:{fg};border-radius:10px;"
-            f"padding:1px 9px;font-size:0.78rem;font-weight:600;margin-right:4px'>{text}</span>")
+    return (f"<span style='display:inline-block;background:{bg};border:1px solid {border};color:{fg};border-radius:999px;"
+            f"padding:2px 10px;font-size:0.76rem;font-weight:650;letter-spacing:.01em;margin-right:4px'>{text}</span>")
 
 
 def status_chip(status: str) -> str:
@@ -95,8 +95,8 @@ def status_chip(status: str) -> str:
 
 def banner(text: str, tone: str = "info") -> None:
     bg, border, fg = TONES[tone]
-    st.markdown(f"<div style='border:1px solid {border};border-radius:8px;padding:8px 14px;background:{bg};color:{fg};"
-                f"font-size:0.86rem;margin:4px 0 10px 0'>{text}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='border:1px solid {border};border-radius:12px;padding:10px 16px;background:{bg};color:{fg};"
+                f"font-size:0.88rem;line-height:1.45;margin:4px 0 12px 0'>{text}</div>", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------ page chrome ----
