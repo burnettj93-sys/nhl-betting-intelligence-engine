@@ -1,0 +1,1157 @@
+{
+ "as_of_utc": "2026-10-09T14:10:14Z",
+ "product_generated_at_utc": "2026-10-09T14:07:17Z",
+ "seed": 20261009,
+ "pricing_floor_games": 40,
+ "players_in_product": 630,
+ "sampled": 23,
+ "passed": 23,
+ "published_option_players": 0,
+ "results": [
+  {
+   "player_id": "8484938",
+   "name": "Arttu Hyry",
+   "stratum": "named audit",
+   "team": "DAL",
+   "position": "R",
+   "games": 28,
+   "usage_tier": 3,
+   "next_game": "PIT 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "DAL",
+     "roster_team": "DAL",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 28,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.3649,
+       "own_rate_last_60": 0.286,
+       "games": 28,
+       "gap": 0.079,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2874,
+       "own_rate_last_60": 0.179,
+       "games": 28,
+       "gap": 0.109,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8482145",
+   "name": "Mavrik Bourque",
+   "stratum": "named audit",
+   "team": "NSH",
+   "position": "C",
+   "games": 159,
+   "usage_tier": 2,
+   "next_game": "OTT 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "NSH",
+     "roster_team": "NSH",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 159,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.5225,
+       "own_rate_last_60": 0.517,
+       "games": 60,
+       "gap": 0.006,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.424,
+       "own_rate_last_60": 0.417,
+       "games": 60,
+       "gap": 0.007,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8476399",
+   "name": "Blake Coleman",
+   "stratum": "named audit",
+   "team": "MIN",
+   "position": "L",
+   "games": 314,
+   "usage_tier": 2,
+   "next_game": "FLA 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "MIN",
+     "roster_team": "MIN",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 314,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.6409,
+       "own_rate_last_60": 0.717,
+       "games": 60,
+       "gap": -0.076,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.4081,
+       "own_rate_last_60": 0.433,
+       "games": 60,
+       "gap": -0.025,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8484794",
+   "name": "Michael Brandsegg-Nygrd",
+   "stratum": "low sample (< pricing floor)",
+   "team": "DET",
+   "position": "R",
+   "games": 17,
+   "usage_tier": 3,
+   "next_game": "SEA 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "DET",
+     "roster_team": "DET",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 17,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {}
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8486171",
+   "name": "T.J. Hughes",
+   "stratum": "low sample (< pricing floor)",
+   "team": "COL",
+   "position": "R",
+   "games": 3,
+   "usage_tier": 3,
+   "next_game": "TOR 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "COL",
+     "roster_team": "COL",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 3,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {}
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8485391",
+   "name": "Anton Frondell",
+   "stratum": "low sample (< pricing floor)",
+   "team": "CHI",
+   "position": "C",
+   "games": 16,
+   "usage_tier": 2,
+   "next_game": "CAR 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "CHI",
+     "roster_team": "CHI",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 16,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {}
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8482784",
+   "name": "Zach Dean",
+   "stratum": "low sample (< pricing floor)",
+   "team": "STL",
+   "position": "C",
+   "games": 10,
+   "usage_tier": null,
+   "next_game": "CBJ 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "STL",
+     "roster_team": "STL",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 10,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": false
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {}
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8485957",
+   "name": "Alberts Smits",
+   "stratum": "low sample (< pricing floor)",
+   "team": "NYR",
+   "position": "D",
+   "games": 5,
+   "usage_tier": 3,
+   "next_game": "WSH 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "NYR",
+     "roster_team": "NYR",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 5,
+     "limited": true,
+     "pricing_eligible": false,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {}
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8481557",
+   "name": "Matt Boldy",
+   "stratum": "established forward, tier 1-2",
+   "team": "MIN",
+   "position": "L",
+   "games": 317,
+   "usage_tier": 1,
+   "next_game": "FLA 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "MIN",
+     "roster_team": "MIN",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 317,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.7716,
+       "own_rate_last_60": 0.85,
+       "games": 60,
+       "gap": -0.078,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.586,
+       "own_rate_last_60": 0.6,
+       "games": 60,
+       "gap": -0.014,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8477404",
+   "name": "Jake Guentzel",
+   "stratum": "established forward, tier 1-2",
+   "team": "TBL",
+   "position": "C",
+   "games": 309,
+   "usage_tier": 1,
+   "next_game": "NYI 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "TBL",
+     "roster_team": "TBL",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 309,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.7084,
+       "own_rate_last_60": 0.683,
+       "games": 60,
+       "gap": 0.025,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.6238,
+       "own_rate_last_60": 0.667,
+       "games": 60,
+       "gap": -0.043,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8478975",
+   "name": "Mason Marchment",
+   "stratum": "established forward, tier 1-2",
+   "team": "SJS",
+   "position": "L",
+   "games": 282,
+   "usage_tier": 2,
+   "next_game": "EDM 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "SJS",
+     "roster_team": "SJS",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 282,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.5044,
+       "own_rate_last_60": 0.55,
+       "games": 60,
+       "gap": -0.046,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.4731,
+       "own_rate_last_60": 0.483,
+       "games": 60,
+       "gap": -0.01,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8476432",
+   "name": "Boone Jenner",
+   "stratum": "established forward, tier 1-2",
+   "team": "WSH",
+   "position": "C",
+   "games": 222,
+   "usage_tier": 1,
+   "next_game": "NYR 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "WSH",
+     "roster_team": "WSH",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 222,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.5478,
+       "own_rate_last_60": 0.633,
+       "games": 60,
+       "gap": -0.086,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.3775,
+       "own_rate_last_60": 0.45,
+       "games": 60,
+       "gap": -0.073,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8477934",
+   "name": "Leon Draisaitl",
+   "stratum": "established forward, tier 1-2",
+   "team": "EDM",
+   "position": "C",
+   "games": 301,
+   "usage_tier": 1,
+   "next_game": "SJS 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "EDM",
+     "roster_team": "EDM",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 301,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.739,
+       "own_rate_last_60": 0.767,
+       "games": 60,
+       "gap": -0.028,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.7629,
+       "own_rate_last_60": 0.817,
+       "games": 60,
+       "gap": -0.054,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8481789",
+   "name": "Tye Kartye",
+   "stratum": "established forward, tier 3-4",
+   "team": "NYR",
+   "position": "L",
+   "games": 209,
+   "usage_tier": 3,
+   "next_game": "WSH 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "NYR",
+     "roster_team": "NYR",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 209,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.3267,
+       "own_rate_last_60": 0.283,
+       "games": 60,
+       "gap": 0.043,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.3443,
+       "own_rate_last_60": 0.3,
+       "games": 60,
+       "gap": 0.044,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8478462",
+   "name": "Nicolas Roy",
+   "stratum": "established forward, tier 3-4",
+   "team": "COL",
+   "position": "C",
+   "games": 283,
+   "usage_tier": 4,
+   "next_game": "TOR 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "COL",
+     "roster_team": "COL",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 283,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.3663,
+       "own_rate_last_60": 0.283,
+       "games": 60,
+       "gap": 0.083,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.341,
+       "own_rate_last_60": 0.317,
+       "games": 60,
+       "gap": 0.024,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8476458",
+   "name": "Ryan Strome",
+   "stratum": "established forward, tier 3-4",
+   "team": "CGY",
+   "position": "C",
+   "games": 298,
+   "usage_tier": 3,
+   "next_game": "ANA 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "CGY",
+     "roster_team": "CGY",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 298,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.3566,
+       "own_rate_last_60": 0.333,
+       "games": 60,
+       "gap": 0.023,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.369,
+       "own_rate_last_60": 0.333,
+       "games": 60,
+       "gap": 0.036,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8479066",
+   "name": "Ryan Lomberg",
+   "stratum": "established forward, tier 3-4",
+   "team": "CBJ",
+   "position": "L",
+   "games": 296,
+   "usage_tier": 4,
+   "next_game": "PIT 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "CBJ",
+     "roster_team": "CBJ",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 296,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.2613,
+       "own_rate_last_60": 0.233,
+       "games": 60,
+       "gap": 0.028,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2197,
+       "own_rate_last_60": 0.167,
+       "games": 60,
+       "gap": 0.053,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8480355",
+   "name": "Mark Kastelic",
+   "stratum": "established forward, tier 3-4",
+   "team": "BOS",
+   "position": "C",
+   "games": 275,
+   "usage_tier": 4,
+   "next_game": "PHI 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "BOS",
+     "roster_team": "BOS",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 275,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.3037,
+       "own_rate_last_60": 0.317,
+       "games": 60,
+       "gap": -0.013,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2679,
+       "own_rate_last_60": 0.233,
+       "games": 60,
+       "gap": 0.035,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8478396",
+   "name": "Noah Hanifin",
+   "stratum": "defenseman",
+   "team": "VGK",
+   "position": "D",
+   "games": 316,
+   "usage_tier": 1,
+   "next_game": "LAK 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "VGK",
+     "roster_team": "VGK",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 316,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.4212,
+       "own_rate_last_60": 0.533,
+       "games": 60,
+       "gap": -0.112,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2911,
+       "own_rate_last_60": 0.333,
+       "games": 60,
+       "gap": -0.042,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8481546",
+   "name": "Cam York",
+   "stratum": "defenseman",
+   "team": "PHI",
+   "position": "D",
+   "games": 280,
+   "usage_tier": 1,
+   "next_game": "BOS 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "PHI",
+     "roster_team": "PHI",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 280,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.2889,
+       "own_rate_last_60": 0.383,
+       "games": 60,
+       "gap": -0.094,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2062,
+       "own_rate_last_60": 0.25,
+       "games": 60,
+       "gap": -0.044,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8479369",
+   "name": "Andrew Peeke",
+   "stratum": "defenseman",
+   "team": "UTA",
+   "position": "D",
+   "games": 275,
+   "usage_tier": 3,
+   "next_game": "BUF 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "UTA",
+     "roster_team": "UTA",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 275,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.2487,
+       "own_rate_last_60": 0.3,
+       "games": 60,
+       "gap": -0.051,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.1749,
+       "own_rate_last_60": 0.183,
+       "games": 60,
+       "gap": -0.008,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8480800",
+   "name": "Quinn Hughes",
+   "stratum": "defenseman",
+   "team": "MIN",
+   "position": "D",
+   "games": 305,
+   "usage_tier": 1,
+   "next_game": "FLA 2026-10-10",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "MIN",
+     "roster_team": "MIN",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 305,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.6158,
+       "own_rate_last_60": 0.667,
+       "games": 60,
+       "gap": -0.051,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.5981,
+       "own_rate_last_60": 0.65,
+       "games": 60,
+       "gap": -0.052,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  },
+  {
+   "player_id": "8483490",
+   "name": "Pavel Mintyukov",
+   "stratum": "defenseman",
+   "team": "ANA",
+   "position": "D",
+   "games": 207,
+   "usage_tier": 2,
+   "next_game": "WPG 2026-10-09",
+   "checks": {
+    "identity_team": {
+     "ok": true,
+     "product_team": "ANA",
+     "roster_team": "ANA",
+     "team_changed_alerts": []
+    },
+    "sample_gate": {
+     "ok": true,
+     "games": 207,
+     "limited": false,
+     "pricing_eligible": true,
+     "in_published_options": false
+    },
+    "explanation": {
+     "ok": true,
+     "lines": 6,
+     "reported_shown": false,
+     "reported_exists": false,
+     "usage_labelled_inferred": true
+    },
+    "model_sanity": {
+     "ok": true,
+     "detail": {
+      "shots>=2": {
+       "model": 0.286,
+       "own_rate_last_60": 0.35,
+       "games": 60,
+       "gap": -0.064,
+       "flag": false
+      },
+      "points>=1": {
+       "model": 0.2441,
+       "own_rate_last_60": 0.25,
+       "games": 60,
+       "gap": -0.006,
+       "flag": false
+      }
+     }
+    }
+   },
+   "findings": [],
+   "pass": true
+  }
+ ],
+ "note": "Model-sanity flags are prompts to look, not failures: the model includes the opponent, ice time and calibration, which a 60-game rate does not."
+}

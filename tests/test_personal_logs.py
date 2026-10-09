@@ -452,5 +452,64 @@ class TestWriteProtection(Base):
         self.assertEqual(log_signing.normalize_key("abcd-efgh"), "ABCDEFGH")
 
 
+
+class TestClaimingTheEarlierTicket(Base):
+    def setUp(self):
+        super().setUp()
+        from operational import paper_bankroll as pb
+        path, ledger = fresh_ledger()
+        combo = __import__("research.real_market_parlay.engine", fromlist=["x"])._evaluate_combo(self.legs[:2])
+        res = pb.create_manual_paper_bet(ledger, combo, provenance={"order_id": "ord_legacy0002"}, event_start_utc="2026-10-15T23:30:00Z", created_at_utc=NOW.isoformat())
+        pb.settle_paper_bet(ledger, res["paper_bet_id"], "LOSS")
+        pl.migrate_legacy_manual(self.logs, ledger, NOW)
+        self.create()
+        self.phrase = pl.issue_claim_phrase(self.logs, NOW)
+
+    def claim(self, phrase, code=CODE_A, key=KEY_A, oid="ord_" + "k" * 12, log_code=None):
+        h = pl.code_hash(log_code or code)
+        doc = order_client.build_claim_order(order_id=oid, log_hash=h, claim_proof=pl.claim_proof(phrase, h), page_generated_at=None)
+        return self.go(log_signing.sign(doc, key, h))
+
+    def count(self, h):
+        return self.logs.execute("SELECT COUNT(*) FROM bets WHERE log_hash = ?", (h,)).fetchone()[0]
+
+    def test_the_phrase_is_stored_only_as_a_hash_and_the_order_never_carries_it(self):
+        self.assertNotIn(self.phrase, json.dumps([dict(r) for r in self.logs.execute("SELECT * FROM claim_phrases")]))
+        self.assertTrue(log_signing.valid_key_shape(self.phrase))
+        res = self.claim(self.phrase)
+        self.assertEqual(res["status"], pl.RECORDED)
+        self.assertNotIn(self.phrase, json.dumps(dict(res)))
+        self.assertNotIn(self.phrase, self.logs.execute("SELECT request_json FROM orders WHERE order_id = ?", ("ord_" + "k" * 12,)).fetchone()[0])
+
+    def test_the_right_phrase_signed_with_the_logs_key_moves_the_ticket_once_and_audits_it(self):
+        h = pl.code_hash(CODE_A)
+        self.assertEqual(self.count(pl.UNCLAIMED_LEGACY), 1)
+        self.assertEqual(self.claim(self.phrase)["status"], pl.RECORDED)
+        self.assertEqual((self.count(pl.UNCLAIMED_LEGACY), self.count(h)), (0, 1))
+        self.assertEqual(pl.section(self.logs, NOW)["logs"][h]["summary"]["settled_pnl"], -10.0)
+        self.assertIn("LEGACY_CLAIMED", [r["kind"] for r in self.logs.execute("SELECT kind FROM audit")])
+        again = self.claim(self.phrase, oid="ord_" + "m" * 12)                      # a second claim with the same phrase
+        self.assertIn("BAD_CLAIM", again["reason"])
+
+    def test_a_wrong_phrase_or_someone_elses_signature_moves_nothing(self):
+        self.assertIn("BAD_CLAIM", self.claim(pl.issue_claim_phrase(self.logs, NOW)[::-1])["reason"])
+        self.assertIn("BAD_SIGNATURE", self.claim(self.phrase, key=OTHER_KEY, oid="ord_" + "n" * 12)["reason"])
+        self.assertEqual(self.count(pl.UNCLAIMED_LEGACY), 1)
+
+    def test_a_proof_made_for_one_log_cannot_claim_into_another(self):
+        self.go(order(self.opt, "ord_" + "p" * 12, CODE_B, create="crt_" + "b" * 10))        # a second person's log
+        hb = pl.code_hash(CODE_B)
+        doc = order_client.build_claim_order(order_id="ord_" + "q" * 12, log_hash=hb, claim_proof=pl.claim_proof(self.phrase, pl.code_hash(CODE_A)), page_generated_at=None)
+        res = self.go(log_signing.sign(doc, KEY_B, hb))
+        self.assertIn("BAD_CLAIM", res["reason"])
+        self.assertEqual(self.count(pl.UNCLAIMED_LEGACY), 1)
+
+    def test_the_published_view_summarises_the_unclaimed_ticket_without_ids(self):
+        sec = pl.section(self.logs, NOW)
+        self.assertEqual(sec["unclaimed_legacy"]["tickets"], 1)
+        self.assertEqual(sec["unclaimed_legacy"]["settled_pnl"], -10.0)
+        self.assertNotIn("LME3", json.dumps(sec["unclaimed_legacy"]))
+
+
 if __name__ == "__main__":
     unittest.main()

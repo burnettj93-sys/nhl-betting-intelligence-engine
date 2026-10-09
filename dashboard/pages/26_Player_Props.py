@@ -21,6 +21,8 @@ opts_doc = tk.get("options")
 if not opts_doc:
     ui.unavailable("No best-option document has been built for today yet; it is written with the ticket board by the paper-trader job.", "Best options")
     st.stop()
+ui.banner("<b>Options, not endorsements.</b> This page lists bets you can browse and add to your own personal log. The model's endorsed selections are only its automatic tickets on <b>Today</b>, "
+          "chosen by estimated hit chance under exposure limits; an option here may be one the model would not take.", "info")
 options = opts_doc["options"]
 cash = tk["account"]["available_cash"]
 pol = opts_doc.get("policy") or {}
@@ -36,7 +38,7 @@ if not options:
 f = st.columns([3, 2, 2])
 q = f[0].text_input("Find a player", key="bo_q")
 kind = f[1].selectbox("Type", ["All", "Singles", "Parlays"], key="bo_kind")
-order = f[2].selectbox("Sort by", ["Best value", "Highest chance", "Biggest return"], key="bo_sort")
+order = f[2].selectbox("Sort by", ["Highest chance", "Best value", "Biggest return"], key="bo_sort")
 show = [o for o in options if (not q or any(q.lower() in p["name"].lower() for p in o["best_for"]) or any(q.lower() in l["label"].lower() for l in o["legs"]))
         and (kind == "All" or (kind == "Singles") == (o["kind"] == "SINGLE"))]
 show.sort(key={"Best value": lambda o: -o["ev_after_haircut"], "Highest chance": lambda o: -o["hit_probability"], "Biggest return": lambda o: -o["potential_return"]}[order])

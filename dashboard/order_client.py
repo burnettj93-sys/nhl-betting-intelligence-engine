@@ -22,7 +22,7 @@ import urllib.request
 REPO = "burnettj93-sys/nhl-betting-intelligence-engine"
 LABEL = "paper-order"
 PERSONAL_LABEL = "personal-bet"
-PERSONAL_TYPES = ("PERSONAL_BET", "PERSONAL_LOG_CREATE")
+PERSONAL_TYPES = ("PERSONAL_BET", "PERSONAL_LOG_CREATE", "PERSONAL_CLAIM_LEGACY")
 SCHEMA = 1
 
 
@@ -58,6 +58,11 @@ def build_personal_order(option: dict | None, *, order_id: str, log_hash: str, p
             "combined_american": option["combined_american"], "hit_probability": option["hit_probability"], "stake": float(stake),
             "price_basis": option.get("price_basis")}
     return doc
+
+
+def build_claim_order(*, order_id: str, log_hash: str, claim_proof: str, page_generated_at: str | None) -> dict:
+    """An order to move the unclaimed earlier manual ticket(s) into the log `log_hash`. It carries a proof bound to that log, never the claim phrase itself."""
+    return {"schema": SCHEMA, "type": "PERSONAL_CLAIM_LEGACY", "order_id": order_id, "log": {"hash": log_hash}, "claim_proof": claim_proof, "page_generated_at_utc": page_generated_at}
 
 
 def personal_write_token(secrets_obj) -> str | None:

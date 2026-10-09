@@ -47,6 +47,25 @@ now says, for every cycle, which tickets were taken, which higher-hit ones were 
   (2) each leg on a card now says how far the model's chance is from its price, and shows **"no edge of its own"** when it is under one point, so a ticket carried by its other leg is visible; (3) the
   selection report; (4) the card and Model Health state the ~8-point player-level model error, so small differences in value are not mistaken for findings.
 
-## 4. What is not established
+## 4. Are the weaker tickets worthwhile, or only allowed by the rules?
+
+Plainly: the tail tickets (≈20% hit chance at +458…+483) are **permitted by the rules, not endorsed by the evidence**. They clear the gates (≥ +100, EV ≥ 5%, EV ≥ 0 with every leg lowered 3 points), but a ~20% ticket
+loses four times in five and its estimated edge is smaller than the model's own player-level error (about 8 points per leg). They are on the book because the day had only two strong legs and the exposure limits stop a third
+ticket on either; leaving the slot empty is the other honest outcome. I did **not** add a hit-chance floor: any number I picked would be arbitrary, and the one rule I tested (every leg must survive the haircut) moved the book to
+*longer* odds. What the product now does instead of hiding the question:
+
+* **Every card shows a plausible range** next to "Model chance" (each leg's chance moved ±8 points, the measured 2025-26 player-level error): the 38.7% ticket (legs 63.5% and 61.0%) reads 29–49%, so even the best ticket's range is wide. That is a range of the
+  estimate (`dashboard/ui.py::chance_range`), not a confidence interval, and it is not shown for moneyline legs, where the 8-point figure was not measured.
+* The selection report lists every qualifying ticket, in hit-chance order, with why each was taken or skipped. A tail ticket is therefore visible as "taken because nothing stronger was free".
+* **The 3-point haircut is a fixed policy margin.** It is not calibrated uncertainty and not evidence of an edge; Today, the option card and Model Health now say so.
+
+## 5. Does recording early exclude better tickets that arrive later?
+
+Partly, and it is mitigated, not eliminated. Tickets are recorded in a 15-minute cycle once their legs are priced, and a recorded ticket is frozen. Two protections exist (`operational/daily_tickets.py`): (1) **waves** — while a later puck-drop wave
+has yet to start, an earlier wave may hold at most 3 of the 5 slots (`RESERVED_FOR_LATER = 2`), so early prices cannot use up the day; (2) each recording cycle is stored in the selection audit, so a day's decisions can be replayed.
+What is **not** protected: within one wave, an earlier-priced game can still take a slot that a better ticket priced ten minutes later would have won, because a recorded ticket is never swapped out (that would rewrite a frozen entry).
+The exposure limits (leg, player, game) are kept. I did not reorder or defer recording further because the evidence available (one day) cannot show what it would gain; the per-cycle report is what will.
+
+## 6. What is not established
 Hit chances are model estimates (35% does not mean 35%); the five tickets of 2026-10-08 all lost (probability of that under the stated chances: about 18%), which proves nothing either way. There are no historical
 DraftKings prices to test realised profit against. Moneyline legs were not reconstructed (their prices are not archived by capture time).

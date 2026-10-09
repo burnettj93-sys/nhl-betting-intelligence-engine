@@ -583,8 +583,8 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
                                   "2025-26 scored once; compared with the recent 30-game rate and the previous live formula; Brier, log loss, "
                                   "calibration tables, limited-history and changed-role slices."},
          "limits": ["Scores players conditional on dressing: injuries and scratches are not modelled. The 'dressed in the team's last game' "
-                    "proxy decides who is priced.", "Probabilities for players with fewer than 20 prior games over-predict in testing and are "
-                    "not used for pricing.", "Hits: calibrated probability does not clearly beat the simple baseline for 1+; display only.",
+                    "proxy decides who is priced.", "Probabilities for players with fewer than 40 prior NHL games over-predict in testing and are "
+                    "not used for pricing (docs/validation/low_sample_calibration.json).", "Hits: calibrated probability does not clearly beat the simple baseline for 1+; display only.",
                     "There are no historical sportsbook prices, so profitability is NOT claimed; evaluation is forward and frozen."],
          "markets": {"SHOTS (alternate ladder 1+..5+)": "PRICING_ACTIVE", "POINTS (1+, 2+)": "PRICING_ACTIVE",
                      "ANYTIME GOAL (1+)": "MODEL_READY_PRICES_GATED_BY_CREDIT_BUDGET", "HITS / BLOCKS": "DISPLAY_ONLY"}},
@@ -620,7 +620,19 @@ def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through,
     pipelines = [{"name": "NHL schedule and results", "through": data_through["schedule_results"], "source": "NHL API → nhl.db"},
                  {"name": "Skater logs", "through": data_through["skaters"], "source": "MoneyPuck daily download"},
                  {"name": "Goalie logs", "through": data_through["goalies"], "source": "MoneyPuck daily download"}]
-    return {"generated_at_utc": _iso(now), "models": models, "pipelines": pipelines, "market_coverage": coverage,
+    matrix = []
+    try:
+        import sqlite3 as _sq
+        from operational import market_matrix, paper_bankroll as _pb
+        _led = _sq.connect(f"file:{_pb.DB_PATH}?mode=ro", uri=True)
+        _led.row_factory = _sq.Row
+        try:
+            matrix = market_matrix.build(sk_verdicts, saves_verdicts, _led, data_through=data_through)
+        finally:
+            _led.close()
+    except Exception as exc:  # noqa: BLE001 - the matrix is informational
+        matrix = [{"market": "(matrix unavailable)", "status": f"{type(exc).__name__}", "data": "", "contract": "", "validation": "", "calibration": "", "betting_value": "", "live": ""}]
+    return {"generated_at_utc": _iso(now), "models": models, "pipelines": pipelines, "market_coverage": coverage, "market_matrix": matrix,
             "ticket_sources": ticket_sources, "skater_verdicts": sk_verdicts, "saves_verdicts": saves_verdicts,
             "guarantees": ["No simulated data is shown anywhere in the product.", "Partial or unvalidated status is stated, not relabelled."]}
 

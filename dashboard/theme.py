@@ -61,6 +61,7 @@ a { color: #8db4ff; }
 [data-testid="stMetricLabel"] p { color: var(--muted) !important; font-size: .7rem !important; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
 [data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; font-weight: 700; }
 [data-testid="stMetricValue"] > div { font-size: clamp(1.15rem, 1.6vw, 1.7rem); white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.2; }
+[data-testid="stMetricDelta"], [data-testid="stMetricDelta"] > div { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; font-size: .78rem; }
 [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetric"] { background: transparent; border: 0; padding: 4px 2px; }
 [data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-variant-numeric: tabular-nums; }
 [data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }

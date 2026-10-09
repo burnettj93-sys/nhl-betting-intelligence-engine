@@ -37,7 +37,7 @@ from operational import state_paths
 DB_NAME = "personal_logs.db"
 SCHEMA = 1
 LABEL = "personal-bet"
-TYPE_BET, TYPE_CREATE = "PERSONAL_BET", "PERSONAL_LOG_CREATE"
+TYPE_BET, TYPE_CREATE, TYPE_CLAIM = "PERSONAL_BET", "PERSONAL_LOG_CREATE", "PERSONAL_CLAIM_LEGACY"
 HASH_SALT = b"nhl-engine/personal-log/v1"
 MIN_CODE_LEN, MAX_CODE_LEN = 8, 64
 MAX_NAME_LEN = 30
@@ -96,6 +96,12 @@ CREATE TABLE IF NOT EXISTS bets (
     settlement_json TEXT,
     notes TEXT,
     UNIQUE (log_hash, fingerprint)
+);
+CREATE TABLE IF NOT EXISTS claim_phrases (
+    phrase_hash TEXT PRIMARY KEY,
+    issued_at_utc TEXT NOT NULL,
+    used_at_utc TEXT,
+    used_by_log TEXT
 );
 CREATE TABLE IF NOT EXISTS audit (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -232,7 +238,7 @@ def _order_shape(raw) -> tuple[dict | None, str | None, str | None]:
         order = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
     except json.JSONDecodeError:
         return None, None, "The order is not valid JSON."
-    if not isinstance(order, dict) or order.get("schema") != SCHEMA or order.get("type") not in (TYPE_BET, TYPE_CREATE):
+    if not isinstance(order, dict) or order.get("schema") != SCHEMA or order.get("type") not in (TYPE_BET, TYPE_CREATE, TYPE_CLAIM):
         return None, None, "Not a personal-log order of the supported schema."
     oid = order.get("order_id")
     if not isinstance(oid, str) or not _ID_RE.fullmatch(oid):
@@ -299,6 +305,8 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
     # Who may write: the signature must verify against the log's stored public key (or, for the creating order, the public key it carries).
     existing = log_row(conn, log_hash)
     pub = existing["write_pub"] if existing else (creation or {}).get("write_pub")
+    if order["type"] == TYPE_CLAIM:
+        return _process_claim(conn, order, oid, log_hash, existing, source, received_at, done, now)
     if not existing and not creation:
         return _store(conn, oid, order["type"], log_hash, REJECTED, "LOG_NOT_FOUND: no log uses that code yet. Create it first.", None, source, order, None, received_at, done)
     if existing and not pub:
@@ -317,6 +325,52 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
                 res = _store(conn, oid, TYPE_CREATE, log_hash, REJECTED if state == REJECTED else CREATED, why, None, source, order, None, received_at, done)
         else:
             res = _process_bet(conn, order, oid, log_hash, creation, current_legs or [], now, source, received_at)
+        conn.execute("COMMIT")
+        return res
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+
+def phrase_hash(phrase) -> str:
+    return hashlib.sha256(re.sub(r"[^a-z0-9]", "", str(phrase or "").lower()).encode()).hexdigest()
+
+
+def claim_proof(phrase, log_hash: str) -> str:
+    """What the app puts in a claim order instead of the phrase: bound to ONE log, so it cannot be replayed to claim into another."""
+    return hashlib.sha256((phrase_hash(phrase) + log_hash).encode()).hexdigest()
+
+
+def issue_claim_phrase(conn, now: dt.datetime) -> str:
+    """Creates a single-use phrase that lets the owner claim the unclaimed earlier manual ticket(s) from the app. Only its hash is stored; the phrase is returned once."""
+    phrase = log_signing.new_write_key()           # 100 bits: the proof in a public order cannot be brute-forced while it is pending
+    conn.execute("INSERT INTO claim_phrases (phrase_hash, issued_at_utc) VALUES (?,?)", (phrase_hash(phrase), _stamp(now)))
+    _audit(conn, "CLAIM_PHRASE_ISSUED", None, None, _stamp(now))
+    return phrase
+
+
+def _process_claim(conn, order, oid, log_hash, existing, source, received_at, done, now) -> dict:
+    def out(status, reason, bet_id=None):
+        return _store(conn, oid, TYPE_CLAIM, log_hash, status, reason, bet_id, source, {k: v for k, v in order.items() if k != "claim_proof"}, None, received_at, done)
+    if not existing:
+        return out(REJECTED, "LOG_NOT_FOUND: claim into a log that exists.")
+    if not existing["write_pub"] or not log_signing.verify(order, existing["write_pub"]):
+        return out(REJECTED, "BAD_SIGNATURE: this claim was not signed with this log's write key.")
+    proof = order.get("claim_proof")
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        match = next((r for r in conn.execute("SELECT * FROM claim_phrases WHERE used_at_utc IS NULL").fetchall()
+                      if isinstance(proof, str) and hashlib.sha256((r["phrase_hash"] + log_hash).encode()).hexdigest() == proof), None)
+        if match is None:
+            conn.execute("COMMIT")
+            return out(REJECTED, "BAD_CLAIM: that claim phrase is wrong or was already used.")
+        moved = conn.execute("SELECT bet_id FROM bets WHERE log_hash = ?", (UNCLAIMED_LEGACY,)).fetchall()
+        for b in moved:
+            conn.execute("UPDATE bets SET log_hash = ? WHERE bet_id = ?", (log_hash, b["bet_id"]))
+            _audit(conn, "LEGACY_CLAIMED", b["bet_id"], {"log": log_hash, "via": "app claim order", "order": oid}, done)
+        conn.execute("UPDATE claim_phrases SET used_at_utc = ?, used_by_log = ? WHERE phrase_hash = ?", (done, log_hash, match["phrase_hash"]))
+        res = _store(conn, oid, TYPE_CLAIM, log_hash, RECORDED, f"{len(moved)} earlier manual ticket(s) moved into this log.", None, source,
+                     {k: v for k, v in order.items() if k != "claim_proof"}, None, received_at, done)
         conn.execute("COMMIT")
         return res
     except Exception:
@@ -456,7 +510,10 @@ def section(conn, now: dt.datetime) -> dict:
             (lg["log_hash"],)).fetchall()]
         logs[lg["log_hash"]] = {"display_name": lg["display_name"], "created_at_utc": lg["created_at_utc"], "write_pub": lg["write_pub"],
                                 "summary": summarize(bets), "bets": cards, "orders": orders}
+    legacy = [dict(b) for b in conn.execute("SELECT stake, result_status, profit_loss FROM bets WHERE log_hash = ?", (UNCLAIMED_LEGACY,))]
     return {"schema": SCHEMA, "generated_at_utc": _stamp(now), "logs": logs,
+            "unclaimed_legacy": {"tickets": len(legacy), "settled_pnl": round(sum(b["profit_loss"] or 0 for b in legacy if b["result_status"] in ("WIN", "LOSS", "VOID")), 2),
+                                 "results": [b["result_status"] for b in legacy]},
             "rules": {"stake_min": MIN_STAKE, "stake_max": MAX_STAKE, "stake_default": DEFAULT_STAKE, "code_min_length": MIN_CODE_LEN}}
 
 
@@ -537,6 +594,13 @@ if __name__ == "__main__":
         print(res)
         if generated and res.get("status") == "CLAIMED":
             print(f"Your write key (shown once; store it): {generated}")
+    elif cmd == "issue-claim-phrase":
+        c = connect()
+        phrase = issue_claim_phrase(c, dt.datetime.now(dt.timezone.utc))
+        out = Path.home() / "Downloads" / "NHL_CLAIM_PHRASE.txt"
+        out.write_text("Single-use phrase for claiming the earlier manual ticket(s) into your own log on My Bets (see docs/PERSONAL_LOGS.md):\n\n" + phrase + "\n")
+        out.chmod(0o600)
+        print(f"A single-use claim phrase was written to {out} (it is not printed here). Delete the file after you use it.")
     elif cmd == "migrate-legacy":
         from operational import paper_bankroll as pb
         bk = pb.init_db()
@@ -545,4 +609,4 @@ if __name__ == "__main__":
         finally:
             bk.close()
     else:
-        print("usage: python3 -m operational.personal_logs migrate-legacy | claim-legacy")
+        print("usage: python3 -m operational.personal_logs migrate-legacy | issue-claim-phrase | claim-legacy")

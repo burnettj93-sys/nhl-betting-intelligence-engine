@@ -177,6 +177,28 @@ if fresh and fresh.get("write_key"):
         fresh.pop("code", None)
         st.rerun()
 
+legacy = doc.get("unclaimed_legacy") or {}
+if legacy.get("tickets"):
+    with st.expander(f"Your earlier manual ticket ({legacy['tickets']}) — what it is and how to claim it"):
+        st.markdown(
+            f"Before personal logs existed, {legacy['tickets']} ticket(s) were added by hand and sat inside the model's book. They were **moved out of the model's accounting** "
+            f"(the original ledger row is untouched and still on file) and now wait here, owned by nobody: result(s) {', '.join(r.title() for r in legacy.get('results', []))}, "
+            f"settled P&L {ui.signed_money(legacy.get('settled_pnl'))}. To put them in your own log: open your log with its write key, then enter the single-use claim phrase below. "
+            "The owner gets the phrase once by running `python3 -m operational.personal_logs issue-claim-phrase` on the engine Mac (it is saved to a file, never shown).".replace("$", "\\$"))
+        if log and log["can_write"]:
+            phrase = st.text_input("Claim phrase", key="mb_claim_phrase", type="password")
+            if st.button("Claim into this log", key="mb_claim", disabled=not phrase.strip()):
+                from operational import personal_logs as _pl
+                order = order_client.build_claim_order(order_id=order_client.new_order_id(), log_hash=log["hash"], claim_proof=_pl.claim_proof(phrase, log["hash"]),
+                                                       page_generated_at=doc.get("generated_at_utc"))
+                order["via"] = "direct" if order_client.personal_write_token(getattr(st, "secrets", {})) else "link"
+                res = ui.file_order(log_signing.sign(order, log["write_key"], log["hash"]))
+                (st.success("Claim sent — it is applied on the engine's next pass (a few minutes).") if res["ok"] else st.error(res["error"]))
+                if res.get("url"):
+                    st.link_button("Open GitHub to finish filing this claim", res["url"])
+        else:
+            st.caption("Open or create a log with its write key first (above), then this box appears.")
+
 if log is None:
     st.subheader("Model book at a glance")
     model_section()

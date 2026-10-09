@@ -22,9 +22,9 @@ _ROWS = [
         "identity_mapping": ("OK", "Name + team matched to the MoneyPuck/NHL player id."),
         "projection": ("OK", "player-rate-toi-v2 with a calibration fitted on a separate season: the calibrated probability beat both "
                              "baselines for shots 1+ to 5+ on the held-out 2025-26 season (docs/validation/skater_projection_validation.json). "
-                             "Players with fewer than 20 prior games are not priced."),
+                             "Players with fewer than 40 prior games are not priced (pricing_policy.MIN_GAMES_FOR_PRICING)."),
         "context_confirmation": ("MISSING", "No lineup/injury feed. Proxy only: the player dressed in his team's last real "
-                                            "game with 20+ games of history and 12+ expected minutes."),
+                                            "game with 40+ games of history and 12+ expected minutes."),
         "eligibility": ("OK", "Contract verified; thresholds 2-5 validated."),
         "settlement": ("OK", "PLAYER_SOG_<k>PLUS via the outcome resolver; did-not-dress legs void under the documented rules."),
     },

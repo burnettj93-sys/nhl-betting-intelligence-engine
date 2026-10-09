@@ -59,7 +59,7 @@ def personal_logs_doc() -> dict:
     from operational import log_signing, personal_logs as pl
     h = pl.code_hash(LOG_CODE)
     empty = pl.summarize([])
-    return {"schema": 1, "generated_at_utc": GEN, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
+    return {"schema": 1, "generated_at_utc": GEN, "unclaimed_legacy": {"tickets": 1, "settled_pnl": -10.0, "results": ["LOSS"]}, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
             "logs": {h: {"display_name": "Casey", "created_at_utc": GEN, "write_pub": log_signing.public_key_hex(LOG_KEY, h), "summary": empty, "bets": [], "orders": []}}}
 
 
@@ -100,7 +100,11 @@ def snapshot(with_options=True) -> dict:
         doc["generated_at_utc"] = GEN
         tickets["options"] = doc
         p["P1"]["option_id"] = doc["options"][0]["option_id"]
-    mh = {"generated_at_utc": GEN, "models": [{"id": "skater-projection", "name": "Skater matchup projection", "version": "player-rate-toi-v2", "role": "LIVE", "purpose": "x",
+    mh = {"generated_at_utc": GEN, "market_matrix": [
+        {"market": "Shots on goal (alternate ladder)", "status": "WORKS (priced, limited coverage)", "data": "d", "contract": "VERIFIED", "validation": "beats baselines on 5 of 5", "calibration": "c",
+         "betting_value": "None. There are no historical sportsbook prices to test against.", "live": "14 leg(s)"},
+        {"market": "Puck line / spread", "status": "BLOCKED (never selected)", "data": "d", "contract": "NOT VERIFIED", "validation": "v", "calibration": "None.", "betting_value": "None.", "live": "Never used on a ticket."}],
+          "models": [{"id": "skater-projection", "name": "Skater matchup projection", "version": "player-rate-toi-v2", "role": "LIVE", "purpose": "x",
                                                "data": {"source": "MoneyPuck", "through": "2026-10-06", "age_days": 2, "players_projected": 2},
                                                "validation": {"split": {"train": [2022, 2023]}, "rows": {"final": 10}, "summary": {"markets_scored": 14, "beating_baselines": 13, "not_beating": ["hits>=1"]},
                                                               "report": "docs/validation/skater_projection_validation.json", "method": "m"},

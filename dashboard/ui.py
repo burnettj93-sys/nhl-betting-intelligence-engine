@@ -232,6 +232,29 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
     return any_stale
 
 
+PLAYER_MODEL_ERROR = 0.08   # 1 SD of between-player error for veteran shots/points legs in the 2025-26 walk-forward (docs/SELECTOR_AUDIT.md)
+
+
+def chance_range(legs: list[dict], error: float = PLAYER_MODEL_ERROR) -> tuple[float, float] | None:
+    """Plausible range for the ticket's hit chance if every leg's probability is one measured player-level error (default 8 points) lower or
+    higher. Legs on the same game are treated as independent here, as the estimate itself does. A range of the estimate, not a confidence interval."""
+    if any(l.get("market_family") in ("MONEYLINE", "PUCK_LINE") for l in legs):
+        return None   # the 8-point figure was measured for individual-player legs only
+    probs = [l.get("probability") for l in legs]
+    if not probs or any(p is None for p in probs):
+        return None
+    lo = hi = 1.0
+    for p in probs:
+        lo *= max(p - error, 0.0)
+        hi *= min(p + error, 1.0)
+    return lo, hi
+
+
+def chance_range_text(legs: list[dict]) -> str | None:
+    r = chance_range(legs)
+    return f"range {r[0] * 100:.0f}–{r[1] * 100:.0f}%" if r else None
+
+
 def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
     status = t["status"]
     with st.container(border=True):
@@ -244,7 +267,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
         _slip(legs, [("Estimated price" if len(legs) > 1 else "DraftKings quote", american(t["combined_american"]), "product of leg prices" if len(legs) > 1 else "US feed", "accent"),
                      ("Stake", money(t["stake"]), None, ""),
                      ("To return", money(t["potential_return"]), f"profit {money(t['potential_profit'])}" if t.get("potential_profit") is not None else None, ""),
-                     ("Model chance", pct(t.get("hit_probability")), f"price implies {pct(1.0 / decimal)}" if decimal else None, ""),
+                     ("Model chance", pct(t.get("hit_probability")), (f"{chance_range_text(legs) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·") if decimal else chance_range_text(legs), ""),
                      ("Result", signed_money(pnl) if pnl is not None else "Open", None, ("good" if (pnl or 0) > 0 else "bad" if (pnl or 0) < 0 else "") if pnl is not None else "open")], outcomes=True)
         st.caption(esc(t["rationale"]))
         leg_why(legs)
@@ -289,7 +312,7 @@ def selection_report(tk: dict, *, quiet: bool = False) -> None:
             legs = " + ".join(f"{l} ({american(p)})" for l, p in zip(c["legs"], c["leg_prices"]))
             rows.append(f"| **{pct(c['hit_probability'], 1)}** | {american(c['estimated_price'])} | {c['ev_estimated'] * 100:+.0f}% | {c['ev_after_haircut'] * 100:+.1f}% | {_h(legs)} | {_h(what)} |")
         st.markdown("\n".join(rows))
-        st.caption("Value = estimated return per dollar; After haircut = the same with every leg's chance lowered 3 points. Individual-player model error in testing was about 8 points, "
+        st.caption("Value = estimated return per dollar; After haircut = the same with every leg's chance lowered 3 points (a fixed policy margin, not a measured uncertainty and not proof of an edge). Individual-player model error in testing was about 8 points, "
                    "so small differences in value between tickets are not reliable; hit chance is the ranking.")
 
 
@@ -323,7 +346,7 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         stale_any = _slip(opt["legs"], [("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]), "DraftKings quote" if quoted else "product of leg prices", "accent"),
                             ("Stake", money(opt["stake"]), None, ""),
                             ("To return", money(opt["potential_return"]), f"profit {money(opt['potential_profit'])}", ""),
-                            ("Model chance", pct(opt["hit_probability"]), f"price implies {pct(1.0 / decimal)}", ""),
+                            ("Model chance", pct(opt["hit_probability"]), (f"{chance_range_text(opt['legs']) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·"), ""),
                             ("Value after haircut", f"{ev:+.0f}%", "3-pt policy margin", "good" if ev > 0 else "bad")], outcomes=False)
         if stale_any:
             banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation, and it cannot be added.", "bad")

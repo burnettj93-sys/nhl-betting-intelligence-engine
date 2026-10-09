@@ -55,3 +55,16 @@ class TestLegContext(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestChanceRange(unittest.TestCase):
+    def test_range_shifts_every_leg_by_the_measured_error(self):
+        from dashboard import ui
+        lo, hi = ui.chance_range([{"probability": 0.6, "market_family": "PLAYER_SOG_ALTERNATE"}, {"probability": 0.5, "market_family": "PLAYER_POINTS"}])
+        self.assertAlmostEqual(lo, 0.52 * 0.42)
+        self.assertAlmostEqual(hi, 0.68 * 0.58)
+
+    def test_no_range_for_team_markets_or_missing_probability(self):
+        from dashboard import ui
+        self.assertIsNone(ui.chance_range([{"probability": 0.6, "market_family": "MONEYLINE"}]))
+        self.assertIsNone(ui.chance_range([{"probability": None, "market_family": "PLAYER_POINTS"}]))
