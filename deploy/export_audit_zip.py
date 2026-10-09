@@ -157,6 +157,21 @@ def isolated_two_log_qa() -> str:
         return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
 
 
+def personal_workflow_verification() -> str:
+    """The engine-side verdict on the hosted personal-log workflow (PENDING until it has been exercised through the app's own write path)."""
+    sys.path.insert(0, str(REPO / "deploy"))
+    try:
+        import verify_personal_workflow
+        return json.dumps(verify_personal_workflow.main(), indent=1, default=str)
+    except Exception as exc:  # noqa: BLE001
+        return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
+
+
+def board_evidence() -> str:
+    p = REPO / "operational" / "runtime" / "board_evidence.jsonl"
+    return p.read_text() if p.exists() else ""
+
+
 def model_vs_personal_reconciliation() -> str:
     """Independent re-derivation of both books from raw rows (not from the account helpers), and the separation checks."""
     sys.path.insert(0, str(REPO))
@@ -268,6 +283,8 @@ def main(argv=None) -> int:
               "audit_evidence/job_health.json": job_health().encode(),
               "audit_evidence/personal_logs_export.json": personal_logs_export().encode(),
               "audit_evidence/isolated_two_log_qa.json": isolated_two_log_qa().encode(),
+              "audit_evidence/personal_workflow_verification.json": personal_workflow_verification().encode(),
+              "audit_evidence/board_evidence.jsonl": board_evidence().encode(),
               "audit_evidence/model_vs_personal_reconciliation.json": model_vs_personal_reconciliation().encode(),
               "audit_evidence/ledger_board_reconciliation.json": reconciliation().encode(),
               **postmortems(),
