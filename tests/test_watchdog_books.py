@@ -118,6 +118,21 @@ class TestReadinessIsSeparateFromHealth(unittest.TestCase):
         p.execute("INSERT INTO orders (order_id, kind, status, request_json, processed_at_utc) VALUES ('o2','PERSONAL_BET','RECORDED',?,'2026-10-15T02:00:00Z')", (json.dumps({"via": "direct"}),))
         self.assertEqual(feat()["status"], "WORKING")
 
+    def test_the_board_is_limited_while_empty_working_when_populated_and_the_evidence_is_logged_once_per_change(self):
+        from operational import state_paths
+        path = state_paths.path("tickets_state.json")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        feat = lambda: next(f for f in wd.readiness(NOW, personal_db(), self.view())["features"] if f["feature"].startswith("Best Options board"))
+        path.write_text(json.dumps({"options": {"options": [], "generated_at_utc": "2026-10-15T16:00:00Z"}, "tickets": []}))
+        self.assertEqual(feat()["status"], "LIMITED")
+        path.write_text(json.dumps({"options": {"options": [{"option_id": "O1"}], "generated_at_utc": "2026-10-15T17:00:00Z"}, "tickets": []}))
+        self.assertEqual(feat()["status"], "WORKING")
+        feat()
+        feat()
+        log = [json.loads(l) for l in state_paths.path(wd.BOARD_LOG).read_text().splitlines()]
+        self.assertEqual([r["options"] for r in log][-2:], [0, 1])               # one line per change, not per run
+        self.assertEqual(len([r for r in log if r["options"] == 1]), 1)
+
     def test_run_reports_health_and_readiness_as_separate_parts(self):
         def runner(cmd, cwd=None, timeout=30):
             if cmd[0] == "launchctl":
