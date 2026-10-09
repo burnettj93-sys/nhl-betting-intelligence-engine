@@ -65,7 +65,7 @@ a { color: #8db4ff; }
 [data-testid="stMetricDelta"], [data-testid="stMetricDelta"] > div { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; font-size: .78rem; }
 [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stMetric"] { background: transparent; border: 0; padding: 4px 2px; }
 [data-testid="stMarkdownContainer"] table { max-width: 100%; }
-[data-testid="stMarkdownContainer"] td, [data-testid="stMarkdownContainer"] th { overflow-wrap: anywhere; word-break: normal; vertical-align: top; }
+[data-testid="stMarkdownContainer"] td, [data-testid="stMarkdownContainer"] th { overflow-wrap: break-word; word-break: normal; vertical-align: top; }
 [data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-variant-numeric: tabular-nums; }
 [data-testid="stExpander"] { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 [data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
