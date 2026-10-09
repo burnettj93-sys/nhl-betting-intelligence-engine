@@ -51,15 +51,16 @@ def origin_block(**kw):
 
 
 LOG_CODE = "otter-maple-puck-4821"
+LOG_KEY = "ABCDEFGHJKLMNPQRSTUV"          # normalised write key of the fixture log
 
 
 def personal_logs_doc() -> dict:
     """One empty personal log (display name Casey) published under the hash of LOG_CODE."""
-    from operational import personal_logs as pl
+    from operational import log_signing, personal_logs as pl
     h = pl.code_hash(LOG_CODE)
     empty = pl.summarize([])
     return {"schema": 1, "generated_at_utc": GEN, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
-            "logs": {h: {"display_name": "Casey", "created_at_utc": GEN, "created_by_order": "crt_" + "a" * 10, "summary": empty, "bets": [], "orders": []}}}
+            "logs": {h: {"display_name": "Casey", "created_at_utc": GEN, "write_pub": log_signing.public_key_hex(LOG_KEY, h), "summary": empty, "bets": [], "orders": []}}}
 
 
 def snapshot(with_options=True) -> dict:

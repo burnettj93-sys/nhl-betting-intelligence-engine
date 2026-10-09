@@ -44,10 +44,11 @@ def build_order(option: dict, *, order_id: str, page_generated_at: str | None, s
 def build_personal_order(option: dict | None, *, order_id: str, log_hash: str, page_generated_at: str | None, stake: float,
                          create: dict | None = None, kind: str = "PERSONAL_BET") -> dict:
     """An order to add `option` to the personal log whose code hashes to `log_hash` (kind PERSONAL_BET), or just to create that log (PERSONAL_LOG_CREATE).
-    `create` = {"creation_id", "display_name"} while the log does not exist yet. The code itself is never put in an order."""
+    `create` = {"creation_id", "display_name", "write_pub"} while the log does not exist yet. The code and the write key are never put in an order; the order is
+    signed afterwards with `operational.log_signing.sign` (the signature is what authorises it)."""
     log = {"hash": log_hash}
     if create:
-        log["create"] = {"creation_id": create["creation_id"], "display_name": create["display_name"]}
+        log["create"] = {"creation_id": create["creation_id"], "display_name": create["display_name"], "write_pub": create["write_pub"]}
     doc = {"schema": SCHEMA, "type": kind, "order_id": order_id, "log": log, "page_generated_at_utc": page_generated_at}
     if kind == "PERSONAL_BET":
         doc["option_id"] = option["option_id"]

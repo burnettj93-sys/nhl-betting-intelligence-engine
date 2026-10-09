@@ -16,8 +16,9 @@ from dashboard import snapshot_source as ss
 from operational import runtime_mode as rm
 import json
 
+from operational import log_signing
 from operational import personal_logs as pl
-from tests.product_fixture import GEN, LOG_CODE, snapshot
+from tests.product_fixture import GEN, LOG_CODE, LOG_KEY, snapshot
 
 PAGES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "pages")
 BANNED = re.compile(r"(?i)\b(simulated|demo|fixture|sample data|lorem)\b")
@@ -47,7 +48,11 @@ def rerun(at, snap):
 
 
 def choose_log(at):
-    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None}
+    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None, "write_key": LOG_KEY}
+
+
+def choose_log_view_only(at, key=None):
+    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None, "write_key": key}
 
 
 def text(at):
@@ -158,6 +163,12 @@ class TestPagesRender(unittest.TestCase):
         self.assertTrue(any(b.label == "Add to Casey — $10.00" for b in at.button))        # offered, not pressed
         self.assertEqual(at.session_state.filtered_state.get("_personal_orders") or {}, {})
 
+    def test_knowing_the_code_without_the_write_key_is_view_only_and_offers_no_add_button(self):
+        for key in (None, "ZZZZYYYYXXXXWWWWVVVV"):
+            at = run_page("26_Player_Props.py", snapshot(), setup=lambda a, k=key: choose_log_view_only(a, k))
+            self.assertFalse(any(b.label.startswith("Add to ") for b in at.button), key)
+            self.assertIn("view-only", text(at))
+
     def test_add_click_files_exactly_one_outstanding_order_for_that_log_and_a_second_click_does_nothing(self):
         at = run_page("26_Player_Props.py", snapshot(), setup=choose_log)
         btn = next(b for b in at.button if b.label == "Add to Casey — $10.00")
@@ -188,6 +199,7 @@ class TestPagesRender(unittest.TestCase):
                 at.run()
         self.assertEqual(len(calls), 1)
         order, token = calls[0]
+        self.assertTrue(log_signing.verify(order, log_signing.public_key_hex(LOG_KEY, pl.code_hash(LOG_CODE))), "the filed order must carry a valid signature")
         self.assertEqual((order["type"], order["log"]["hash"], token), ("PERSONAL_BET", pl.code_hash(LOG_CODE), "t0ken-value"))
         self.assertNotIn("t0ken-value", text(at))
         self.assertNotIn("otter-maple", json.dumps(order))
@@ -212,7 +224,9 @@ class TestMyBetsPage(unittest.TestCase):
         at = run_page("38_My_Bets.py", snapshot())
         self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
         t = text(at)
-        self.assertIn("A code is a name, not a password", t.replace("<b>", "").replace("</b>", ""))
+        flat = t.replace("<b>", "").replace("</b>", "")
+        self.assertIn("What is public, and what is protected", flat)
+        self.assertIn("Reading is therefore not private. Writing is protected", flat)
         self.assertIn("public repository", t)
         self.assertFalse(BANNED.search(t))
 
@@ -227,6 +241,30 @@ class TestMyBetsPage(unittest.TestCase):
         next(b for b in at2.button if b.key == "mb_open").click(); rerun(at2, snapshot())
         self.assertTrue(any("No log uses that code" in e.value for e in at2.error))
         self.assertNotIn("_personal_log", at2.session_state)
+
+    def test_creating_a_log_shows_the_code_and_write_key_once_and_files_a_signed_order_without_them(self):
+        filed = []
+        with mock.patch.object(order_client, "submit_direct", side_effect=lambda o, t, **kw: filed.append(o) or {"ok": True, "issue": 5}):
+            at = run_page("38_My_Bets.py", snapshot(), setup=lambda a: a.secrets.__setitem__("LOG_WRITE_TOKEN", "tk"))
+            at.text_input(key="mb_new_name").set_value("Dana"); rerun(at, snapshot())
+            at.text_input(key="mb_new_code").set_value("brand-new-code-2468"); rerun(at, snapshot())
+            next(b for b in at.button if b.key == "mb_create").click(); rerun(at, snapshot())
+        self.assertEqual(len(filed), 1)
+        doc = filed[0]
+        h = pl.code_hash("brand-new-code-2468")
+        self.assertEqual((doc["type"], doc["log"]["hash"]), ("PERSONAL_LOG_CREATE", h))
+        self.assertTrue(log_signing.verify(doc, doc["log"]["create"]["write_pub"]))
+        blob = json.dumps(doc)
+        self.assertNotIn("brand-new-code", blob)
+        shown = " ".join(c.value for c in at.code)
+        self.assertIn("brand-new-code-2468", shown)
+        key = shown.split("Write key: ")[1].strip()
+        self.assertTrue(log_signing.valid_key_shape(key))
+        self.assertNotIn(log_signing.normalize_key(key), blob.replace("-", ""))
+        self.assertEqual(log_signing.public_key_hex(log_signing.normalize_key(key), h), doc["log"]["create"]["write_pub"])
+        self.assertIn("only time they are shown", " ".join(m.value for m in at.markdown))
+        next(b for b in at.button if b.key == "mb_saved").click(); rerun(at, snapshot())
+        self.assertEqual(len(at.code), 0)                                              # gone once acknowledged
 
     def test_creating_with_a_code_already_in_use_is_refused_without_filing_anything(self):
         with mock.patch.object(order_client, "submit_direct") as sub:

@@ -94,6 +94,16 @@ class TestSelectionPolicy(unittest.TestCase):
                 use[rmp.leg_identity(l)] = use.get(rmp.leg_identity(l), 0) + 1
         self.assertLessEqual(max(use.values()), rmp.MAX_TICKETS_PER_LEG)
 
+    def test_one_player_is_on_at_most_two_tickets_whatever_the_market(self):
+        """2026-10-08: one player's 8-minute night lost three of the day's five tickets. A player may sit on at most MAX_TICKETS_PER_PLAYER."""
+        star = [leg(1, "A", price=100, p=0.75, thr=t) for t in (1, 2, 3)]
+        partners = [leg(g, f"P{g}", price=-105, p=0.62) for g in (2, 3, 4, 5, 6)]
+        picked = rmp.select_tickets(star + partners, max_tickets=5)
+        with_a = [t for t in picked["tickets"] if any(l.participant_id == "A" for l in t.legs)]
+        self.assertEqual(rmp.MAX_TICKETS_PER_PLAYER, 2)
+        self.assertGreaterEqual(len(picked["tickets"]), 3)
+        self.assertLessEqual(len(with_a), 2)
+
     def test_games_can_appear_on_more_than_one_ticket(self):
         picked = rmp.select_tickets(board(4))
         games = [l.game_id for t in picked["tickets"] for l in t.legs]

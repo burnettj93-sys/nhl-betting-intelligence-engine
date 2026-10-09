@@ -190,7 +190,10 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
             st.caption(f"Manually added from order {prov.get('order_id')} (received {et_time(prov.get('received_at_utc'), True)}, "
                        f"revalidated {et_time(prov.get('revalidated_at_utc'), True)}). {prov.get('jurisdiction_note', '')}")
         for a in t.get("alerts") or []:
-            st.warning(esc(a["detail"]))
+            if a.get("retracted"):
+                st.caption(f"Alert retracted — {esc(a['retracted'])} (original: {esc(a['detail'])})")
+            else:
+                st.warning(esc(a["detail"]))
 
 
 def leg_why(legs: list[dict]) -> None:
@@ -311,11 +314,22 @@ def selected_log() -> dict | None:
     if doc:
         sel["creation"] = None                                  # the log exists now; later bets do not need the creation details
         sel["name"] = doc["display_name"]
-    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc}
+    key = sel.get("write_key")
+    # Writing is allowed only with the log's write key; it must derive the public key the log was created with (published, so a wrong key is caught here).
+    pub = (doc or {}).get("write_pub") or (sel.get("creation") or {}).get("write_pub")
+    can_write = bool(key and pub and _write_pub(key, sel["hash"]) == pub)
+    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc, "write_key": key if can_write else None,
+            "can_write": can_write, "key_given": bool(key)}
 
 
-def select_log(code: str, name: str | None = None, *, creation: dict | None = None) -> None:
-    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation}
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
+def _write_pub(write_key: str, log_hash: str) -> str:
+    from operational import log_signing
+    return log_signing.public_key_hex(write_key, log_hash)
+
+
+def select_log(code: str, name: str | None = None, *, creation: dict | None = None, write_key: str | None = None) -> None:
+    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation, "write_key": write_key or None}
 
 
 def forget_log() -> None:
@@ -348,6 +362,11 @@ def add_control(opt: dict, *, key: str, cash: float | None = None, page_generate
     on_book = opt.get("on_book")
     if on_book:
         st.caption(f"The model book holds this exact bet as {on_book['ticket_id']} ({on_book['status'].title()}). Adding it to your own log does not change that.")
+    if not log["can_write"]:
+        banner(f"<b>{esc(log['name'])}</b> is open <b>view-only</b> in this session"
+               + (": the write key you entered does not match this log." if log["key_given"] else ": adding a bet needs the log's write key.")
+               + " Enter it on <b>My Bets</b> (sidebar). Knowing a log's code lets you read it, not write to it.", "warn")
+        return
     banner(f"Adding to your personal log <b>{esc(log['name'])}</b> — separate from the model book.", "info")
     sess = st.session_state.setdefault("_personal_orders", {})
     mine = sess.get(opt["option_id"])
@@ -395,6 +414,9 @@ def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, p
         return                                                  # a repeated click while an order is outstanding
     order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
                                               stake=stake, create=None if log["exists"] else log["creation"])
+    from operational import log_signing
+    order["via"] = "direct" if order_client.personal_write_token(getattr(st, "secrets", {})) else "link"      # signed with the order; lets the engine tell a one-click order from a hand-filed one
+    order = log_signing.sign(order, log["write_key"], log["hash"])
     res = file_order(order)
     if not res["ok"]:
         banner(esc(res["error"]), "bad")

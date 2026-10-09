@@ -727,8 +727,22 @@ def record_ticket_alert(conn: sqlite3.Connection, paper_bet_id: str, kind: str, 
     return cur.rowcount == 1
 
 
+RETRACTIONS_DDL = ("CREATE TABLE IF NOT EXISTS ticket_alert_retractions (alert_id INTEGER PRIMARY KEY, reason TEXT NOT NULL, retracted_at_utc TEXT NOT NULL)")
+
+
+def retract_ticket_alert(conn: sqlite3.Connection, alert_id: int, reason: str) -> bool:
+    """Marks an alert as raised in error. The alert row is never edited or deleted (the history stays), the ticket is untouched, and the card shows
+    the alert as retracted with this reason. Returns True when newly retracted."""
+    conn.execute(RETRACTIONS_DDL)
+    cur = conn.execute("INSERT OR IGNORE INTO ticket_alert_retractions (alert_id, reason, retracted_at_utc) VALUES (?, ?, ?)", (alert_id, reason, _utcnow_iso()))
+    conn.commit()
+    return cur.rowcount == 1
+
+
 def ticket_alerts(conn: sqlite3.Connection, paper_bet_ids: list[str] | None = None) -> dict[str, list[dict]]:
-    rows = conn.execute("SELECT * FROM ticket_alerts ORDER BY alert_id").fetchall()
+    have = conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ticket_alert_retractions'").fetchone()
+    rows = conn.execute("SELECT a.*, " + ("r.reason AS retracted_reason FROM ticket_alerts a LEFT JOIN ticket_alert_retractions r ON r.alert_id = a.alert_id"
+                                           if have else "NULL AS retracted_reason FROM ticket_alerts a") + " ORDER BY a.alert_id").fetchall()
     out: dict[str, list[dict]] = {}
     for r in rows:
         if paper_bet_ids is None or r["paper_bet_id"] in paper_bet_ids:

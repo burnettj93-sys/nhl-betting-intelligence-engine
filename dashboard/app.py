@@ -64,11 +64,25 @@ from operational import runtime_mode  # noqa: E402  (after the auth gate on purp
 # boundary: each of those pages also calls auth.require_admin() at the top of
 # its own script (see tests/test_auth.py's route-level tests).
 _MODE = runtime_mode.current_mode()
-_nav_sections = {
-    section: [st.Page(str(PAGES_DIR / spec.file), title=spec.title, icon=spec.icon, default=spec.default)
-              for spec in specs]
-    for section, specs in page_registry.pages_for(_user["role"], _MODE).items()
-}
+_landing: dict = {}
+
+
+def _page(spec):
+    if spec.default:
+        # Streamlit gives the default page the bare root URL, so "/Today" would answer "page not found". The landing page is therefore an ordinary
+        # page at /Today, and a hidden default page at "/" forwards to it: both addresses work and the navigation shows one Today.
+        _landing["page"] = st.Page(str(PAGES_DIR / spec.file), title=spec.title, icon=spec.icon, url_path="Today")
+        return _landing["page"]
+    return st.Page(str(PAGES_DIR / spec.file), title=spec.title, icon=spec.icon)
+
+
+def _go_landing() -> None:
+    st.switch_page(_landing["page"])
+
+
+_nav_sections = {section: [_page(spec) for spec in specs] for section, specs in page_registry.pages_for(_user["role"], _MODE).items()}
+_first = next(iter(_nav_sections))
+_nav_sections[_first] = _nav_sections[_first] + [st.Page(_go_landing, title="Home", url_path="home", default=True, visibility="hidden")]
 
 pg = st.navigation(_nav_sections)
 

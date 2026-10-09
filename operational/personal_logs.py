@@ -7,10 +7,13 @@ audited legacy migration, which only READS it), and nothing in the model code re
 change the model's cash, exposure, daily slots, P&L, win rate or performance evaluation. tests/test_personal_logs.py
 proves it by hashing the model ledger before and after adding and settling bets in two logs.
 
-What a code is -- and is not. A code is a name you choose for your log; whoever knows it can open and add to that log.
-It is NOT authentication and it does not make a log private: the engine's published data lives in a public repository,
-so the bets in a log are readable by anyone who looks, filed under a one-way hash of the code (not the code itself) and
-an optional display name. Do not put anything personal in a log or its name. Paper bets only; no money moves.
+What a code is -- and is not. A code is a NAME for your log. It is not a password and it does not make a log private: the engine's
+published data lives in a public repository, so the bets in a log are readable by anyone who looks, filed under a one-way hash of the code
+(not the code itself) and a display name. Do not put anything personal in a log or its name. Paper bets only; no money moves.
+
+Who may WRITE. Knowing a code does not let anyone add to a log. Each log has a separate WRITE KEY (generated when the log is created, shown once);
+only its public half is stored, and every order must carry a valid signature made with it (operational/log_signing.py). The queue is public, but
+a signature in it cannot be reused to write anything else, so the public queue leaks nothing that grants access.
 
 Flow (same durable queue as the other hosted actions, see operational/manual_orders.py):
   hosted page -> PERSONAL_BET / PERSONAL_LOG_CREATE order (a GitHub issue created with the app's own write credential)
@@ -28,6 +31,7 @@ import sqlite3
 from pathlib import Path
 
 from operational import eastern_time as et
+from operational import log_signing
 from operational import state_paths
 
 DB_NAME = "personal_logs.db"
@@ -56,7 +60,8 @@ CREATE TABLE IF NOT EXISTS logs (
     display_name TEXT NOT NULL,
     created_at_utc TEXT NOT NULL,
     created_by_order TEXT,
-    note TEXT
+    note TEXT,
+    write_pub TEXT
 );
 CREATE TABLE IF NOT EXISTS orders (
     order_id TEXT PRIMARY KEY,
@@ -191,6 +196,8 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA_SQL)
+    if "write_pub" not in {r["name"] for r in conn.execute("PRAGMA table_info(logs)")}:      # databases created before write keys existed
+        conn.execute("ALTER TABLE logs ADD COLUMN write_pub TEXT")
     return conn
 
 
@@ -245,7 +252,9 @@ def _creation(log: dict) -> tuple[dict | None, str | None]:
     name, err = validate_name(c.get("display_name"))
     if err:
         return None, err
-    return {"creation_id": c["creation_id"], "display_name": name}, None
+    if not isinstance(c.get("write_pub"), str) or not re.fullmatch(r"[0-9a-f]{64}", c["write_pub"]):
+        return None, "The log creation needs the log's public write key."
+    return {"creation_id": c["creation_id"], "display_name": name, "write_pub": c["write_pub"]}, None
 
 
 def _same_day(stamp: str, et_date: str) -> bool:
@@ -265,8 +274,8 @@ def _ensure_log(conn, log_hash: str, creation: dict | None, now: dt.datetime) ->
     made = sum(1 for r in conn.execute("SELECT created_at_utc FROM logs WHERE created_by_order IS NOT NULL").fetchall() if _same_day(r["created_at_utc"], today))
     if made >= MAX_NEW_LOGS_PER_DAY:
         return REJECTED, "RATE_LIMIT: too many new logs today. Try again tomorrow."
-    conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order) VALUES (?,?,?,?)",
-                 (log_hash, creation["display_name"], _stamp(now), creation["creation_id"]))
+    conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order, write_pub) VALUES (?,?,?,?,?)",
+                 (log_hash, creation["display_name"], _stamp(now), creation["creation_id"], creation["write_pub"]))
     _audit(conn, "LOG_CREATED", log_hash, {"display_name": creation["display_name"]}, _stamp(now))
     return CREATED, None
 
@@ -286,6 +295,17 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
     creation, cerr = _creation(order["log"])
     if cerr:
         return _store(conn, oid, order["type"], log_hash, REJECTED, cerr, None, source, order, None, received_at, done)
+
+    # Who may write: the signature must verify against the log's stored public key (or, for the creating order, the public key it carries).
+    existing = log_row(conn, log_hash)
+    pub = existing["write_pub"] if existing else (creation or {}).get("write_pub")
+    if not existing and not creation:
+        return _store(conn, oid, order["type"], log_hash, REJECTED, "LOG_NOT_FOUND: no log uses that code yet. Create it first.", None, source, order, None, received_at, done)
+    if existing and not pub:
+        return _store(conn, oid, order["type"], log_hash, REJECTED, "NO_WRITE_KEY: this log has no write key, so nothing can be added to it.", None, source, order, None, received_at, done)
+    if not log_signing.verify(order, pub):
+        return _store(conn, oid, order["type"], log_hash, REJECTED,
+                      "BAD_SIGNATURE: this order was not signed with this log's write key, so it was not applied.", None, source, order, None, received_at, done)
 
     conn.execute("BEGIN IMMEDIATE")
     try:
@@ -434,7 +454,7 @@ def section(conn, now: dt.datetime) -> dict:
         orders = [dict(r) for r in conn.execute(
             "SELECT order_id, kind, status, reason, bet_id, processed_at_utc FROM orders WHERE log_hash = ? ORDER BY processed_at_utc DESC, order_id LIMIT 25",
             (lg["log_hash"],)).fetchall()]
-        logs[lg["log_hash"]] = {"display_name": lg["display_name"], "created_at_utc": lg["created_at_utc"], "created_by_order": lg["created_by_order"],
+        logs[lg["log_hash"]] = {"display_name": lg["display_name"], "created_at_utc": lg["created_at_utc"], "write_pub": lg["write_pub"],
                                 "summary": summarize(bets), "bets": cards, "orders": orders}
     return {"schema": SCHEMA, "generated_at_utc": _stamp(now), "logs": logs,
             "rules": {"stake_min": MIN_STAKE, "stake_max": MAX_STAKE, "stake_default": DEFAULT_STAKE, "code_min_length": MIN_CODE_LEN}}
@@ -479,16 +499,22 @@ def migrate_legacy_manual(conn, bankroll_conn, now: dt.datetime) -> dict:
     return {"migrated": len(moved), "bets": moved}
 
 
-def claim_legacy(conn, code, display_name, now: dt.datetime) -> dict:
-    """Moves the unclaimed legacy bets into the log opened by `code` (creating it with `display_name` if it does not exist). Local, owner-run."""
+def claim_legacy(conn, code, display_name, now: dt.datetime, write_key: str | None = None) -> dict:
+    """Moves the unclaimed legacy bets into the log opened by `code` (creating it with `display_name` and the public half of `write_key` if it does not
+    exist). Local, owner-run. For an existing log the write key must match the stored public key."""
     err = validate_code(code)
     name, nerr = validate_name(display_name)
     if err or nerr:
         return {"status": "REJECTED", "reason": err or nerr}
     h = code_hash(code)
-    if log_row(conn, h) is None:
-        conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order, note) VALUES (?,?,?,?,?)",
-                     (h, name, _stamp(now), "legacy-claim", "Created by the owner to claim earlier manual tickets."))
+    existing = log_row(conn, h)
+    if existing is None:
+        if not log_signing.valid_key_shape(write_key):
+            return {"status": "REJECTED", "reason": "A new log needs a write key (generate one on My Bets, or leave it blank here to have one generated)."}
+        conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order, note, write_pub) VALUES (?,?,?,?,?,?)",
+                     (h, name, _stamp(now), "legacy-claim", "Created by the owner to claim earlier manual tickets.", log_signing.public_key_hex(write_key, h)))
+    elif not (log_signing.valid_key_shape(write_key) and log_signing.public_key_hex(write_key, h) == existing["write_pub"]):
+        return {"status": "REJECTED", "reason": "That log exists and the write key does not match it."}
     pending = unclaimed_legacy(conn)
     for b in pending:
         conn.execute("UPDATE bets SET log_hash = ? WHERE bet_id = ?", (h, b["bet_id"]))
@@ -501,7 +527,16 @@ if __name__ == "__main__":
     import sys
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "claim-legacy":
-        print(claim_legacy(connect(), getpass.getpass("Log code to claim the earlier tickets into: "), input("Display name for the log: "), dt.datetime.now(dt.timezone.utc)))
+        code = getpass.getpass("Log code to claim the earlier tickets into: ")
+        name = input("Display name for the log: ")
+        key = getpass.getpass("Write key (press Enter to generate a new one): ").strip() or None
+        generated = None
+        if key is None:
+            key = generated = log_signing.new_write_key()
+        res = claim_legacy(connect(), code, name, dt.datetime.now(dt.timezone.utc), key)
+        print(res)
+        if generated and res.get("status") == "CLAIMED":
+            print(f"Your write key (shown once; store it): {generated}")
     elif cmd == "migrate-legacy":
         from operational import paper_bankroll as pb
         bk = pb.init_db()

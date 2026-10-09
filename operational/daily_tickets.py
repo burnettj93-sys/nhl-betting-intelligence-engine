@@ -365,7 +365,7 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         "result": {"status": row["result_status"], "profit_loss": row.get("profit_loss"),
                    "settled_at_utc": row.get("settled_at_utc"), "notes": row.get("notes"),
                    "settled_odds": (settlement or {}).get("settled_odds")} if row["result_status"] != "PENDING" else None,
-        "alerts": [{"kind": a["kind"], "detail": a["detail"], "at": a["created_at_utc"]} for a in (alerts or [])],
+        "alerts": [{"kind": a["kind"], "detail": a["detail"], "at": a["created_at_utc"], "retracted": a.get("retracted_reason")} for a in (alerts or [])],
         "origin": row.get("origin") or "AUTOMATIC",
         "provenance": json.loads(row["provenance_json"]) if row.get("provenance_json") else None,
     }

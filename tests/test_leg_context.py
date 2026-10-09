@@ -27,12 +27,19 @@ class TestLegContext(unittest.TestCase):
     def test_established_player_is_not_flagged(self):
         c = lc.for_leg(LEG, {"1": skater(159, tier=2, pp=2)}, {})
         self.assertFalse(c["low_sample"])
-        self.assertTrue(any("power-play" in x for x in c["lines"]))
+        self.assertTrue(any("estimated power-play usage: some" in x for x in c["lines"]))
+        self.assertTrue(any("No reported line or PP unit" in x for x in c["lines"]))
         self.assertIn("variance", c["uncertainty"])
 
     def test_inferred_role_is_labelled_inferred(self):
         c = lc.for_leg(LEG, {"1": skater(100)}, {})
-        self.assertIn("inferred", c["lines"][0])
+        self.assertIn("not an assigned line or PP unit", c["lines"][0])
+
+    def test_a_reported_pp_unit_is_shown_separately_with_its_source(self):
+        p = skater(100, pp=1)
+        p["reported"] = {"status": "REPORTED", "line": "L2", "pp": "PP1", "reported_by": "Test Reporter"}
+        c = lc.for_leg(LEG, {"1": p}, {})
+        self.assertTrue(any("Reported by Test Reporter: line L2, PP unit PP1" in x for x in c["lines"]))
 
     def test_unknown_player_and_moneyline_give_nothing(self):
         self.assertIsNone(lc.for_leg(LEG, {}, {}))

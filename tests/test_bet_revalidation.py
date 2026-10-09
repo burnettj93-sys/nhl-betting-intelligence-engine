@@ -300,6 +300,45 @@ class TestTradeDetectionVoids(unittest.TestCase):
             summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
         self.assertEqual(summary["alerts_recorded"], 0)
 
+    def test_the_rosters_current_team_beats_a_stale_archival_corpus(self):
+        """Regression (2026-10-08): the corpus said DAL, the roster sync said NSH (where he played); no 'trade' alert may be raised."""
+        from unittest import mock
+        _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
+               created_at_utc="2026-10-15T18:00:00+00:00")
+        self.nhl_conn.execute("INSERT INTO team_membership_events (player_id, team_id, effective_at_utc, observed_at_utc, event_type, source) "
+                              "VALUES ('P1', 'TOR', '2026-09-24T00:00:00', '2026-09-24T00:00:00', 'ROSTER_SYNC', 'nhl_api')")
+        self.nhl_conn.commit()
+        stale = {"p1": [{"player_id": "P1", "player_name": "P1", "most_recent_team": "DAL", "most_recent_game_date": "2026-04-15"}]}
+        with mock.patch.object(br, "_load_player_index", return_value=stale):
+            summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
+        self.assertEqual(summary["alerts_recorded"], 0)
+
+    def test_the_rosters_current_team_still_raises_a_real_trade_alert(self):
+        from unittest import mock
+        _stake(self.bankroll_conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")],
+               created_at_utc="2026-10-15T18:00:00+00:00")
+        self.nhl_conn.execute("INSERT INTO team_membership_events (player_id, team_id, effective_at_utc, observed_at_utc, event_type, source) "
+                              "VALUES ('P1', 'BOS', '2026-10-15T12:00:00', '2026-10-15T12:00:00', 'TRADE', 'nhl_api')")
+        self.nhl_conn.commit()
+        with mock.patch.object(br, "_load_player_index", return_value={}):
+            summary = br.revalidate_pending_real_market_bets(self.bankroll_conn, self.nhl_conn, now=NOW)
+        self.assertEqual(summary["alerts_recorded"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAlertRetraction(unittest.TestCase):
+    def test_a_retracted_alert_keeps_its_row_and_carries_the_reason(self):
+        conn = _fresh_bankroll_conn()
+        _stake(conn, [_leg(market_family="PLAYER_SOG", threshold=4, participant_id="P1")], created_at_utc="2026-10-15T18:00:00+00:00")
+        tid = pb.query_paper_bets(conn, track="REAL_MARKET_PAPER")[0]["paper_bet_id"]
+        self.assertTrue(pb.record_ticket_alert(conn, tid, "TEAM_CHANGED", "TEAM_CHANGED: x is now on DAL"))
+        aid = pb.ticket_alerts(conn)[tid][0]["alert_id"]
+        self.assertIsNone(pb.ticket_alerts(conn)[tid][0]["retracted_reason"])
+        self.assertTrue(pb.retract_ticket_alert(conn, aid, "archival corpus was stale"))
+        self.assertFalse(pb.retract_ticket_alert(conn, aid, "again"))
+        a = pb.ticket_alerts(conn)[tid][0]
+        self.assertEqual((a["detail"], a["retracted_reason"]), ("TEAM_CHANGED: x is now on DAL", "archival corpus was stale"))
+        self.assertEqual(pb.query_paper_bets(conn, track="REAL_MARKET_PAPER")[0]["result_status"], "PENDING")
