@@ -98,6 +98,12 @@ class TestAvailabilityRecord(IsolatedState):
         self.assertEqual(pa.read("2099-01-01")["games"]["g1"]["markets"]["other"]["status"], pa.BUDGET_BLOCKED)
         pa.record("2099-01-01", "g1", "m", pa.FETCH_ERROR, now)
 
+    def test_repeating_the_same_plan_statement_keeps_the_time_it_was_first_made(self):
+        t1, t2 = dt.datetime(2026, 10, 9, 13, 0, tzinfo=U), dt.datetime(2026, 10, 9, 19, 0, tzinfo=U)
+        pa.note_unfetched("2099-01-02", "g1", "m", pa.BUDGET_BLOCKED, t1, detail="no credits")
+        pa.note_unfetched("2099-01-02", "g1", "m", pa.BUDGET_BLOCKED, t2, detail="no credits")
+        self.assertEqual(pa.read("2099-01-02")["games"]["g1"]["markets"]["m"]["checked_utc"], "2026-10-09T13:00:00Z")
+
     def test_lead_hours_summarise_how_early_a_market_was_seen(self):
         rows = [{"market": "a", "status": pa.POSTED, "hours_to_start": 9.0}, {"market": "a", "status": pa.POSTED, "hours_to_start": 5.0},
                 {"market": "a", "status": pa.NOT_POSTED, "hours_to_start": 30.0}, {"market": "b", "status": pa.NOT_POSTED, "hours_to_start": 11.0}]
