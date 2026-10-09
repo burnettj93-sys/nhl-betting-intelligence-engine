@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.watchdog</string>
+
+    <!-- Self-check every 30 minutes (operational/watchdog.py): jobs loaded, release pinned to origin/master, trader and publication recent, database path.
+         Read-only; sends a macOS notification when something turns FAIL. Install with WorkingDirectory at the pinned release checkout. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.watchdog</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/nhl_engine_release</string>
+
+    <key>StartInterval</key>
+    <integer>1800</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/watchdog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/watchdog.err.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

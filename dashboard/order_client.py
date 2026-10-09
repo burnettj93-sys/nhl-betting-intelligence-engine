@@ -1,16 +1,15 @@
 """
-The page side of "Add to paper book -- $10".
+The page side of the hosted write actions.
 
-The hosted app cannot write the ledger, so an explicit click files an ORDER in a durable, authenticated queue and the
-engine (operational/manual_orders.py) answers it after revalidating against current prices. Two ways in:
+The hosted app cannot write a database, so an explicit click files an ORDER in a durable queue (a GitHub issue) and the engine answers it
+(operational/manual_orders.py). Nothing here runs on page load, filtering or refresh; a function in this module is only called from a button handler.
 
-  * direct: when this app has a GitHub token secret (PAPER_ORDER_TOKEN, a fine-grained token limited to Issues on this
-    repository) and the signed-in viewer's email is listed in ORDER_ALLOWED_EMAILS, the click creates the order issue
-    itself -- one click;
-  * link: otherwise the click builds a pre-filled GitHub issue; opening it and pressing "Submit new issue" while signed in
-    as the repository owner files the order (GitHub is the authentication). The engine ignores issues from anyone else.
-
-Nothing here runs on page load, filtering or refresh; a function in this module is only called from a button handler.
+  * Personal logs (add a bet / create a log): the app's own write credential (`LOG_WRITE_TOKEN`, a fine-grained token limited to Issues on this repository)
+    creates the order issue. The people who can reach the app are the people the owner invited to it; the log code only says WHICH log a bet belongs to.
+    The order carries a one-way hash of the code, never the code.
+  * Evidence records that feed the shared product (goalie confirmations, Ontario price checks, the non-staking path check): the same credential, plus a
+    signed-in viewer (`st.login()` OIDC) whose email is on `ORDER_ALLOWED_EMAILS`, because those change what everyone sees.
+  * Without a credential the click builds a pre-filled GitHub issue; only the repository owner's issues are processed.
 """
 from __future__ import annotations
 
@@ -22,6 +21,8 @@ import urllib.request
 
 REPO = "burnettj93-sys/nhl-betting-intelligence-engine"
 LABEL = "paper-order"
+PERSONAL_LABEL = "personal-bet"
+PERSONAL_TYPES = ("PERSONAL_BET", "PERSONAL_LOG_CREATE")
 SCHEMA = 1
 
 
@@ -38,6 +39,36 @@ def build_order(option: dict, *, order_id: str, page_generated_at: str | None, s
                                             "american_price", "quote_updated_utc")} for l in option["legs"]],
             "combined_american": option["combined_american"], "hit_probability": option["hit_probability"], "stake": 10.0,
             "price_basis": option.get("price_basis")}}
+
+
+def build_personal_order(option: dict | None, *, order_id: str, log_hash: str, page_generated_at: str | None, stake: float,
+                         create: dict | None = None, kind: str = "PERSONAL_BET") -> dict:
+    """An order to add `option` to the personal log whose code hashes to `log_hash` (kind PERSONAL_BET), or just to create that log (PERSONAL_LOG_CREATE).
+    `create` = {"creation_id", "display_name"} while the log does not exist yet. The code itself is never put in an order."""
+    log = {"hash": log_hash}
+    if create:
+        log["create"] = {"creation_id": create["creation_id"], "display_name": create["display_name"]}
+    doc = {"schema": SCHEMA, "type": kind, "order_id": order_id, "log": log, "page_generated_at_utc": page_generated_at}
+    if kind == "PERSONAL_BET":
+        doc["option_id"] = option["option_id"]
+        doc["accepted"] = {
+            "legs": [{k: l.get(k) for k in ("game_id", "participant_id", "participant_name", "market_family", "threshold", "side",
+                                            "american_price", "quote_updated_utc")} for l in option["legs"]],
+            "combined_american": option["combined_american"], "hit_probability": option["hit_probability"], "stake": float(stake),
+            "price_basis": option.get("price_basis")}
+    return doc
+
+
+def personal_write_token(secrets_obj) -> str | None:
+    """The app's write credential for personal-log orders, or None. `LOG_WRITE_TOKEN`; `PAPER_ORDER_TOKEN` (the earlier name) is accepted too."""
+    try:
+        for key in ("LOG_WRITE_TOKEN", "PAPER_ORDER_TOKEN"):
+            tok = str(secrets_obj.get(key) or "").strip()
+            if tok:
+                return tok
+    except Exception:  # noqa: BLE001 - no secrets at all
+        pass
+    return None
 
 
 def build_verification(leg: dict, *, verification_id: str, ontario_price: float, observed_at_utc: str, where_seen: str,
@@ -90,10 +121,13 @@ def path_status(secrets_obj, signed_in_email: str | None) -> dict:
         masked = f"{name[:1]}{'*' * max(len(name) - 1, 1)}@{domain}"
     allowed = bool(email) and email in emails
     return {"write_path_configured": token, "login_configured": login_configured(secrets_obj), "allowed_email_count": len(emails), "signed_in": bool(email),
-            "signed_in_masked": masked, "viewer_allowed": allowed, "direct_ready": token and allowed}
+            "signed_in_masked": masked, "viewer_allowed": allowed, "direct_ready": token and allowed,
+            "personal_log_writes_ready": personal_write_token(secrets_obj) is not None}
 
 
 def issue_title(order: dict) -> str:
+    if order.get("type") in PERSONAL_TYPES:
+        return f"personal-bet {order['order_id']}"
     if order.get("type") == "ORDER_PATH_CHECK":
         return f"order-path-check {order['check_id']}"
     if order.get("type") == "GOALIE_CONFIRMATION":
@@ -104,6 +138,8 @@ def issue_title(order: dict) -> str:
 
 
 def issue_label(order: dict) -> str:
+    if order.get("type") in PERSONAL_TYPES:
+        return PERSONAL_LABEL
     if order.get("type") == "ORDER_PATH_CHECK":
         return "order-path-check"
     if order.get("type") == "GOALIE_CONFIRMATION":

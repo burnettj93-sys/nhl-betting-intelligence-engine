@@ -50,6 +50,18 @@ def origin_block(**kw):
     return base
 
 
+LOG_CODE = "otter-maple-puck-4821"
+
+
+def personal_logs_doc() -> dict:
+    """One empty personal log (display name Casey) published under the hash of LOG_CODE."""
+    from operational import personal_logs as pl
+    h = pl.code_hash(LOG_CODE)
+    empty = pl.summarize([])
+    return {"schema": 1, "generated_at_utc": GEN, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
+            "logs": {h: {"display_name": "Casey", "created_at_utc": GEN, "created_by_order": "crt_" + "a" * 10, "summary": empty, "bets": [], "orders": []}}}
+
+
 def snapshot(with_options=True) -> dict:
     games = [
         {"game_id": "2026020900", "season": "20262027", "season_label": "2026-27", "type": "REGULAR", "date_et": "2026-10-08", "date_in_db": "2026-10-08", "start_utc": "2026-10-08T23:00:00Z",
@@ -77,11 +89,11 @@ def snapshot(with_options=True) -> dict:
                  "upcoming": [{"game_id": "2026020900", "date_et": "2026-10-08", "start_et": "7:00 PM ET", "opp": "BBB" if t == "AAA" else "AAA", "home": t == "AAA", "state": "SCHEDULED"}],
                  "skaters": [{"player_id": "P1", "name": "Test Skater One", "position": "C", "usage_tier": 1, "pp_usage": 1, "reported": None, "toi_recent": 19.0, "season": p["P1"]["season"]}],
                  "goalies": [{"player_id": "G1", "name": "Test Goalie One", "season": g["G1"]["season"], "start": g["G1"]["start"], "confirmation": g["G1"]["confirmation"]}]} for t in ("AAA", "BBB")}
-    tickets = {"account": account(), "slots": {"total": 5, "used": 0, "empty": 5}, "tickets": [], "manual_tickets": [], "earlier_open_tickets": [], "recent_settled": [],
+    tickets = {"account": account(), "slots": {"total": 5, "used": 0, "empty": 5}, "tickets": [], "earlier_open_tickets": [], "recent_settled": [],
                "empty_slot_reason": "Nothing qualifies yet.", "notice": None, "label": "US-feed paper experiment.", "generated_at_utc": GEN, "date_et": "2026-10-08",
                "policy": {"min_combined_decimal": 2.0, "min_estimated_ev": 0.05, "leg_probability_margin": 0.03, "max_tickets_per_day": 5, "max_tickets_per_leg": 2, "max_tickets_per_game": 3, "stake": 10.0},
                "exposure": {"tickets_counted": 0, "recorded_stake_at_risk": 0, "players": [], "games": [], "note": ""},
-               "origins": {"AUTOMATIC": origin_block(), "MANUALLY_ADDED": origin_block(), "ALL": origin_block()}, "singles": [], "diagnostics": {}, "coverage": {"rows": []}}
+               "origins": {"AUTOMATIC": origin_block(), "ALL": origin_block()}, "singles": [], "diagnostics": {}, "coverage": {"rows": []}}
     if with_options:
         doc = po.build_options(board(4, price=-105, p=0.62), "2026-10-08")
         doc["generated_at_utc"] = GEN
@@ -100,7 +112,7 @@ def snapshot(with_options=True) -> dict:
             "tickets": tickets, "product_meta": {"schema_version": 1, "generated_at_utc": GEN, "et_today": "2026-10-08", "default_date": "2026-10-08",
                                                  "data_through": {"skaters": "2026-10-06", "goalies": "2026-10-06", "schedule_results": "2026-10-08T02:00:00Z"}, "current_season": "20262027"},
             "product_games": {"dates": sorted({x["date_et"] for x in games}), "games": games, "default_date": "2026-10-08", "et_today": "2026-10-08", "records": {}},
-            "product_game_details": details, "product_players": p, "product_goalies": g, "product_teams": teams, "product_model_health": mh, "manual_orders": {"orders": [], "ontario_verifications": []},
+            "product_game_details": details, "product_players": p, "product_goalies": g, "product_teams": teams, "product_model_health": mh, "manual_orders": {"orders": [], "ontario_verifications": []}, "personal_logs": personal_logs_doc(),
             "performance": perf}
 
 

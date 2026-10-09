@@ -236,7 +236,7 @@ class TestBuilder(unittest.TestCase):
         self.assertNotIn("SIMULATED", blob)
         self.assertNotIn("DEMO_PAPER", blob)
         self.assertNotIn("GAME_PARLAY_PAPER", blob)
-        self.assertEqual(list(self.doc["performance"]["breakdowns"]), ["ALL", "AUTOMATIC", "MANUALLY_ADDED"])
+        self.assertEqual(list(self.doc["performance"]["breakdowns"]), ["ALL", "AUTOMATIC"])
 
     def test_yahoo_and_user_specific_data_are_absent_structurally(self):
         blob = schema.strict_dumps(self.doc).lower()
@@ -887,9 +887,10 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
                 "source": source, "last_error": err,
                 "components": {"odds": "2026-09-25T12:00:04Z", "nhl_data": "2026-09-25T11:44:37+00:00"}}
 
-    def model(self, **kw):
+    def model(self, now="2026-09-25T12:11:00+00:00", **kw):
+        import datetime as dt
         from dashboard import components as comp
-        return comp.cloud_banner_model(self.fr(**kw), {})
+        return comp.cloud_banner_model(self.fr(**kw), {}, now=dt.datetime.fromisoformat(now))
 
     def test_it_always_shows_data_as_of_and_last_updated(self):
         for state in ("CURRENT", "STALE", "VERY_STALE", "UNAVAILABLE"):
@@ -904,10 +905,18 @@ class TestBannerAndStaleBehavior(unittest.TestCase):
             self.assertNotIn("SNAPSHOT CURRENT", m["headline"])
         self.assertIn("STALE", self.model(state="STALE")["headline"])
 
-    def test_current_data_is_labeled_current_in_green(self):
+    def test_a_recently_published_snapshot_says_how_recent_in_green(self):
         m = self.model(state="CURRENT")
         self.assertEqual(m["tone"], "ok")
-        self.assertIn("CURRENT", m["headline"])
+        self.assertIn("PUBLISHED 10 MIN AGO", m["headline"])
+
+    def test_a_snapshot_the_engine_stopped_publishing_is_never_labelled_current_even_with_recent_data(self):
+        """Hosted defect: the banner said CURRENT at 63 minutes while Data Status said STALE."""
+        m = self.model(state="CURRENT", now="2026-09-25T13:04:00+00:00")
+        self.assertEqual(m["tone"], "warn")
+        self.assertIn("NOT RECENTLY PUBLISHED", m["headline"])
+        self.assertNotIn("CURRENT", m["headline"])
+        self.assertIn("63 min", m["headline"])
 
     def test_remote_failure_with_last_known_good_says_remote_update_failed(self):
         m = self.model(state="CURRENT", source="REMOTE_LAST_KNOWN_GOOD", err="HTTP 503")

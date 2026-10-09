@@ -1,4 +1,4 @@
-"""Ticket History — every ticket in the paper account, both origins, with its legs, frozen prices and result."""
+"""Ticket History — every ticket in the model's paper book, with its legs, frozen prices and result."""
 from __future__ import annotations
 
 import json
@@ -17,11 +17,9 @@ from dashboard import ui
 ui.header("Ticket History", "Every recorded ticket with the prices and probabilities frozen when it was recorded.")
 perf = ui.load(ps.performance, "Ticket history")
 bets = list(reversed(perf["bets"]))
-f = st.columns(3)
-origin = f[0].selectbox("Origin", ["All", "Automatic", "Manually added"], key="th_origin")
-status = f[1].selectbox("Status", ["All", "Open", "Won", "Lost", "Void", "Unresolved"], key="th_status")
-q = f[2].text_input("Find a player", key="th_q")
-want_origin = {"Automatic": "AUTOMATIC", "Manually added": "MANUALLY_ADDED"}.get(origin)
+f = st.columns(2)
+status = f[0].selectbox("Status", ["All", "Open", "Won", "Lost", "Void", "Unresolved"], key="th_status")
+q = f[1].text_input("Find a player", key="th_q")
 want_status = {"Open": {"PENDING"}, "Won": {"WIN"}, "Lost": {"LOSS"}, "Void": {"VOID"}, "Unresolved": {"UNRESOLVED"}}.get(status)
 
 
@@ -29,7 +27,7 @@ def legs_of(b):
     return json.loads(b.get("legs_json") or "[]")
 
 
-rows = [b for b in bets if (not want_origin or (b.get("origin") or "AUTOMATIC") == want_origin) and (not want_status or b["result_status"] in want_status)
+rows = [b for b in bets if (not want_status or b["result_status"] in want_status)
         and (not q or any(q.lower() in (l.get("participant_name") or "").lower() for l in legs_of(b)))]
 st.caption(f"{len(rows)} of {len(bets)} ticket(s).")
 if not rows:

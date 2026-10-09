@@ -97,6 +97,19 @@ def manual_orders() -> list[dict]:
         conn.close()
 
 
+def personal_logs() -> dict:
+    """The published personal-log section ({"logs": {hash: {...}}, "rules": {...}}). Local mode builds it from the personal database."""
+    if _cloud():
+        return _wrap(cloud_snapshot.personal_logs)
+    import datetime as dt
+    from operational import personal_logs as pl
+    conn = pl.connect()
+    try:
+        return pl.section(conn, dt.datetime.now(dt.timezone.utc))
+    finally:
+        conn.close()
+
+
 def performance() -> dict:
     from dashboard import paper_performance_view as ppv
     try:

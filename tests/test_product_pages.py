@@ -10,10 +10,14 @@ from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
+from dashboard import order_client
 from dashboard import page_registry
 from dashboard import snapshot_source as ss
 from operational import runtime_mode as rm
-from tests.product_fixture import snapshot
+import json
+
+from operational import personal_logs as pl
+from tests.product_fixture import GEN, LOG_CODE, snapshot
 
 PAGES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "pages")
 BANNED = re.compile(r"(?i)\b(simulated|demo|fixture|sample data|lorem)\b")
@@ -33,12 +37,25 @@ def run_page(file, snap, *, setup=None, timeout=120):
     return at
 
 
+def rerun(at, snap):
+    """at.run() inside the same hosted-mode patches run_page uses (a bare at.run() would fall back to local mode)."""
+    state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snap, source="REMOTE", fetch_status="OK", freshness="CURRENT", schema_version=2)
+    with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+            mock.patch.object(ss, "current", return_value=state):
+        at.run()
+    return at
+
+
+def choose_log(at):
+    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None}
+
+
 def text(at):
     return " ".join([m.value for m in at.markdown] + [c.value for c in at.caption] + [t.value for t in at.title] + [h.value for h in at.subheader]
                     + [w.value for w in at.warning] + [i.value for i in at.info] + [e.value for e in at.error])
 
 
-CORE = ["21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "26_Player_Props.py", "30_Players.py", "27_Goalies.py", "31_Team_Intelligence.py",
+CORE = ["38_My_Bets.py", "21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "26_Player_Props.py", "30_Players.py", "27_Goalies.py", "31_Team_Intelligence.py",
         "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py"]
 
 
@@ -122,32 +139,130 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("never displayed", t)
         self.assertIn("Run non-staking order-path check", [b.label for b in at.button])
 
-    def test_best_options_page_labels_quotes_and_estimates_and_offers_add(self):
+    def test_best_options_page_labels_quotes_and_estimates(self):
         at = run_page("26_Player_Props.py", snapshot())
         t = text(at)
         self.assertNotIn("redundant", t.lower())
         self.assertIn("Estimated price", " ".join(m.label for m in at.metric))
-        self.assertIn("Add to paper book — $10", [b.label for b in at.button])
 
-    def test_nothing_is_written_by_browsing_or_filtering(self):
+    def test_without_a_chosen_log_no_add_button_is_offered_and_the_page_says_where_to_go(self):
         at = run_page("26_Player_Props.py", snapshot())
-        self.assertEqual(at.session_state.filtered_state.get("_paper_orders") or {}, {})
-        self.assertTrue(any(b.label == "Add to paper book — $10" for b in at.button))     # offered, not pressed
+        self.assertFalse(any(b.label.startswith("Add to ") for b in at.button))
+        self.assertIn("open or create your own log on My Bets", text(at).replace("**", ""))
 
-    def test_add_click_files_exactly_one_outstanding_order_and_a_second_click_does_nothing(self):
-        at = run_page("26_Player_Props.py", snapshot())
-        btn = next(b for b in at.button if b.label == "Add to paper book — $10")
+    def test_with_a_log_chosen_the_destination_is_named_and_browsing_writes_nothing(self):
+        at = run_page("26_Player_Props.py", snapshot(), setup=choose_log)
+        t = text(at)
+        self.assertIn("Adding to your personal log Casey", t.replace("<b>", "").replace("</b>", ""))
+        self.assertIn("separate from the model book", t)
+        self.assertTrue(any(b.label == "Add to Casey — $10.00" for b in at.button))        # offered, not pressed
+        self.assertEqual(at.session_state.filtered_state.get("_personal_orders") or {}, {})
+
+    def test_add_click_files_exactly_one_outstanding_order_for_that_log_and_a_second_click_does_nothing(self):
+        at = run_page("26_Player_Props.py", snapshot(), setup=choose_log)
+        btn = next(b for b in at.button if b.label == "Add to Casey — $10.00")
         btn.click()
         with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
                 mock.patch.object(ss, "current", return_value=ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snapshot(), source="REMOTE", fetch_status="OK", freshness="CURRENT")):
             at.run()
-        orders = at.session_state["_paper_orders"]
+        orders = at.session_state["_personal_orders"]
         self.assertEqual(len(orders), 1)
         only = next(iter(orders.values()))
-        self.assertIn("issues/new?labels=paper-order", only["url"])
-        # once an order is outstanding for that option the button is replaced by its status
-        outstanding = [b for b in at.button if b.label == "Add to paper book — $10"]
-        self.assertEqual(len(outstanding), len([o for o in snapshot()["tickets"]["options"]["options"]]) - 1)
+        self.assertEqual(only["log"], pl.code_hash(LOG_CODE))
+        self.assertIn("issues/new?labels=personal-bet", only["url"])
+        self.assertNotIn("otter", only["url"])                                         # the code is never in an order
+        outstanding = [b for b in at.button if b.label == "Add to Casey — $10.00"]
+        self.assertEqual(len(outstanding), len(snapshot()["tickets"]["options"]["options"]) - 1)
+
+    def test_direct_write_uses_the_app_credential_once_and_never_shows_it(self):
+        calls = []
+
+        def fake_submit(order, token, **kw):
+            calls.append((order, token))
+            return {"ok": True, "issue": 77}
+        with mock.patch.object(order_client, "submit_direct", side_effect=fake_submit):
+            at = run_page("26_Player_Props.py", snapshot(), setup=lambda a: (choose_log(a), a.secrets.__setitem__("LOG_WRITE_TOKEN", "t0ken-value")))
+            next(b for b in at.button if b.label == "Add to Casey — $10.00").click()
+            with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
+                    mock.patch.object(ss, "current", return_value=ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snapshot(), source="REMOTE", fetch_status="OK", freshness="CURRENT")):
+                at.run()
+        self.assertEqual(len(calls), 1)
+        order, token = calls[0]
+        self.assertEqual((order["type"], order["log"]["hash"], token), ("PERSONAL_BET", pl.code_hash(LOG_CODE), "t0ken-value"))
+        self.assertNotIn("t0ken-value", text(at))
+        self.assertNotIn("otter-maple", json.dumps(order))
+        self.assertEqual(next(iter(at.session_state["_personal_orders"].values()))["issue"], 77)
+
+    def test_engine_answers_are_shown_on_the_card(self):
+        snap = snapshot()
+        h = pl.code_hash(LOG_CODE)
+        at = run_page("26_Player_Props.py", snap, setup=choose_log)
+        oid = next(iter(snap["tickets"]["options"]["options"]))["option_id"]
+        next(b for b in at.button if b.label == "Add to Casey — $10.00").click()
+        rerun(at, snap)
+        order_id = next(iter(at.session_state["_personal_orders"].values()))["order_id"]
+        snap2 = snapshot()
+        snap2["personal_logs"]["logs"][h]["orders"] = [{"order_id": order_id, "kind": "PERSONAL_BET", "status": "REJECTED", "reason": "stale quote", "bet_id": None, "processed_at_utc": GEN}]
+        at2 = run_page("26_Player_Props.py", snap2, setup=lambda a: (choose_log(a), a.session_state.__setitem__("_personal_orders", {oid: {"order_id": order_id, "log": h}})))
+        self.assertIn("stale quote", text(at2))
+
+
+class TestMyBetsPage(unittest.TestCase):
+    def test_renders_with_the_code_warning_and_no_simulated_wording(self):
+        at = run_page("38_My_Bets.py", snapshot())
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        t = text(at)
+        self.assertIn("A code is a name, not a password", t.replace("<b>", "").replace("</b>", ""))
+        self.assertIn("public repository", t)
+        self.assertFalse(BANNED.search(t))
+
+    def test_opening_a_published_code_selects_the_log_and_an_unknown_code_is_refused(self):
+        at = run_page("38_My_Bets.py", snapshot())
+        at.text_input(key="mb_open_code").set_value(LOG_CODE); rerun(at, snapshot())
+        next(b for b in at.button if b.key == "mb_open").click(); rerun(at, snapshot())
+        self.assertEqual(at.session_state["_personal_log"]["hash"], pl.code_hash(LOG_CODE))
+        self.assertIn("Casey", " ".join(m.value for m in at.markdown))
+        at2 = run_page("38_My_Bets.py", snapshot())
+        at2.text_input(key="mb_open_code").set_value("no-such-code-123"); rerun(at2, snapshot())
+        next(b for b in at2.button if b.key == "mb_open").click(); rerun(at2, snapshot())
+        self.assertTrue(any("No log uses that code" in e.value for e in at2.error))
+        self.assertNotIn("_personal_log", at2.session_state)
+
+    def test_creating_with_a_code_already_in_use_is_refused_without_filing_anything(self):
+        with mock.patch.object(order_client, "submit_direct") as sub:
+            at = run_page("38_My_Bets.py", snapshot())
+            at.text_input(key="mb_new_name").set_value("Dana"); rerun(at, snapshot())
+            at.text_input(key="mb_new_code").set_value(LOG_CODE); rerun(at, snapshot())
+            next(b for b in at.button if b.key == "mb_create").click(); rerun(at, snapshot())
+        self.assertTrue(any("already in use" in e.value for e in at.error))
+        sub.assert_not_called()
+
+    def test_my_model_and_both_views_keep_the_two_books_apart(self):
+        at = run_page("38_My_Bets.py", snapshot(), setup=choose_log)
+        self.assertEqual(at.radio(key="mb_view").options, ["My bets", "Model bets", "Both"])
+        at.radio(key="mb_view").set_value("Both"); rerun(at, snapshot())
+        md = " ".join(m.value for m in at.markdown)
+        self.assertIn("My log", md)
+        self.assertIn("Model book", md)
+        self.assertIn("kept separate on purpose", " ".join(c.value for c in at.caption))
+        at.radio(key="mb_view").set_value("Model bets"); rerun(at, snapshot())
+        self.assertEqual(len(at.exception), 0)
+
+    def test_page_without_the_section_is_unavailable_not_an_error(self):
+        snap = snapshot()
+        del snap["personal_logs"]
+        at = run_page("38_My_Bets.py", snap)
+        self.assertEqual(len(at.exception), 0)
+        self.assertIn("not published yet", " ".join(w.value for w in at.warning) + text(at))
+
+
+    def test_goalie_page_has_the_best_option_section_and_says_why_when_there_is_none(self):
+        at = run_page("27_Goalies.py", snapshot(), setup=lambda a: a.query_params.__setitem__("goalie", "G1"))
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        t = text(at)
+        self.assertIn("Best qualifying +100 option", t)
+        self.assertIn("No qualifying option for this goalie right now", t)
+        self.assertIn("not a substitute for his own line", t)
 
     def test_model_health_states_validation_and_blocked_markets_without_relabelling(self):
         at = run_page("22_Model_Health.py", snapshot())

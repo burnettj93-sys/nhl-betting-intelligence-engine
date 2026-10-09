@@ -16,9 +16,9 @@ from dashboard import order_client, product_source
 from operational import eastern_time as et
 from operational import runtime_mode
 
-TONES = {"good": ("#12301e", "#2f6a48", "#8fe0b0"), "warn": ("#3a2f12", "#6b5417", "#f0cf6a"),
-         "bad": ("#3d1d1d", "#7a2f2f", "#f0a0a0"), "info": ("#14243d", "#2f4f80", "#9cc2f5"),
-         "muted": ("#1c212b", "#3a3f4b", "#aab2c5")}
+TONES = {"good": ("#16352a", "#2f7a57", "#9be8bf"), "warn": ("#3a3115", "#8a6d1f", "#f3d479"),
+         "bad": ("#3f2226", "#92404a", "#f5a9b0"), "info": ("#1b2d4d", "#3a64a8", "#a9c9ff"),
+         "muted": ("#252d3b", "#3b465a", "#b5bfd1")}
 STATUS_TONE = {"RECORDED": "info", "PENDING": "info", "WON": "good", "LOST": "bad", "VOID": "muted", "UNRESOLVED": "warn",
                "RECOMMENDED": "warn", "FINAL": "muted", "SCHEDULED": "info", "STARTED": "warn", "UNCONFIRMED": "warn",
                "CONFIRMED": "good", "AUTOMATIC": "muted", "MANUALLY_ADDED": "info"}
@@ -85,8 +85,8 @@ def esc(text) -> str:
 
 def chip(text: str, tone: str = "muted") -> str:
     bg, border, fg = TONES.get(tone, TONES["muted"])
-    return (f"<span style='display:inline-block;background:{bg};border:1px solid {border};color:{fg};border-radius:10px;"
-            f"padding:1px 9px;font-size:0.78rem;font-weight:600;margin-right:4px'>{text}</span>")
+    return (f"<span style='display:inline-block;background:{bg};border:1px solid {border};color:{fg};border-radius:999px;"
+            f"padding:2px 10px;font-size:0.76rem;font-weight:650;letter-spacing:.01em;margin-right:4px'>{text}</span>")
 
 
 def status_chip(status: str) -> str:
@@ -95,8 +95,8 @@ def status_chip(status: str) -> str:
 
 def banner(text: str, tone: str = "info") -> None:
     bg, border, fg = TONES[tone]
-    st.markdown(f"<div style='border:1px solid {border};border-radius:8px;padding:8px 14px;background:{bg};color:{fg};"
-                f"font-size:0.86rem;margin:4px 0 10px 0'>{text}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='border:1px solid {border};border-radius:12px;padding:10px 16px;background:{bg};color:{fg};"
+                f"font-size:0.88rem;line-height:1.45;margin:4px 0 12px 0'>{text}</div>", unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------ page chrome ----
@@ -182,6 +182,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
         res = t.get("result")
         c[4].metric("Result", signed_money(res["profit_loss"]) if res and res.get("profit_loss") is not None else "Open")
         st.caption(esc(t["rationale"]))
+        leg_why(legs)
         if t.get("recorded_at_utc"):
             st.caption(f"Recorded {et_time(t['recorded_at_utc'], True)} · ticket {t['ticket_id']} · prices and probabilities are frozen at that moment.")
         prov = t.get("provenance")
@@ -190,6 +191,24 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                        f"revalidated {et_time(prov.get('revalidated_at_utc'), True)}). {prov.get('jurisdiction_note', '')}")
         for a in t.get("alerts") or []:
             st.warning(esc(a["detail"]))
+
+
+def leg_why(legs: list[dict]) -> None:
+    """Short per-selection rationale (role, recent production and sample, expected output, main uncertainty) from the published product state."""
+    from operational import leg_context
+    try:
+        players, goalies = product_source.players(), product_source.goalies()
+    except Exception:  # noqa: BLE001 - the card stays valid without the extra context
+        return
+    shown = [(l, leg_context.for_leg(l, players, goalies)) for l in legs if l.get("market_family") != "MONEYLINE"]
+    shown = [(l, c) for l, c in shown if c]
+    if not shown:
+        return
+    with st.expander("Why this selection"):
+        for l, c in shown:
+            st.markdown(f"**{esc(l['label'])}**")
+            st.caption(esc(" · ".join(c["lines"])))
+            (st.warning if c["low_sample"] else st.caption)(esc(c["uncertainty"]))
 
 
 # ------------------------------------------------------------------ best options ----
@@ -215,6 +234,7 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         c[4].metric("Value after haircut", f"{opt['ev_after_haircut'] * 100:+.0f}%",
                     help="Expected return per dollar after lowering every leg's probability by 3 points — a policy margin, not a calibration.")
         st.caption(esc(opt["rationale"]))
+        leg_why(opt["legs"])
         if show_people and opt.get("best_for"):
             names = ", ".join(p["name"] for p in opt["best_for"])
             st.caption(f"Best option for: {names}")
@@ -265,84 +285,121 @@ def ontario_check(opt: dict, *, key: str) -> None:
                 st.link_button("Open GitHub to file this check", sess[f"{key}_{i}"])
 
 
-def _engine_order(order_id: str) -> dict | None:
+# ---- personal logs: the only writer in the product UI ----
+# A personal log belongs to whoever knows its code. It is kept apart from the $500 model book (different database file), so nothing here can change the
+# model's cash, exposure, slots or results. A code is a name for a log, not a password: see operational/personal_logs.py.
+
+def personal_logs_doc() -> dict:
     try:
-        for o in product_source.manual_orders():
-            if o["order_id"] == order_id:
-                return o
-    except Exception:  # noqa: BLE001
+        return product_source.personal_logs() or {}
+    except Exception:  # noqa: BLE001 - a missing section just means no log can be opened right now
+        return {}
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
+def _code_hash(code: str) -> str:
+    from operational import personal_logs
+    return personal_logs.code_hash(code)
+
+
+def selected_log() -> dict | None:
+    """The log this browser session is working in, resolved against what is published: {"hash", "name", "exists", "creation"} or None."""
+    sel = st.session_state.get("_personal_log")
+    if not sel:
         return None
+    doc = (personal_logs_doc().get("logs") or {}).get(sel["hash"])
+    if doc:
+        sel["creation"] = None                                  # the log exists now; later bets do not need the creation details
+        sel["name"] = doc["display_name"]
+    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc}
+
+
+def select_log(code: str, name: str | None = None, *, creation: dict | None = None) -> None:
+    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation}
+
+
+def forget_log() -> None:
+    st.session_state.pop("_personal_log", None)
+
+
+def _log_order(order_id: str, log_hash: str) -> dict | None:
+    for o in ((personal_logs_doc().get("logs") or {}).get(log_hash) or {}).get("orders") or []:
+        if o["order_id"] == order_id:
+            return o
     return None
 
 
-def add_control(opt: dict, *, key: str, cash: float | None, page_generated_at: str | None) -> None:
-    """The only writer in the product UI. Called on every render, but it files an order only inside the button handlers."""
+def file_order(order: dict) -> dict:
+    """Creates the order in the queue. {"ok", "via", "issue"|"url"|"error"}; the credential never leaves this function."""
+    token = order_client.personal_write_token(getattr(st, "secrets", {}))
+    if token:
+        res = order_client.submit_direct(order, token)
+        return {"ok": res["ok"], "via": "direct", "issue": res.get("issue"), "error": res.get("error")}
+    return {"ok": True, "via": "link", "url": order_client.prefilled_issue_url(order)}
+
+
+def add_control(opt: dict, *, key: str, cash: float | None = None, page_generated_at: str | None = None) -> None:
+    """Adds this option to the personal log chosen on My Bets. Called on every render, but it files an order only inside the button handlers."""
+    from operational import personal_logs as pl
+    log = selected_log()
+    if not log:
+        st.caption("To track this bet, open or create your own log on **My Bets** (sidebar) first. Personal logs never touch the model's $500 book.")
+        return
     on_book = opt.get("on_book")
     if on_book:
-        label = "an automatic ticket" if on_book["origin"] == "AUTOMATIC" else "a manually added ticket"
-        banner(f"On the book as {label}: <b>{on_book['ticket_id']}</b> ({on_book['status'].title()}). A second stake on the same bet is not allowed.", "info")
-        return
-    sess = st.session_state.setdefault("_paper_orders", {})
+        st.caption(f"The model book holds this exact bet as {on_book['ticket_id']} ({on_book['status'].title()}). Adding it to your own log does not change that.")
+    banner(f"Adding to your personal log <b>{esc(log['name'])}</b> — separate from the model book.", "info")
+    sess = st.session_state.setdefault("_personal_orders", {})
     mine = sess.get(opt["option_id"])
-    order = _engine_order(mine["order_id"]) if mine else None
-    if order is not None:
-        status = order["status"]
+    if mine and mine.get("log") != log["hash"]:
+        mine = None
+    answer = _log_order(mine["order_id"], log["hash"]) if mine else None
+    if answer is not None:
+        status = answer["status"]
         if status == "RECORDED":
-            banner(f"Added to the paper book as <b>{order['ticket_id']}</b> (\\$10, manually added).", "good")
+            banner(f"Added to <b>{esc(log['name'])}</b> as <b>{answer['bet_id']}</b> (manually added).", "good")
             return
         if status == "ALREADY_RECORDED":
-            banner(f"Not added again: {esc(order['reason'])} ({order['ticket_id']}).", "info")
-            return
-        if status == "REJECTED":
-            banner(f"The engine did not add this: {esc(order['reason'])}", "bad")
-            if st.button("Dismiss", key=f"{key}_dismiss"):
-                sess.pop(opt["option_id"], None)
-                st.rerun()
+            banner(f"Not added again: {esc(answer['reason'])}", "info")
             return
         if status == "NEEDS_ACCEPTANCE":
-            detail = order.get("detail") or {}
-            ch = "; ".join(f"{c['leg']}: {c['was']} → {c['now']}" for c in detail.get("changes", [])) or "details changed"
-            banner(f"<b>Nothing was added.</b> Since you looked, {esc(ch)}. New price {american(detail.get('combined_american'))}, "
-                   f"hit chance {pct(detail.get('hit_probability'))}, return {money(detail.get('potential_return'))}. "
-                   "Accept the new details to add it.", "warn")
-            if st.button("Accept new details and add — $10", key=f"{key}_accept", type="primary"):
-                _submit(opt | {k: detail[k] for k in ("legs", "combined_american", "hit_probability") if k in detail}, key, sess,
-                        page_generated_at, supersedes=order["order_id"])
-            return
+            banner("<b>Nothing was added.</b> The price or hit chance moved since you looked. Reload to see the current numbers, then add again.", "warn")
+        else:
+            banner(f"The engine did not add this: {esc(answer['reason'])}", "bad")
+        if st.button("Dismiss", key=f"{key}_dismiss"):
+            sess.pop(opt["option_id"], None)
+            st.rerun()
+        return
     if mine:
-        msg = "Order sent — waiting for the engine to revalidate and record it."
-        banner(msg, "info")
+        banner("Order sent — waiting for the engine to revalidate and record it (usually a few minutes).", "info")
         if mine.get("url"):
             st.link_button("Open GitHub to finish filing this order", mine["url"])
-            st.caption("The order exists only after you press “Submit new issue” on GitHub.")
+            st.caption("Repository owner only: the order exists once you press “Submit new issue” on GitHub.")
         if st.button("Check status", key=f"{key}_check"):
             from dashboard import snapshot_source
             snapshot_source.current(force_refresh=True)
             st.rerun()
         return
-    disabled = cash is not None and cash + 1e-9 < opt["stake"]
-    if disabled:
-        st.caption(f"Add is unavailable: available cash {money(cash)} is below the {money(opt['stake'])} stake (no top-up).")
-    if st.button("Add to paper book — $10", key=f"{key}_add", disabled=disabled, type="primary",
-                 help="Files one $10 order. The engine rechecks the price first and asks you to accept any change."):
-        _submit(opt, key, sess, page_generated_at)
+    rules = personal_logs_doc().get("rules") or {}
+    lo, hi, default = rules.get("stake_min", pl.MIN_STAKE), rules.get("stake_max", pl.MAX_STAKE), rules.get("stake_default", pl.DEFAULT_STAKE)
+    stake = st.number_input("Stake (paper $)", min_value=float(lo), max_value=float(hi), value=float(default), step=5.0, key=f"{key}_stake")
+    if not order_client.personal_write_token(getattr(st, "secrets", {})):
+        st.caption("Adding bets from this page is not switched on yet (the app has no write credential). The button below makes a pre-filled GitHub issue that only the repository owner can submit.")
+    if st.button(f"Add to {log['name']} — {money(stake)}", key=f"{key}_add", type="primary",
+                 help="Files one order. The engine rechecks the price first, and tells you if it moved. Nothing is added by browsing or refreshing."):
+        _submit_personal(opt, key, sess, log, float(stake), page_generated_at)
 
 
-def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supersedes: str | None = None) -> None:
-    if opt["option_id"] in sess and not supersedes:
+def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, page_generated_at: str | None) -> None:
+    if opt["option_id"] in sess:
         return                                                  # a repeated click while an order is outstanding
-    order = order_client.build_order(opt, order_id=order_client.new_order_id(), page_generated_at=page_generated_at, supersedes=supersedes)
-    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), signed_in_email())
-    record = {"order_id": order["order_id"], "via": "direct" if direct else "link"}
-    if direct:
-        res = order_client.submit_direct(order, token)
-        if not res["ok"]:
-            banner(esc(res["error"]), "bad")
-            return
-        record["issue"] = res["issue"]
-    else:
-        record["url"] = order_client.prefilled_issue_url(order)
-    sess[opt["option_id"]] = record
+    order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
+                                              stake=stake, create=None if log["exists"] else log["creation"])
+    res = file_order(order)
+    if not res["ok"]:
+        banner(esc(res["error"]), "bad")
+        return
+    sess[opt["option_id"]] = {"order_id": order["order_id"], "log": log["hash"], "via": res["via"], "issue": res.get("issue"), "url": res.get("url")}
     st.rerun()
 
 
@@ -371,6 +428,30 @@ def reported_line(p: dict) -> str:
 def reported_pp(p: dict) -> str:
     r = _shown(p)
     return (r.get("pp") or "—") if r else "—"
+
+
+def app_version() -> dict:
+    """The commit this running app was deployed from, read from its checkout's .git (no subprocess), or 'unknown'. Shown on Diagnostics so a stale deploy is visible."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    try:
+        git = root / ".git"
+        if git.is_file():                                      # a worktree: ".git" is a pointer file
+            git = Path(git.read_text().split("gitdir:", 1)[1].strip())
+        ref = (git / "HEAD").read_text().strip()
+        if len(ref) == 40:
+            return {"commit": ref, "source": ".git/HEAD"}
+        target = git / ref.split(" ", 1)[1]
+        if target.exists():
+            return {"commit": target.read_text().strip(), "source": ".git ref"}
+        packed = git / "packed-refs"
+        if packed.exists():
+            for line in packed.read_text().splitlines():
+                if line.endswith(" " + ref.split(" ", 1)[1]):
+                    return {"commit": line.split()[0], "source": "packed-refs"}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"commit": "unknown", "source": None}
 
 
 # ---- order-path check: proves the click-to-queue path end to end without staking anything ----

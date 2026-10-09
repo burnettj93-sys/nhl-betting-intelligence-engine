@@ -1,0 +1,119 @@
+{
+ "purpose": "Calibration of the shipped skater model (Platt-calibrated) on the untouched 2025-26 walk-forward by number of prior NHL games; basis for MIN_GAMES_FOR_PRICING = 40",
+ "generated_by": "walk-forward over research/product_models/validate.py (same configuration and calibration as docs/validation/skater_projection_validation.json)",
+ "slices_by_prior_games": {
+  "5-19": {
+   "n": 1698,
+   "points>=1": {
+    "pred": 0.2766,
+    "obs": 0.2362,
+    "ll": 0.54078
+   },
+   "goals>=1": {
+    "pred": 0.1204,
+    "obs": 0.1095,
+    "ll": 0.34119
+   },
+   "shots>=2": {
+    "pred": 0.3362,
+    "obs": 0.2815,
+    "ll": 0.57525
+   },
+   "shots>=3": {
+    "pred": 0.1361,
+    "obs": 0.1078,
+    "ll": 0.3239
+   },
+   "assists>=1": {
+    "pred": 0.186,
+    "obs": 0.1449,
+    "ll": 0.41451
+   }
+  },
+  "20-39": {
+   "n": 2149,
+   "points>=1": {
+    "pred": 0.2639,
+    "obs": 0.2415,
+    "ll": 0.54007
+   },
+   "goals>=1": {
+    "pred": 0.1143,
+    "obs": 0.0889,
+    "ll": 0.29356
+   },
+   "shots>=2": {
+    "pred": 0.3225,
+    "obs": 0.2955,
+    "ll": 0.57969
+   },
+   "shots>=3": {
+    "pred": 0.1285,
+    "obs": 0.1196,
+    "ll": 0.34692
+   },
+   "assists>=1": {
+    "pred": 0.1779,
+    "obs": 0.1685,
+    "ll": 0.44187
+   }
+  },
+  "40-79": {
+   "n": 3145,
+   "points>=1": {
+    "pred": 0.2749,
+    "obs": 0.2712,
+    "ll": 0.56068
+   },
+   "goals>=1": {
+    "pred": 0.1196,
+    "obs": 0.1145,
+    "ll": 0.33994
+   },
+   "shots>=2": {
+    "pred": 0.33,
+    "obs": 0.3313,
+    "ll": 0.59514
+   },
+   "shots>=3": {
+    "pred": 0.1353,
+    "obs": 0.1428,
+    "ll": 0.37315
+   },
+   "assists>=1": {
+    "pred": 0.1857,
+    "obs": 0.179,
+    "ll": 0.4589
+   }
+  },
+  "80+": {
+   "n": 39630,
+   "points>=1": {
+    "pred": 0.3569,
+    "obs": 0.3658,
+    "ll": 0.60376
+   },
+   "goals>=1": {
+    "pred": 0.1562,
+    "obs": 0.1612,
+    "ll": 0.40771
+   },
+   "shots>=2": {
+    "pred": 0.4366,
+    "obs": 0.448,
+    "ll": 0.61295
+   },
+   "shots>=3": {
+    "pred": 0.2178,
+    "obs": 0.2348,
+    "ll": 0.47451
+   },
+   "assists>=1": {
+    "pred": 0.2459,
+    "obs": 0.2551,
+    "ll": 0.53473
+   }
+  }
+ },
+ "reading": "Below 40 prior games the model predicts more than occurs (points>=1 +2.4 to +4.0 pts, shots>=2 +3 to +5.5 pts); from 40 it is within about 1 pt. A role-specific slice (low ice time, no power play) was examined and discarded: it was defined by the game's actual ice time, which is only known afterwards, so it is biased and proves nothing."
+}

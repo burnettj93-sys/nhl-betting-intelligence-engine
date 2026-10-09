@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 VALIDATION_PATH = REPO / "docs" / "validation" / "skater_projection_validation.json"
 EVENTS = {"shots": (1, 2, 3, 4, 5), "points": (1, 2), "goals": (1,), "assists": (1,), "hits": (1, 2, 3), "blocks": (1, 2)}
 ROLE_WINDOW = 6                 # most recent games used to infer line / power-play unit
-MIN_GAMES_FOR_PRICING = 20      # the validation shows over-prediction before this much history
+from operational.pricing_policy import MIN_GAMES_FOR_PRICING  # noqa: E402  (policy lives in a dependency-free module)
 
 
 def load_validation(path: Path = VALIDATION_PATH) -> dict:

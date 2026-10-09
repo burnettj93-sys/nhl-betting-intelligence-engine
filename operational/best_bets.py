@@ -284,6 +284,7 @@ def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, ro
 
 
 def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None = None) -> dict:
+    from research.product_models import live
     as_of = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S")
     dressed, curteam = _dressed_and_current_team(conn, list(today), as_of)
     signature = hashlib.sha256(json.dumps({t: sorted(v) for t, v in sorted(dressed.items())}).encode()).hexdigest()[:16]
@@ -293,13 +294,15 @@ def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None =
         cached = json.loads(cache_path.read_text())
         _, checksum = _current_season_rows()
         if (cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature
-                    and cached.get("version") == MODEL_VERSION):
+                    and cached.get("version") == MODEL_VERSION
+                    and cached.get("min_games") == live.MIN_GAMES_FOR_PRICING):
             return cached["model"]
     _rows, checksum = _current_season_rows()
     model = compute_model_v2(today, dressed, curteam, date)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature,
-                                      "version": MODEL_VERSION, "model": model}))
+                                      "version": MODEL_VERSION, "model": model,
+                                      "min_games": live.MIN_GAMES_FOR_PRICING}))
     return model
 
 

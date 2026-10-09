@@ -1,5 +1,5 @@
 """Today — the automatic engine's view of the Eastern-time hockey day: today's games, the (up to five) distinct +100 cross-game
-tickets it recorded or recommends, the shared $500 paper account, and anything added by hand. Read-only."""
+tickets it recorded or recommends, and the model's $500 paper book. Personal logs are on My Bets and never appear here. Read-only."""
 from __future__ import annotations
 
 import sys
@@ -12,9 +12,9 @@ if str(REPO_ROOT) not in sys.path:
 import streamlit as st
 
 from dashboard import product_source as ps
-from dashboard import ui
+from dashboard import theme, ui
 
-ui.header("Today", "Games, the automatic tickets, and the paper account — all from observed data and DraftKings quotes.")
+ui.header("Today", "Games, the automatic tickets, and the model's paper book — all from observed data and DraftKings quotes.")
 tk = ui.load(ps.tickets, "The ticket board")
 try:
     games = ps.games()
@@ -35,7 +35,7 @@ cols[2].metric("Equity", ui.money(acct["equity"]), help="Cash plus open stakes a
 cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
 cols[5].metric("Tickets", acct["tickets"], help="All tickets ever recorded in this account.")
-st.caption(f"Paper account · \\$500 start, \\$10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
+st.caption(f"Model book (automatic tickets only) · \\$500 start, \\$10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
@@ -72,7 +72,8 @@ st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket i
 for t in tk["tickets"]:
     ui.ticket_card(t)
 if slots["empty"]:
-    ui.banner("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")), "muted")
+    theme.empty_state("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")),
+                      "The engine leaves a slot empty rather than fill it with a ticket that fails the rules.")
     pol = tk.get("policy") or {}
     st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
                f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
@@ -80,7 +81,7 @@ if slots["empty"]:
 
 ex = tk.get("exposure") or {}
 if ex.get("tickets_counted"):
-    with st.expander(f"Shared exposure across {ex['tickets_counted']} ticket(s) (automatic and manual)"):
+    with st.expander(f"Exposure across {ex['tickets_counted']} model-book ticket(s)"):
         by = ex.get("tickets_by_origin") or {}
         st.caption(f"Open stake at risk: {ui.money(ex.get('recorded_stake_at_risk'))} · "
                    + " · ".join(f"{ui.STATUS_TEXT.get(k, k)}: {v}" for k, v in by.items()) + ". " + ui.esc(ex.get("note", "")))
@@ -95,14 +96,7 @@ if ex.get("tickets_counted"):
         if not shared and not shared_g:
             st.caption("No player or game appears on more than one ticket.")
 
-manual = tk.get("manual_tickets") or []
-st.subheader("Added by hand today")
-st.caption("Tickets added with “Add to paper book — \\$10” on Best Options or Players. They share the account and exposure above, never take one of the five automatic slots, and are reported separately in Paper Performance.")
-if manual:
-    for t in manual:
-        ui.ticket_card(t)
-else:
-    st.caption("None today.")
+st.caption("Your own bets live on **My Bets** (your personal log) and never change the model book on this page.")
 
 if tk.get("earlier_open_tickets"):
     st.subheader("Earlier tickets still open")
@@ -112,4 +106,4 @@ if tk.get("recent_settled"):
     st.subheader("Recently settled")
     for t in tk["recent_settled"][:5]:
         ui.ticket_card(t)
-    st.caption("Full history, both origins, is on Ticket History.")
+    st.caption("Full history is on Ticket History.")

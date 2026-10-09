@@ -136,3 +136,25 @@ else:
                    "saves props stay blocked from tickets until this goalie's start is confirmed.")
     else:
         st.caption("No projection: this goalie has no recorded appearances and is not among his team's recent starters.")
+
+st.markdown("#### Best qualifying +100 option")
+try:
+    _tk = ps.tickets()
+    _doc = ps.options()
+    _opts = {o["option_id"]: o for o in _doc.get("options", [])}
+    _person = (_doc.get("persons") or {}).get(sel)
+    _page_ts = _tk["generated_at_utc"]
+except ps.Unavailable as _exc:
+    _opts, _person, _page_ts = {}, None, None
+    st.caption(f"The option board is unavailable: {ui.esc(str(_exc))}")
+if _person and _person.get("option_id") in _opts:
+    ui.option_card(_opts[_person["option_id"]], key=f"gl_{_person['option_id']}", cash=None, page_generated_at=_page_ts)
+elif _page_ts:
+    _why = {"NO_FRESH_PRICED_LEG": "no fresh DraftKings saves price is on file for this goalie",
+            "NO_LEG_BEATS_ITS_PRICE": "none of his priced saves lines beats its price under the ticket policy",
+            "NO_COMPANION_REACHES_PLUS_100_WITH_POSITIVE_VALUE": "his saves line alone does not reach +100 and no cross-game partner makes a +100 parlay with value"}
+    _confirmed = str(cf.get("status", "")).upper() == "CONFIRMED" if ng else False
+    st.caption("No qualifying option for this goalie right now: "
+               + (_why.get((_person or {}).get("reason_no_option"), "saves lines are only priced into options once this goalie's start is confirmed, and none is on file")
+                  if _confirmed else "saves props stay blocked until this goalie's start is confirmed by a recognised source, and the goalie's team result is not a substitute for his own line")
+               + ". Singles are quoted DraftKings prices; two-leg parlays are labelled estimates, never a quoted combined price.")

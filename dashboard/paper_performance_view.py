@@ -1,10 +1,9 @@
 """
 Paper Performance data: the real $500 / $10-per-ticket paper account, read from the stored ledger rows only.
 
-The account is one shared pool of cash. Results are reported three ways -- AUTOMATIC tickets (selected and recorded by the
-engine), MANUALLY_ADDED tickets (added by hand with the explicit action) and ALL -- so a manual ticket is never folded into
-the engine's own record. Simulated tracks are not part of the product; this module reads REAL_MARKET_PAPER only and creates
-nothing.
+This is the MODEL book: the engine's own AUTOMATIC tickets only. Hand-added bets are not in this ledger's accounting (they live in the
+separate personal-log database, see operational/personal_logs.py). Simulated tracks are not part of the product; this module reads
+REAL_MARKET_PAPER only and creates nothing.
 """
 from __future__ import annotations
 
@@ -22,8 +21,7 @@ def read_dashboard_state(conn, *, max_bets: int | None = None) -> dict:
     out = {"account": pb.account_state(conn, TRACK), "summary": pb.bankroll_summary(conn, TRACK),
            "answer": pb.answer_theoretical_bankroll_question(conn, TRACK), "origins": pb.origin_performance(conn, TRACK),
            "breakdowns": {"ALL": pb.performance_breakdowns(conn, TRACK)}, "bets": bets}
-    for origin in pb.ORIGINS:
-        out["breakdowns"][origin] = pb.performance_breakdowns(conn, TRACK, origin=origin)
+    out["breakdowns"]["AUTOMATIC"] = out["breakdowns"]["ALL"]
     return out
 
 

@@ -25,6 +25,28 @@ st.title("Diagnostics")
 comp.render_model_status_header()
 st.caption("Process facts only -- no environment variables, secrets or paths are shown.")
 
+st.markdown("### Versions and the unattended engine")
+from dashboard import ui as _uiv
+from operational import watchdog as _wd
+_ver = _uiv.app_version()
+try:
+    from dashboard import cloud_snapshot as _cs0
+    _sm = _cs0.snapshot_meta()
+    _hs = _cs0.health_section()
+except Exception:  # noqa: BLE001 - never fail the page
+    _sm, _hs = {}, {}
+_vc = st.columns(3)
+_vc[0].metric("This hosted app is running commit", (_ver["commit"] or "unknown")[:10])
+_vc[1].metric("Published data was built from commit", ((_sm or {}).get("source_master_commit") or "unknown")[:10])
+_wv = _wd.view((_hs or {}).get("watchdog"))
+_vc[2].metric("Watchdog", _wv["status"], f"checked {(_wv['age_min'] or 0):.0f} min ago" if _wv["age_min"] is not None else None, delta_color="off")
+if _wv["message"]:
+    st.warning(_wv["message"])
+if _wv["checks"]:
+    st.dataframe([{"Check": c["name"].replace("_", " "), "Status": c["status"], "Evidence": c["detail"]} for c in _wv["checks"]], hide_index=True, width="stretch")
+st.caption("The watchdog runs on the engine's Mac every 30 minutes (launchd) and is re-aged here when the page opens: if it stops, this turns FAIL by itself. "
+           "If the two commits differ, a deploy is pending or the hosted app has not been rebooted.")
+
 st.markdown("### Owner daily check")
 try:
     from dashboard import snapshot_source

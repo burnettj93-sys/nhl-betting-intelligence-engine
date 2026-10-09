@@ -53,6 +53,10 @@ PAPER_BET_STAKE = 10.00  # 2% of the default starting bankroll -- fixed, never d
 TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER", "GAME_PARLAY_PAPER")
 PRICE_SOURCES = ("LIVE_DRAFTKINGS", "SIMULATED_DEMO")
 ORIGINS = ("AUTOMATIC", "MANUALLY_ADDED")
+# The model book (the $500 experiment) is the AUTOMATIC tickets and nothing else. A MANUALLY_ADDED row that exists in this ledger is a
+# pre-separation legacy record: it is kept untouched for audit, but no account, exposure, slot, performance or settlement query counts it.
+# Hand-added bets now live in operational/personal_logs.py, a different database file.
+MODEL_BOOK_ORIGIN = "AUTOMATIC"
 RESULT_STATES = ("PENDING", "WIN", "LOSS", "VOID", "UNRESOLVED")
 
 ODDS_RANGE_BUCKETS_ORDER = (
@@ -284,7 +288,7 @@ def account_state(conn: sqlite3.Connection, track: str) -> dict:
              COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN stake END), 0) AS open_stakes,
              COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN 1 END), 0) AS open_tickets,
              COUNT(*) AS tickets
-           FROM paper_bets WHERE track = ?""", (track,)).fetchone()
+           FROM paper_bets WHERE track = ? AND origin = 'AUTOMATIC'""", (track,)).fetchone()
     realized, open_stakes = float(row["realized"]), float(row["open_stakes"])
     cash = PAPER_STARTING_BANKROLL + realized - open_stakes
     return {"track": track, "starting_bankroll": PAPER_STARTING_BANKROLL, "available_cash": round(cash, 2),
@@ -577,7 +581,8 @@ def compute_manual_ticket_id(stake_date: str, legs) -> str:
 
 def create_manual_paper_bet(conn: sqlite3.Connection, combo, *, provenance: dict, event_start_utc: str | None,
                              created_at_utc: str | None = None, code_version: str | None = None) -> dict:
-    """The one writer for MANUALLY_ADDED tickets. Same $10 stake, same REAL_MARKET_PAPER account and the same atomic
+    """RETIRED: no production code calls this any more (hand-added bets go to operational/personal_logs.py; a ledger row it writes is excluded from
+    every model-book query). Kept only so the legacy record and its tests stay interpretable. It was the one writer for MANUALLY_ADDED tickets. Same $10 stake, same REAL_MARKET_PAPER account and the same atomic
     funds/duplicate transaction as automatic tickets; the ticket id carries an M prefix and the exact details the user
     accepted are frozen in provenance_json. Refuses a bet the automatic tickets already hold (same legs, same day):
     that would stake one bet twice."""
@@ -663,7 +668,7 @@ def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:
     Returns {"count": int, "used_game_ids": set[str],
              "used_leg_keys": set[(game_id, participant_id, market_family, threshold)]}."""
     rows = conn.execute(
-        "SELECT legs_json FROM paper_bets WHERE track = 'REAL_MARKET_PAPER' AND is_combo = 1 "
+        "SELECT legs_json FROM paper_bets WHERE track = 'REAL_MARKET_PAPER' AND is_combo = 1 AND origin = 'AUTOMATIC' "
         "AND market_id LIKE ?", (f"REAL_MARKET_PARLAY:{stake_date}:%",)).fetchall()
     used_game_ids: set[str] = set()
     used_leg_keys: set[tuple] = set()
@@ -740,7 +745,7 @@ def find_unresolved_past_event_bets(conn: sqlite3.Connection, track: str | None 
     this NEVER guesses a WIN/LOSS outcome (Part 43/44)."""
     now_iso = _utcnow_iso()
     states = "('PENDING', 'UNRESOLVED')" if include_unresolved else "('PENDING')"
-    clauses = [f"result_status IN {states}", "event_start_utc IS NOT NULL", "event_start_utc < ?"]
+    clauses = [f"result_status IN {states}", "event_start_utc IS NOT NULL", "event_start_utc < ?", "origin = 'AUTOMATIC'"]
     params: list = [now_iso]
     if track is not None:
         clauses.append("track = ?")
@@ -760,7 +765,7 @@ def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None =
     before its game starts -- never to re-settle or re-price a bet whose
     event has already begun."""
     now_iso = _utcnow_iso()
-    clauses = ["result_status = 'PENDING'", "event_start_utc IS NOT NULL", "event_start_utc >= ?"]
+    clauses = ["result_status = 'PENDING'", "event_start_utc IS NOT NULL", "event_start_utc >= ?", "origin = 'AUTOMATIC'"]
     params: list = [now_iso]
     if track is not None:
         clauses.append("track = ?")
@@ -773,7 +778,8 @@ def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None =
 
 
 def query_paper_bets(conn: sqlite3.Connection, track: str | None = None, is_combo: bool | None = None,
-                      result_status: str | None = None, origin: str | None = None) -> list[dict]:
+                      result_status: str | None = None, origin: str | None = MODEL_BOOK_ORIGIN) -> list[dict]:
+    """The model book's tickets by default (origin AUTOMATIC). Pass origin=None to read every row, including a legacy MANUALLY_ADDED record (audit only)."""
     clauses, params = [], []
     if origin is not None:
         clauses.append("origin = ?"); params.append(origin)
@@ -906,7 +912,7 @@ def _breakdown(rows: list[dict], key_fn) -> dict:
     return out
 
 
-def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | None = None) -> dict:
+def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | None = MODEL_BOOK_ORIGIN) -> dict:
     """Part 38: results by market family, confidence, edge bucket, odds
     range, Top Conviction status, straight vs combo (optionally for one origin)."""
     rows = query_paper_bets(conn, track=track, origin=origin)
@@ -934,9 +940,8 @@ def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | N
 
 
 def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -> dict:
-    """The same account, split by where each ticket came from. AUTOMATIC and MANUALLY_ADDED tickets share one cash
-    balance, but their results are reported separately (and together under ALL) so a manual click can never be
-    folded into the engine's own record."""
+    """The model book's results, in the shape the pages already use: AUTOMATIC and ALL are the same set. Hand-added bets are not in this ledger's
+    accounting at all (see MODEL_BOOK_ORIGIN); their records are in operational/personal_logs.py, one log at a time."""
     rows = query_paper_bets(conn, track=track)
 
     def block(subset: list[dict]) -> dict:
@@ -955,9 +960,7 @@ def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER
                 "settled_pnl": round(pnl, 2), "roi": (pnl / staked) if staked > 0 else None,
                 "hit_rate": (wins / decided) if decided else None}
 
-    out = {origin: block([r for r in rows if (r.get("origin") or "AUTOMATIC") == origin]) for origin in ORIGINS}
-    out["ALL"] = block(rows)
-    return out
+    return {"AUTOMATIC": block(rows), "ALL": block(rows)}
 
 
 def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str) -> str:

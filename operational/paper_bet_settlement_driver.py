@@ -198,6 +198,34 @@ def resolve_combo_bet(nhl_conn, bet: dict) -> dict:
     return {"status": "WIN", **detail}
 
 
+def terminal_outcome(result: dict) -> dict | None:
+    """Maps one resolver (single) or combo result to the state a ticket takes, or None when it must simply stay as it is (a game not final yet).
+    {"status": WIN|LOSS|VOID|UNRESOLVED, "settled_odds", "notes", "detail_json"}. Shared by the model book and the personal logs so both settle by the same rules."""
+    status = result["status"]
+    if status in (resolver.GAME_NOT_FINAL, PENDING_STILL_WAITING):
+        return None
+    if status == resolver.RESOLVED:
+        final_status = "WIN" if result["outcome_hit"] else "LOSS"
+    elif status in ("WIN", "LOSS", "VOID"):
+        final_status = status
+    elif status in _PUSH_STATUSES:  # a single ticket whose player/team did not play: refund
+        final_status = "VOID" if VOID_RULES_VERIFIED else "UNRESOLVED"
+    else:
+        final_status = "UNRESOLVED"
+    notes = None
+    if result.get("reason") == "VOID_RULE_UNVERIFIED" or (status in _PUSH_STATUSES and not VOID_RULES_VERIFIED):
+        notes = ("A leg did not play. DraftKings Ontario's void/parlay-reduction rule is unverified, so the ticket "
+                 "stays open (UNRESOLVED); provisional outcome: "
+                 + json.dumps(result.get("provisional") or {"status": "VOID"}, default=str))
+    elif result.get("voided_legs"):
+        names = ", ".join(str(l.get("participant_name")) for l in result["voided_legs"])
+        notes = f"Parlay repriced: voided leg(s) {names} removed; settled at {result['settled_odds']:+.0f}"
+    detail = ({"leg_results": result["leg_results"], "settled_odds": result.get("settled_odds"),
+               "provisional": result.get("provisional")}
+              if "leg_results" in result else {"resolver": result})
+    return {"status": final_status, "settled_odds": result.get("settled_odds"), "notes": notes, "detail_json": json.dumps(detail, default=str)}
+
+
 def settle_due_bets(bankroll_conn, nhl_conn, *, track: str | None = None) -> dict:
     """The real, narrow driver entry point. Finds every PENDING bet whose
     event has started (paper_bankroll.find_unresolved_past_event_bets(),
@@ -215,36 +243,18 @@ def settle_due_bets(bankroll_conn, nhl_conn, *, track: str | None = None) -> dic
         summary["scanned"] += 1
         result = (resolve_combo_bet(nhl_conn, bet) if bet.get("is_combo")
                    else resolve_straight_bet(nhl_conn, bet))
-        status = result["status"]
-        if status in (resolver.GAME_NOT_FINAL, PENDING_STILL_WAITING):
+        outcome = terminal_outcome(result)
+        if outcome is None:
             summary["skipped_still_pending"] += 1
             summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": "SKIPPED_STILL_PENDING"})
             continue
-        if status == resolver.RESOLVED:
-            final_status = "WIN" if result["outcome_hit"] else "LOSS"
-        elif status in ("WIN", "LOSS", "VOID"):
-            final_status = status
-        elif status in _PUSH_STATUSES:  # a single ticket whose player/team did not play: refund
-            final_status = "VOID" if VOID_RULES_VERIFIED else "UNRESOLVED"
-        else:
-            final_status = "UNRESOLVED"
+        final_status = outcome["status"]
         if final_status == "UNRESOLVED" and bet["result_status"] == "UNRESOLVED":
             summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": "STILL_UNRESOLVED"})
             continue
-        notes = None
-        if result.get("reason") == "VOID_RULE_UNVERIFIED" or (status in _PUSH_STATUSES and not VOID_RULES_VERIFIED):
-            notes = ("A leg did not play. DraftKings Ontario's void/parlay-reduction rule is unverified, so the ticket "
-                     "stays open (UNRESOLVED); provisional outcome: "
-                     + json.dumps(result.get("provisional") or {"status": "VOID"}, default=str))
-        elif result.get("voided_legs"):
-            names = ", ".join(str(l.get("participant_name")) for l in result["voided_legs"])
-            notes = f"Parlay repriced: voided leg(s) {names} removed; settled at {result['settled_odds']:+.0f}"
-        detail = ({"leg_results": result["leg_results"], "settled_odds": result.get("settled_odds"),
-                   "provisional": result.get("provisional")}
-                  if "leg_results" in result else {"resolver": result})
         pb.settle_paper_bet(bankroll_conn, bet["paper_bet_id"], final_status,
-                            settled_odds=result.get("settled_odds"), notes=notes,
-                            settlement_json=json.dumps(detail, default=str))
+                            settled_odds=outcome["settled_odds"], notes=outcome["notes"],
+                            settlement_json=outcome["detail_json"])
         summary["settled"] += 1
         summary["results"].append({"paper_bet_id": bet["paper_bet_id"], "status": final_status,
                                     "resolver_detail": result})
