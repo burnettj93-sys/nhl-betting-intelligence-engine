@@ -77,6 +77,26 @@ class TestMorningSwitch(unittest.TestCase):
             self.assertTrue(cp.morning_enabled())
 
 
+class TestTransitionDay(unittest.TestCase):
+    def test_a_plan_saved_before_the_morning_look_cannot_be_pushed_over_its_budget_by_it(self):
+        old = {"day": "2026-10-09", "made_at_utc": "x", "D": 11.43, "games_today": 4, "games_priced": ["a", "b", "c"], "games_not_priced": ["d"], "goals_games": ["a"], "saves_games": [],
+               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.0, cp.PROPS: 6.0, cp.SAVES: 0.0, cp.GOALS: 1.0, cp.REFRESH: 0.43},
+               "budget": {"D": 11.43}}
+        starts4 = starts(("a", 0), ("b", 0), ("c", 15), ("d", 30))
+        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(cp, "day_budget", return_value={"D": 11.43}):
+            plan = cp.day_plan(NOW, "2026-10-09", starts4, remaining=282)
+        self.assertEqual(plan["morning_games"], [])                                   # 11.43 is fully committed: no credits are left for a morning look today
+        self.assertEqual(plan["allowance"][cp.MORNING], 0.0)
+        total = sum(v for k, v in plan["allowance"].items())
+        self.assertLessEqual(total, 11.43 + 1.0)                                      # the tomorrow check's one credit is the only addition
+        richer = {**old, "allowance": {**old["allowance"], cp.PROPS: 2.0}, "budget": {"D": 11.43}}
+        with mock.patch.object(cp, "load_plan", return_value=richer), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(cp, "day_budget", return_value={"D": 11.43}):
+            plan2 = cp.day_plan(NOW, "2026-10-09", starts4, remaining=282)
+        self.assertGreater(len(plan2["morning_games"]), 0)                            # credits that really are free fund a morning look
+
+
 class TestPlanState(unittest.TestCase):
     def test_the_priced_set_is_saved_for_the_day_and_not_reshuffled(self):
         with mock.patch.object(cp, "_persist") as persist, mock.patch.object(cp, "load_plan", return_value=None), mock.patch.object(cp, "spent_today", return_value={}):
