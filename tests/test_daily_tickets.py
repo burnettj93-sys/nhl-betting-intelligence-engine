@@ -287,7 +287,7 @@ class TestTodayScreen(unittest.TestCase):
         text = " ".join(m.value for m in at.markdown)
         self.assertEqual(text.count("Recorded</span>"), 5)
         self.assertGreaterEqual(len(at.dataframe), 5)                   # one leg table per ticket (+ exposure tables)
-        self.assertTrue(any('Shared exposure' in e.label for e in at.expander))
+        self.assertTrue(any('Exposure across' in e.label for e in at.expander))
         self.assertTrue(any(m.label == "Estimated combined price" for m in at.metric))
         self.assertFalse(any("Market coverage" in m.value for m in at.markdown))
 

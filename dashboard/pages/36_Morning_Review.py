@@ -47,7 +47,7 @@ m[0].metric("Available cash", ui.money(a["available_cash"]))
 m[1].metric("Open stakes", ui.money(a["open_stakes"]))
 m[2].metric("Equity", ui.money(a["equity"]))
 m[3].metric("Settled P&L (all time)", ui.signed_money(a["settled_pnl"]))
-for origin, label in (("AUTOMATIC", "Automatic tickets"), ("MANUALLY_ADDED", "Manually added tickets")):
+for origin, label in (("AUTOMATIC", "Model book (automatic tickets)"),):
     o = rv["origins"][origin]
     st.caption(f"{label}: {o['tickets']} total · {o['wins']}W-{o['losses']}L-{o['voids']}V · {o['pending'] + o['unresolved']} open · settled P&L {ui.signed_money(o['settled_pnl'])}")
 
@@ -55,7 +55,7 @@ tickets = rv["tickets"]
 st.subheader("Tickets settled that day")
 if not tickets:
     st.info(f"No ticket settled on {rv['review_date_et']}. Open tickets: {len(rv['open_tickets'])}.")
-for origin in ("AUTOMATIC", "MANUALLY_ADDED"):
+for origin in ("AUTOMATIC",):
     mine = [t for t in tickets if t["origin"] == origin]
     if not mine:
         continue

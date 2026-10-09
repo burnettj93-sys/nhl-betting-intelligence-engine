@@ -554,7 +554,7 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
     if rv:
         lines += ["", f"## Daily review of {rv['review_date_et']} (Eastern)",
                   f"- Account: cash ${rv['account']['available_cash']:.2f}, open ${rv['account']['open_stakes']:.2f}, equity ${rv['account']['equity']:.2f}, settled P&L {rv['account']['settled_pnl']:+.2f}"]
-        for origin in ("AUTOMATIC", "MANUALLY_ADDED"):
+        for origin in ("AUTOMATIC",):
             o = rv["origins"][origin]
             lines.append(f"- {origin}: {o['tickets']} ticket(s), {o['wins']}W-{o['losses']}L-{o['voids']}V, settled P&L {o['settled_pnl']:+.2f}")
         lines += [f"- {t['ticket_id']} ({t['origin']}): {t['status']} {t['profit_loss']} -- reading {t['reading']}" for t in rv["tickets"]]

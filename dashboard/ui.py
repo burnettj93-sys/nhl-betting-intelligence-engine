@@ -285,84 +285,121 @@ def ontario_check(opt: dict, *, key: str) -> None:
                 st.link_button("Open GitHub to file this check", sess[f"{key}_{i}"])
 
 
-def _engine_order(order_id: str) -> dict | None:
+# ---- personal logs: the only writer in the product UI ----
+# A personal log belongs to whoever knows its code. It is kept apart from the $500 model book (different database file), so nothing here can change the
+# model's cash, exposure, slots or results. A code is a name for a log, not a password: see operational/personal_logs.py.
+
+def personal_logs_doc() -> dict:
     try:
-        for o in product_source.manual_orders():
-            if o["order_id"] == order_id:
-                return o
-    except Exception:  # noqa: BLE001
+        return product_source.personal_logs() or {}
+    except Exception:  # noqa: BLE001 - a missing section just means no log can be opened right now
+        return {}
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
+def _code_hash(code: str) -> str:
+    from operational import personal_logs
+    return personal_logs.code_hash(code)
+
+
+def selected_log() -> dict | None:
+    """The log this browser session is working in, resolved against what is published: {"hash", "name", "exists", "creation"} or None."""
+    sel = st.session_state.get("_personal_log")
+    if not sel:
         return None
+    doc = (personal_logs_doc().get("logs") or {}).get(sel["hash"])
+    if doc:
+        sel["creation"] = None                                  # the log exists now; later bets do not need the creation details
+        sel["name"] = doc["display_name"]
+    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc}
+
+
+def select_log(code: str, name: str | None = None, *, creation: dict | None = None) -> None:
+    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation}
+
+
+def forget_log() -> None:
+    st.session_state.pop("_personal_log", None)
+
+
+def _log_order(order_id: str, log_hash: str) -> dict | None:
+    for o in ((personal_logs_doc().get("logs") or {}).get(log_hash) or {}).get("orders") or []:
+        if o["order_id"] == order_id:
+            return o
     return None
 
 
-def add_control(opt: dict, *, key: str, cash: float | None, page_generated_at: str | None) -> None:
-    """The only writer in the product UI. Called on every render, but it files an order only inside the button handlers."""
+def file_order(order: dict) -> dict:
+    """Creates the order in the queue. {"ok", "via", "issue"|"url"|"error"}; the credential never leaves this function."""
+    token = order_client.personal_write_token(getattr(st, "secrets", {}))
+    if token:
+        res = order_client.submit_direct(order, token)
+        return {"ok": res["ok"], "via": "direct", "issue": res.get("issue"), "error": res.get("error")}
+    return {"ok": True, "via": "link", "url": order_client.prefilled_issue_url(order)}
+
+
+def add_control(opt: dict, *, key: str, cash: float | None = None, page_generated_at: str | None = None) -> None:
+    """Adds this option to the personal log chosen on My Bets. Called on every render, but it files an order only inside the button handlers."""
+    from operational import personal_logs as pl
+    log = selected_log()
+    if not log:
+        st.caption("To track this bet, open or create your own log on **My Bets** (sidebar) first. Personal logs never touch the model's $500 book.")
+        return
     on_book = opt.get("on_book")
     if on_book:
-        label = "an automatic ticket" if on_book["origin"] == "AUTOMATIC" else "a manually added ticket"
-        banner(f"On the book as {label}: <b>{on_book['ticket_id']}</b> ({on_book['status'].title()}). A second stake on the same bet is not allowed.", "info")
-        return
-    sess = st.session_state.setdefault("_paper_orders", {})
+        st.caption(f"The model book holds this exact bet as {on_book['ticket_id']} ({on_book['status'].title()}). Adding it to your own log does not change that.")
+    banner(f"Adding to your personal log <b>{esc(log['name'])}</b> — separate from the model book.", "info")
+    sess = st.session_state.setdefault("_personal_orders", {})
     mine = sess.get(opt["option_id"])
-    order = _engine_order(mine["order_id"]) if mine else None
-    if order is not None:
-        status = order["status"]
+    if mine and mine.get("log") != log["hash"]:
+        mine = None
+    answer = _log_order(mine["order_id"], log["hash"]) if mine else None
+    if answer is not None:
+        status = answer["status"]
         if status == "RECORDED":
-            banner(f"Added to the paper book as <b>{order['ticket_id']}</b> (\\$10, manually added).", "good")
+            banner(f"Added to <b>{esc(log['name'])}</b> as <b>{answer['bet_id']}</b> (manually added).", "good")
             return
         if status == "ALREADY_RECORDED":
-            banner(f"Not added again: {esc(order['reason'])} ({order['ticket_id']}).", "info")
-            return
-        if status == "REJECTED":
-            banner(f"The engine did not add this: {esc(order['reason'])}", "bad")
-            if st.button("Dismiss", key=f"{key}_dismiss"):
-                sess.pop(opt["option_id"], None)
-                st.rerun()
+            banner(f"Not added again: {esc(answer['reason'])}", "info")
             return
         if status == "NEEDS_ACCEPTANCE":
-            detail = order.get("detail") or {}
-            ch = "; ".join(f"{c['leg']}: {c['was']} → {c['now']}" for c in detail.get("changes", [])) or "details changed"
-            banner(f"<b>Nothing was added.</b> Since you looked, {esc(ch)}. New price {american(detail.get('combined_american'))}, "
-                   f"hit chance {pct(detail.get('hit_probability'))}, return {money(detail.get('potential_return'))}. "
-                   "Accept the new details to add it.", "warn")
-            if st.button("Accept new details and add — $10", key=f"{key}_accept", type="primary"):
-                _submit(opt | {k: detail[k] for k in ("legs", "combined_american", "hit_probability") if k in detail}, key, sess,
-                        page_generated_at, supersedes=order["order_id"])
-            return
+            banner("<b>Nothing was added.</b> The price or hit chance moved since you looked. Reload to see the current numbers, then add again.", "warn")
+        else:
+            banner(f"The engine did not add this: {esc(answer['reason'])}", "bad")
+        if st.button("Dismiss", key=f"{key}_dismiss"):
+            sess.pop(opt["option_id"], None)
+            st.rerun()
+        return
     if mine:
-        msg = "Order sent — waiting for the engine to revalidate and record it."
-        banner(msg, "info")
+        banner("Order sent — waiting for the engine to revalidate and record it (usually a few minutes).", "info")
         if mine.get("url"):
             st.link_button("Open GitHub to finish filing this order", mine["url"])
-            st.caption("The order exists only after you press “Submit new issue” on GitHub.")
+            st.caption("Repository owner only: the order exists once you press “Submit new issue” on GitHub.")
         if st.button("Check status", key=f"{key}_check"):
             from dashboard import snapshot_source
             snapshot_source.current(force_refresh=True)
             st.rerun()
         return
-    disabled = cash is not None and cash + 1e-9 < opt["stake"]
-    if disabled:
-        st.caption(f"Add is unavailable: available cash {money(cash)} is below the {money(opt['stake'])} stake (no top-up).")
-    if st.button("Add to paper book — $10", key=f"{key}_add", disabled=disabled, type="primary",
-                 help="Files one $10 order. The engine rechecks the price first and asks you to accept any change."):
-        _submit(opt, key, sess, page_generated_at)
+    rules = personal_logs_doc().get("rules") or {}
+    lo, hi, default = rules.get("stake_min", pl.MIN_STAKE), rules.get("stake_max", pl.MAX_STAKE), rules.get("stake_default", pl.DEFAULT_STAKE)
+    stake = st.number_input("Stake (paper $)", min_value=float(lo), max_value=float(hi), value=float(default), step=5.0, key=f"{key}_stake")
+    if not order_client.personal_write_token(getattr(st, "secrets", {})):
+        st.caption("Adding bets from this page is not switched on yet (the app has no write credential). The button below makes a pre-filled GitHub issue that only the repository owner can submit.")
+    if st.button(f"Add to {log['name']} — {money(stake)}", key=f"{key}_add", type="primary",
+                 help="Files one order. The engine rechecks the price first, and tells you if it moved. Nothing is added by browsing or refreshing."):
+        _submit_personal(opt, key, sess, log, float(stake), page_generated_at)
 
 
-def _submit(opt: dict, key: str, sess: dict, page_generated_at: str | None, supersedes: str | None = None) -> None:
-    if opt["option_id"] in sess and not supersedes:
+def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, page_generated_at: str | None) -> None:
+    if opt["option_id"] in sess:
         return                                                  # a repeated click while an order is outstanding
-    order = order_client.build_order(opt, order_id=order_client.new_order_id(), page_generated_at=page_generated_at, supersedes=supersedes)
-    direct, token = order_client.configured_write_access(getattr(st, "secrets", {}), signed_in_email())
-    record = {"order_id": order["order_id"], "via": "direct" if direct else "link"}
-    if direct:
-        res = order_client.submit_direct(order, token)
-        if not res["ok"]:
-            banner(esc(res["error"]), "bad")
-            return
-        record["issue"] = res["issue"]
-    else:
-        record["url"] = order_client.prefilled_issue_url(order)
-    sess[opt["option_id"]] = record
+    order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
+                                              stake=stake, create=None if log["exists"] else log["creation"])
+    res = file_order(order)
+    if not res["ok"]:
+        banner(esc(res["error"]), "bad")
+        return
+    sess[opt["option_id"]] = {"order_id": order["order_id"], "log": log["hash"], "via": res["via"], "issue": res.get("issue"), "url": res.get("url")}
     st.rerun()
 
 

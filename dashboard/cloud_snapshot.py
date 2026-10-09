@@ -110,6 +110,10 @@ def manual_orders() -> dict:
     return _optional("manual_orders")
 
 
+def personal_logs() -> dict:
+    return _optional("personal_logs")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 

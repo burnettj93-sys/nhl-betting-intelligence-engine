@@ -102,6 +102,16 @@ def run(now: dt.datetime | None = None) -> dict:
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
         if settlement_summary.get("settled"):
             daily_tickets.refresh_state_only(bankroll_conn, now)
+        # Personal logs (a separate database; never the model ledger) settle by the same rules. A failure never stops the model book's cycle.
+        try:
+            from operational import personal_logs
+            _pconn = personal_logs.connect()
+            try:
+                personal_summary = personal_logs.settle_open(_pconn, nhl_conn, now)
+            finally:
+                _pconn.close()
+        except Exception as exc:  # noqa: BLE001
+            personal_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "settled": 0}
         try:
             from operational import product_data
             product_summary = product_data.refresh_state(now, nhl=nhl_conn, tickets_state=daily_tickets.read_state())
@@ -115,7 +125,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "manual_orders": manual_summary, "product_state": product_summary, "starter_feed": df_summary}
+              "manual_orders": manual_summary, "personal_logs": personal_summary, "product_state": product_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],
@@ -123,7 +133,7 @@ def run(now: dt.datetime | None = None) -> dict:
         "insufficient_funds": stake_summary["insufficient_funds"], "status": "SUCCESS"})
     settled_count = (settlement_summary or {}).get("settled", 0)
     if (stake_summary["newly_recorded"] > 0 or settled_count > 0 or stake_summary["state_changed"]
-            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or df_summary.get("written") or _publish_heartbeat_due(now)):
+            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or personal_summary.get("settled") or df_summary.get("written") or _publish_heartbeat_due(now)):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result

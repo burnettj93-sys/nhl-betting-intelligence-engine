@@ -236,7 +236,7 @@ class TestBuilder(unittest.TestCase):
         self.assertNotIn("SIMULATED", blob)
         self.assertNotIn("DEMO_PAPER", blob)
         self.assertNotIn("GAME_PARLAY_PAPER", blob)
-        self.assertEqual(list(self.doc["performance"]["breakdowns"]), ["ALL", "AUTOMATIC", "MANUALLY_ADDED"])
+        self.assertEqual(list(self.doc["performance"]["breakdowns"]), ["ALL", "AUTOMATIC"])
 
     def test_yahoo_and_user_specific_data_are_absent_structurally(self):
         blob = schema.strict_dumps(self.doc).lower()

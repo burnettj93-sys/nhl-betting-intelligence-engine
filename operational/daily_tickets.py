@@ -438,8 +438,8 @@ def single_card(leg: rmp.ParlayLeg) -> dict:
 
 
 def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | None:
-    """Annotates each option with the ticket already holding it (automatic or manual), so the page can show
-    'on the book' instead of offering a second stake."""
+    """Annotates each option with the AUTOMATIC model-book ticket that already holds the same bet, so the page can say so. It is information only: a
+    person may still add the same bet to their own personal log (that never touches the model book)."""
     if not options:
         return options
     for opt in options.get("options", []):
@@ -447,7 +447,7 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
         legs = opt["legs"]
         stub = [type("L", (), {"game_id": l["game_id"], "participant_id": l["participant_id"], "market_family": l["market_family"],
                                "threshold": l["threshold"], "side": l["side"]}) for l in legs]
-        for tid in (pb.compute_ticket_id(et_date, stub), pb.compute_manual_ticket_id(et_date, stub)):
+        for tid in (pb.compute_ticket_id(et_date, stub),):
             row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?", (tid,)).fetchone()
             if row:
                 opt["on_book"] = {"ticket_id": row["paper_bet_id"], "origin": row["origin"], "status": row["result_status"]}
@@ -459,10 +459,8 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
                 empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None) -> dict:
     et_date = et.eastern_today(now)
     rows = recorded_today(bankroll_conn, et_date)
-    manual_rows = recorded_today(bankroll_conn, et_date, origin="MANUALLY_ADDED")
-    alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows + manual_rows])
+    alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows])
     cards = [ticket_from_row(r, now, alerts.get(r["paper_bet_id"])) for r in rows]
-    manual_cards = [ticket_from_row(r, now, alerts.get(r["paper_bet_id"])) for r in manual_rows]
     recorded_ids = {c["ticket_id"] for c in cards}
     account = pb.account_state(bankroll_conn, TRACK)
     for combo in recommended:
@@ -480,20 +478,20 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         if empty:
             empty_reason = notice
     settled = [dict(r) for r in bankroll_conn.execute(
-        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND result_status IN ('WIN','LOSS','VOID') "
+        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND origin = 'AUTOMATIC' AND result_status IN ('WIN','LOSS','VOID') "
         "AND market_id NOT LIKE ? ORDER BY settled_at_utc DESC LIMIT ?",
         (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", RECENT_SETTLED_LIMIT)).fetchall()]
     open_rows = [dict(r) for r in bankroll_conn.execute(
-        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND result_status IN ('PENDING','UNRESOLVED') "
+        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND origin = 'AUTOMATIC' AND result_status IN ('PENDING','UNRESOLVED') "
         "AND market_id NOT LIKE ? ORDER BY created_at_utc", (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%")).fetchall()]
     other_alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in settled + open_rows])
     return {
         "date_et": et_date, "generated_at_utc": now.isoformat(),
         "account": account, "slots": {"total": SLOT_COUNT, "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
-        "manual_tickets": manual_cards, "origins": pb.origin_performance(bankroll_conn, TRACK),
+        "origins": pb.origin_performance(bankroll_conn, TRACK),
         "singles": [single_card(l) for l in singles],
-        "exposure": exposure(cards + manual_cards + [c for c in [ticket_from_row(r, now) for r in open_rows]
+        "exposure": exposure(cards + [c for c in [ticket_from_row(r, now) for r in open_rows]
                                                       if c["status"] in (STATUS_RECORDED, STATUS_PENDING, STATUS_UNRESOLVED)]),
         "earlier_open_tickets": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in open_rows],
         "recent_settled": [ticket_from_row(r, now, other_alerts.get(r["paper_bet_id"])) for r in settled],

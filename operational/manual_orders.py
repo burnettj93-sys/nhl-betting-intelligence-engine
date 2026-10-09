@@ -1,24 +1,17 @@
 """
-Manual "Add to paper book -- $10": the only way a ticket enters the paper book by hand.
+Hosted-app write queue, engine side.
 
-The hosted dashboard is read-only (Streamlit Community Cloud has no durable disk), so a click there cannot write the
-ledger directly. It files an ORDER -- a small JSON document naming the legs and prices the person was looking at --
-in a durable, authenticated queue (a GitHub issue created by the repository owner; see dashboard/order_client.py).
-This module is the engine side:
+The hosted dashboard is read-only (Streamlit Community Cloud has no durable disk), so a click there cannot write anything directly. It files a small
+JSON document -- an ORDER -- in a durable queue (a GitHub issue created with the app's own write credential, see dashboard/order_client.py) and the
+engine answers it here, on its own schedule:
 
-  1. fetch_github_orders()   reads open `paper-order` issues, keeps ONLY those opened by the repository owner;
-  2. process_order()         revalidates the order against the CURRENT fresh prices and either
-        RECORDED            -> one $10 MANUALLY_ADDED ticket in the shared paper account,
-        ALREADY_RECORDED    -> the same order id / same bet already on the book (never a second stake),
-        NEEDS_ACCEPTANCE    -> a price or probability moved since the person looked; nothing is recorded until they
-                               explicitly accept the new details (a new order carrying the new prices),
-        REJECTED            -> not eligible any more (stale/started/unavailable/no longer +100 with value/no cash/...);
-  3. every order, whatever happened, is one row of `manual_orders` keyed by order id (a repeated click or a retried
-     transport reads the stored answer back instead of processing again).
+  * PERSONAL_BET / PERSONAL_LOG_CREATE (label `personal-bet`) -> operational/personal_logs.py: friends' own paper-bet logs, kept in a separate
+    database file and never in the model ledger;
+  * ONTARIO_VERIFICATION, GOALIE_CONFIRMATION, ORDER_PATH_CHECK -> evidence records that stake nothing;
+  * PAPER_ORDER (the old "add to the paper book" order) is RETIRED: it is answered with a rejection that points to personal logs. The $500 model book
+    receives only the engine's own automatic tickets; a hand-added bet can no longer enter it. The old writer survives only as a legacy record.
 
-Rules carried over from the automatic tickets, unchanged: exact $10 stake, atomic funds check, deterministic ticket
-identity, frozen entry details, no top-up, settlement by the same driver. A manual ticket never takes one of the five
-automatic daily slots; exposure and the account are shared; performance is reported by origin.
+Every order, whatever happened, is one stored row keyed by order id: a repeated click or a retried transport reads the stored answer back.
 """
 from __future__ import annotations
 
@@ -53,6 +46,20 @@ def leg_key(d) -> tuple:
 
 # ------------------------------------------------------------------ validation ----
 
+def check_accepted(accepted) -> str | None:
+    """A reason the accepted legs are malformed, or None. Shape only: every leg needs its identity fields and an American price, and two legs
+    from one game are not supported (no same-game joint model or quoted combined price)."""
+    if not isinstance(accepted, dict) or not isinstance(accepted.get("legs"), list) or not (1 <= len(accepted["legs"]) <= MAX_LEGS):
+        return f"The order must name 1 to {MAX_LEGS} legs."
+    for l in accepted["legs"]:
+        if not isinstance(l, dict) or any(k not in l for k in LEG_KEY) or not isinstance(l.get("american_price"), (int, float)) \
+                or isinstance(l.get("american_price"), bool) or abs(l["american_price"]) < 100:
+            return "Every leg needs its identity fields and an American price."
+    if len({l["game_id"] for l in accepted["legs"]}) != len(accepted["legs"]):
+        return "Two legs from the same game are not supported (no same-game joint model or quoted combined price)."
+    return None
+
+
 def parse_order(raw) -> tuple[dict | None, str | None]:
     """(order, error). The order document is checked for shape only; whether it is still a good bet is revalidation."""
     try:
@@ -64,15 +71,10 @@ def parse_order(raw) -> tuple[dict | None, str | None]:
     oid = order.get("order_id")
     if not isinstance(oid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", oid):
         return None, "order_id is missing or malformed."
-    accepted = order.get("accepted")
-    if not isinstance(accepted, dict) or not isinstance(accepted.get("legs"), list) or not (1 <= len(accepted["legs"]) <= MAX_LEGS):
-        return None, f"The order must name 1 to {MAX_LEGS} legs."
-    for l in accepted["legs"]:
-        if not isinstance(l, dict) or any(k not in l for k in LEG_KEY) or not isinstance(l.get("american_price"), (int, float)) \
-                or isinstance(l.get("american_price"), bool) or abs(l["american_price"]) < 100:
-            return None, "Every leg needs its identity fields and an American price."
-    if len({l["game_id"] for l in accepted["legs"]}) != len(accepted["legs"]):
-        return None, "Two legs from the same game are not supported (no same-game joint model or quoted combined price)."
+    err = check_accepted(order.get("accepted"))
+    if err:
+        return None, err
+    accepted = order["accepted"]
     stake = accepted.get("stake", pb.PAPER_BET_STAKE)
     if isinstance(stake, bool) or not isinstance(stake, (int, float)) or abs(stake - pb.PAPER_BET_STAKE) > 1e-9:
         return None, f"The stake is fixed at ${pb.PAPER_BET_STAKE:.2f}."
@@ -153,65 +155,21 @@ def recent_orders(conn, limit: int = 40) -> list[dict]:
 
 # ------------------------------------------------------------------ processing ----
 
-def process_order(conn, raw_order, *, current_legs: list[rmp.ParlayLeg], now: dt.datetime, source: str,
+RETIRED_REASON = ("Hand-added bets no longer go into the model book (it holds only the engine's automatic tickets). "
+                  "Open My Bets, choose or create your personal log, and add the bet there.")
+
+
+def process_order(conn, raw_order, *, current_legs: list[rmp.ParlayLeg] | None = None, now: dt.datetime, source: str,
                   received_at: str | None = None, page_generated_at: str | None = None) -> dict:
-    """Process one order to a stored answer. Safe to call any number of times, concurrently: the first call decides,
-    later calls (same order id) return what was stored."""
+    """RETIRED path: answers an old PAPER_ORDER with a stored rejection and writes nothing else. Safe to call any number of times."""
     received_at = received_at or now.strftime("%Y-%m-%dT%H:%M:%SZ")
     order, error = parse_order(raw_order)
     if order is None:
-        oid = None
-        if isinstance(raw_order, dict):
-            oid = raw_order.get("order_id")
+        oid = raw_order.get("order_id") if isinstance(raw_order, dict) else None
         oid = oid if isinstance(oid, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,64}", oid) else "INVALID-" + re.sub(r"\W", "", source)[:40]
-        prior = stored_order(conn, oid)
-        if prior:
-            return prior
-        return _store(conn, oid, source, None, REJECTED, error, None, {"raw": str(raw_order)[:2000]}, None, received_at)
+        return stored_order(conn, oid) or _store(conn, oid, source, None, REJECTED, error, None, {"raw": str(raw_order)[:2000]}, None, received_at)
     oid = order["order_id"]
-    prior = stored_order(conn, oid)
-    if prior:
-        return prior
-    accepted = order["accepted"]
-    option_id = order.get("option_id")
-
-    rv = revalidate(accepted, current_legs, now)
-    if rv["status"] in ("UNAVAILABLE", "NO_LONGER_QUALIFIES"):
-        return _store(conn, oid, source, option_id, REJECTED, rv["reason"], None, order,
-                      current_details(rv) or None, received_at)
-    if rv["status"] == "CHANGED":
-        return _store(conn, oid, source, option_id, NEEDS_ACCEPTANCE,
-                      "Prices or the hit chance changed since you looked. Nothing was recorded; review the new details "
-                      "and accept them to add the ticket.", None, order, current_details(rv), received_at)
-
-    combo = rv["combo"]
-    created = max([now] + [t for t in (quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc) for l in combo.legs)
-                           if t is not None and (t - now).total_seconds() <= 120.0])
-    from operational import daily_tickets
-    provenance = {
-        "order_id": oid, "source": source, "option_id": option_id, "received_at_utc": received_at,
-        "revalidated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "page_generated_at_utc": page_generated_at or order.get("page_generated_at_utc"),
-        "accepted": {"legs": accepted["legs"], "combined_american": accepted.get("combined_american"),
-                     "hit_probability": accepted.get("hit_probability")},
-        "supersedes_order_id": order.get("supersedes_order_id"),
-        "price_basis": "SPORTSBOOK_QUOTE" if len(combo.legs) == 1 else "ESTIMATED_PRODUCT_OF_LEG_PRICES",
-        "jurisdiction_note": "Prices are DraftKings US-feed quotes (The Odds API); not verified against DraftKings Ontario.",
-    }
-    res = pb.create_manual_paper_bet(conn, combo, provenance=provenance, event_start_utc=daily_tickets._earliest_start(combo),
-                                     created_at_utc=created.isoformat(), code_version=daily_tickets.code_version())
-    status = res["status"]
-    if status == "INSERTED":
-        return _store(conn, oid, source, option_id, RECORDED, None, res["paper_bet_id"], order, None, received_at)
-    if status == "DUPLICATE":
-        origin = res.get("duplicate_of_origin")
-        why = ("The automatic tickets already hold this exact bet today." if origin == "AUTOMATIC"
-               else "This exact bet is already on the book (added earlier).")
-        return _store(conn, oid, source, option_id, ALREADY, why, res["paper_bet_id"], order, None, received_at)
-    if status == "INSUFFICIENT_FUNDS":
-        return _store(conn, oid, source, option_id, REJECTED,
-                      f"Available cash ${res['available_cash']:.2f} is below the ${pb.PAPER_BET_STAKE:.0f} stake. "
-                      "There is no top-up; cash returns as tickets settle.", None, order, None, received_at)
-    return _store(conn, oid, source, option_id, REJECTED, f"Unexpected result {status}.", None, order, None, received_at)
+    return stored_order(conn, oid) or _store(conn, oid, source, order.get("option_id"), REJECTED, RETIRED_REASON, None, order, None, received_at)
 
 
 # ------------------------------------------------------------------ GitHub queue ----
@@ -366,14 +324,16 @@ def _confirm(nhl_conn, body, now, source):
 
 
 def _answer_text(row: dict) -> str:
-    base = {RECORDED: f"Recorded as {row.get('ticket_id')} ($10 MANUALLY_ADDED).",
-            ALREADY: f"Not recorded again: {row.get('reason')} ({row.get('ticket_id')}).",
-            NEEDS_ACCEPTANCE: row.get("reason"), REJECTED: f"Rejected: {row.get('reason')}"}[row["status"]]
-    return f"order `{row['order_id']}` -> **{row['status']}**. {base}"
+    return f"order `{row['order_id']}` -> **{row['status']}**. {row.get('reason') or ''}".strip()
+
+
+def _personal_answer_text(row: dict) -> str:
+    detail = {"RECORDED": f"Recorded as {row.get('bet_id')} in the personal log.", "CREATED": "Log created."}.get(row["status"], row.get("reason") or "")
+    return f"personal-log order `{row['order_id']}` -> **{row['status']}**. {detail}".strip()
 
 
 def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp.ParlayLeg] | None = None,
-                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None) -> dict:
+                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None, personal_conn=None, personal_fetch=None) -> dict:
     """One pass of the engine-side queue. Serialised by a lock file so overlapping runs cannot race."""
     lock_path = state_paths.path(LOCK_NAME)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,6 +364,36 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                 _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
             except Exception as exc:  # noqa: BLE001 -- the answer is stored either way; a failed comment is reported
                 results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
+        personal_results = []
+        if fetch is None or personal_fetch is not None:
+            from operational import personal_logs
+            try:
+                p_orders, p_ignored = (personal_fetch or fetch_github_orders)(repo, owner, personal_logs.LABEL)
+            except Exception as exc:  # noqa: BLE001
+                p_orders, p_ignored = [], [{"error": f"{exc.__class__.__name__}: {exc}"}]
+            ignored = ignored + p_ignored
+            if p_orders:
+                own = personal_conn or personal_logs.connect()
+                try:
+                    for o in p_orders:
+                        if legs is None:
+                            from operational import daily_tickets
+                            legs = daily_tickets.collect_candidate_legs(nhl_conn, now)["legs"]
+                        try:
+                            parsed = json.loads(o["body"])
+                        except (json.JSONDecodeError, TypeError):
+                            parsed = o["body"]
+                        row = personal_logs.process_order(own, parsed, current_legs=legs, now=now, source=f"github-issue:{o['issue']}", received_at=o.get("created_at"))
+                        personal_results.append({"issue": o["issue"], **{k: row[k] for k in ("order_id", "status", "reason", "bet_id")}})
+                        if personal_fetch is None:
+                            try:
+                                _gh(["api", f"repos/{repo}/issues/{o['issue']}/comments", "-f", f"body={_personal_answer_text(row)}"])
+                                _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
+                            except Exception as exc:  # noqa: BLE001 -- the answer is stored either way
+                                personal_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
+                finally:
+                    if personal_conn is None:
+                        own.close()
         v_results = []
         if fetch is None:
             from operational import goalie_confirmations
@@ -429,4 +419,5 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                         v_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
         else:
             v_ignored = []
-        return {"status": "OK", "processed": len(results) + len(v_results), "results": results, "verifications": v_results, "ignored": ignored + v_ignored}
+        return {"status": "OK", "processed": len(results) + len(v_results) + len(personal_results), "results": results, "verifications": v_results,
+                "personal": personal_results, "ignored": ignored + v_ignored}

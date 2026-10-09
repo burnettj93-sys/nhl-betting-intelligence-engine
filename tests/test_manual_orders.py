@@ -67,7 +67,10 @@ class TestOptions(unittest.TestCase):
         self.assertEqual(po.build_options(legs, DATE)["options"], [])
 
 
-class TestOrderFlow(unittest.TestCase):
+class TestRetiredModelBookOrders(unittest.TestCase):
+    """The old "add to the paper book" order is retired: it is answered with a stored rejection and the model ledger is never written.
+    (Personal logs are tested in tests/test_personal_logs.py; the model book's isolation is proven there.)"""
+
     def setUp(self):
         self.path, self.conn = fresh_ledger()
         self.legs = board(4, price=-105, p=0.62)
@@ -77,122 +80,26 @@ class TestOrderFlow(unittest.TestCase):
     def process(self, order, legs=None, now=NOW):
         return mo.process_order(self.conn, order, current_legs=legs or self.legs, now=now, source="test:1")
 
-    def test_records_exactly_one_manual_ten_dollar_ticket(self):
-        row = self.process(order_for(self.opt, "ord_" + "1" * 12))
-        self.assertEqual(row["status"], mo.RECORDED)
-        bets = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")
-        self.assertEqual(len(bets), 1)
-        b = bets[0]
-        self.assertEqual((b["origin"], b["stake"]), ("MANUALLY_ADDED", 10.0))
-        self.assertTrue(b["paper_bet_id"].startswith("M"))
-        prov = json.loads(b["provenance_json"])
-        self.assertEqual(prov["order_id"], "ord_" + "1" * 12)
-        self.assertEqual(prov["accepted"]["legs"][0]["american_price"], self.opt["legs"][0]["american_price"])
-        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 490.0)
-
-    def test_repeat_click_same_order_id_is_answered_from_storage(self):
-        order = order_for(self.opt, "ord_" + "2" * 12)
-        a, b = self.process(order), self.process(order)
-        self.assertEqual((a["status"], b["status"]), (mo.RECORDED, mo.RECORDED))
-        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 1)
-
-    def test_second_click_with_a_new_order_id_is_a_duplicate_not_a_second_stake(self):
-        self.process(order_for(self.opt, "ord_" + "3" * 12))
-        again = self.process(order_for(self.opt, "ord_" + "4" * 12))
-        self.assertEqual(again["status"], mo.ALREADY)
-        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 1)
-
-    def test_concurrent_orders_for_the_same_bet_record_once(self):
-        results = []
-
-        def work(i):
-            conn = pb.get_conn(self.path)
-            results.append(mo.process_order(conn, order_for(self.opt, f"ord_c{i:011d}"), current_legs=self.legs, now=NOW, source="t"))
-            conn.close()
-        threads = [threading.Thread(target=work, args=(i,)) for i in range(6)]
-        [t.start() for t in threads]; [t.join() for t in threads]
-        self.assertEqual(sum(1 for r in results if r["status"] == mo.RECORDED), 1)
-        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 1)
-
-    def test_a_bet_the_automatic_tickets_hold_cannot_be_added_again(self):
-        combo = rmp._evaluate_combo(self.legs[:2])
-        dtk.record_tickets(self.conn, [combo], NOW)
-        opt = po.build_options(self.legs, DATE)["options"]
-        match = next(o for o in opt if {l["participant_id"] for l in o["legs"]} == {"P1", "P2"})
-        row = self.process(order_for(match, "ord_" + "5" * 12))
-        self.assertEqual(row["status"], mo.ALREADY)
-        self.assertIn("automatic", row["reason"].lower())
-        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 1)
-
-    def test_price_change_needs_explicit_acceptance_then_records_at_the_new_price(self):
-        moved = [dataclasses.replace(l, american_price=-115) if l.participant_id in {x["participant_id"] for x in self.opt["legs"]} else l for l in self.legs]
-        row = self.process(order_for(self.opt, "ord_" + "6" * 12), legs=moved)
-        self.assertEqual(row["status"], mo.NEEDS_ACCEPTANCE)
-        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER"), [])
-        detail = json.loads(row["detail_json"])
-        self.assertTrue(detail["changes"])
-        accepted = dict(self.opt, legs=detail["legs"], combined_american=detail["combined_american"], hit_probability=detail["hit_probability"])
-        row2 = self.process(order_for(accepted, "ord_" + "7" * 12, supersedes="ord_" + "6" * 12), legs=moved)
-        self.assertEqual(row2["status"], mo.RECORDED)
-        b = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")[0]
-        self.assertEqual(json.loads(b["provenance_json"])["supersedes_order_id"], "ord_" + "6" * 12)
-        self.assertIn(-115, [l["american_price"] for l in json.loads(b["legs_json"])])
-
-    def test_stale_or_withdrawn_legs_reject_without_writing(self):
-        stale = [dataclasses.replace(l, price_fresh=False) for l in self.legs]
-        row = self.process(order_for(self.opt, "ord_" + "8" * 12), legs=stale)
+    def test_a_valid_old_order_is_rejected_with_the_pointer_to_personal_logs_and_writes_no_ticket(self):
+        row = self.process(order_for(self.opt, "ord_" + "a" * 12))
         self.assertEqual(row["status"], mo.REJECTED)
-        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER"), [])
+        self.assertIn("My Bets", row["reason"])
+        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER", origin=None), [])
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["tickets"], 0)
 
-    def test_no_longer_qualifying_is_rejected_not_offered_for_acceptance(self):
-        worse = [dataclasses.replace(l, conservative_probability=0.40) for l in self.legs]
-        row = self.process(order_for(self.opt, "ord_" + "9" * 12), legs=worse)
-        self.assertEqual(row["status"], mo.REJECTED)
+    def test_repeating_the_order_reads_the_stored_answer(self):
+        o = order_for(self.opt, "ord_" + "b" * 12)
+        self.assertEqual(self.process(o), self.process(o))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM manual_orders").fetchone()[0], 1)
 
-    def test_invalid_orders_write_nothing(self):
+    def test_invalid_orders_are_rejected_and_write_nothing(self):
         for bad in ({"type": "PAPER_ORDER"}, "not json", {"schema": 1, "type": "PAPER_ORDER", "order_id": "x"},
-                    dict(order_for(self.opt, "ord_" + "b" * 12), accepted={"legs": [], "stake": 10})):
-            row = self.process(bad)
-            self.assertEqual(row["status"], mo.REJECTED)
-        o = order_for(self.opt, "ord_" + "c" * 12)
+                    dict(order_for(self.opt, "ord_" + "c" * 12), accepted={"legs": [], "stake": 10})):
+            self.assertEqual(self.process(bad)["status"], mo.REJECTED)
+        o = order_for(self.opt, "ord_" + "d" * 12)
         o["accepted"]["stake"] = 25.0
         self.assertEqual(self.process(o)["status"], mo.REJECTED)
-        o = order_for(self.opt, "ord_" + "d" * 12)
-        o["accepted"]["legs"][0]["american_price"] = 50
-        self.assertEqual(self.process(o)["status"], mo.REJECTED)
-        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER"), [])
-
-    def test_same_game_legs_are_not_supported(self):
-        o = order_for(self.opt, "ord_" + "e" * 12)
-        if len(o["accepted"]["legs"]) == 1:
-            o["accepted"]["legs"].append(dict(o["accepted"]["legs"][0], participant_id="Z"))
-        else:
-            o["accepted"]["legs"][1]["game_id"] = o["accepted"]["legs"][0]["game_id"]
-        self.assertEqual(self.process(o)["status"], mo.REJECTED)
-
-    def test_insufficient_cash_is_refused_and_nothing_is_written(self):
-        for i in range(50):                                                    # drain the account to < $10
-            pb.record_paper_bet(self.conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id=f"X{i}", entry_odds=100,
-                                idempotency_key=f"drain{i}")
-        row = self.process(order_for(self.opt, "ord_" + "f" * 12))
-        self.assertEqual(row["status"], mo.REJECTED)
-        self.assertIn("cash", row["reason"].lower())
-        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")), 50)
-
-    def test_manual_tickets_do_not_take_automatic_slots_and_origins_report_separately(self):
-        self.process(order_for(self.opt, "ord_" + "g" * 12))
-        today = dtk.recorded_today(self.conn, DATE)
-        self.assertEqual(today, [])                                            # no automatic ticket
-        self.assertEqual(len(dtk.recorded_today(self.conn, DATE, origin="MANUALLY_ADDED")), 1)
-        state = dtk.build_state(self.conn, NOW, recommended=[], singles=[], empty_reason="x", diagnostics={}, record_results=[], options=self.doc)
-        self.assertEqual(state["slots"]["used"], 0)
-        self.assertEqual(len(state["manual_tickets"]), 1)
-        self.assertEqual(state["manual_tickets"][0]["origin"], "MANUALLY_ADDED")
-        self.assertEqual(state["origins"]["MANUALLY_ADDED"]["tickets"], 1)
-        self.assertEqual(state["origins"]["AUTOMATIC"]["tickets"], 0)
-        self.assertEqual(state["exposure"]["tickets_by_origin"], {"MANUALLY_ADDED": 1})
-        on_book = [o for o in state["options"]["options"] if o.get("on_book")]
-        self.assertEqual(len(on_book), 1)
+        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER", origin=None), [])
 
     def test_browsing_writes_nothing(self):
         before = self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0]
@@ -201,20 +108,55 @@ class TestOrderFlow(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], before)
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM manual_orders").fetchone()[0], 0)
 
-    def test_manual_ticket_settles_like_any_other(self):
-        self.process(order_for(self.opt, "ord_" + "h" * 12))
-        b = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")[0]
-        pb.settle_paper_bet(self.conn, b["paper_bet_id"], "WIN")
-        acct = pb.account_state(self.conn, "REAL_MARKET_PAPER")
-        self.assertGreater(acct["settled_pnl"], 0)
-        self.assertEqual(pb.origin_performance(self.conn)["MANUALLY_ADDED"]["wins"], 1)
+    def test_check_accepted_still_validates_shapes_for_personal_orders(self):
+        o = order_for(self.opt, "ord_" + "e" * 12)
+        self.assertIsNone(mo.check_accepted(o["accepted"]))
+        o["accepted"]["legs"][0]["american_price"] = 50
+        self.assertIsNotNone(mo.check_accepted(o["accepted"]))
+        same = order_for(self.opt, "ord_" + "f" * 12)
+        if len(same["accepted"]["legs"]) == 1:
+            same["accepted"]["legs"].append(dict(same["accepted"]["legs"][0], participant_id="Z"))
+        else:
+            same["accepted"]["legs"][1]["game_id"] = same["accepted"]["legs"][0]["game_id"]
+        self.assertIn("same game", mo.check_accepted(same["accepted"]))
 
-    def test_origin_and_provenance_are_immutable(self):
-        self.process(order_for(self.opt, "ord_" + "i" * 12))
-        pid = pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER")[0]["paper_bet_id"]
-        for col, val in (("origin", "AUTOMATIC"), ("provenance_json", "{}"), ("legs_json", "[]")):
-            with self.assertRaises(sqlite3.DatabaseError):
-                self.conn.execute(f"UPDATE paper_bets SET {col} = ? WHERE paper_bet_id = ?", (val, pid))
+
+class TestLegacyManualRowIsOutsideTheModelBook(unittest.TestCase):
+    """A MANUALLY_ADDED row left in the ledger by the earlier feature is kept for audit but counted nowhere in the model book."""
+
+    def setUp(self):
+        self.path, self.conn = fresh_ledger()
+        self.legs = board(4, price=-105, p=0.62)
+        self.combo = rmp._evaluate_combo(self.legs[:2])
+        self.res = pb.create_manual_paper_bet(self.conn, self.combo, provenance={"order_id": "ord_legacy0001"}, event_start_utc="2026-10-15T23:30:00Z",
+                                              created_at_utc=NOW.isoformat())
+        self.assertEqual(self.res["status"], "INSERTED")
+
+    def test_account_exposure_slots_and_performance_ignore_it(self):
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["tickets"], 0)
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 500.0)
+        self.assertEqual(pb.origin_performance(self.conn)["ALL"]["tickets"], 0)
+        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER"), [])
+        self.assertEqual(len(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER", origin=None)), 1)      # still there for audit
+        self.assertEqual(pb.todays_real_parlay_usage(self.conn, "2026-10-15")["count"], 0)
+        self.assertEqual(dtk.recorded_today(self.conn, DATE), [])
+
+    def test_the_settlement_driver_does_not_touch_it(self):
+        self.assertEqual(pb.find_unresolved_past_event_bets(self.conn, track="REAL_MARKET_PAPER", include_unresolved=True), [])
+        self.assertEqual(pb.find_pending_future_event_bets(self.conn, track="REAL_MARKET_PAPER"), [])
+
+    def test_the_model_book_state_has_no_manual_section(self):
+        state = dtk.build_state(self.conn, NOW, recommended=[], singles=[], empty_reason=None, diagnostics={}, record_results=[], options=None)
+        self.assertNotIn("manual_tickets", state)
+        self.assertEqual(state["account"]["tickets"], 0)
+
+    def test_production_code_has_no_caller_of_the_retired_writer(self):
+        import re
+        from pathlib import Path
+        root = Path(__file__).resolve().parent.parent
+        hits = [str(f.relative_to(root)) for d in ("operational", "dashboard", "research", "deploy") for f in (root / d).rglob("*.py")
+                if "create_manual_paper_bet(" in f.read_text() and f.name != "paper_bankroll.py"]
+        self.assertEqual(hits, [])
 
 
 class TestQueue(unittest.TestCase):

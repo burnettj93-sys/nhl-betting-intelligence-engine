@@ -208,6 +208,15 @@ def _manual_orders() -> dict:
         conn.close()
 
 
+def _personal_logs() -> dict:
+    from operational import personal_logs
+    conn = personal_logs.connect()
+    try:
+        return personal_logs.section(conn, dt.datetime.now(dt.timezone.utc))
+    finally:
+        conn.close()
+
+
 _SECTION_BUILDERS = {
     "tickets": _tickets,
     "product_meta": _product_meta,
@@ -218,6 +227,7 @@ _SECTION_BUILDERS = {
     "product_teams": _product("teams"),
     "product_model_health": _product("model_health"),
     "manual_orders": _manual_orders,
+    "personal_logs": _personal_logs,
     "performance": _performance,
     "morning_review": _morning_review,
     "ledger": _ledger,
