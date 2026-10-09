@@ -24,15 +24,20 @@ Friends can keep their own paper bets under a code they choose, on the **My Bets
 different logs and proves a hash of **every table** of the model ledger and its account state is identical before and after.
 The model book's own queries count only `origin = 'AUTOMATIC'` rows (`paper_bankroll.MODEL_BOOK_ORIGIN`), which is what moves the earlier manual ticket out of the model's accounting.
 
-## What a code is — and is not
+## What is public, what is protected (read this before using it)
 
-A code is a name for a log. **It is not authentication.** Whoever knows it can open that log and add bets to it. The engine publishes its data to a public repository, so the bets in a
-log are readable by anyone who finds the published file; they are filed under a one-way scrypt hash of the code and the display name, never the code. The page says so before a
-log is created. Do not put anything personal in a log or its name (names are limited to letters, numbers, spaces and `. ' _ -`). Paper bets only; no money moves.
-
-Collisions: a new code is checked against the published hashes; the engine refuses to create a log whose hash already exists (`CODE_IN_USE`) unless the order carries the same
-`creation_id` as the log's creator (so retries and a first bet filed before the log appears both work). Opening a code that does not exist is refused (`LOG_NOT_FOUND`).
-Abuse limits: 40 orders per log per day, 25 new logs per day.
+* **Reading is not private.** The engine publishes its data to a *public* GitHub repository (that is what lets the free hosted app read it). Anyone can open the published file and read every
+  log's bets, filed under a one-way hash of the log's code and a display name — never the code itself. That is the cost of a free, always-on app with no account system. Do not put anything
+  personal in a log or its name. Paper bets only; no money moves.
+* **Writing is protected.** Each log has a **write key**: 20 random characters (100 bits) generated when the log is created and shown **once**. Knowing a log's code lets you *read* it, not add to it.
+  The app derives an Ed25519 key pair from the write key; only the **public** half is stored and published. Every order (add a bet, create a log) is **signed** with the private half, which exists only in
+  the browser session of whoever holds the key. The engine verifies the signature and refuses anything else (`BAD_SIGNATURE`). The order queue is public too, but a signature in it cannot be reused
+  to write anything else (every order id is answered once, and the signature covers the whole order), so the public queue leaks nothing that grants access.
+* **Why this and not a password:** a password would have to travel in the (public) order. A signature does not. It is the least machinery that keeps writes private on a public queue: no accounts,
+  no server-side secrets, one extra string to save.
+* **Lost key:** cannot be recovered (the engine never has it). The log stays readable; create a new one.
+* **Opening view-only:** enter only the code to read a log; the page then offers no add button.
+* The code itself is a *name*: 8+ characters you choose (or accept the suggestion). It is **not** the secret.
 
 ## How a click becomes a bet
 
@@ -44,17 +49,32 @@ Abuse limits: 40 orders per log per day, 25 new logs per day.
 3. Started games settle with the same resolver and rules as the model book (`paper_bet_settlement_driver.terminal_outcome`): a leg that did not play leaves the bet open and visible
    rather than guessing. The log's published view refreshes with the next publish (about 8 minutes at most).
 
-## Owner setup (one step)
+## Owner setup (the exact steps)
 
-The hosted app needs a credential that can create issues in this repository. Create a **fine-grained personal access token** for `burnettj93-sys/nhl-betting-intelligence-engine` with
-**Issues: Read and write** and nothing else, then in the Streamlit app's *Settings → Secrets* add:
+The hosted app needs one credential: permission to create issues (the order queue) in this repository. Nothing else.
+
+1. GitHub → your avatar → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+2. **Token name:** `nhl-app-log-writer`. **Expiration:** 90 days (put a reminder; a shorter life limits damage if it leaks).
+3. **Resource owner:** `burnettj93-sys`. **Repository access:** *Only select repositories* → `nhl-betting-intelligence-engine`.
+4. **Permissions → Repository permissions:** **Issues: Read and write**. Leave everything else as *No access* (Metadata: Read-only is added automatically). No account or organisation permissions.
+5. **Generate token** and copy it (it starts with `github_pat_`). Do not paste it anywhere else, and do not send it to me.
+6. Open the app on Streamlit Community Cloud → **Manage app** → ⋮ → **Settings** → **Secrets**, and add one line:
 
 ```toml
-LOG_WRITE_TOKEN = "<the token>"
+LOG_WRITE_TOKEN = "github_pat_…the token…"
 ```
 
-Reboot the app. Anyone you invite to the (private) app can then add bets to their own log with one click. Without the secret the button builds a pre-filled GitHub issue that only
-the repository owner can submit — useful for you, not for friends. (The earlier name `PAPER_ORDER_TOKEN` is also accepted.) Rotate the token if it is ever exposed.
+7. **Save**, then ⋮ → **Reboot app**. My Bets then stops saying "no write credential configured".
+
+If the token is ever exposed: GitHub → Settings → Developer settings → revoke it, make a new one, replace the secret. Orders are only processed when the issue was opened by the repository owner's account, so
+a token from another account cannot file orders.
+
+## The verification I run once the secret exists (isolated test data)
+
+On the hosted app: **My Bets → Create a log** (name "QA test", the suggested code) → save the code and write key shown once → **Open** it with the write key → add one option from Best Options → wait for the engine's answer
+(≤ ~10 minutes) and confirm it appears under *Open bets* → reload and reopen on another browser (durability) → after the game finishes confirm it moves to *Settled* with the right result. Also: open the same log
+with the code only and confirm there is no add button; try the wrong key and confirm it is refused. The test log is a personal log: it never touches the model book (Today / Paper Performance are compared before
+and after). Product readiness on Diagnostics changes from NOT VERIFIED to WORKING only when an order sent by the app's own write path has been processed.
 
 ## The earlier manual ticket
 
@@ -66,4 +86,4 @@ book now shows only automatic tickets. The owner can claim it into their own log
 python3 -m operational.personal_logs claim-legacy
 ```
 
-(it prompts for the code without echoing it and for the display name).
+(it prompts for the code without echoing it, for the display name, and for a write key — press Enter to have one generated and printed once).

@@ -296,9 +296,10 @@ class TestTodayScreen(unittest.TestCase):
             self.assertIn(ticket["ticket_id"], text)
         text = " ".join(m.value for m in at.markdown)
         self.assertEqual(text.count("Recorded</span>"), 5)
-        self.assertGreaterEqual(len(at.dataframe), 5)                   # one leg table per ticket (+ exposure tables)
+        self.assertEqual(text.count("class='slip'"), 5)                  # one bet slip per ticket: a row per selection, then the stat strip
+        self.assertGreaterEqual(text.count("class='odds'"), 10)
         self.assertTrue(any('Exposure across' in e.label for e in at.expander))
-        self.assertTrue(any(m.label == "Estimated combined price" for m in at.metric))
+        self.assertIn("<span class='k'>Estimated price</span>", text)
         self.assertFalse(any("Market coverage" in m.value for m in at.markdown))
 
     def test_recommended_tickets_are_badged_and_the_cash_notice_is_shown(self):

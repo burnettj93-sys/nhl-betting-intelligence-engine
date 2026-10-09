@@ -148,7 +148,9 @@ class TestPagesRender(unittest.TestCase):
         at = run_page("26_Player_Props.py", snapshot())
         t = text(at)
         self.assertNotIn("redundant", t.lower())
-        self.assertIn("Estimated price", " ".join(m.label for m in at.metric))
+        flat = " ".join(m.value for m in at.markdown)
+        self.assertIn("<span class='k'>Estimated price</span>", flat)
+        self.assertIn("class='odds'", flat)
 
     def test_without_a_chosen_log_no_add_button_is_offered_and_the_page_says_where_to_go(self):
         at = run_page("26_Player_Props.py", snapshot())
