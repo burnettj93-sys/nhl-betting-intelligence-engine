@@ -157,11 +157,11 @@ class TestGoalieConfirmations(unittest.TestCase):
     def test_a_confirmation_is_stored_with_source_and_time_and_read_back(self):
         res = goalie_confirmations.validate_and_record(self.nhl, self.doc(), now=self.now, source_ref="t")
         self.assertEqual(res["status"], "RECORDED")
-        got = goalie_confirmations.lookup(self.nhl, 2026020070, "TOR", "8000001")
+        got = goalie_confirmations.lookup(self.nhl, 2026020070, "TOR", "8000001", now=self.now)
         self.assertEqual(got["status"], "CONFIRMED")
         self.assertIn("team announcement", got["source"])
         self.assertEqual(got["checked_at_utc"], "2026-10-08T14:50:00Z")
-        other = goalie_confirmations.lookup(self.nhl, 2026020070, "TOR", "8000009")
+        other = goalie_confirmations.lookup(self.nhl, 2026020070, "TOR", "8000009", now=self.now)
         self.assertEqual(other["status"], "NOT_STARTING")
         self.assertEqual(goalie_confirmations.validate_and_record(self.nhl, self.doc(), now=self.now, source_ref="t")["status"], "ALREADY_RECORDED")
 
@@ -170,7 +170,7 @@ class TestGoalieConfirmations(unittest.TestCase):
         goalie_confirmations.validate_and_record(self.nhl, self.doc(), now=self.now, source_ref="t")
         status = pit.goalie_status(self.nhl, 2026020070, "TOR", "2026-10-08T16:00:00")
         self.assertEqual((status.status, status.player_id), ("CONFIRMED", "8000001"))
-        obs = goalie_confirmations.confirmed_observations(self.nhl, 2026020070, "TOR")
+        obs = goalie_confirmations.confirmed_observations(self.nhl, 2026020070, "TOR", now=self.now)
         self.assertEqual(obs[0].source_status, "CONFIRMED")
         self.assertEqual(obs[0].goalie_id, "8000001")
 

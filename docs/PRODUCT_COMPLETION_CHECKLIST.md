@@ -126,8 +126,8 @@ Any displayed price is judged **when the page is opened** against the engine's o
 ## 1a. Navigation
 `/Today` and `/` both work (a hidden default page forwards the root to Today), verified on the hosted app. One platform quirk remains: if the very first request after a reboot is a deep link, Streamlit briefly shows its unthemed legacy page list; loading the root first (or any reload) shows the real navigation.
 
-## 5a. Populated option cards (PENDING — needs tonight's captures)
-Player prices are captured about 100 minutes before puck drop; at the time of this revision no option was published (the first 7 PM ET game's capture window opens about 5:15 PM ET). The watchdog's readiness table now records, persistently (`board_evidence.jsonl`), when the board first holds options, so the evidence does not depend on a session. Hosted checks still to do when options exist: bet-slip cards, destination control, stale marking, mobile layout, Players and Goalies option sections.
+## 5a. Populated option cards
+**Verified on the hosted app, 2026-10-09 5:16 PM ET (desktop and 390 px)**: the first pregame captures produced 12 option cards on Best Options (quoted price, stake, return, model chance with its plausible range, value after the haircut, "why this selection", Ontario check) and 3 recorded automatic tickets on Today. **Not verifiable**: the add control (no write credential: a visitor is told to open a log first), a morning-priced card (no early price was bought on the release day), and the stale/provisional card states with real data. Those stay open.
 
 ## 10. QA
 
