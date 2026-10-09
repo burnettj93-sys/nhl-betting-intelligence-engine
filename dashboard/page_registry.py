@@ -53,6 +53,7 @@ PAGES: tuple[PageSpec, ...] = (
     PageSpec("39_Tomorrow.py", "Tomorrow", "🌅", "Operate", CORE_USER, True),
     PageSpec("2_Game_Detail.py", "Game Detail", "🔍", "Operate", CORE_USER, True),
     PageSpec("26_Player_Props.py", "Best Options", "🎫", "Operate", CORE_USER, True),
+    PageSpec("40_Parlay_Builder.py", "Parlay Builder", "🧱", "Operate", CORE_USER, True),
     PageSpec("38_My_Bets.py", "My Bets", "🥚", "Operate", CORE_USER, True),
     # ---- Track & Monitor
     PageSpec("30_Players.py", "Players", "🧑‍🤝‍🧑", "Track & Monitor", CORE_USER, True),

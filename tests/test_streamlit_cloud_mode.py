@@ -153,7 +153,7 @@ class TestPageRegistry(unittest.TestCase):
 
     def test_a_plain_user_sees_the_product_pages_and_no_research_or_admin_page(self):
         user_titles = {p.title for specs in page_registry.pages_for("USER", rm.LOCAL_MODE).values() for p in specs}
-        self.assertEqual(user_titles, PRODUCT_PAGES | LIGHTWEIGHT | {"My Bets"})
+        self.assertEqual(user_titles, PRODUCT_PAGES | LIGHTWEIGHT | {"My Bets", "Parlay Builder"})
 
     def test_no_simulated_page_exists_in_the_registry_or_on_disk(self):
         titles = {p.title for p in page_registry.PAGES}

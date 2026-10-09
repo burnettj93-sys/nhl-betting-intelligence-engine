@@ -157,14 +157,19 @@ def check_reconciliation(ledger, personal) -> dict:
         pnl = round(sum(b["profit_loss"] or 0 for b in bets if b["result_status"] in ("WIN", "LOSS", "VOID")), 2)
         if pnl != summ["settled_pnl"] or summ["bets"] != len(bets):
             problems.append(f"personal log {lg['log_hash'][:8]}: summary does not match its rows")
-    for m in personal.execute("SELECT * FROM migrations"):
+    for r in pl.reconcile(personal):                           # every account's own $500 bankroll, re-derived from its stakes and payouts a second way
+        if not r["agrees"]:
+            problems.append(f"personal account {r['log_hash'][:8]}: cash {r['available_cash']} != re-derived {r['cash_by_flows']}")
+        if pl.account_state(personal, r["log_hash"])["over_drawn"]:
+            problems.append(f"personal account {r['log_hash'][:8]}: stakes exceed its cash")
+    for m in personal.execute("SELECT * FROM migrations WHERE source_ref NOT LIKE 'bankroll-v1:%'"):       # (bankroll migration records are not ticket copies)
         src = ledger.execute("SELECT * FROM paper_bets WHERE paper_bet_id = ?", (m["source_ref"].split(":", 1)[1],)).fetchone()
         cp = personal.execute("SELECT * FROM bets WHERE bet_id = ?", (m["bet_id"],)).fetchone()
         if src is None or cp is None or (src["legs_json"], src["stake"], src["profit_loss"], src["result_status"]) != (cp["legs_json"], cp["stake"], cp["profit_loss"], cp["result_status"]):
             problems.append(f"migrated ticket {m['bet_id']} differs from its original ledger row")
     if problems:
         return {"name": "reconciliation", "status": FAIL, "detail": "; ".join(problems)[:300]}
-    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways; {n_logs} personal log(s) agree with their rows; no bet in both books"}
+    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways; {n_logs} personal account(s) agree with their rows and each reconciles its own $500 bankroll; no bet in both books"}
 
 
 def check_settlement_backlog(ledger, personal, now: dt.datetime) -> dict:

@@ -15,6 +15,11 @@ Who may WRITE. Knowing a code does not let anyone add to a log. Each log has a s
 only its public half is stored, and every order must carry a valid signature made with it (operational/log_signing.py). The queue is public, but
 a signature in it cannot be reused to write anything else, so the public queue leaks nothing that grants access.
 
+Accounts (2026-10-09). A personal log is now a personal ACCOUNT: opened by a last name (a duplicate surname becomes "Burnett 2"), protected by a short 8-character passcode shown once
+(the write key; see operational/log_signing.py), and holding its OWN $500 paper bankroll. Cash is never stored: it is recomputed from the account's own bets every time
+(available = $500 + settled P&L - open stakes), so reopening an account cannot reset it and two accounts can never share a balance. An order whose stake exceeds the available cash is
+refused inside the same transaction that would record it. Earlier code-based logs keep working unchanged (same table, same signatures) and get the same $500 starting balance.
+
 Flow (same durable queue as the other hosted actions, see operational/manual_orders.py):
   hosted page -> PERSONAL_BET / PERSONAL_LOG_CREATE order (a GitHub issue created with the app's own write credential)
   -> engine revalidates against current fresh prices -> one row in the log -> settlement by the same resolver the model
@@ -43,6 +48,11 @@ MIN_CODE_LEN, MAX_CODE_LEN = 8, 64
 MAX_NAME_LEN = 30
 MIN_STAKE, MAX_STAKE = 1.0, 1000.0
 DEFAULT_STAKE = 10.0
+STARTING_BALANCE = 500.0
+ACCOUNT_SALT = b"nhl-engine/personal-account/key-v2|"
+MIN_SURNAME_LEN = 2
+MAX_BUILDER_LEGS = 6
+KIND_BUILDER = "BUILDER"
 MAX_BET_ORDERS_PER_LOG_PER_DAY = 40
 MAX_NEW_LOGS_PER_DAY = 25
 UNCLAIMED_LEGACY = "legacy-unclaimed"
@@ -61,7 +71,9 @@ CREATE TABLE IF NOT EXISTS logs (
     created_at_utc TEXT NOT NULL,
     created_by_order TEXT,
     note TEXT,
-    write_pub TEXT
+    write_pub TEXT,
+    slug TEXT,
+    starting_balance REAL NOT NULL DEFAULT 500
 );
 CREATE TABLE IF NOT EXISTS orders (
     order_id TEXT PRIMARY KEY,
@@ -183,6 +195,58 @@ def validate_name(name) -> tuple[str | None, str | None]:
     return n, None
 
 
+_SURNAME_RE = re.compile(r"[^\W\d_][^\W\d_ '\-]*(?:[ '\-][^\W\d_]+)*", re.UNICODE)
+
+
+def clean_surname(raw) -> tuple[str | None, str | None]:
+    """(display surname, error). Letters (accents allowed), with single spaces, hyphens or apostrophes inside: Burnett, O'Brien, Van der Berg, Saint-Pierre."""
+    n = re.sub(r"\s+", " ", str(raw or "")).strip()
+    n = re.sub(r"\s+\d+$", "", n)                       # a trailing number is a duplicate marker (Burnett 2), not part of the name
+    if len(n) < MIN_SURNAME_LEN:
+        return None, "Enter your last name."
+    if len(n) > MAX_NAME_LEN:
+        return None, f"Use at most {MAX_NAME_LEN} characters."
+    if not _SURNAME_RE.fullmatch(n) or _BLOCKED_IN_TEXT.search(n):
+        return None, "Use letters only (a space, hyphen or apostrophe inside a name is fine)."
+    return n, None
+
+
+def parse_account_name(raw) -> tuple[str | None, int, str | None]:
+    """(surname, number, error) from what a person types to open an account: 'Burnett' -> (Burnett, 1); 'burnett 2' -> (burnett, 2)."""
+    text = re.sub(r"\s+", " ", str(raw or "")).strip()
+    m = re.fullmatch(r"(.*?)[ \-]+(\d{1,3})", text)
+    number = int(m.group(2)) if m else 1
+    name, err = clean_surname(m.group(1) if m else text)
+    return name, max(number, 1), err
+
+
+def surname_slug(surname: str, number: int = 1) -> str:
+    """The account identifier: lowercase ASCII letters, words joined by '-', plus '-N' for the Nth person with the same last name. 'O'Brien' -> 'obrien'; 'Van der Berg' -> 'van-der-berg'."""
+    import unicodedata
+    base = unicodedata.normalize("NFKD", surname).encode("ascii", "ignore").decode().lower()
+    base = re.sub(r"[^a-z ]", "", base.replace("-", " "))
+    base = "-".join(base.split())
+    return base if number <= 1 else f"{base}-{number}"
+
+
+def account_key(slug: str) -> str:
+    """The 32-hex key an account is filed under. Last names are public by design (the display name is published), so this is a plain keyed hash, not a slow one."""
+    return hashlib.sha256(ACCOUNT_SALT + slug.encode()).hexdigest()[:32]
+
+
+def display_for(surname: str, number: int = 1) -> str:
+    return surname if number <= 1 else f"{surname} {number}"
+
+
+def next_free_number(published_slugs, surname: str) -> int:
+    """The number a NEW person with this last name would get: 1 if nobody has it, else the next unused (Burnett -> Burnett 2 -> Burnett 3)."""
+    taken = set(published_slugs)
+    n = 1
+    while surname_slug(surname, n) in taken:
+        n += 1
+    return n
+
+
 # ------------------------------------------------------------------ storage ----
 
 def _stamp(t: dt.datetime) -> str:
@@ -202,8 +266,13 @@ def connect(path: str | Path | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.executescript(SCHEMA_SQL)
-    if "write_pub" not in {r["name"] for r in conn.execute("PRAGMA table_info(logs)")}:      # databases created before write keys existed
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(logs)")}
+    if "write_pub" not in cols:                                                                  # databases created before write keys existed
         conn.execute("ALTER TABLE logs ADD COLUMN write_pub TEXT")
+    if "slug" not in cols:
+        conn.execute("ALTER TABLE logs ADD COLUMN slug TEXT")
+    if "starting_balance" not in cols:                                                           # databases created before personal bankrolls existed
+        conn.execute("ALTER TABLE logs ADD COLUMN starting_balance REAL NOT NULL DEFAULT 500")
     return conn
 
 
@@ -255,12 +324,25 @@ def _creation(log: dict) -> tuple[dict | None, str | None]:
         return None, None
     if not isinstance(c, dict) or not isinstance(c.get("creation_id"), str) or not _ID_RE.fullmatch(c["creation_id"]):
         return None, "The log creation details are malformed."
-    name, err = validate_name(c.get("display_name"))
-    if err:
-        return None, err
+    slug = c.get("slug")
+    if slug is not None:                                  # a last-name account: the display name is "Surname" or "Surname N", and the key is derived from the slug
+        if not isinstance(slug, str) or not re.fullmatch(r"[a-z]+(?:-[a-z]+)*(?:-\d{1,3})?", slug):
+            return None, "The account identifier is malformed."
+        name, err = clean_surname(c.get("display_name"))
+        if err:
+            return None, err
+        m = re.search(r"-(\d{1,3})$", slug)
+        number = int(m.group(1)) if m else 1
+        if surname_slug(name, number) != slug:
+            return None, "The account identifier does not match the last name."
+        name = display_for(name, number)
+    else:                                                 # an earlier code-based log
+        name, err = validate_name(c.get("display_name"))
+        if err:
+            return None, err
     if not isinstance(c.get("write_pub"), str) or not re.fullmatch(r"[0-9a-f]{64}", c["write_pub"]):
         return None, "The log creation needs the log's public write key."
-    return {"creation_id": c["creation_id"], "display_name": name, "write_pub": c["write_pub"]}, None
+    return {"creation_id": c["creation_id"], "display_name": name, "write_pub": c["write_pub"], "slug": slug}, None
 
 
 def _same_day(stamp: str, et_date: str) -> bool:
@@ -272,21 +354,23 @@ def _ensure_log(conn, log_hash: str, creation: dict | None, now: dt.datetime) ->
     existing = log_row(conn, log_hash)
     if existing:
         if creation and existing["created_by_order"] != creation["creation_id"]:
+            if creation.get("slug"):
+                return REJECTED, "NAME_TAKEN: someone already has that account. If it is you, open it; if not, create the next numbered one."
             return REJECTED, "CODE_IN_USE: that code already opens another log. Choose a different code."
         return "OK", None
     if not creation:
-        return REJECTED, "LOG_NOT_FOUND: no log uses that code yet. Create it first."
+        return REJECTED, "LOG_NOT_FOUND: no account or log uses that name yet. Create it first."
     today = et.eastern_today(now)
     made = sum(1 for r in conn.execute("SELECT created_at_utc FROM logs WHERE created_by_order IS NOT NULL").fetchall() if _same_day(r["created_at_utc"], today))
     if made >= MAX_NEW_LOGS_PER_DAY:
         return REJECTED, "RATE_LIMIT: too many new logs today. Try again tomorrow."
-    conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order, write_pub) VALUES (?,?,?,?,?)",
-                 (log_hash, creation["display_name"], _stamp(now), creation["creation_id"], creation["write_pub"]))
-    _audit(conn, "LOG_CREATED", log_hash, {"display_name": creation["display_name"]}, _stamp(now))
+    conn.execute("INSERT INTO logs (log_hash, display_name, created_at_utc, created_by_order, write_pub, slug, starting_balance) VALUES (?,?,?,?,?,?,?)",
+                 (log_hash, creation["display_name"], _stamp(now), creation["creation_id"], creation["write_pub"], creation.get("slug"), STARTING_BALANCE))
+    _audit(conn, "LOG_CREATED", log_hash, {"display_name": creation["display_name"], "slug": creation.get("slug"), "starting_balance": STARTING_BALANCE}, _stamp(now))
     return CREATED, None
 
 
-def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str, received_at: str | None = None) -> dict:
+def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str, received_at: str | None = None, builder_pool: dict | None = None) -> dict:
     """Process one personal-log order to a stored answer. Safe to repeat: the first call decides, later calls read it back."""
     received_at = received_at or _stamp(now)
     done = _stamp(now)
@@ -299,6 +383,8 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
         return prior
     log_hash = order["log"]["hash"]
     creation, cerr = _creation(order["log"])
+    if not cerr and creation and creation.get("slug") and account_key(creation["slug"]) != log_hash:
+        cerr = "The account key does not match the account identifier."
     if cerr:
         return _store(conn, oid, order["type"], log_hash, REJECTED, cerr, None, source, order, None, received_at, done)
 
@@ -312,6 +398,9 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
     if existing and not pub:
         return _store(conn, oid, order["type"], log_hash, REJECTED, "NO_WRITE_KEY: this log has no write key, so nothing can be added to it.", None, source, order, None, received_at, done)
     if not log_signing.verify(order, pub):
+        if existing and creation and creation.get("slug") and existing["created_by_order"] != creation["creation_id"]:
+            return _store(conn, oid, order["type"], log_hash, REJECTED, "NAME_TAKEN: someone already has that account. If it is you, open it with your passcode; if not, create the next numbered one.",
+                          None, source, order, None, received_at, done)
         return _store(conn, oid, order["type"], log_hash, REJECTED,
                       "BAD_SIGNATURE: this order was not signed with this log's write key, so it was not applied.", None, source, order, None, received_at, done)
 
@@ -324,7 +413,7 @@ def process_order(conn, raw, *, current_legs=None, now: dt.datetime, source: str
                 state, why = _ensure_log(conn, log_hash, creation, now)
                 res = _store(conn, oid, TYPE_CREATE, log_hash, REJECTED if state == REJECTED else CREATED, why, None, source, order, None, received_at, done)
         else:
-            res = _process_bet(conn, order, oid, log_hash, creation, current_legs or [], now, source, received_at)
+            res = _process_bet(conn, order, oid, log_hash, creation, current_legs or [], now, source, received_at, builder_pool)
         conn.execute("COMMIT")
         return res
     except Exception:
@@ -378,7 +467,68 @@ def _process_claim(conn, order, oid, log_hash, existing, source, received_at, do
         raise
 
 
-def _process_bet(conn, order, oid, log_hash, creation, current_legs, now, source, received_at) -> dict:
+_BUILDER_LEG_KEYS = ("game_id", "participant_id", "market_family", "threshold", "side", "american_price")
+
+
+def _check_builder_shape(accepted) -> str | None:
+    """Shape only: 1-6 legs, each with identity and a price; no player twice in the same market (a player's 2+ and 3+ shots are one bet on one outcome, not two)."""
+    if not isinstance(accepted, dict) or not isinstance(accepted.get("legs"), list) or not (1 <= len(accepted["legs"]) <= MAX_BUILDER_LEGS):
+        return f"A slip needs 1 to {MAX_BUILDER_LEGS} legs."
+    seen = set()
+    for l in accepted["legs"]:
+        if not isinstance(l, dict) or any(k not in l for k in _BUILDER_LEG_KEYS) or isinstance(l.get("american_price"), bool) \
+                or not isinstance(l.get("american_price"), (int, float)) or abs(l["american_price"]) < 100:
+            return "Every leg needs its identity fields and an American price."
+        ident = (str(l["game_id"]), str(l["participant_id"]), l["market_family"])
+        if ident in seen:
+            return "A player can appear once per market on a slip (his 2+ and 3+ shots are one bet, not two)."
+        seen.add(ident)
+    return None
+
+
+def _process_builder(conn, order, oid, log_hash, accepted, stake, builder_pool, now, source, received_at, reject) -> dict:
+    """A bet the person built themselves on the Paper Parlay Builder. It does NOT need the model's edge or +100: it needs a real, fresh DraftKings price for every leg, a game that has
+    not started, a player who can be identified, sufficient funds, and no duplicate. The combined price is the product of the leg prices: an ESTIMATE, and for legs from one game it is
+    not even that (DraftKings prices same-game combinations with its own correlation adjustment), so such a slip must be acknowledged and is labelled as multiplied, not quoted."""
+    from operational import builder_pool as bp
+    from operational import daily_tickets
+    done = _stamp(now)
+    if not builder_pool or not builder_pool.get("games"):
+        return reject("UNAVAILABLE: the engine has no current price list to check this slip against. Nothing was recorded; try again in a few minutes.", None)
+    rv = bp.revalidate(accepted, builder_pool, now)
+    if rv["status"] == "UNAVAILABLE":
+        return reject(rv["reason"], {"legs": rv["legs"]})
+    same_game = len({l["game_id"] for l in rv["legs"]}) < len(rv["legs"])
+    if same_game and accepted.get("same_game_ack") is not True:
+        return reject("SAME_GAME: legs from one game are priced by DraftKings together, not by multiplying; tick the box to confirm you understand this slip's number is not a DraftKings quote.")
+    if rv["status"] == "CHANGED":
+        return reject("A price moved since you built the slip. Nothing was recorded; review the new prices and submit again.", {"legs": rv["legs"], "changes": rv["changes"], "combined_american": rv["combined_american"]}, NEEDS_ACCEPTANCE)
+    identities = sorted(f"{l['game_id']}:{l['participant_id']}:{l['market_family']}:{l['threshold']}:{l['side']}" for l in rv["legs"])
+    today = et.eastern_today(now)
+    fingerprint = hashlib.sha256(f"{log_hash}|{today}|{'|'.join(identities)}".encode()).hexdigest()[:20]
+    dup = conn.execute("SELECT bet_id FROM bets WHERE log_hash = ? AND fingerprint = ?", (log_hash, fingerprint)).fetchone()
+    if dup:
+        return reject("This exact slip is already in this account (added earlier today).", None, ALREADY, dup["bet_id"])
+    bet_id = "P" + hashlib.sha256(f"{log_hash}|{oid}".encode()).hexdigest()[:14].upper()
+    frozen = [{**l, "code_version": daily_tickets.code_version()} for l in rv["legs"]]
+    probs = [l.get("conservative_probability") for l in frozen]
+    joint = None if any(p is None for p in probs) or same_game else round(__import__("math").prod(probs), 6)
+    basis = "SAME_GAME_MULTIPLIED_NOT_A_QUOTE" if same_game else ("SPORTSBOOK_QUOTE" if len(frozen) == 1 else "ESTIMATED_PRODUCT_OF_LEG_PRICES")
+    provenance = {"order_id": oid, "source": source, "received_at_utc": received_at, "revalidated_at_utc": done, "page_generated_at_utc": order.get("page_generated_at_utc"),
+                  "kind": KIND_BUILDER, "price_basis": basis, "same_game": same_game,
+                  "accepted": {"legs": accepted["legs"], "combined_american": accepted.get("combined_american")},
+                  "jurisdiction_note": "Prices are DraftKings US-feed quotes (The Odds API); not verified against DraftKings Ontario."}
+    starts = [l["game_start_utc"] for l in frozen if l.get("game_start_utc")]
+    conn.execute(
+        "INSERT INTO bets (bet_id, log_hash, order_id, fingerprint, legs_json, entry_odds, model_probability, ev, stake, created_at_utc, event_start_utc, origin, provenance_json) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (bet_id, log_hash, oid, fingerprint, json.dumps(frozen), rv["combined_american"], joint, None, stake, done, min(starts) if starts else None, ORIGIN_LABEL,
+         json.dumps(provenance, sort_keys=True)))
+    _audit(conn, "BET_ADDED", bet_id, {"log": log_hash, "order": oid, "stake": stake, "kind": KIND_BUILDER}, done)
+    return reject(None, None, RECORDED, bet_id)
+
+
+def _process_bet(conn, order, oid, log_hash, creation, current_legs, now, source, received_at, builder_pool=None) -> dict:
     from operational import manual_orders
     done = _stamp(now)
 
@@ -386,7 +536,7 @@ def _process_bet(conn, order, oid, log_hash, creation, current_legs, now, source
         return _store(conn, oid, TYPE_BET, log_hash, status, reason, bet_id, source, order, detail, received_at, done)
 
     accepted = order.get("accepted")
-    err = manual_orders.check_accepted(accepted)
+    err = _check_builder_shape(accepted) if isinstance(accepted, dict) and accepted.get("kind") == KIND_BUILDER else manual_orders.check_accepted(accepted)
     stake = None
     if err is None:
         stake = accepted.get("stake", DEFAULT_STAKE)
@@ -400,10 +550,18 @@ def _process_bet(conn, order, oid, log_hash, creation, current_legs, now, source
     if state == REJECTED:
         return reject(why)
     today = et.eastern_today(now)
-    sent = [r["processed_at_utc"] for r in conn.execute("SELECT processed_at_utc FROM orders WHERE log_hash = ? AND kind = ? AND status IN (?,?,?)",
+    # orders that were never this account's own (a wrong signature, an unknown account) do not count against it: nobody can use up another account's daily allowance
+    sent = [r["processed_at_utc"] for r in conn.execute("SELECT processed_at_utc FROM orders WHERE log_hash = ? AND kind = ? AND status IN (?,?,?) "
+                                                        "AND (reason IS NULL OR (reason NOT LIKE 'BAD_SIGNATURE%' AND reason NOT LIKE 'LOG_NOT_FOUND%' AND reason NOT LIKE 'NO_WRITE_KEY%'))",
                                                         (log_hash, TYPE_BET, RECORDED, NEEDS_ACCEPTANCE, REJECTED)).fetchall()]
     if sum(1 for s in sent if _same_day(s, today)) >= MAX_BET_ORDERS_PER_LOG_PER_DAY:
         return reject("RATE_LIMIT: this log reached its daily limit of orders.")
+
+    cash = account_state(conn, log_hash)["available_cash"]
+    if stake > cash + 1e-9:
+        return reject(f"INSUFFICIENT_FUNDS: this account has ${max(cash, 0):,.2f} available and the stake is ${stake:,.2f}. Nothing was recorded.")
+    if accepted.get("kind") == KIND_BUILDER:
+        return _process_builder(conn, order, oid, log_hash, accepted, stake, builder_pool, now, source, received_at, reject)
 
     rv = manual_orders.revalidate(accepted, current_legs, now)
     if rv["status"] in ("UNAVAILABLE", "NO_LONGER_QUALIFIES"):
@@ -441,6 +599,51 @@ def _process_bet(conn, order, oid, log_hash, creation, current_legs, now, source
          stake, done, daily_tickets._earliest_start(combo), ORIGIN_LABEL, json.dumps(provenance, sort_keys=True)))
     _audit(conn, "BET_ADDED", bet_id, {"log": log_hash, "order": oid, "stake": stake}, done)
     return reject(None, None, RECORDED, bet_id)
+
+
+# ------------------------------------------------------------------ bankroll ----
+
+def account_state(conn, log_hash: str) -> dict:
+    """The account's own paper bankroll, recomputed from its bets (never stored, so it cannot drift or be reset by reopening):
+    available cash = starting balance + settled profit/loss - stakes still open. Payouts received = stake plus profit for every win, stake back for every void."""
+    lg = log_row(conn, log_hash)
+    start = float(lg["starting_balance"]) if lg and lg.get("starting_balance") is not None else STARTING_BALANCE
+    rows = conn.execute("SELECT stake, result_status, profit_loss FROM bets WHERE log_hash = ?", (log_hash,)).fetchall()
+    open_stakes = round(sum(r["stake"] for r in rows if r["result_status"] in ("PENDING", "UNRESOLVED")), 2)
+    settled = [r for r in rows if r["result_status"] in ("WIN", "LOSS", "VOID")]
+    pnl = round(sum(r["profit_loss"] or 0.0 for r in settled), 2)
+    payouts = round(sum((r["stake"] + (r["profit_loss"] or 0.0)) for r in settled if r["result_status"] == "WIN") + sum(r["stake"] for r in settled if r["result_status"] == "VOID"), 2)
+    available = round(start + pnl - open_stakes, 2)
+    return {"starting_balance": start, "available_cash": available, "open_stakes": open_stakes, "settled_pnl": pnl, "payouts_received": payouts,
+            "equity": round(available + open_stakes, 2), "total_staked": round(sum(r["stake"] for r in rows), 2), "over_drawn": available < -1e-9}
+
+
+def reconcile(conn) -> list[dict]:
+    """Every account's cash re-derived a second, independent way: starting balance - every stake paid + every payout received = available cash, checked per account.
+    A difference is a defect (a stake counted twice, or lost). The legacy-unclaimed bucket is excluded: nobody owns it."""
+    out = []
+    for lg in conn.execute("SELECT log_hash, display_name, starting_balance FROM logs WHERE log_hash <> ?", (UNCLAIMED_LEGACY,)).fetchall():
+        st = account_state(conn, lg["log_hash"])
+        cash_flow = round(st["starting_balance"] - st["total_staked"] + st["payouts_received"], 2)           # money out for every stake, money back for every payout
+        out.append({"log_hash": lg["log_hash"], "name": lg["display_name"], "available_cash": st["available_cash"], "cash_by_flows": cash_flow,
+                    "agrees": abs(st["available_cash"] - cash_flow) < 0.005})
+    return out
+
+
+def migrate_bankrolls(conn, now: dt.datetime) -> dict:
+    """One-off and idempotent: every existing log gets the $500 starting balance (the column default does this for new databases; this makes it explicit and audited
+    for ones that existed before bankrolls) and its CURRENT state is recorded, so a later comparison can show nothing was counted twice or lost."""
+    done = []
+    for lg in conn.execute("SELECT log_hash, starting_balance FROM logs WHERE log_hash <> ?", (UNCLAIMED_LEGACY,)).fetchall():
+        ref = f"bankroll-v1:{lg['log_hash']}"
+        if conn.execute("SELECT 1 FROM migrations WHERE source_ref = ?", (ref,)).fetchone():
+            continue
+        st = account_state(conn, lg["log_hash"])
+        conn.execute("INSERT INTO migrations (source_ref, bet_id, migrated_at_utc, detail_json) VALUES (?,?,?,?)",
+                     (ref, "-", _stamp(now), json.dumps({"starting_balance": st["starting_balance"], "state_after": st}, sort_keys=True)))
+        _audit(conn, "BANKROLL_MIGRATED", lg["log_hash"], {"starting_balance": st["starting_balance"], "available_cash": st["available_cash"], "open_stakes": st["open_stakes"]}, _stamp(now))
+        done.append(lg["log_hash"])
+    return {"migrated": len(done), "logs": done}
 
 
 # ------------------------------------------------------------------ settlement ----
@@ -508,13 +711,14 @@ def section(conn, now: dt.datetime) -> dict:
         orders = [dict(r) for r in conn.execute(
             "SELECT order_id, kind, status, reason, bet_id, processed_at_utc FROM orders WHERE log_hash = ? ORDER BY processed_at_utc DESC, order_id LIMIT 25",
             (lg["log_hash"],)).fetchall()]
-        logs[lg["log_hash"]] = {"display_name": lg["display_name"], "created_at_utc": lg["created_at_utc"], "write_pub": lg["write_pub"],
-                                "summary": summarize(bets), "bets": cards, "orders": orders}
+        logs[lg["log_hash"]] = {"display_name": lg["display_name"], "slug": lg["slug"], "created_at_utc": lg["created_at_utc"], "write_pub": lg["write_pub"],
+                                "summary": summarize(bets), "bankroll": account_state(conn, lg["log_hash"]), "bets": cards, "orders": orders}
     legacy = [dict(b) for b in conn.execute("SELECT stake, result_status, profit_loss FROM bets WHERE log_hash = ?", (UNCLAIMED_LEGACY,))]
     return {"schema": SCHEMA, "generated_at_utc": _stamp(now), "logs": logs,
             "unclaimed_legacy": {"tickets": len(legacy), "settled_pnl": round(sum(b["profit_loss"] or 0 for b in legacy if b["result_status"] in ("WIN", "LOSS", "VOID")), 2),
                                  "results": [b["result_status"] for b in legacy]},
-            "rules": {"stake_min": MIN_STAKE, "stake_max": MAX_STAKE, "stake_default": DEFAULT_STAKE, "code_min_length": MIN_CODE_LEN}}
+            "rules": {"stake_min": MIN_STAKE, "stake_max": MAX_STAKE, "stake_default": DEFAULT_STAKE, "code_min_length": MIN_CODE_LEN, "starting_balance": STARTING_BALANCE,
+                      "max_builder_legs": MAX_BUILDER_LEGS, "passcode_length": log_signing.PASSCODE_LEN}}
 
 
 def unclaimed_legacy(conn) -> list[dict]:
@@ -601,6 +805,9 @@ if __name__ == "__main__":
         out.write_text("Single-use phrase for claiming the earlier manual ticket(s) into your own log on My Bets (see docs/PERSONAL_LOGS.md):\n\n" + phrase + "\n")
         out.chmod(0o600)
         print(f"A single-use claim phrase was written to {out} (it is not printed here). Delete the file after you use it.")
+    elif cmd == "migrate-bankrolls":
+        c = connect()
+        print(json.dumps({"migrated": migrate_bankrolls(c, dt.datetime.now(dt.timezone.utc)), "accounts": reconcile(c)}, indent=1))
     elif cmd == "migrate-legacy":
         from operational import paper_bankroll as pb
         bk = pb.init_db()
@@ -609,4 +816,4 @@ if __name__ == "__main__":
         finally:
             bk.close()
     else:
-        print("usage: python3 -m operational.personal_logs migrate-legacy | issue-claim-phrase | claim-legacy")
+        print("usage: python3 -m operational.personal_logs migrate-legacy | migrate-bankrolls | issue-claim-phrase | claim-legacy")

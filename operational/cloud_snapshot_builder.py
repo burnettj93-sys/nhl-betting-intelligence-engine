@@ -222,6 +222,12 @@ def _personal_logs() -> dict:
         conn.close()
 
 
+def _builder_pool() -> dict:
+    """The Paper Parlay Builder's price list (operational/builder_pool.py), written by the 15-minute trader."""
+    from operational import builder_pool
+    return builder_pool.load() or {"generated_at_utc": None, "games": {}}
+
+
 _SECTION_BUILDERS = {
     "tickets": _tickets,
     "product_meta": _product_meta,
@@ -233,6 +239,7 @@ _SECTION_BUILDERS = {
     "product_model_health": _product("model_health"),
     "manual_orders": _manual_orders,
     "personal_logs": _personal_logs,
+    "builder_pool": _builder_pool,
     "performance": _performance,
     "morning_review": _morning_review,
     "ledger": _ledger,

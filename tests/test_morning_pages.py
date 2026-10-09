@@ -9,7 +9,7 @@ import unittest
 from dashboard import ui
 from operational import price_availability as pa
 from tests.product_fixture import GEN, snapshot
-from tests.test_product_pages import FIXTURE_NOW, choose_log, run_page, text
+from tests.test_product_pages import FIXTURE_NOW, choose_log, run_page, text, with_token
 
 U = dt.timezone.utc
 
@@ -78,7 +78,7 @@ class TestMorningPages(unittest.TestCase):
         self.assertNotIn("STALE — quoted 5.0 h ago", t)            # a provisional price is not mislabelled stale inside its provisional limit
 
     def test_best_options_marks_aged_provisional_cards_and_offers_no_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot(), setup=choose_log)
+        at = run_page("26_Player_Props.py", morning_snapshot(), setup=lambda a: (choose_log(a), with_token(a)))
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("Provisional.", t)
@@ -91,7 +91,7 @@ class TestMorningPages(unittest.TestCase):
             o["early"] = True
             for l in o["legs"]:
                 l["early"] = True
-        at = run_page("26_Player_Props.py", snap, setup=choose_log)
+        at = run_page("26_Player_Props.py", snap, setup=lambda a: (choose_log(a), with_token(a)))        # the add control needs the write credential
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("Morning price.", t)
@@ -99,7 +99,7 @@ class TestMorningPages(unittest.TestCase):
         self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"], "a fresh morning option is addable")
 
     def test_a_non_provisional_option_still_offers_its_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False), setup=choose_log)
+        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False), setup=lambda a: (choose_log(a), with_token(a)))
         self.assertEqual(len(at.exception), 0)
         self.assertNotIn("Provisional.", text(at))
         self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"])

@@ -1,4 +1,4 @@
-# Product completion checklist (revision 8, 2026-10-09)
+# Product completion checklist (revision 9, 2026-10-09)
 
 Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
 **BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
@@ -83,7 +83,7 @@ Any displayed price is judged **when the page is opened** against the engine's o
 | Redundant recommendations reworked or hidden; technical rejections in Diagnostics | WORKS | Option de-duplication by legs; rejections in Diagnostics. |
 | Browsing, filtering or refreshing never records a bet | WORKS | Tests: no order and no ledger write without a button press. |
 
-## 6. Personal bet logs by code
+## 6. Personal bet logs (earlier code-based logs; see 6a for accounts)
 
 | Item | Status | Evidence |
 |---|---|---|
@@ -94,6 +94,19 @@ Any displayed price is judged **when the page is opened** against the engine's o
 | Destination obvious before adding | WORKS | "Adding to your personal log *X* — separate from the model book" above every add button. |
 | Earlier manual ticket | WORKS | `ME3D7C508EBFDD3` (lost, −$10) left the model accounting (model P&L −$44.24 → −$34.24, cash $455.76 → $465.76, tickets 10 → 9); the ledger row is untouched (hash of the table identical), a copy sits in "unclaimed earlier manual tickets" with migration and audit rows; ledger backed up first. The owner claims it with `python3 -m operational.personal_logs claim-legacy`. |
 | **The hosted add button end to end (create → add → persist → settle, two logs, model book unchanged)** | **BLOCKED — `LOG_WRITE_TOKEN` not configured** (My Bets still says "no write credential") | Needs the app's write credential. Without it the button only builds a pre-filled GitHub issue that the repository owner alone can submit — which is not an end-to-end test and is not offered to friends. Exact action: `docs/PERSONAL_LOGS.md` → create a fine-grained token (Issues: read/write on this one repository) and add `LOG_WRITE_TOKEN` to the app's Streamlit secrets. Once it exists I run the hosted test with isolated test logs and prove it with `python3 deploy/verify_personal_workflow.py` (PENDING until two logs were created through the app's own write path and one bet settled; FAIL if a personal bet ever touches the model ledger or a book does not reconcile). The two-log separation and unchanged model accounting are already proven on a copy of the live ledger (`deploy/qa_two_logs.py`). |
+
+## 6a. Last-name accounts, personal bankrolls and the Paper Parlay Builder (owner requirement 2026-10-09) — `docs/PERSONAL_LOGS.md`
+
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| Last-name identifier; duplicate surname handled clearly ("Burnett 2"); no long key in everyday use; write protection kept | WORKS in code and tests; hosted behaviour checked read-only (see below) | `personal_logs.surname_slug/parse_account_name/next_free_number`; 8-character passcode (40 bits) with a slow derivation, Ed25519 signatures; `NAME_TAKEN` and `BAD_SIGNATURE` refusals (`tests/test_personal_accounts.py`, 42 tests). Creating an account on the hosted app needs `LOG_WRITE_TOKEN`. |
+| Own $500 per person: available cash, open stakes, payouts, settled P&L; funds enforced; never reset on reopening | WORKS in code and tests | Cash recomputed from the account's own bets (never stored); funds checked in the insert's transaction (`INSUFFICIENT_FUNDS`); reopen test; per-account second derivation `personal_logs.reconcile` run by the watchdog every 30 minutes. |
+| Separate from the model's $500 book and from each other | WORKS in tests and on a copy of the live ledger | `deploy/qa_two_logs.py` (two accounts sharing a surname, builder + model-option bets, overdraft refused, forged cross-account order refused, settlement WIN/LOSS): model ledger hash and account identical before/after; each account reconciles. |
+| Migrate existing logs without losing history or double counting | WORKS in tests; run on the live database at promotion | `migrate_bankrolls` is idempotent; the live database holds only the unclaimed earlier-ticket bucket (1 bet, no bankroll), so no live account is changed by it. |
+| Paper Parlay Builder: player → market → line → slip → browse others → edit/remove → stake → explicit submit; actual prices, freshness, estimated combined odds, return, destination | WORKS in code and page tests (17); hosted rendering checked signed out (below) | `dashboard/pages/40_Parlay_Builder.py`, `operational/builder_pool.py` (price list written each trader cycle, published as a snapshot section). Shots, points, anytime goal; saves only for a confirmed starter. |
+| Builder bets are the person's own choices (no edge or +100); price, participation, funds, duplicate and settlement safeguards remain | WORKS in tests | Engine revalidates price (moved → `NEEDS_ACCEPTANCE`, nothing recorded), freshness from the provider quote time, game not started, identity, funds, same-slip duplicate; settlement by the shared resolver. A made-up market is refused, not a crash. |
+| Multiplied same-game prices are not presented as a sportsbook quote | WORKS | Labelled "Multiplied price — NOT a DraftKings quote", needs an acknowledgement, stored as `SAME_GAME_MULTIPLIED_NOT_A_QUOTE`; different-game slips are "Estimated"; only a single leg is a "Quoted price". |
+| **Hosted create → build → add → persist → settle, two isolated accounts** | **BLOCKED — `LOG_WRITE_TOKEN` not configured** | Same owner action as section 6. `deploy/verify_personal_workflow.py` stays PENDING until two last-name accounts were created through the hosted write path, each with a builder bet, one bet has settled, and the model ledger is untouched. |
 
 ## 7. Paper book, settlement, postmortems
 

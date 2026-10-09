@@ -1,6 +1,7 @@
 """
 Verifies the hosted personal-log workflow from the engine's own records, after it has been exercised on the hosted app (create log -> add -> persist -> settle):
 
+  0. (accounts) each is a last-name account (slug on file), starts with its own $500 and its cash re-derives a second way; at least one bet per account came from the Paper Parlay Builder;
   1. at least two logs exist, each created by an order that arrived through the app's own write path (`via: direct`) and signed (a valid signature is re-verified here);
   2. each log has at least one bet recorded from such an order, and at least one settled bet (open -> won/lost/void) with the right profit arithmetic;
   3. the two logs are separate: no bet id, order id or log hash is shared, and each log's totals equal its own rows;
@@ -44,13 +45,17 @@ def main(ledger=None, personal=None, now: dt.datetime | None = None) -> dict:
         settled = [b for b in bets if b["result_status"] in ("WIN", "LOSS", "VOID")]
         arithmetic_ok = all(
             (round(b["profit_loss"], 2) == -b["stake"]) if b["result_status"] == "LOSS" else (b["profit_loss"] == 0.0) if b["result_status"] == "VOID" else (b["profit_loss"] > 0) for b in settled)
-        direct.append({"log": lg["display_name"], "hash_prefix": lg["log_hash"][:8], "orders_via_app_write_path": len(via), "created_via_app": bool(creation),
+        builder = [b for b in bets if '"kind": "BUILDER"' in (b["provenance_json"] or "")]
+        acct = pl.account_state(personal, lg["log_hash"])
+        direct.append({"log": lg["display_name"], "last_name_account": bool(lg.get("slug")), "starting_balance": acct["starting_balance"], "available_cash": acct["available_cash"], "builder_bets": len(builder), "hash_prefix": lg["log_hash"][:8], "orders_via_app_write_path": len(via), "created_via_app": bool(creation),
                        "signatures_verify": signed_ok, "bets": len(bets), "open": len(bets) - len(settled), "settled": len(settled), "settled_arithmetic_ok": arithmetic_ok,
                        "summary": pl.summarize(bets)})
     qualifying = [d for d in direct if d["created_via_app"] and d["bets"] and d["signatures_verify"]]
     report["logs"] = direct
     if len(qualifying) < 2:
         report["pending"].append(f"need 2 logs created and added to through the hosted app's own write path; found {len(qualifying)}")
+    if not all(d["builder_bets"] for d in qualifying) or not qualifying:
+        report["pending"].append("every account needs at least one bet built on the Paper Parlay Builder and submitted through the hosted app")
     if not any(d["settled"] for d in qualifying):
         report["pending"].append("no bet created through the app has settled yet (it settles after its game finishes)")
     ids = [b["bet_id"] for b in personal.execute("SELECT bet_id FROM bets")]
@@ -62,6 +67,7 @@ def main(ledger=None, personal=None, now: dt.datetime | None = None) -> dict:
     report["steps"]["no_personal_bet_in_the_model_ledger"] = not clash and not leaked
     rec = wd.check_reconciliation(ledger, personal)
     report["steps"]["model_book_reconciles_three_ways_and_each_log_matches_its_rows"] = rec["status"] == wd.OK
+    report["steps"]["each_account_has_its_own_500_and_its_cash_reconciles"] = all(r["agrees"] for r in pl.reconcile(personal)) and all(d["starting_balance"] == pl.STARTING_BALANCE for d in direct)
     report["reconciliation"] = rec
     for k, v in report["steps"].items():
         if not v:

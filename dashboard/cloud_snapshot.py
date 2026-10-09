@@ -114,6 +114,10 @@ def personal_logs() -> dict:
     return _optional("personal_logs")
 
 
+def builder_pool() -> dict:
+    return _optional("builder_pool")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 

@@ -372,10 +372,14 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
     decimal_price = 1.0
     for l in card_legs:
         decimal_price *= l["decimal_price"]
-    p = row.get("model_probability") or 0.0
+    p = row.get("model_probability")
     stake = row["stake"]
     margin = next((l["haircut_margin"] for l in legs if l.get("haircut_margin") is not None), rmp.LEG_PROBABILITY_MARGIN)
-    ev_after = haircut_ev([l["probability"] for l in card_legs], decimal_price, margin)
+    probs = [l["probability"] for l in card_legs]
+    # A bet a person built themselves may include legs the model has no estimate for: then there is no chance and no value figure to show, and none is invented.
+    ev_after = haircut_ev(probs, decimal_price, margin) if all(x is not None for x in probs) and p is not None else None
+    prov_doc = json.loads(row["provenance_json"]) if row.get("provenance_json") else None
+    builder = bool(prov_doc and prov_doc.get("kind") == "BUILDER")
     return {
         "ticket_id": row["paper_bet_id"], "status": _status_for_row(row, now), "recorded": True,
         "legs": card_legs, "combined_decimal": round(decimal_price, 4),
@@ -383,8 +387,8 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         "stake": stake, "potential_return": round(stake * decimal_price, 2),
         "potential_profit": round(stake * (decimal_price - 1.0), 2),
         "hit_probability": p, "ev_estimated": row.get("ev"),
-        "ev_after_haircut": ev_after, "haircut_margin": margin,
-        "rationale": _rationale(p, 1.0 / decimal_price if decimal_price else 0.0, ev_after, len(card_legs), margin),
+        "ev_after_haircut": ev_after, "haircut_margin": margin, "price_basis": (prov_doc or {}).get("price_basis"), "builder": builder,
+        "rationale": (_builder_rationale(prov_doc, p, decimal_price) if builder else _rationale(p or 0.0, 1.0 / decimal_price if decimal_price else 0.0, ev_after or 0.0, len(card_legs), margin)),
         "recorded_at_utc": row["created_at_utc"], "event_start_utc": row.get("event_start_utc"),
         "result": {"status": row["result_status"], "profit_loss": row.get("profit_loss"),
                    "settled_at_utc": row.get("settled_at_utc"), "notes": row.get("notes"),
@@ -393,6 +397,15 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         "origin": row.get("origin") or "AUTOMATIC",
         "provenance": json.loads(row["provenance_json"]) if row.get("provenance_json") else None,
     }
+
+
+def _builder_rationale(prov: dict, p, decimal_price: float) -> str:
+    basis = prov.get("price_basis")
+    price = {"SPORTSBOOK_QUOTE": "a DraftKings quote",
+             "ESTIMATED_PRODUCT_OF_LEG_PRICES": "an estimate: the product of each leg's own DraftKings price, not a quoted parlay price",
+             "SAME_GAME_MULTIPLIED_NOT_A_QUOTE": "multiplied from the leg prices, NOT a DraftKings quote (DraftKings prices legs from one game together with its own adjustment)"}.get(basis, "an estimate")
+    chance = f"The model's combined estimate is {p:.0%}. " if p is not None else "The model has no combined estimate for this slip. "
+    return f"Built by the person on the Paper Parlay Builder: their own selection, with no edge or +100 requirement. The price is {price}. {chance}Prices are US-feed quotes, not verified for Ontario."
 
 
 def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:

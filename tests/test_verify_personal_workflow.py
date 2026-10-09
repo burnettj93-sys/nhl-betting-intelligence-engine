@@ -38,6 +38,20 @@ class TestVerifier(unittest.TestCase):
         res = pl.process_order(self.p, log_signing.sign(doc, KEYS[code], h), current_legs=self.legs, now=NOW, source="t")
         self.assertEqual(res["status"], pl.RECORDED)
 
+    def add_builder(self, surname, passcode, n=1):
+        """A last-name account created through the app path, with one Paper Parlay Builder bet."""
+        from tests.product_fixture import builder_pool_doc
+        slug = pl.surname_slug(surname, n)
+        h = pl.account_key(slug)
+        now = dt.datetime(2026, 10, 8, 22, 0, tzinfo=dt.timezone.utc)
+        create = {"creation_id": "crt_" + slug.replace("-", "x") + "yyyy", "display_name": surname, "slug": slug, "write_pub": log_signing.public_key_hex(passcode, h)}
+        leg = {"game_id": "2026020900", "participant_id": "P1", "participant_name": "Test Skater One", "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2, "side": "OVER", "american_price": -110.0}
+        doc = order_client.build_builder_order([leg], order_id="ord_" + slug.replace("-", "x") + "b0001", log_hash=h, page_generated_at=None, stake=10, same_game_ack=False,
+                                               combined_american=-110, create=create)
+        doc["via"] = "direct"
+        res = pl.process_order(self.p, log_signing.sign(doc, passcode, h), current_legs=[], now=now, source="t", builder_pool=builder_pool_doc())
+        self.assertEqual(res["status"], pl.RECORDED, res)
+
     def test_pending_until_two_logs_were_created_through_the_app_path_and_one_settled(self):
         self.assertEqual(vpw.main(self.ledger, self.p, NOW)["result"], "PENDING")
         self.add("qa-one-code-1111", 0, via="link")                      # hand-filed: proves nothing about the app's credential
@@ -45,15 +59,24 @@ class TestVerifier(unittest.TestCase):
         self.assertEqual(r["result"], "PENDING")
         self.assertIn("found 0", " ".join(r["pending"]))
 
-    def test_passes_only_with_two_app_created_logs_a_settled_bet_and_an_untouched_model_book(self):
-        self.add("qa-one-code-1111", 0)
-        self.add("qa-two-code-2222", 1)
+    def test_passes_only_with_two_app_created_accounts_builder_bets_a_settled_bet_and_an_untouched_model_book(self):
+        self.add_builder("Qaone", "AB2D-EF3G")
+        self.add_builder("Qatwo", "HJ4K-LM5N")
         self.assertEqual(vpw.main(self.ledger, self.p, NOW)["result"], "PENDING")          # nothing settled yet
         with mock.patch.object(drv, "resolve_combo_bet", side_effect=[{"status": "WIN", "leg_results": []}, {"status": "LOSS", "leg_results": []}]):
             pl.settle_open(self.p, None, NOW + dt.timedelta(days=1))
         r = vpw.main(self.ledger, self.p, NOW)
         self.assertEqual((r["result"], r["problems"], r["pending"]), ("PASS", [], []))
         self.assertEqual(len(r["logs"]), 2)
+
+    def test_earlier_code_based_logs_without_builder_bets_stay_pending(self):
+        self.add("qa-one-code-1111", 0)
+        self.add("qa-two-code-2222", 1)
+        with mock.patch.object(drv, "resolve_combo_bet", side_effect=[{"status": "WIN", "leg_results": []}, {"status": "LOSS", "leg_results": []}]):
+            pl.settle_open(self.p, None, NOW + dt.timedelta(days=1))
+        r = vpw.main(self.ledger, self.p, NOW)
+        self.assertEqual(r["result"], "PENDING")
+        self.assertIn("Paper Parlay Builder", " ".join(r["pending"]))
 
     def test_fails_when_a_personal_bet_id_appears_in_the_model_ledger(self):
         self.add("qa-one-code-1111", 0)

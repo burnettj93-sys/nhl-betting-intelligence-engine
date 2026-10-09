@@ -97,6 +97,14 @@ def manual_orders() -> list[dict]:
         conn.close()
 
 
+def builder_pool() -> dict:
+    """The Paper Parlay Builder's price list. Local mode reads the engine's own file."""
+    if _cloud():
+        return _wrap(cloud_snapshot.builder_pool)
+    from operational import builder_pool as bp
+    return bp.load() or {"generated_at_utc": None, "games": {}}
+
+
 def personal_logs() -> dict:
     """The published personal-log section ({"logs": {hash: {...}}, "rules": {...}}). Local mode builds it from the personal database."""
     if _cloud():
