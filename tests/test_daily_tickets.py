@@ -32,7 +32,7 @@ def leg(game, pid, price=-105, p=0.60, thr=3, family="PLAYER_SOG_ALTERNATE", sta
     return rmp.ParlayLeg(
         game_id=str(game), event_id=f"evt{game}", market_family=family, participant_id=pid, participant_name=f"Player {pid}",
         side="OVER", threshold=thr, american_price=price, conservative_probability=p, sportsbook="draftkings",
-        captured_at_utc=captured, provider_contract_verified=True, model_threshold_eligible=True,
+        captured_at_utc=captured, quote_updated_utc=captured, retrieved_at_utc=captured, provider_contract_verified=True, model_threshold_eligible=True,
         identity_resolved=True, price_fresh=True, event_not_started=True,
         team="TOR", opponent="MTL", game_start_utc=start, model_version="test-model-v1")
 
@@ -93,6 +93,32 @@ class TestSelectionPolicy(unittest.TestCase):
             for l in t.legs:
                 use[rmp.leg_identity(l)] = use.get(rmp.leg_identity(l), 0) + 1
         self.assertLessEqual(max(use.values()), rmp.MAX_TICKETS_PER_LEG)
+
+    def test_stale_priced_legs_never_enter_selection_even_when_they_look_great(self):
+        fresh = [leg(g, f"P{g}", price=-105, p=0.62) for g in (1, 2, 3, 4)]
+        stale = [dataclasses_replace(leg(g, f"S{g}", price=150, p=0.80), price_fresh=False, freshness_status="OLDER_THAN_LIMIT") for g in (5, 6, 7, 8)]
+        picked = rmp.select_tickets(fresh + stale, max_tickets=5)
+        self.assertTrue(picked["tickets"])
+        used = {l.participant_id for t in picked["tickets"] for l in t.legs}
+        self.assertFalse(used & {"S5", "S6", "S7", "S8"})
+        ml_stale = dataclasses_replace(leg(9, "TOR", price=130, p=0.70, thr=None, family="MONEYLINE"), price_fresh=False)
+        self.assertEqual(rmp._prepare_pool([ml_stale]), [])
+
+    def test_the_selection_report_says_why_a_higher_hit_ticket_was_not_taken(self):
+        """Tickets are taken in estimated-hit-chance order; a higher-hit alternative is skipped only for a stated exposure limit, never silently."""
+        legs = [leg(1, "A", price=-110, p=0.70), leg(2, "B", price=-110, p=0.66)] + [leg(g, f"P{g}", price=100, p=0.52) for g in (3, 4, 5, 6)]
+        picked = rmp.select_tickets(legs, max_tickets=4)
+        rows = picked["considered"]
+        self.assertTrue(rows and rows[0]["status"] == "SELECTED")
+        hits = [r["hit_probability"] for r in rows]
+        self.assertEqual(hits, sorted(hits, reverse=True))                       # listed best hit chance first
+        self.assertEqual([r["status"] for r in rows].count("SELECTED"), len(picked["tickets"]))
+        skipped = [r for r in rows if r["status"].startswith("BLOCKED")]
+        self.assertTrue(skipped, "the leg limit must have skipped something here")
+        self.assertTrue(all(r["reason"] for r in skipped))
+        self.assertTrue(all(r["hit_probability"] <= rows[0]["hit_probability"] for r in skipped))
+        later = [r for r in rows if r["status"] == "NOT_REACHED"]
+        self.assertTrue(all(r["hit_probability"] <= min(t.joint_probability for t in picked["tickets"]) + 1e-9 for r in later))
 
     def test_one_player_is_on_at_most_two_tickets_whatever_the_market(self):
         """2026-10-08: one player's 8-minute night lost three of the day's five tickets. A player may sit on at most MAX_TICKETS_PER_PLAYER."""

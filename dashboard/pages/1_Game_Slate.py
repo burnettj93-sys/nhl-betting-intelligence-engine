@@ -72,8 +72,14 @@ for g in day:
             c[1].caption("In progress or awaiting the final result.")
         ml = g.get("moneyline")
         if ml and ml.get("home") and ml.get("away"):
-            c[2].markdown(f"DraftKings: **{g['away']} {ui.american(ml['away']['american'])}** / **{g['home']} {ui.american(ml['home']['american'])}**")
-            c[2].caption(f"Quote captured {ui.et_time(ml['home']['quote_captured_at_utc'], True)} ({ui.age_text(ml['home']['quote_captured_at_utc'])}). US feed.")
+            _txt, _stale = ui.moneyline_text(g)
+            if _stale:
+                c[2].markdown(f"<span style='opacity:.65'>DraftKings: {g['away']} {ui.american(ml['away']['american'])} / {g['home']} {ui.american(ml['home']['american'])}</span> {ui.chip('STALE', 'warn')}",
+                              unsafe_allow_html=True)
+                c[2].caption(f"Last quote {ui.et_time(ml['home']['quote_captured_at_utc'], True)} ({ui.age_text(ml['home']['quote_captured_at_utc'])}), past its freshness limit — not used for tickets. US feed.")
+            else:
+                c[2].markdown(f"DraftKings: **{g['away']} {ui.american(ml['away']['american'])}** / **{g['home']} {ui.american(ml['home']['american'])}**")
+                c[2].caption(f"Quote captured {ui.et_time(ml['home']['quote_captured_at_utc'], True)} ({ui.age_text(ml['home']['quote_captured_at_utc'])}). US feed.")
         elif g["state"] == "SCHEDULED":
             c[2].caption("No DraftKings moneyline quote on file.")
         goalies = g.get("goalies") or {}

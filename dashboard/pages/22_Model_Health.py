@@ -33,7 +33,8 @@ _rows = [
     ("Market support", f"{_active} priced · {_gated} gated or display-only", "Whether a market has real DraftKings prices captured and a model allowed to price it (per-model chips below). Limited by the credit allowance and by starter confirmation for saves."),
     ("Predictive validation", f"skaters {_sk.get('beating_baselines', '?')}/{_sk.get('markets_scored', '?')} · goalie saves {_gl.get('beating_baselines', '?')}/{_gl.get('markets_scored', '?')} beat baselines",
      "Chronological walk-forward on seasons the model never saw: better than simple base-rate and rolling-average baselines on log loss. It says the probabilities are informative, not that prices are wrong."),
-    ("Calibration", "calibrated; caveat below 40 games", "Probabilities are Platt-calibrated on 2024-25 and tested on 2025-26. With fewer than 40 prior NHL games the model still over-predicts, so those players are not priced (docs/validation/low_sample_calibration.json)."),
+    ("Calibration", "calibrated on average; caveats", "Probabilities are Platt-calibrated on 2024-25 and tested on 2025-26. With fewer than 40 prior NHL games the model still over-predicts, so those players are not priced (docs/validation/low_sample_calibration.json). "
+     "For veterans in the 50–62% band it under-predicted by about 3 points, and an individual player's probability was off by about 8–10 points (1 SD): an edge smaller than that is an estimate, not a finding (docs/SELECTOR_AUDIT.md)."),
     ("Betting-value evidence", "none yet", "There are no historical DraftKings prices to test against and the live paper book has only a handful of tickets. A positive 'edge' on a card is a model estimate after a 3-point haircut, not proof of profit."),
 ]
 st.markdown("| Kind of evidence | Status | What it says |\n|---|---|---|\n" + "\n".join(f"| **{a}** | {ui.esc(b)} | {ui.esc(c)} |" for a, b, c in _rows))

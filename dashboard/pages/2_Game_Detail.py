@@ -72,8 +72,9 @@ elif g.get("win_probability"):
     m[1].metric(f"{g['away']} win chance", ui.pct(wp["away"]))
     ml = g.get("moneyline")
     if ml and ml.get("home") and ml.get("away"):
-        m[2].metric("DraftKings moneyline", f"{ui.american(ml['away']['american'])} / {ui.american(ml['home']['american'])}",
-                    f"{g['away']} / {g['home']}", delta_color="off")
+        _txt, _stale = ui.moneyline_text(g)
+        m[2].metric("DraftKings moneyline" + (" — STALE" if _stale else ""), f"{ui.american(ml['away']['american'])} / {ui.american(ml['home']['american'])}",
+                    f"{g['away']} / {g['home']}" + (" · past its freshness limit, not used for tickets" if _stale else ""), delta_color="off")
         st.caption(f"Quote captured {ui.et_time(ml['home']['quote_captured_at_utc'], True)} ({ui.age_text(ml['home']['quote_captured_at_utc'])}). US feed; not verified for Ontario.")
     else:
         m[2].caption("No DraftKings moneyline quote on file.")

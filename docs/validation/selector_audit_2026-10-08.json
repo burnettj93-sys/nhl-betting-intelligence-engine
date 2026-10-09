@@ -1,0 +1,1893 @@
+{
+ "as_of_utc": "2026-10-08T18:07:56Z",
+ "eastern_date": "2026-10-08",
+ "reconstruction": {
+  "games_upcoming": 10,
+  "modelled_players": 317,
+  "events_with_capture": 6,
+  "legs": 546
+ },
+ "pool_legs_with_positive_edge": 27,
+ "games_in_pool": 6,
+ "qualifying_tickets": 106,
+ "pool_legs": [
+  {
+   "leg": "Blake Coleman 2+ shots on goal",
+   "price": -135.0,
+   "model_probability": 0.635,
+   "leg_ev": 0.1054,
+   "leg_ev_after_haircut": 0.0531
+  },
+  {
+   "leg": "Anders Lee 2+ shots on goal",
+   "price": -140.0,
+   "model_probability": 0.6097,
+   "leg_ev": 0.0452,
+   "leg_ev_after_haircut": -0.0062
+  },
+  {
+   "leg": "Mavrik Bourque 2+ shots on goal",
+   "price": -125.0,
+   "model_probability": 0.5578,
+   "leg_ev": 0.004,
+   "leg_ev_after_haircut": -0.05
+  },
+  {
+   "leg": "Christian Dvorak 2+ shots on goal",
+   "price": 120.0,
+   "model_probability": 0.4591,
+   "leg_ev": 0.01,
+   "leg_ev_after_haircut": -0.056
+  },
+  {
+   "leg": "Tyler Seguin 1+ point",
+   "price": 145.0,
+   "model_probability": 0.4483,
+   "leg_ev": 0.0983,
+   "leg_ev_after_haircut": 0.0248
+  },
+  {
+   "leg": "Mavrik Bourque 1+ point",
+   "price": 165.0,
+   "model_probability": 0.4399,
+   "leg_ev": 0.1657,
+   "leg_ev_after_haircut": 0.0862
+  },
+  {
+   "leg": "Ryan Hartman 1+ point",
+   "price": 165.0,
+   "model_probability": 0.4137,
+   "leg_ev": 0.0963,
+   "leg_ev_after_haircut": 0.0168
+  },
+  {
+   "leg": "Christian Dvorak 1+ point",
+   "price": 165.0,
+   "model_probability": 0.4106,
+   "leg_ev": 0.0881,
+   "leg_ev_after_haircut": 0.0086
+  },
+  {
+   "leg": "Jamie Benn 1+ point",
+   "price": 150.0,
+   "model_probability": 0.4053,
+   "leg_ev": 0.0132,
+   "leg_ev_after_haircut": -0.0618
+  },
+  {
+   "leg": "Lawson Crouse 1+ point",
+   "price": 170.0,
+   "model_probability": 0.3972,
+   "leg_ev": 0.0724,
+   "leg_ev_after_haircut": -0.0086
+  },
+  {
+   "leg": "Linus Karlsson 1+ point",
+   "price": 165.0,
+   "model_probability": 0.3893,
+   "leg_ev": 0.0316,
+   "leg_ev_after_haircut": -0.0479
+  },
+  {
+   "leg": "Peyton Krebs 1+ point",
+   "price": 205.0,
+   "model_probability": 0.3747,
+   "leg_ev": 0.1428,
+   "leg_ev_after_haircut": 0.0513
+  },
+  {
+   "leg": "Blake Coleman 3+ shots on goal",
+   "price": 210.0,
+   "model_probability": 0.3729,
+   "leg_ev": 0.156,
+   "leg_ev_after_haircut": 0.063
+  },
+  {
+   "leg": "Anders Lee 3+ shots on goal",
+   "price": 200.0,
+   "model_probability": 0.3467,
+   "leg_ev": 0.0401,
+   "leg_ev_after_haircut": -0.0499
+  },
+  {
+   "leg": "Jordan Spence 1+ point",
+   "price": 205.0,
+   "model_probability": 0.3327,
+   "leg_ev": 0.0147,
+   "leg_ev_after_haircut": -0.0768
+  },
+  {
+   "leg": "Max Sasson 1+ point",
+   "price": 290.0,
+   "model_probability": 0.2978,
+   "leg_ev": 0.1614,
+   "leg_ev_after_haircut": 0.0444
+  },
+  {
+   "leg": "Olli Maatta 1+ point",
+   "price": 280.0,
+   "model_probability": 0.2877,
+   "leg_ev": 0.0933,
+   "leg_ev_after_haircut": -0.0207
+  },
+  {
+   "leg": "Ryan McDonagh 1+ point",
+   "price": 320.0,
+   "model_probability": 0.286,
+   "leg_ev": 0.2012,
+   "leg_ev_after_haircut": 0.0752
+  },
+  {
+   "leg": "Jack McBain 1+ point",
+   "price": 275.0,
+   "model_probability": 0.2756,
+   "leg_ev": 0.0335,
+   "leg_ev_after_haircut": -0.079
+  },
+  {
+   "leg": "Christian Dvorak 3+ shots on goal",
+   "price": 370.0,
+   "model_probability": 0.2138,
+   "leg_ev": 0.0049,
+   "leg_ev_after_haircut": -0.1361
+  },
+  {
+   "leg": "Jamie Oleksiak 1+ point",
+   "price": 500.0,
+   "model_probability": 0.2124,
+   "leg_ev": 0.2744,
+   "leg_ev_after_haircut": 0.0944
+  },
+  {
+   "leg": "Jonas Brodin 1+ point",
+   "price": 500.0,
+   "model_probability": 0.2075,
+   "leg_ev": 0.245,
+   "leg_ev_after_haircut": 0.065
+  },
+  {
+   "leg": "Will Borgen 1+ point",
+   "price": 425.0,
+   "model_probability": 0.1943,
+   "leg_ev": 0.0201,
+   "leg_ev_after_haircut": -0.1374
+  },
+  {
+   "leg": "Blake Coleman 4+ shots on goal",
+   "price": 550.0,
+   "model_probability": 0.1887,
+   "leg_ev": 0.2266,
+   "leg_ev_after_haircut": 0.0315
+  },
+  {
+   "leg": "Anders Lee 4+ shots on goal",
+   "price": 500.0,
+   "model_probability": 0.1704,
+   "leg_ev": 0.0224,
+   "leg_ev_after_haircut": -0.1576
+  },
+  {
+   "leg": "Blake Coleman 5+ shots on goal",
+   "price": 1300.0,
+   "model_probability": 0.0879,
+   "leg_ev": 0.2306,
+   "leg_ev_after_haircut": -0.1894
+  },
+  {
+   "leg": "Anders Lee 5+ shots on goal",
+   "price": 1200.0,
+   "model_probability": 0.077,
+   "leg_ev": 0.001,
+   "leg_ev_after_haircut": -0.389
+  }
+ ],
+ "recorded_tickets": [
+  {
+   "ticket_id": "T758AB336C3C110",
+   "recorded_at_utc": "2026-10-08T18:07:55+00:00",
+   "hit_probability": 0.3872,
+   "estimated_price": 198,
+   "rank_by_hit_chance_among_qualifying": 1,
+   "result": "LOSS"
+  },
+  {
+   "ticket_id": "T72833219796FC9",
+   "recorded_at_utc": "2026-10-08T18:07:55+00:00",
+   "hit_probability": 0.2733,
+   "estimated_price": 320,
+   "rank_by_hit_chance_among_qualifying": 5,
+   "result": "LOSS"
+  },
+  {
+   "ticket_id": "T14E804CB71BFE2",
+   "recorded_at_utc": "2026-10-08T18:07:56+00:00",
+   "hit_probability": 0.3542,
+   "estimated_price": 213,
+   "rank_by_hit_chance_among_qualifying": 2,
+   "result": "LOSS"
+  },
+  {
+   "ticket_id": "T91EE69F28A2961",
+   "recorded_at_utc": "2026-10-08T18:07:56+00:00",
+   "hit_probability": 0.208,
+   "estimated_price": 458,
+   "rank_by_hit_chance_among_qualifying": 16,
+   "result": "LOSS"
+  },
+  {
+   "ticket_id": "TD58DA8BB492B00",
+   "recorded_at_utc": "2026-10-08T18:07:56+00:00",
+   "hit_probability": 0.202,
+   "estimated_price": 483,
+   "rank_by_hit_chance_among_qualifying": 17,
+   "result": "LOSS"
+  }
+ ],
+ "selection_report_today_rules": [
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    -140.0
+   ],
+   "hit_probability": 0.3872,
+   "estimated_price": 198,
+   "ev_estimated": 0.1553,
+   "ev_after_haircut": 0.0466,
+   "status": "SELECTED",
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Mavrik Bourque 2+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    -125.0
+   ],
+   "hit_probability": 0.3542,
+   "estimated_price": 213,
+   "ev_estimated": 0.1098,
+   "ev_after_haircut": 0.0005,
+   "status": "SELECTED",
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Tyler Seguin 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    145.0
+   ],
+   "hit_probability": 0.2847,
+   "estimated_price": 326,
+   "ev_estimated": 0.2141,
+   "ev_after_haircut": 0.0793,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -135.0
+   ],
+   "hit_probability": 0.2793,
+   "estimated_price": 361,
+   "ev_estimated": 0.2886,
+   "ev_after_haircut": 0.144,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    145.0,
+    -140.0
+   ],
+   "hit_probability": 0.2733,
+   "estimated_price": 320,
+   "ev_estimated": 0.148,
+   "ev_after_haircut": 0.0185,
+   "status": "SELECTED",
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "hit_probability": 0.2682,
+   "estimated_price": 354,
+   "ev_estimated": 0.2184,
+   "ev_after_haircut": 0.0795,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Anders Lee 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    165.0
+   ],
+   "hit_probability": 0.2607,
+   "estimated_price": 361,
+   "ev_estimated": 0.2027,
+   "ev_after_haircut": 0.0622,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Ryan Hartman 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "hit_probability": 0.2522,
+   "estimated_price": 354,
+   "ev_estimated": 0.1459,
+   "ev_after_haircut": 0.0105,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Anders Lee 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    170.0
+   ],
+   "hit_probability": 0.2522,
+   "estimated_price": 370,
+   "ev_estimated": 0.1854,
+   "ev_after_haircut": 0.0441,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Christian Dvorak 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "hit_probability": 0.2503,
+   "estimated_price": 354,
+   "ev_estimated": 0.1373,
+   "ev_after_haircut": 0.0023,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Anders Lee 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Linus Karlsson 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    165.0
+   ],
+   "hit_probability": 0.2472,
+   "estimated_price": 361,
+   "ev_estimated": 0.1403,
+   "ev_after_haircut": 0.0027,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    205.0,
+    -135.0
+   ],
+   "hit_probability": 0.2379,
+   "estimated_price": 431,
+   "ev_estimated": 0.2633,
+   "ev_after_haircut": 0.1072,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    205.0,
+    -140.0
+   ],
+   "hit_probability": 0.2285,
+   "estimated_price": 423,
+   "ev_estimated": 0.1945,
+   "ev_after_haircut": 0.0448,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Anders Lee 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    -140.0
+   ],
+   "hit_probability": 0.2274,
+   "estimated_price": 431,
+   "ev_estimated": 0.2082,
+   "ev_after_haircut": 0.0564,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Anders Lee 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Anders Lee 3+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    200.0
+   ],
+   "hit_probability": 0.2202,
+   "estimated_price": 422,
+   "ev_estimated": 0.1497,
+   "ev_after_haircut": 0.0006,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Mavrik Bourque 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    -125.0
+   ],
+   "hit_probability": 0.208,
+   "estimated_price": 458,
+   "ev_estimated": 0.1607,
+   "ev_after_haircut": 0.0099,
+   "status": "BLOCKED_PLAYER_LIMIT",
+   "reason": "Blake Coleman is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Christian Dvorak 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    120.0
+   ],
+   "hit_probability": 0.202,
+   "estimated_price": 483,
+   "ev_estimated": 0.1774,
+   "ev_after_haircut": 0.0254,
+   "status": "SELECTED",
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Tyler Seguin 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    145.0
+   ],
+   "hit_probability": 0.1972,
+   "estimated_price": 549,
+   "ev_estimated": 0.2804,
+   "ev_after_haircut": 0.1132,
+   "status": "BLOCKED_PLAYER_LIMIT",
+   "reason": "Mavrik Bourque is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Max Sasson 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    290.0,
+    -135.0
+   ],
+   "hit_probability": 0.1891,
+   "estimated_price": 579,
+   "ev_estimated": 0.2838,
+   "ev_after_haircut": 0.0999,
+   "status": "BLOCKED_LEG_LIMIT",
+   "reason": "Blake Coleman 2+ shots on goal is already on 2 tickets"
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Ryan Hartman 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    165.0
+   ],
+   "hit_probability": 0.1855,
+   "estimated_price": 549,
+   "ev_estimated": 0.2041,
+   "ev_after_haircut": 0.0421,
+   "status": "SELECTED",
+   "reason": null
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    165.0
+   ],
+   "hit_probability": 0.1841,
+   "estimated_price": 549,
+   "ev_estimated": 0.1951,
+   "ev_after_haircut": 0.0336,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Ryan Hartman 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "hit_probability": 0.182,
+   "estimated_price": 602,
+   "ev_estimated": 0.278,
+   "ev_after_haircut": 0.1045,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Max Sasson 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    290.0,
+    -140.0
+   ],
+   "hit_probability": 0.1816,
+   "estimated_price": 569,
+   "ev_estimated": 0.2139,
+   "ev_after_haircut": 0.0379,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "hit_probability": 0.1806,
+   "estimated_price": 602,
+   "ev_estimated": 0.2684,
+   "ev_after_haircut": 0.0956,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Jamie Benn 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    150.0
+   ],
+   "hit_probability": 0.1783,
+   "estimated_price": 562,
+   "ev_estimated": 0.1812,
+   "ev_after_haircut": 0.0192,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    170.0
+   ],
+   "hit_probability": 0.1781,
+   "estimated_price": 562,
+   "ev_estimated": 0.1779,
+   "ev_after_haircut": 0.0161,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    170.0
+   ],
+   "hit_probability": 0.1747,
+   "estimated_price": 616,
+   "ev_estimated": 0.2502,
+   "ev_after_haircut": 0.0769,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Ryan McDonagh 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    320.0,
+    -140.0
+   ],
+   "hit_probability": 0.1744,
+   "estimated_price": 620,
+   "ev_estimated": 0.2555,
+   "ev_after_haircut": 0.0685,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Linus Karlsson 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "hit_probability": 0.1713,
+   "estimated_price": 602,
+   "ev_estimated": 0.2026,
+   "ev_after_haircut": 0.0343,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Christian Dvorak 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    120.0
+   ],
+   "hit_probability": 0.1712,
+   "estimated_price": 582,
+   "ev_estimated": 0.1676,
+   "ev_after_haircut": 0.0035,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Ryan Hartman 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "hit_probability": 0.1699,
+   "estimated_price": 602,
+   "ev_estimated": 0.1929,
+   "ev_after_haircut": 0.0255,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Tyler Seguin 1+ point"
+   ],
+   "leg_prices": [
+    210.0,
+    145.0
+   ],
+   "hit_probability": 0.1672,
+   "estimated_price": 660,
+   "ev_estimated": 0.2697,
+   "ev_after_haircut": 0.0894,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Peyton Krebs 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    205.0
+   ],
+   "hit_probability": 0.1648,
+   "estimated_price": 708,
+   "ev_estimated": 0.3322,
+   "ev_after_haircut": 0.142,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Ryan Hartman 1+ point",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    170.0
+   ],
+   "hit_probability": 0.1643,
+   "estimated_price": 616,
+   "ev_estimated": 0.1757,
+   "ev_after_haircut": 0.0081,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Blake Coleman 3+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    210.0
+   ],
+   "hit_probability": 0.164,
+   "estimated_price": 722,
+   "ev_estimated": 0.3476,
+   "ev_after_haircut": 0.1547,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Ryan McDonagh 1+ point",
+    "Mavrik Bourque 2+ shots on goal"
+   ],
+   "leg_prices": [
+    320.0,
+    -125.0
+   ],
+   "hit_probability": 0.1595,
+   "estimated_price": 656,
+   "ev_estimated": 0.2061,
+   "ev_after_haircut": 0.0215,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Ryan Hartman 1+ point"
+   ],
+   "leg_prices": [
+    205.0,
+    165.0
+   ],
+   "hit_probability": 0.155,
+   "estimated_price": 708,
+   "ev_estimated": 0.2529,
+   "ev_after_haircut": 0.069,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    205.0,
+    165.0
+   ],
+   "hit_probability": 0.1539,
+   "estimated_price": 708,
+   "ev_estimated": 0.2435,
+   "ev_after_haircut": 0.0604,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    210.0,
+    165.0
+   ],
+   "hit_probability": 0.1531,
+   "estimated_price": 722,
+   "ev_estimated": 0.2578,
+   "ev_after_haircut": 0.0721,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Anders Lee 3+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    200.0
+   ],
+   "hit_probability": 0.1525,
+   "estimated_price": 695,
+   "ev_estimated": 0.2125,
+   "ev_after_haircut": 0.032,
+   "status": "NOT_REACHED",
+   "reason": "every slot was already filled by a ticket with a higher estimated hit chance"
+  }
+ ],
+ "top_qualifying_by_hit_chance": [
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    -0.0062
+   ],
+   "hit_probability": 0.3872,
+   "estimated_price": 198,
+   "ev_estimated": 0.1553,
+   "ev_after_haircut": 0.0466,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Mavrik Bourque 2+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    -125.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.5578
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    -0.05
+   ],
+   "hit_probability": 0.3542,
+   "estimated_price": 213,
+   "ev_estimated": 0.1098,
+   "ev_after_haircut": 0.0005,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Tyler Seguin 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    145.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.4483
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    0.0248
+   ],
+   "hit_probability": 0.2847,
+   "estimated_price": 326,
+   "ev_estimated": 0.2141,
+   "ev_after_haircut": 0.0793,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -135.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.635
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    0.0531
+   ],
+   "hit_probability": 0.2793,
+   "estimated_price": 361,
+   "ev_estimated": 0.2886,
+   "ev_after_haircut": 0.144,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    145.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.4483,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0248,
+    -0.0062
+   ],
+   "hit_probability": 0.2733,
+   "estimated_price": 320,
+   "ev_estimated": 0.148,
+   "ev_after_haircut": 0.0185,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    -0.0062
+   ],
+   "hit_probability": 0.2682,
+   "estimated_price": 354,
+   "ev_estimated": 0.2184,
+   "ev_after_haircut": 0.0795,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.4106
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    0.0086
+   ],
+   "hit_probability": 0.2607,
+   "estimated_price": 361,
+   "ev_estimated": 0.2027,
+   "ev_after_haircut": 0.0622,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Ryan Hartman 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.4137,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0168,
+    -0.0062
+   ],
+   "hit_probability": 0.2522,
+   "estimated_price": 354,
+   "ev_estimated": 0.1459,
+   "ev_after_haircut": 0.0105,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    170.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.3972
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    -0.0086
+   ],
+   "hit_probability": 0.2522,
+   "estimated_price": 370,
+   "ev_estimated": 0.1854,
+   "ev_after_haircut": 0.0441,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Christian Dvorak 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.4106,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0086,
+    -0.0062
+   ],
+   "hit_probability": 0.2503,
+   "estimated_price": 354,
+   "ev_estimated": 0.1373,
+   "ev_after_haircut": 0.0023,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Linus Karlsson 1+ point"
+   ],
+   "leg_prices": [
+    -135.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.3893
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    -0.0479
+   ],
+   "hit_probability": 0.2472,
+   "estimated_price": 361,
+   "ev_estimated": 0.1403,
+   "ev_after_haircut": 0.0027,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    205.0,
+    -135.0
+   ],
+   "leg_model_probabilities": [
+    0.3747,
+    0.635
+   ],
+   "leg_ev_after_haircut": [
+    0.0513,
+    0.0531
+   ],
+   "hit_probability": 0.2379,
+   "estimated_price": 431,
+   "ev_estimated": 0.2633,
+   "ev_after_haircut": 0.1072,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Peyton Krebs 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    205.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.3747,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0513,
+    -0.0062
+   ],
+   "hit_probability": 0.2285,
+   "estimated_price": 423,
+   "ev_estimated": 0.1945,
+   "ev_after_haircut": 0.0448,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.3729,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.063,
+    -0.0062
+   ],
+   "hit_probability": 0.2274,
+   "estimated_price": 431,
+   "ev_estimated": 0.2082,
+   "ev_after_haircut": 0.0564,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 2+ shots on goal",
+    "Anders Lee 3+ shots on goal"
+   ],
+   "leg_prices": [
+    -135.0,
+    200.0
+   ],
+   "leg_model_probabilities": [
+    0.635,
+    0.3467
+   ],
+   "leg_ev_after_haircut": [
+    0.0531,
+    -0.0499
+   ],
+   "hit_probability": 0.2202,
+   "estimated_price": 422,
+   "ev_estimated": 0.1497,
+   "ev_after_haircut": 0.0006,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Mavrik Bourque 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    -125.0
+   ],
+   "leg_model_probabilities": [
+    0.3729,
+    0.5578
+   ],
+   "leg_ev_after_haircut": [
+    0.063,
+    -0.05
+   ],
+   "hit_probability": 0.208,
+   "estimated_price": 458,
+   "ev_estimated": 0.1607,
+   "ev_after_haircut": 0.0099,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Christian Dvorak 2+ shots on goal"
+   ],
+   "leg_prices": [
+    165.0,
+    120.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.4591
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    -0.056
+   ],
+   "hit_probability": 0.202,
+   "estimated_price": 483,
+   "ev_estimated": 0.1774,
+   "ev_after_haircut": 0.0254,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Tyler Seguin 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    145.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.4483
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    0.0248
+   ],
+   "hit_probability": 0.1972,
+   "estimated_price": 549,
+   "ev_estimated": 0.2804,
+   "ev_after_haircut": 0.1132,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Max Sasson 1+ point",
+    "Blake Coleman 2+ shots on goal"
+   ],
+   "leg_prices": [
+    290.0,
+    -135.0
+   ],
+   "leg_model_probabilities": [
+    0.2978,
+    0.635
+   ],
+   "leg_ev_after_haircut": [
+    0.0444,
+    0.0531
+   ],
+   "hit_probability": 0.1891,
+   "estimated_price": 579,
+   "ev_estimated": 0.2838,
+   "ev_after_haircut": 0.0999,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Ryan Hartman 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.4483,
+    0.4137
+   ],
+   "leg_ev_after_haircut": [
+    0.0248,
+    0.0168
+   ],
+   "hit_probability": 0.1855,
+   "estimated_price": 549,
+   "ev_estimated": 0.2041,
+   "ev_after_haircut": 0.0421,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.4483,
+    0.4106
+   ],
+   "leg_ev_after_haircut": [
+    0.0248,
+    0.0086
+   ],
+   "hit_probability": 0.1841,
+   "estimated_price": 549,
+   "ev_estimated": 0.1951,
+   "ev_after_haircut": 0.0336,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Ryan Hartman 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.4137
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    0.0168
+   ],
+   "hit_probability": 0.182,
+   "estimated_price": 602,
+   "ev_estimated": 0.278,
+   "ev_after_haircut": 0.1045,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Max Sasson 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    290.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.2978,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0444,
+    -0.0062
+   ],
+   "hit_probability": 0.1816,
+   "estimated_price": 569,
+   "ev_estimated": 0.2139,
+   "ev_after_haircut": 0.0379,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Christian Dvorak 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.4106
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    0.0086
+   ],
+   "hit_probability": 0.1806,
+   "estimated_price": 602,
+   "ev_estimated": 0.2684,
+   "ev_after_haircut": 0.0956,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Jamie Benn 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    150.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.4053
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    -0.0618
+   ],
+   "hit_probability": 0.1783,
+   "estimated_price": 562,
+   "ev_estimated": 0.1812,
+   "ev_after_haircut": 0.0192,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Tyler Seguin 1+ point",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    145.0,
+    170.0
+   ],
+   "leg_model_probabilities": [
+    0.4483,
+    0.3972
+   ],
+   "leg_ev_after_haircut": [
+    0.0248,
+    -0.0086
+   ],
+   "hit_probability": 0.1781,
+   "estimated_price": 562,
+   "ev_estimated": 0.1779,
+   "ev_after_haircut": 0.0161,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Lawson Crouse 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    170.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.3972
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    -0.0086
+   ],
+   "hit_probability": 0.1747,
+   "estimated_price": 616,
+   "ev_estimated": 0.2502,
+   "ev_after_haircut": 0.0769,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Ryan McDonagh 1+ point",
+    "Anders Lee 2+ shots on goal"
+   ],
+   "leg_prices": [
+    320.0,
+    -140.0
+   ],
+   "leg_model_probabilities": [
+    0.286,
+    0.6097
+   ],
+   "leg_ev_after_haircut": [
+    0.0752,
+    -0.0062
+   ],
+   "hit_probability": 0.1744,
+   "estimated_price": 620,
+   "ev_estimated": 0.2555,
+   "ev_after_haircut": 0.0685,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Mavrik Bourque 1+ point",
+    "Linus Karlsson 1+ point"
+   ],
+   "leg_prices": [
+    165.0,
+    165.0
+   ],
+   "leg_model_probabilities": [
+    0.4399,
+    0.3893
+   ],
+   "leg_ev_after_haircut": [
+    0.0862,
+    -0.0479
+   ],
+   "hit_probability": 0.1713,
+   "estimated_price": 602,
+   "ev_estimated": 0.2026,
+   "ev_after_haircut": 0.0343,
+   "status": null,
+   "reason": null
+  },
+  {
+   "legs": [
+    "Blake Coleman 3+ shots on goal",
+    "Christian Dvorak 2+ shots on goal"
+   ],
+   "leg_prices": [
+    210.0,
+    120.0
+   ],
+   "leg_model_probabilities": [
+    0.3729,
+    0.4591
+   ],
+   "leg_ev_after_haircut": [
+    0.063,
+    -0.056
+   ],
+   "hit_probability": 0.1712,
+   "estimated_price": 582,
+   "ev_estimated": 0.1676,
+   "ev_after_haircut": 0.0035,
+   "status": null,
+   "reason": null
+  }
+ ],
+ "portfolio": {
+  "greedy_by_hit_chance_expected_hits": 1.4021,
+  "best_possible_expected_hits_under_the_same_limits": 1.4021,
+  "best_possible_set": [
+   {
+    "legs": [
+     "Blake Coleman 2+ shots on goal",
+     "Anders Lee 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -135.0,
+     -140.0
+    ],
+    "leg_model_probabilities": [
+     0.635,
+     0.6097
+    ],
+    "leg_ev_after_haircut": [
+     0.0531,
+     -0.0062
+    ],
+    "hit_probability": 0.3872,
+    "estimated_price": 198,
+    "ev_estimated": 0.1553,
+    "ev_after_haircut": 0.0466,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Blake Coleman 2+ shots on goal",
+     "Mavrik Bourque 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -135.0,
+     -125.0
+    ],
+    "leg_model_probabilities": [
+     0.635,
+     0.5578
+    ],
+    "leg_ev_after_haircut": [
+     0.0531,
+     -0.05
+    ],
+    "hit_probability": 0.3542,
+    "estimated_price": 213,
+    "ev_estimated": 0.1098,
+    "ev_after_haircut": 0.0005,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Tyler Seguin 1+ point",
+     "Anders Lee 2+ shots on goal"
+    ],
+    "leg_prices": [
+     145.0,
+     -140.0
+    ],
+    "leg_model_probabilities": [
+     0.4483,
+     0.6097
+    ],
+    "leg_ev_after_haircut": [
+     0.0248,
+     -0.0062
+    ],
+    "hit_probability": 0.2733,
+    "estimated_price": 320,
+    "ev_estimated": 0.148,
+    "ev_after_haircut": 0.0185,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Mavrik Bourque 1+ point",
+     "Christian Dvorak 2+ shots on goal"
+    ],
+    "leg_prices": [
+     165.0,
+     120.0
+    ],
+    "leg_model_probabilities": [
+     0.4399,
+     0.4591
+    ],
+    "leg_ev_after_haircut": [
+     0.0862,
+     -0.056
+    ],
+    "hit_probability": 0.202,
+    "estimated_price": 483,
+    "ev_estimated": 0.1774,
+    "ev_after_haircut": 0.0254,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Tyler Seguin 1+ point",
+     "Ryan Hartman 1+ point"
+    ],
+    "leg_prices": [
+     145.0,
+     165.0
+    ],
+    "leg_model_probabilities": [
+     0.4483,
+     0.4137
+    ],
+    "leg_ev_after_haircut": [
+     0.0248,
+     0.0168
+    ],
+    "hit_probability": 0.1855,
+    "estimated_price": 549,
+    "ev_estimated": 0.2041,
+    "ev_after_haircut": 0.0421,
+    "status": null,
+    "reason": null
+   }
+  ]
+ },
+ "counterfactual_every_leg_must_survive_the_haircut": {
+  "legs_surviving": "12 of 27",
+  "tickets": [
+   {
+    "legs": [
+     "Blake Coleman 2+ shots on goal",
+     "Tyler Seguin 1+ point"
+    ],
+    "leg_prices": [
+     -135.0,
+     145.0
+    ],
+    "leg_model_probabilities": [
+     0.635,
+     0.4483
+    ],
+    "leg_ev_after_haircut": [
+     0.0531,
+     0.0248
+    ],
+    "hit_probability": 0.2847,
+    "estimated_price": 326,
+    "ev_estimated": 0.2141,
+    "ev_after_haircut": 0.0793,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Mavrik Bourque 1+ point",
+     "Blake Coleman 2+ shots on goal"
+    ],
+    "leg_prices": [
+     165.0,
+     -135.0
+    ],
+    "leg_model_probabilities": [
+     0.4399,
+     0.635
+    ],
+    "leg_ev_after_haircut": [
+     0.0862,
+     0.0531
+    ],
+    "hit_probability": 0.2793,
+    "estimated_price": 361,
+    "ev_estimated": 0.2886,
+    "ev_after_haircut": 0.144,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Mavrik Bourque 1+ point",
+     "Tyler Seguin 1+ point"
+    ],
+    "leg_prices": [
+     165.0,
+     145.0
+    ],
+    "leg_model_probabilities": [
+     0.4399,
+     0.4483
+    ],
+    "leg_ev_after_haircut": [
+     0.0862,
+     0.0248
+    ],
+    "hit_probability": 0.1972,
+    "estimated_price": 549,
+    "ev_estimated": 0.2804,
+    "ev_after_haircut": 0.1132,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Ryan Hartman 1+ point",
+     "Christian Dvorak 1+ point"
+    ],
+    "leg_prices": [
+     165.0,
+     165.0
+    ],
+    "leg_model_probabilities": [
+     0.4137,
+     0.4106
+    ],
+    "leg_ev_after_haircut": [
+     0.0168,
+     0.0086
+    ],
+    "hit_probability": 0.1699,
+    "estimated_price": 602,
+    "ev_estimated": 0.1929,
+    "ev_after_haircut": 0.0255,
+    "status": null,
+    "reason": null
+   },
+   {
+    "legs": [
+     "Peyton Krebs 1+ point",
+     "Christian Dvorak 1+ point"
+    ],
+    "leg_prices": [
+     205.0,
+     165.0
+    ],
+    "leg_model_probabilities": [
+     0.3747,
+     0.4106
+    ],
+    "leg_ev_after_haircut": [
+     0.0513,
+     0.0086
+    ],
+    "hit_probability": 0.1539,
+    "estimated_price": 708,
+    "ev_estimated": 0.2435,
+    "ev_after_haircut": 0.0604,
+    "status": null,
+    "reason": null
+   }
+  ],
+  "expected_hits": 1.0849,
+  "best_ticket_hit_chance": 0.2847
+ },
+ "model_uncertainty_2025_26": {
+  "shots>=2": {
+   "band": [
+    0.5,
+    0.62
+   ],
+   "predictions": 7624,
+   "mean_predicted": 0.5592,
+   "observed": 0.5897,
+   "bias_observed_minus_predicted": 0.0305,
+   "players_with_5plus": 198,
+   "sd_of_player_mean_residual": 0.1133,
+   "binomial_noise_sd": 0.0796,
+   "between_player_model_error_sd": 0.0807
+  },
+  "points>=1": {
+   "band": [
+    0.38,
+    0.5
+   ],
+   "predictions": 8504,
+   "mean_predicted": 0.4361,
+   "observed": 0.4631,
+   "bias_observed_minus_predicted": 0.027,
+   "players_with_5plus": 231,
+   "sd_of_player_mean_residual": 0.1293,
+   "binomial_noise_sd": 0.0827,
+   "between_player_model_error_sd": 0.0993
+  }
+ }
+}

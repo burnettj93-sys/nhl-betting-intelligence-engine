@@ -156,6 +156,13 @@ st.markdown("### Order path (one-click add) check")
 from dashboard import ui as _ui
 _ui.order_path_panel()
 
+st.markdown("### Why these tickets (selection report)")
+try:
+    from dashboard import product_source as _psr
+    _uiv.selection_report(_psr.tickets())
+except Exception as _exc:  # noqa: BLE001
+    st.caption(f"Selection report unavailable: {_exc}")
+
 st.markdown("### Ticket and option diagnostics (admin)")
 try:
     from dashboard import product_source as _ps

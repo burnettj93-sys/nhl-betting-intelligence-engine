@@ -54,14 +54,18 @@ elif not todays:
     st.info(f"No regular-season games are scheduled for {today}. Next game day: {nxt}. Open Games to browse.")
 else:
     rows = []
+    n_stale = 0
     for g in todays:
-        ml = g.get("moneyline") or {}
+        ml_text, ml_stale = ui.moneyline_text(g)
+        n_stale += int(ml_stale)
         score = f"{g['away_score']}–{g['home_score']}" if g["state"] == "FINAL" else "—"
         rows.append({"Time": g["start_et"], "Game": f"{g['away']} @ {g['home']}", "Status": ui.STATUS_TEXT.get(g["state"], g["state"].title()),
                      "Score": score, "Model home win": ui.pct((g.get("win_probability") or {}).get("home")),
-                     "DK moneyline (away / home)": (f"{ui.american((ml.get('away') or {}).get('american'))} / "
-                                                    f"{ui.american((ml.get('home') or {}).get('american'))}" if ml else "no fresh quote"),
+                     "DK moneyline (away / home)": ml_text,
                      "Tickets": len(g.get("tickets") or [])})
+    if n_stale:
+        ui.banner(f"<b>{n_stale} of {len(todays)} moneyline prices below are stale</b> (older than their freshness limit when you opened this page). They are shown as the last quote only, "
+                  "marked STALE, and are never used for a ticket; the moneyline refresh is limited by the odds-credit allowance (see Data Status).", "warn")
     st.dataframe(rows, hide_index=True, width="stretch")
     st.caption("Model home win is a display estimate (validated strength model); moneyline quotes are DraftKings US-feed prices and are not used for tickets unless fresh.")
 
@@ -78,6 +82,8 @@ if slots["empty"]:
     st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
                f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
                f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
+
+ui.selection_report(tk)
 
 ex = tk.get("exposure") or {}
 if ex.get("tickets_counted"):
