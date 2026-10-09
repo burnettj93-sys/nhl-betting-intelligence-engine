@@ -27,7 +27,7 @@ CSS = """
         --accent:@@accent@@; --accent-soft:@@accent_soft@@; --good:@@good@@; --bad:@@bad@@; --warn:@@warn@@; --radius:12px; }
 html, body, .stApp, [data-testid="stAppViewContainer"], button, input, textarea, select { font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, 'Source Sans Pro', sans-serif; }
 .stApp { background: var(--bg); color: var(--text); font-feature-settings: 'tnum' 1, 'cv11' 1; }
-.block-container { padding-top: 1.6rem; padding-bottom: 3rem; max-width: 1240px; }
+.block-container { padding-top: 4rem; padding-bottom: 3rem; max-width: 1240px; }   /* clears Streamlit's fixed top bar */
 
 /* ---- type scale: 30 / 21 / 17 / 15 body / 13.5 secondary / 12 labels */
 h1 { font-size: 1.9rem !important; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; margin: 0 0 .25rem 0 !important; padding: 0 !important; }
@@ -67,7 +67,7 @@ a { color: #8db4ff; }
 [data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
 
 /* ---- bet slip: selections, prices, chance and stake read first */
-.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 2px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .card-title { font-weight: 700; font-size: 1.02rem; line-height: 1.35; min-width: 0; flex: 1 1 260px; }
 .card-chips { flex: 0 0 auto; display: flex; gap: 2px; flex-wrap: wrap; }
 .slip { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 4px 0; }
@@ -119,7 +119,7 @@ button:focus-visible, a:focus-visible, [role="tab"]:focus-visible, input:focus-v
 
 /* ---- phones: two-up metrics instead of a tall stack, roomier tap targets, tighter margins */
 @media (max-width: 760px) {
-  .block-container { padding: 1rem .9rem 2.5rem .9rem; }
+  .block-container { padding: 3.6rem .9rem 2.5rem .9rem; }
   h1 { font-size: 1.55rem !important; } [data-testid="stMain"] h1::before { width: 32px; height: 32px; margin-right: 10px; }
   [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) { flex-wrap: wrap !important; gap: .5rem !important; }
   [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="stColumn"] { min-width: calc(50% - .5rem) !important; flex: 1 1 calc(50% - .5rem) !important; width: auto !important; }

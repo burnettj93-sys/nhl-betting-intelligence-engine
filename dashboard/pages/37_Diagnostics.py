@@ -44,12 +44,12 @@ if _wv["message"]:
     st.warning(_wv["message"])
 st.markdown("**Operational health** — is the machinery running the right code on the right data, and do the books agree?")
 if _wv["checks"]:
-    st.dataframe([{"Check": c["name"].replace("_", " "), "Status": c["status"], "Evidence": c["detail"]} for c in _wv["checks"]], hide_index=True, width="stretch")
+    st.markdown("| Check | Status | Evidence |\n|---|---|---|\n" + "\n".join(f"| {c['name'].replace('_', ' ')} | **{c['status']}** | {_uiv.esc(c['detail']).replace('|', '/')} |" for c in _wv["checks"]))
 _ready = ((_hs or {}).get("watchdog") or {}).get("readiness")
 st.markdown("**Product readiness** — which features actually work end to end? (Separate from the table above.)")
 if _ready:
-    st.dataframe([{"Feature": f["feature"], "Status": f["status"].replace("_", " "), "Why": f["detail"], "Owner action": f.get("owner_action") or "—"} for f in _ready["features"]],
-                 hide_index=True, width="stretch")
+    st.markdown("| Feature | Status | Why | Owner action |\n|---|---|---|---|\n" + "\n".join(
+        f"| {f['feature']} | **{f['status'].replace('_', ' ')}** | {_uiv.esc(f['detail']).replace('|', '/')} | {_uiv.esc(f.get('owner_action') or '—').replace('|', '/')} |" for f in _ready["features"]))
     c = _ready["counts"]
     st.caption(f"{c['WORKING']} working · {c['LIMITED']} limited · {c['NOT_VERIFIED']} not verified · {c['BLOCKED']} blocked · {c['OWNER_ACTION']} waiting on an owner action. " + _ready["note"])
 else:
