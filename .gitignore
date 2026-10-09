@@ -234,3 +234,6 @@ operational/new_contract_candidates.jsonl
 # snapshot only -- see docs/RUNTIME_DB_HYGIENE.md. Backed up by
 # operational/backup_databases.py, never committed.
 operational/runtime/
+
+# runtime MoneyPuck download state (shared by symlink into the release checkout) -- never commit
+data/raw/moneypuck/*/2026/
