@@ -206,7 +206,7 @@ def sentence(day: str, game_ids: list[str] | None = None) -> str:
     for g in rest:
         reasons[worst(g)] = reasons.get(worst(g), 0) + 1
     parts = [f"DraftKings player prices are on file for {len(posted)} of {len(ids)} games"]
-    why = {BUDGET_BLOCKED: "not fetched because the odds-credit plan did not cover them", NOT_POSTED: "not posted by DraftKings yet",
+    why = {BUDGET_BLOCKED: "not looked at (the odds-credit plan did not cover an early look; a pregame price follows for the games it does cover)", NOT_POSTED: "not posted by DraftKings yet",
            NOT_FETCHED: "not fetched yet", FETCH_ERROR: "a fetch failed"}
     if reasons:
         parts.append("; " + ", ".join(f"{n} {why[k]}" for k, n in reasons.items()))

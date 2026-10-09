@@ -618,7 +618,7 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
             avail = ""
         return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. A ticket is recorded only on prices fetched within "
                 f"{sched.PREGAME_HOURS * 60:.0f} minutes of puck drop (from about {opens.astimezone(et.EASTERN).strftime('%-I:%M %p ET')} for the first game), so every "
-                f"one is re-checked at the last moment. {avail} Until then the app shows provisional options built from the morning look.").strip()
+                f"one is re-checked at the last moment. {avail} Provisional options appear here as soon as a morning or midday price is on file.").strip()
     return base
 
 
