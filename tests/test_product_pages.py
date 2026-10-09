@@ -296,6 +296,17 @@ class TestMyBetsPage(unittest.TestCase):
         at.radio(key="mb_view").set_value("Model bets"); rerun(at, snapshot())
         self.assertEqual(len(at.exception), 0)
 
+    def test_the_earlier_manual_ticket_is_explained_and_claimable_only_with_a_write_key(self):
+        at = run_page("38_My_Bets.py", snapshot())
+        self.assertTrue(any("earlier manual ticket" in e.label for e in at.expander))
+        self.assertIn("moved out of the model", " ".join(m.value for m in at.markdown))
+        self.assertFalse(any(b.key == "mb_claim" for b in at.button))                  # no log open: no claim box
+        at2 = run_page("38_My_Bets.py", snapshot(), setup=choose_log)
+        self.assertTrue(any(b.key == "mb_claim" for b in at2.button))
+        at3 = run_page("38_My_Bets.py", snapshot(), setup=lambda a: choose_log_view_only(a, None))
+        self.assertFalse(any(b.key == "mb_claim" for b in at3.button))
+        self.assertIn("write key first", " ".join(c.value for c in at3.caption))
+
     def test_page_without_the_section_is_unavailable_not_an_error(self):
         snap = snapshot()
         del snap["personal_logs"]

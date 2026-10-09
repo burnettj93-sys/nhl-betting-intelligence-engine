@@ -1,0 +1,320 @@
+{
+ "as_of_utc": "2026-10-09T14:12:18Z",
+ "source": "api-web.nhle.com box scores, fetched now",
+ "bets_checked": 11,
+ "agree": 11,
+ "leg_game_states": {
+  "OFF": 19
+ },
+ "results": [
+  {
+   "book": "model",
+   "bet_id": "TDD065E3FE00331",
+   "legs": [
+    {
+     "leg": "Ryan Leonard PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 2,
+     "hit": true
+    },
+    {
+     "leg": "Nazem Kadri PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 4,
+     "hit": true
+    }
+   ],
+   "stored": {
+    "status": "WIN",
+    "profit_loss": 15.346938775510203
+   },
+   "recomputed": {
+    "status": "WIN",
+    "profit_loss": 15.35
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "TBDAC49EFEAAEDA",
+   "legs": [
+    {
+     "leg": "Evgeni Malkin PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 1,
+     "hit": false
+    },
+    {
+     "leg": "Nazem Kadri PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 4,
+     "hit": true
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "T54F8E52D8B2D50",
+   "legs": [
+    {
+     "leg": "Ryan Leonard PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 2,
+     "hit": true
+    },
+    {
+     "leg": "Gabriel Landeskog PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 3,
+     "hit": true
+    }
+   ],
+   "stored": {
+    "status": "WIN",
+    "profit_loss": 20.41379310344827
+   },
+   "recomputed": {
+    "status": "WIN",
+    "profit_loss": 20.41
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "T758AB336C3C110",
+   "legs": [
+    {
+     "leg": "Blake Coleman PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 6,
+     "hit": true
+    },
+    {
+     "leg": "Anders Lee PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 1,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "T72833219796FC9",
+   "legs": [
+    {
+     "leg": "Tyler Seguin PLAYER_POINTS 1",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    },
+    {
+     "leg": "Anders Lee PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 1,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "T14E804CB71BFE2",
+   "legs": [
+    {
+     "leg": "Blake Coleman PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 6,
+     "hit": true
+    },
+    {
+     "leg": "Mavrik Bourque PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "T91EE69F28A2961",
+   "legs": [
+    {
+     "leg": "Blake Coleman PLAYER_SOG_ALTERNATE 3",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 6,
+     "hit": true
+    },
+    {
+     "leg": "Mavrik Bourque PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "TD58DA8BB492B00",
+   "legs": [
+    {
+     "leg": "Mavrik Bourque PLAYER_POINTS 1",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    },
+    {
+     "leg": "Christian Dvorak PLAYER_SOG_ALTERNATE 2",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "earlier manual ticket (kept in the ledger for audit)",
+   "bet_id": "ME3D7C508EBFDD3",
+   "legs": [
+    {
+     "leg": "Arttu Hyry PLAYER_POINTS 1",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "model",
+   "bet_id": "1eb2ce28-0d7f-4c00-acc7-4d2b8b7793b6",
+   "legs": [
+    {
+     "leg": "CGY MONEYLINE",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": "COL",
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  },
+  {
+   "book": "personal log legacy-u",
+   "bet_id": "LME3D7C508EBFDD3",
+   "legs": [
+    {
+     "leg": "Arttu Hyry PLAYER_POINTS 1",
+     "state": "OFF",
+     "status": "RESOLVED",
+     "actual": 0,
+     "hit": false
+    }
+   ],
+   "stored": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "recomputed": {
+    "status": "LOSS",
+    "profit_loss": -10.0
+   },
+   "agrees": true,
+   "problems": []
+  }
+ ]
+}

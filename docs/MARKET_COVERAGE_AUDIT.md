@@ -26,7 +26,7 @@ Status: OK = exists, PARTIAL = exists with a stated limit, MISSING = does not ex
 
 ### Shots on goal (alternate ladder 2+..5+)
 * Ontario menu: Market family listed on the DK Ontario menu (owner screenshots, 2026-09-29).
-* context confirmation: No lineup/injury feed. Proxy only: the player dressed in his team's last real game with 20+ games of history and 12+ expected minutes.
+* context confirmation: No lineup/injury feed. Proxy only: the player dressed in his team's last real game with 40+ games of history and 12+ expected minutes.
 
 ### Shots on goal (standard two-sided)
 * Ontario menu: Over/under shots listed on the DK Ontario menu.

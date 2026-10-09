@@ -59,7 +59,7 @@ def personal_logs_doc() -> dict:
     from operational import log_signing, personal_logs as pl
     h = pl.code_hash(LOG_CODE)
     empty = pl.summarize([])
-    return {"schema": 1, "generated_at_utc": GEN, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
+    return {"schema": 1, "generated_at_utc": GEN, "unclaimed_legacy": {"tickets": 1, "settled_pnl": -10.0, "results": ["LOSS"]}, "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8},
             "logs": {h: {"display_name": "Casey", "created_at_utc": GEN, "write_pub": log_signing.public_key_hex(LOG_KEY, h), "summary": empty, "bets": [], "orders": []}}}
 
 

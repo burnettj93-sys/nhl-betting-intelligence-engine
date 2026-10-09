@@ -96,6 +96,24 @@ class TestSources(unittest.TestCase):
         self.assertEqual(wd.check_sources(NOW, self.view("DISABLED"))["status"], wd.OK)
 
 
+class TestPublishingAndQuotes(unittest.TestCase):
+    def test_publishing_switched_off_is_a_failure_not_a_quiet_gap(self):
+        with mock.patch("operational.publish_cloud_snapshot.publishing_enabled", return_value=False):
+            r = wd.check_publishing_enabled()
+        self.assertEqual(r["status"], wd.FAIL)
+        self.assertIn("OFF", r["detail"])
+        with mock.patch("operational.publish_cloud_snapshot.publishing_enabled", return_value=True):
+            self.assertEqual(wd.check_publishing_enabled()["status"], wd.OK)
+
+    def test_stale_quotes_are_a_warning_only_when_a_refresh_was_allowed(self):
+        view = lambda state: {"rows": [{"key": "odds_props", "state": state, "age_min": 400.0, "limit_min": 180.0}, {"key": "odds_moneyline", "state": "CURRENT", "age_min": 5, "limit_min": 180}]}
+        self.assertEqual(wd.check_quotes(NOW, view("STALE"))["status"], wd.WARN)
+        r = wd.check_quotes(NOW, view("BUDGET_LIMITED"))
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("credit budget forbids", r["detail"])
+        self.assertEqual(wd.check_quotes(NOW, view("CURRENT"))["status"], wd.OK)
+
+
 class TestReadinessIsSeparateFromHealth(unittest.TestCase):
     def view(self):
         return {"rows": [{"key": "odds_props", "state": "NOT_DUE", "reason": "3 of 4 games planned", "age_min": None, "limit_min": None}]}

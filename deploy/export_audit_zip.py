@@ -311,6 +311,10 @@ def main(argv=None) -> int:
     df_state = REPO / "operational" / "runtime" / "dailyfaceoff_state.json"
     if df_state.exists():                       # public data fetched from the starter/lineup source, with fetch times and any error
         extras["audit_evidence/dailyfaceoff_state.json"] = df_state.read_bytes()
+    for name in ("credit_plan_ledger.jsonl", "credit_plan_state.json"):      # every paid odds call by class, and the day's plan
+        cp = REPO / "operational" / "runtime" / name
+        if cp.exists():
+            extras[f"audit_evidence/{name}"] = cp.read_bytes()
     checks = REPO / "operational" / "runtime" / "order_path_checks.json"
     if checks.exists():
         extras["audit_evidence/order_path_checks.json"] = checks.read_bytes()

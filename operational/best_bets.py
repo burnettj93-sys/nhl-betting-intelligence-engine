@@ -525,7 +525,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                        only_market: str | None = None) -> list:
     """ParlayLegs for DraftKings' Over prices -- shots-on-goal alternate ladder
     (k+ shots) and player_points (Over 0.5 / 1.5 = 1+ / 2+ points) -- for players
-    the rolling-form model covers (dressed in their team's last game, 20+ games
+    the rolling-form model covers (dressed in their team's last game, 40+ games
     of history). Both contracts are certified against real archived payloads
     (provider_adapter.VERIFIED_CONTRACTS)."""
     from research.generic_prop_pricing import provider_adapter

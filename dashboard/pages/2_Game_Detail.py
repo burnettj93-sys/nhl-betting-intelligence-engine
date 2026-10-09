@@ -141,6 +141,6 @@ for side in ("away", "home"):
                      "Best option": "yes" if p.get("option_id") in opts else "—"})
     if rows:
         st.dataframe(rows, hide_index=True, width="stretch")
-        st.caption("Est. usage tier and Est. PP usage are inferred from recent ice time (they are not assigned lines or power-play units). Reported line / PP appear only where a lineup source lists the player; each player's page shows the source and time. Probabilities are calibrated; players with fewer than 20 prior games are flagged limited and are not priced.")
+        st.caption("Est. usage tier and Est. PP usage are inferred from recent ice time (they are not assigned lines or power-play units). Reported line / PP appear only where a lineup source lists the player; each player's page shows the source and time. Probabilities are calibrated; players with fewer than 40 prior games are flagged limited and are not priced.")
     else:
         st.caption("No skater logs on file for this team yet this season.")

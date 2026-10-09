@@ -10,7 +10,9 @@ Persistent self-check (launchd, every 30 minutes; deploy/launchd/com.nhlengine.w
       reconciliation        the model book re-derived from raw rows (cash by P&L = cash by stake/return flows = the account helper); every personal log's
                             summary = its raw rows; no personal bet is in the model ledger; a migrated legacy ticket equals its original row;
       settlement_backlog    bets (model and personal) whose game started more than 6 hours ago and are still open: WARN, FAIL past 12 hours;
-      source_freshness      the sources the engine depends on (schedule, results, player logs, prices) are inside their own freshness policies.
+      source_freshness      the sources the engine depends on (schedule, results, player logs) are inside their own freshness policies;
+      quote_freshness       prop and moneyline prices are inside their rules (a price stale only because the credit budget forbids a refresh is readiness, not failure);
+      publishing_enabled    publication to the hosted app is switched ON (a demonstration that left it OFF is a FAIL).
   PRODUCT READINESS -- which user-facing features actually work end to end, and which are blocked, limited or unverified, with the owner action each needs.
 
 An operational "OK" means the machinery is running and the books agree. It does NOT mean a blocked feature works: readiness is reported on its own and
@@ -304,6 +306,35 @@ def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) ->
             "note": "Operational health OK means the machinery runs and the books agree. It does not mean a blocked, limited or unverified feature works."}
 
 
+def check_publishing_enabled() -> dict:
+    """Publication to the hosted app must be ON. A demonstration that turned it off and was never restored is a FAIL, not a quiet gap."""
+    try:
+        from operational import publish_cloud_snapshot as pcs
+        on = bool(pcs.publishing_enabled())
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "publishing_enabled", "status": FAIL, "detail": f"could not read the publishing switch: {type(exc).__name__}"}
+    return {"name": "publishing_enabled", "status": OK if on else FAIL,
+            "detail": "NHL_ENGINE_CLOUD_PUBLISH is ON" if on else "publication to the hosted app is switched OFF (NHL_ENGINE_CLOUD_PUBLISH); the hosted app will go stale"}
+
+
+def check_quotes(now: dt.datetime, evaluated: dict | None = None) -> dict:
+    """Price freshness for what is about to be bet on: the prop and moneyline prices judged by their own freshness rules. A price that is stale only because the
+    odds-credit budget forbids a refresh is NOT an operational failure (it is the LIMITED line on product readiness); one that is stale while a refresh was
+    allowed means the capture machinery is not doing its job."""
+    from operational import source_status as ss
+    try:
+        view = evaluated or ss.evaluate(ss.build(now), now)
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "quote_freshness", "status": WARN, "detail": f"could not evaluate quotes: {type(exc).__name__}"}
+    rows = {r["key"]: r for r in view["rows"]}
+    bad = [(k, rows[k]) for k in ("odds_props", "odds_moneyline") if k in rows and rows[k]["state"] == ss.STALE]
+    budget = [k for k in ("odds_props", "odds_moneyline") if k in rows and rows[k]["state"] == ss.BUDGET_LIMITED]
+    if bad:
+        return {"name": "quote_freshness", "status": WARN, "detail": "; ".join(f"{k} stale ({ss._fmt_age(r['age_min'])} old, policy {ss._fmt_age(r['limit_min']) if r.get('limit_min') else 'n/a'}) although a refresh was allowed" for k, r in bad)}
+    return {"name": "quote_freshness", "status": OK, "detail": ("quotes inside their rules" if not budget else
+                                                                f"{', '.join(budget)} past their freshness limit only because the credit budget forbids a refresh (product readiness: LIMITED)")}
+
+
 def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     checks = []
@@ -329,6 +360,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_age("trader_recent", (health.get("real_parlay_paper_trader") or {}).get("last_success_utc"), TRADER_MAX_AGE_MIN, now, "the 15-minute trader"))
     checks.append(check_age("publish_recent", (health.get("cloud_snapshot_publish") or {}).get("last_success_utc"), PUBLISH_MAX_AGE_MIN, now, "the hosted snapshot publication"))
     checks.append(check_database())
+    checks.append(check_publishing_enabled())
     ready = None
     if deep:
         try:
@@ -342,6 +374,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
                 checks.append(check_reconciliation(ledger, personal))
                 checks.append(check_settlement_backlog(ledger, personal, now))
                 checks.append(check_sources(now))
+                checks.append(check_quotes(now))
                 ready = readiness(now, personal)
             finally:
                 ledger.close()
