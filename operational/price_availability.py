@@ -137,6 +137,8 @@ def note_unfetched(day: str, game_id: str, market: str, status: str, now: dt.dat
     cur = ((doc["games"].get(str(game_id)) or {}).get("markets") or {}).get(market)
     if cur and cur["status"] in (POSTED, NOT_POSTED) and status != FETCH_ERROR:
         return
+    if cur and cur["status"] == status and status != FETCH_ERROR:
+        return                      # the same statement again changes nothing; keep the time it was first made
     record(day, game_id, market, status, now, detail=detail, **kw)
 
 
