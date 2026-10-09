@@ -266,12 +266,18 @@ STATUS_WORDS = {"SELECTED": "Taken", "BLOCKED_LEG_LIMIT": "Skipped — leg limit
                 "NOT_REACHED": "Not needed — slots full"}
 
 
-def selection_report(tk: dict) -> None:
+def selection_report(tk: dict, *, quiet: bool = False) -> None:
     """Why these tickets and not the others: every qualifying ticket in hit-chance order with what happened to it. Estimates, not findings."""
     audit = ((tk.get("diagnostics") or {}).get("selection_audit") or {})
     cycles = audit.get("recording_cycles_today") or []
     cyc = cycles[-1] if cycles else audit.get("latest_cycle")
-    if not cyc or not cyc.get("considered"):
+    if not cyc:
+        return
+    if not cyc.get("considered"):
+        if quiet:
+            return
+        st.caption(f"No ticket qualified in the latest selection pass ({et_time(cyc['at_utc'], True)}): {cyc.get('pool_legs', 0)} eligible leg(s), {cyc.get('qualifying', 0)} qualifying ticket(s). "
+                   "The report lists every qualifying ticket, and why each was taken or skipped, as soon as any qualify.")
         return
     with st.expander("Why these tickets — and the higher-hit alternatives that were not taken"):
         st.caption(f"{cyc['qualifying']} tickets qualified from {cyc['pool_legs']} eligible legs ({et_time(cyc['at_utc'], True)}). They are ranked by **estimated hit chance** (then value), "
@@ -617,8 +623,9 @@ def order_path_panel() -> None:
         if st.button("Sign out", key="order_signout"):
             st.logout()
     elif not stat["login_configured"]:
-        st.info("One-click adding needs a supported sign-in. Streamlit states that the platform's own viewer header is not a supported identity, so writes use `st.login()` "
-                "(OIDC): the owner's setup steps are in docs/MANUAL_ORDERS.md. Until then the click opens a pre-filled GitHub issue (the link path), which GitHub authenticates.")
+        st.info("This panel is about the owner-only evidence records (goalie confirmations, Ontario price checks): they change what everyone sees, so they need a supported sign-in "
+                "(`st.login()`, OIDC; steps in docs/MANUAL_ORDERS.md) because Streamlit says the platform's own viewer header is not a supported identity. "
+                "**Personal-log adding is different:** it needs no sign-in, only the app's write credential (`LOG_WRITE_TOKEN`, docs/PERSONAL_LOGS.md) plus the log's own write key.")
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
     probe = identity_probe()
     st.caption(f"What the platform exposes (names only, no values; none of it is used for authorisation): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "
