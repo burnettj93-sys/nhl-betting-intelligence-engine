@@ -40,6 +40,7 @@ st.set_page_config(
 # bootstrap form -- st.stop() below means none of the real navigation,
 # page registration, or per-page content below this point executes.
 theme.inject()
+st.logo(str(theme.EGGY_ICON), size="large")        # Eggy at the top of the sidebar, above the navigation
 _user = auth.render_auth_gate()
 if _user is None:
     st.stop()
