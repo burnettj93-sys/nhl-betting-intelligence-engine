@@ -118,9 +118,11 @@ if _cb:
     st.caption("Computed from the provider's own response headers on every archived call (docs/ODDS_CREDIT_AUDIT.md).")
     _pl, _mv = _cb.get("plan"), _cb.get("month_view")
     if _pl:
+        _mk = ", ".join(m.replace("player_", "").replace("_alternate", "").replace("_", " ") for m in (_pl.get("morning_markets") or [])) or "shots"
         st.markdown(f"**Today's credit plan ({_pl['day']}).** Day budget {_pl['D']} credits for {_pl['games_today']} game(s): "
-                    f"{_pl['games_priced']} priced (shots + points), {_pl['games_not_priced']} not priced, goals for {_pl['goals_games']}, saves for {_pl['saves_games']} (confirmed starters only). "
-                    f"Short {_pl['shortfall_per_day_required_only']} credits today to price every game with the required markets.")
+                    f"morning look ({_mk}) at {_pl.get('morning_games', 0)}, pregame price (shots + points; the price a ticket is recorded on) for {_pl['games_priced']}, "
+                    f"{_pl['games_not_priced']} without a pregame price, goals for {_pl['goals_games']}, saves for {_pl['saves_games']} (confirmed starters only). "
+                    f"Short {_pl['shortfall_per_day_required_only']} credits today to give every game its pregame price.")
         st.dataframe([{"Class": k.replace("_", " ").title(), "Allowance": v, "Spent today": _cb["spent_today_by_class"].get(k, 0.0)} for k, v in _pl["allowance"].items()],
                      hide_index=True, width="stretch")
     if _mv:
@@ -129,6 +131,29 @@ if _cb:
                    f"({_mv['shortfall_month_everything']} with saves, goals and a second display refresh).")
 else:
     st.caption("Credit position is not in the published snapshot yet.")
+
+st.markdown("### Morning workflow: what it costs, and what the allowance buys instead")
+_sv = (_cb or {}).get("service_levels")
+if _sv:
+    _mb = _sv["minimum_budget"]
+    st.markdown(f"**Minimum budget that meets the requirement: about {_mb['credits_per_day_average']} credits a day ({_mb['credits_per_month']:,} a month; "
+                f"{_mb['busiest_night_credits']} on a 16-game night).** The provider's smallest tier above the free allowance is {_mb['smallest_provider_tier']['name']} "
+                f"(${_mb['smallest_provider_tier']['usd_per_month']}/month, {_mb['smallest_provider_tier']['credits_per_month']:,} credits): {_mb['smallest_provider_tier']['headroom_x']}× the need. "
+                "Nothing has been purchased.")
+    st.dataframe([{"Service level": l["name"], "Looks per game": " → ".join(f"{x['look']} ({'+'.join(x['markets'])})" for x in l["looks"]),
+                   "Credits per game": l["credits_per_game"], "Credits per day (avg)": l["credits_per_day_average"], "Credits per month": f"{l['credits_per_month']:,}",
+                   "Fits the free 500?": "yes" if l["fits_free_allowance"] else "no", "Smallest plan": l["smallest_tier"]["name"]} for l in _sv["levels"]],
+                 hide_index=True, width="stretch")
+    _ea = _sv.get("existing_allowance")
+    if _ea:
+        st.markdown(f"**Reduced service under the existing allowance** ({_ea['credits_per_day']} credits a day today; {_ea['remaining']} left, {_ea['days_left']} days to go). "
+                    "It does **not** meet the requirement: it looks at part of the slate in the morning and prices fewer games before puck drop.")
+        st.dataframe([{"Games that day": r["games"], "Morning look at": f"{r['morning_games']} ({r['morning_coverage_pct']}%)", "Pregame price for": f"{r['pregame_games']} ({r['pregame_coverage_pct']}%)",
+                       "Anytime goals for": r["goals_games"], "Tomorrow check": "yes" if r["tomorrow_check"] else "no", "Credits left for a midday look": r["midday_refresh_credits"]}
+                      for r in _ea["reduced_service"]], hide_index=True, width="stretch")
+    st.caption(f"Costs used: {_sv['inputs']['costs']}. Schedule on file: {_sv['inputs']['games_per_game_day']} games per game day over {_sv['inputs']['listed_game_days']} days.")
+else:
+    st.caption("Service levels are not in the published snapshot yet.")
 
 st.markdown("### Data status evidence (technical)")
 try:

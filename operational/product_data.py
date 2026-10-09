@@ -400,15 +400,18 @@ def _credit_budget(now: dt.datetime) -> dict | None:
         from operational import credit_allocation
         rows = credit_allocation.read_calls(since=now - dt.timedelta(days=credit_allocation.WINDOW_DAYS + 1))
         st = credit_allocation.status(now, rows=rows)
-        from operational import credit_planner, eastern_time as _et
+        from operational import credit_planner, eastern_time as _et, service_plan
         plan = credit_planner.load_plan(_et.eastern_today(now))
         spent = credit_planner.spent_today(now)
         return {**st, "goals_decision": credit_allocation.goals_capture_decision(st, credit_allocation.captures_per_day(rows, now)),
                 "plan": ({"day": plan["day"], "D": plan["budget"].get("D"), "games_today": plan["games_today"], "games_priced": len(plan["games_priced"]),
                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]), "saves_games": len(plan["saves_games"]),
+                          "morning_games": len(plan.get("morning_games") or []), "morning_markets": plan.get("morning_markets"),
                           "allowance": plan["allowance"], "shortfall_per_day_required_only": plan["shortfall_per_day_required_only"],
                           "shortfall_per_day_everything": plan["shortfall_per_day_everything"]} if plan else None),
-                "spent_today_by_class": spent, "month_view": credit_planner.month_view(now, st["remaining"])}
+                "spent_today_by_class": spent, "month_view": credit_planner.month_view(now, st["remaining"]),
+                "service_levels": service_plan.report(remaining=st["remaining"], days_left=st.get("days_left_in_cycle"), D=(plan or {}).get("budget", {}).get("D"))
+                if (plan or {}).get("budget", {}).get("D") is not None else service_plan.report()}
     except Exception:  # noqa: BLE001
         return None
 

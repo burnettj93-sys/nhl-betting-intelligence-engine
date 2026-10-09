@@ -723,6 +723,12 @@ def run_props(now: dt.datetime | None = None) -> dict:
     """`--mode=props` (08:15 launchd job). While no PLAYER_SOG / GOALIE_SAVES contract is VERIFIED this is the
     low-cost DISCOVERY contract watch (<= 2 sampled events, <= 6 credits/day, stops at the first appearance).
     Once a contract is VERIFIED it runs the budget-governed daily pull restricted to the VERIFIED keys only."""
+    from operational import credit_planner as _cp
+    if _cp.enforced():
+        # The credit plan buys the day's first look at player prices itself (operational/morning_update.py at 08:00 ET, capture_schedule MORNING slot), game by game
+        # and accounted by class; this older 08:15 league-wide pull would spend the same credits a second time outside the plan.
+        return {"run_at_utc": (now or dt.datetime.now(dt.timezone.utc)).isoformat(), "ran": False,
+                "reason": "RETIRED_BY_CREDIT_PLAN: the morning look (08:00 ET) replaces this pull; see docs/MORNING_WORKFLOW.md", "credits_spent_this_run": 0}
     from operational import prop_discovery as pd
     states = pd.market_states()
     if pd.mode(states) == pd.DISCOVERY:

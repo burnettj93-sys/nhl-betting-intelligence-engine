@@ -44,6 +44,7 @@ if tk.get("notice"):
 if tk.get("label"):
     st.caption(ui.esc(tk["label"]))
 
+ui.morning_strip(tk)
 today = games["et_today"] if games else tk["date_et"]
 todays = [g for g in games["games"] if g["date_et"] == today and g["type"] == "REGULAR" and g["season"] == "20262027"] if games else []
 st.subheader(f"Today's games — {today}")
@@ -83,6 +84,7 @@ if slots["empty"]:
                f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
                f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
 
+ui.provisional_section(tk)
 ui.selection_report(tk, quiet=True)
 
 ex = tk.get("exposure") or {}

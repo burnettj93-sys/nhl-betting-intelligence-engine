@@ -51,7 +51,7 @@ def leg_card(l: rmp.ParlayLeg) -> dict:
             "side": l.side, "team": l.team, "opponent": l.opponent, "game_start_utc": l.game_start_utc,
             "american_price": l.american_price, "decimal_price": round(d, 4), "probability": round(l.conservative_probability, 4),
             "quote_updated_utc": l.quote_updated_utc, "retrieved_at_utc": l.retrieved_at_utc,
-            "quote_age_min": l.quote_age_min, "model_version": l.model_version}
+            "quote_age_min": l.quote_age_min, "model_version": l.model_version, "provisional": bool(getattr(l, "provisional", False))}
 
 
 def _passes(legs: list[rmp.ParlayLeg]) -> rmp.ParlayResult | None:
@@ -84,6 +84,7 @@ def _option_from_combo(kind: str, combo: rmp.ParlayResult, et_date: str) -> dict
         "ev_estimated": round(combo.ev_estimated, 4), "ev_after_haircut": round(combo.ev_conservative, 4),
         "haircut_margin": combo.leg_probability_margin, "rationale": _rationale(kind, combo),
         "oldest_quote_age_min": max((l.quote_age_min or 0.0) for l in combo.legs),
+        "provisional": any(getattr(l, "provisional", False) for l in combo.legs),
         "earliest_start_utc": min((l.game_start_utc for l in combo.legs if l.game_start_utc), default=None),
     }
 

@@ -48,7 +48,7 @@ class TestRun(unittest.TestCase):
     def test_run_writes_state_and_view_reages_it(self):
         state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
-        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled"})
+        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "morning_update"})
         stored = wd.load_state()
         self.assertEqual(stored["checked_at_utc"], "2026-10-09T12:00:00Z")
         self.assertEqual(wd.view(stored, NOW + dt.timedelta(minutes=20))["status"], stored["status"])
@@ -62,3 +62,59 @@ class TestRun(unittest.TestCase):
         from operational import cloud_snapshot_schema as schema
         blob = json.dumps(wd.load_state())
         self.assertIsNone(schema._ABSOLUTE_PATH_RE.search(blob))
+
+
+class TestMorningUpdateCheck(unittest.TestCase):
+    """The 08:00 ET update is judged from the availability record; late is WARN, very late FAIL, and every day's outcome is logged persistently."""
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        from operational import price_availability as pa
+        self.pa = pa
+        self.tmp = tempfile.TemporaryDirectory()
+        patcher = mock.patch.object(pa.state_paths, "path", side_effect=lambda n, **kw: Path(self.tmp.name) / n)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.tmp.cleanup)
+
+    def at(self, h, m=0):
+        return dt.datetime(2026, 10, 9, h + 4, m, tzinfo=dt.timezone.utc)     # ET wall clock
+
+    def seed(self, looked_at, markets=("m",), status=None, start="2026-10-09T23:00:00Z"):
+        pa = self.pa
+        pa.record("2026-10-09", "g1", markets[0], status or pa.POSTED, looked_at, hours_to_start=11, outcomes=3, start_utc=start)
+
+    def test_before_8_nothing_is_due(self):
+        self.assertEqual(wd.check_morning_update(self.at(7, 0))["status"], wd.OK)
+
+    def test_done_when_every_game_was_looked_at_after_8(self):
+        self.seed(self.at(8, 6))
+        r = wd.check_morning_update(self.at(9, 0))
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("morning update done", r["detail"])
+        self.assertTrue([e for e in wd.morning_evidence() if e["state"] == "DONE"])
+
+    def test_missed_is_warn_after_845_and_fail_after_10(self):
+        self.pa.note_unfetched("2026-10-09", "g1", "m", self.pa.NOT_FETCHED, self.at(6, 0), start_utc="2026-10-09T23:00:00Z")
+        self.assertEqual(wd.check_morning_update(self.at(8, 30))["status"], wd.OK)       # inside the grace period
+        self.assertEqual(wd.check_morning_update(self.at(8, 50))["status"], wd.WARN)
+        self.assertEqual(wd.check_morning_update(self.at(10, 5))["status"], wd.FAIL)
+
+    def test_a_look_before_8_does_not_count(self):
+        self.seed(self.at(7, 30))
+        self.assertEqual(wd.check_morning_update(self.at(9, 0))["status"], wd.WARN)
+
+    def test_readiness_calls_morning_unmet_until_a_scheduled_morning_is_on_record(self):
+        feats = {f["feature"]: f for f in wd.readiness(self.at(9, 0))["features"]}
+        morning = next(v for k, v in feats.items() if k.startswith("Morning update"))
+        self.assertEqual(morning["status"], "NOT_VERIFIED")
+        self.assertIn("UNMET", morning["detail"])
+        refresh = feats["Several price refreshes a day"]
+        self.assertEqual(refresh["status"], "LIMITED")
+        self.assertIn("NOT MET", refresh["detail"])
+        self.seed(self.at(8, 6))
+        wd.check_morning_update(self.at(9, 0))
+        feats = {f["feature"]: f for f in wd.readiness(self.at(9, 0))["features"]}
+        self.assertEqual(next(v for k, v in feats.items() if k.startswith("Morning update"))["status"], "WORKING")
