@@ -19,6 +19,24 @@ mh = ui.load(ps.model_health, "Model health")
 
 MARKET_TONE = {"PRICING_ACTIVE": "good", "DISPLAY_ONLY": "muted", "MODEL_READY_PRICES_NOT_CAPTURED": "warn", "MODEL_READY_PRICES_GATED_BY_CREDIT_BUDGET": "warn",
                "PRICED_ONLY_WITH_CONFIRMED_STARTER": "warn", "PRICING_ACTIVE_ELO_NOT_THIS_MODEL": "warn"}
+def _summ(model_id):
+    m = next((x for x in mh["models"] if x["id"] == model_id), None)
+    return ((m or {}).get("validation") or {}).get("summary") or {}
+
+
+_sk, _gl = _summ("skater-projection"), _summ("goalie-saves")
+_active = sum(1 for m in mh["models"] for v in (m.get("markets") or {}).values() if v == "PRICING_ACTIVE")
+_gated = sum(1 for m in mh["models"] for v in (m.get("markets") or {}).values() if v != "PRICING_ACTIVE")
+st.subheader("What the evidence does and does not say")
+st.dataframe([
+    {"Kind of evidence": "Data freshness", "Status": "see Data Status", "What it says": "Each source's data-through date, last fetch, age and next refresh are on Data Status; the pipelines below show how far each feed runs."},
+    {"Kind of evidence": "Market support", "Status": f"{_active} priced · {_gated} gated or display-only", "What it says": "Whether a market has real DraftKings prices captured and a model allowed to price it (per-model chips below). Limited by the credit allowance and by starter confirmation for saves."},
+    {"Kind of evidence": "Predictive validation", "Status": f"skaters {_sk.get('beating_baselines', '?')}/{_sk.get('markets_scored', '?')} · goalie saves {_gl.get('beating_baselines', '?')}/{_gl.get('markets_scored', '?')} beat baselines",
+     "What it says": "Chronological walk-forward on seasons the model never saw: better than simple base-rate and rolling-average baselines on log loss. It says the probabilities are informative, not that prices are wrong."},
+    {"Kind of evidence": "Calibration", "Status": "calibrated; caveat below 40 games", "What it says": "Probabilities are Platt-calibrated on 2024-25 and tested on 2025-26. With fewer than 40 prior NHL games the model still over-predicts, so those players are not priced (docs/validation/low_sample_calibration.json)."},
+    {"Kind of evidence": "Betting-value evidence", "Status": "none yet", "What it says": "There are no historical DraftKings prices to test against and the live paper book has only a handful of tickets. A positive 'edge' on a card is a model estimate after a 3-point haircut, not proof of profit."},
+], hide_index=True, width="stretch")
+
 st.subheader("Data pipelines")
 st.dataframe([{"Pipeline": p["name"], "Source": p["source"], "Data through": (p["through"] or "n/a")[:16].replace("T", " "), "Detail": p.get("detail") or ""} for p in mh["pipelines"]], hide_index=True, width="stretch")
 

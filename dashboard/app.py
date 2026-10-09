@@ -31,7 +31,7 @@ st.set_page_config(
     page_title="NHL Betting Intelligence",
     page_icon=Image.open(theme.EGGY_ICON),
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 # P0.7 (2026-09-24 hardening block): the auth gate runs BEFORE any
