@@ -74,7 +74,7 @@ a token from another account cannot file orders.
 On the hosted app: **My Bets → Create a log** (name "QA test", the suggested code) → save the code and write key shown once → **Open** it with the write key → add one option from Best Options → wait for the engine's answer
 (≤ ~10 minutes) and confirm it appears under *Open bets* → reload and reopen on another browser (durability) → after the game finishes confirm it moves to *Settled* with the right result. Also: open the same log
 with the code only and confirm there is no add button; try the wrong key and confirm it is refused. The test log is a personal log: it never touches the model book (Today / Paper Performance are compared before
-and after). Product readiness on Diagnostics changes from NOT VERIFIED to WORKING only when an order sent by the app's own write path has been processed.
+and after). Product readiness on Diagnostics changes from NOT VERIFIED to WORKING only when an order sent by the app's own write path has been processed. The engine-side proof is `python3 deploy/verify_personal_workflow.py`: it reports PENDING until two logs were created through the app's write path and one bet has settled, and FAIL if a personal bet ever appears in the model ledger or a book does not reconcile.
 
 ## The earlier manual ticket
 

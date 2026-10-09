@@ -204,6 +204,34 @@ def check_sources(now: dt.datetime, evaluated: dict | None = None) -> dict:
             "detail": "; ".join(f"{k} {r['state'].lower()} ({ss._fmt_age(r['age_min']) if r.get('age_min') is not None else 'no timestamp'}, policy {ss._fmt_age(r['limit_min']) if r.get('limit_min') else '—'})" for k, r in bad)}
 
 
+BOARD_LOG = "board_evidence.jsonl"
+
+
+def _log_board_evidence(options: int, tickets: int, built: str | None, now: dt.datetime) -> None:
+    """Appends a line when the published board's option count changes (persistent evidence that cards were populated, and when)."""
+    p = state_paths.path(BOARD_LOG)
+    try:
+        last = json.loads(p.read_text().splitlines()[-1]) if p.exists() and p.read_text().strip() else None
+    except (OSError, json.JSONDecodeError, IndexError):
+        last = None
+    if last is None or last.get("options") != options or last.get("tickets") != tickets:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a") as f:
+            f.write(json.dumps({"at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "options": options, "tickets": tickets, "options_built_utc": built}, sort_keys=True) + "\n")
+
+
+def _first_board_evidence() -> str | None:
+    p = state_paths.path(BOARD_LOG)
+    try:
+        for line in p.read_text().splitlines():
+            row = json.loads(line)
+            if row.get("options"):
+                return row["at_utc"]
+    except (OSError, json.JSONDecodeError):
+        return None
+    return None
+
+
 def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) -> dict:
     """Which user-facing features work end to end. Statuses: WORKING, LIMITED, NOT_VERIFIED, BLOCKED, OWNER_ACTION. Independent of operational health."""
     feats = []
@@ -227,6 +255,19 @@ def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) ->
         add("Personal logs: one-click add from the hosted app", "NOT_VERIFIED", "no order has ever arrived through the app's own write credential; a link-filed or hand-filed order does not prove it",
             "Add the LOG_WRITE_TOKEN Streamlit secret (docs/PERSONAL_LOGS.md), then run the create → add → settle check")
     df = json.loads(state_paths.path("dailyfaceoff_state.json").read_text()) if state_paths.path("dailyfaceoff_state.json").exists() else {}
+    # Is tonight's board actually populated? Judged from the engine's own published ticket board and logged persistently, so the evidence does not depend on anyone watching.
+    try:
+        tk = json.loads(state_paths.path("tickets_state.json").read_text())
+        opts = (tk.get("options") or {}).get("options") or []
+        built = (tk.get("options") or {}).get("generated_at_utc")
+        _log_board_evidence(len(opts), len(tk.get("tickets") or []), built, now)
+        if opts:
+            add("Best Options board (populated option cards)", "WORKING", f"{len(opts)} option(s) published (built {built}); first-ever populated board: {_first_board_evidence() or 'now'}")
+        else:
+            add("Best Options board (populated option cards)", "LIMITED", "no option is published yet: player prices are captured about 100 minutes before puck drop, so the board is empty until then",
+                "None — it fills by itself when the day's captures arrive")
+    except Exception:  # noqa: BLE001
+        pass
     add("Automatic starting-goalie confirmation", "BLOCKED", df.get("disabled_reason") or "no permitted automatic source is connected",
         "Grant or choose a permitted source (docs/STARTING_GOALIE_SOURCE_AUDIT.md); until then confirmations are recorded by hand")
     add("Reported lines and power-play units", "BLOCKED", "same source; the app shows only the inferred estimate, labelled as such", "same as above")
