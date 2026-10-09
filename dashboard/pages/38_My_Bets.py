@@ -30,17 +30,24 @@ def money(v):
     return ui.money(v)
 
 
-def show_log_summary(summary: dict) -> None:
-    c = st.columns(6)
-    c[0].metric("Bets", summary["bets"])
-    c[1].metric("Open", summary["open"], f"{money(summary['open_stake'])} at stake", delta_color="off")
-    c[2].metric("Settled", f"{summary['wins']}W–{summary['losses']}L–{summary['voids']}V")
-    c[3].metric("Settled P&L", ui.signed_money(summary["settled_pnl"]))
-    c[4].metric("Win rate", ui.pct(summary["win_rate"], 0) if summary["win_rate"] is not None else "—")
-    c[5].metric("ROI on settled", ui.pct(summary["roi"], 1) if summary["roi"] is not None else "—", help="Settled profit divided by settled stakes (voids excluded).")
+def metric_grid(items: list[tuple], compact: bool) -> None:
+    """Six figures in one row, or three per row when the section sits in a half-width column (so values never truncate)."""
+    per_row = 3 if compact else len(items)
+    for i in range(0, len(items), per_row):
+        row = st.columns(per_row)
+        for col, item in zip(row, items[i:i + per_row]):
+            label, value, *rest = item
+            col.metric(label, value, *(rest[:1]), **(rest[1] if len(rest) > 1 else {}))
 
 
-def my_log_section(log: dict) -> None:
+def show_log_summary(summary: dict, compact: bool = False) -> None:
+    metric_grid([("Bets", summary["bets"]), ("Open", summary["open"], f"{money(summary['open_stake'])} at stake", {"delta_color": "off"}),
+                 ("Settled", f"{summary['wins']}W–{summary['losses']}L–{summary['voids']}V"), ("Settled P&L", ui.signed_money(summary["settled_pnl"])),
+                 ("Win rate", ui.pct(summary["win_rate"], 0) if summary["win_rate"] is not None else "—"),
+                 ("ROI on settled", ui.pct(summary["roi"], 1) if summary["roi"] is not None else "—", None, {"help": "Settled profit divided by settled stakes (voids excluded)."})], compact)
+
+
+def my_log_section(log: dict, compact: bool = False) -> None:
     d = log["doc"]
     if d is None:
         ui.banner("Waiting for the engine to create this log (usually a few minutes). You can add bets in the meantime — they are held in order.", "info")
@@ -49,7 +56,7 @@ def my_log_section(log: dict) -> None:
             st.link_button("Open GitHub to finish filing the log request", pending["url"])
             st.caption("Repository owner only: the request exists once you press “Submit new issue” on GitHub.")
         return
-    show_log_summary(d["summary"])
+    show_log_summary(d["summary"], compact)
     st.caption(f"Log created {ui.et_time(d['created_at_utc'], True)} · every bet shows “Manually added” · stakes are your own paper amounts, there is no bankroll limit.")
     def is_settled(b):
         return (b.get("result") or {}).get("status") in ("WIN", "LOSS", "VOID")
@@ -75,19 +82,15 @@ def my_log_section(log: dict) -> None:
                          hide_index=True, width="stretch")
 
 
-def model_section() -> None:
+def model_section(compact: bool = False) -> None:
     tk = ui.load(ps.tickets, "The model book")
     if "account" not in tk:
         ui.unavailable("The model book has not been published yet.", "The model book")
         return
     acct, allo = tk["account"], (tk.get("origins") or {}).get("ALL") or {}
-    c = st.columns(6)
-    c[0].metric("Available cash", money(acct["available_cash"]))
-    c[1].metric("Open stakes", money(acct["open_stakes"]), f"{acct['open_tickets']} open", delta_color="off")
-    c[2].metric("Equity", money(acct["equity"]))
-    c[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
-    c[4].metric("Record", f"{allo.get('wins', 0)}W–{allo.get('losses', 0)}L–{allo.get('voids', 0)}V")
-    c[5].metric("Tickets", acct["tickets"])
+    metric_grid([("Available cash", money(acct["available_cash"])), ("Open stakes", money(acct["open_stakes"]), f"{acct['open_tickets']} open", {"delta_color": "off"}),
+                 ("Equity", money(acct["equity"])), ("Settled P&L", ui.signed_money(acct["settled_pnl"])),
+                 ("Record", f"{allo.get('wins', 0)}W–{allo.get('losses', 0)}L–{allo.get('voids', 0)}V"), ("Tickets", acct["tickets"])], compact)
     st.caption("The model's \\$500 book: only the engine's automatic \\$10 tickets. Details on Today, Paper Performance and Ticket History.")
     for t in (tk.get("tickets") or []):
         if t.get("recorded"):
@@ -164,8 +167,8 @@ else:
     left, right = st.columns(2)
     with left:
         st.markdown("#### My log")
-        my_log_section(log)
+        my_log_section(log, compact=True)
     with right:
         st.markdown("#### Model book")
-        model_section()
+        model_section(compact=True)
     st.caption("The two sets of numbers are kept separate on purpose: your bets are not part of the model's record, and the model's tickets are not in your log.")

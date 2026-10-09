@@ -1,0 +1,10 @@
+{
+  "archived_file": "data/raw/moneypuck/goalie/2026/20261009T110108.472024_goalie_2026.zip",
+  "byte_size": 25878,
+  "dataset": "goalie",
+  "latest_accepted_at_utc": "2026-10-09T11:01:08.472024",
+  "latest_accepted_checksum": "d76eb7a9f62b620f1787cf41b17cb0f81a0c8271f409f56e2c34864646699ec6",
+  "provenance_type": "LIVE_OBSERVED",
+  "season": 2026,
+  "source_url": "https://peter-tanner.com/moneypuck/downloads/seasonPlayersSummary/goalies/2026.zip"
+}
