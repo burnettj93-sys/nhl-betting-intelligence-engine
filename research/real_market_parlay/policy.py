@@ -8,8 +8,8 @@ The postmortem (docs/POSTMORTEM_2026-10-10.md) found tickets accepted with hit c
 Two policies are defined here, side by side, so the difference is visible and testable:
 
   LEGACY    exactly what ran on 2026-10-07 .. 2026-10-09 (minus the per-player limit added on 2026-10-09, which is included): the numbers the engine's module constants carry.
-  PROPOSED  the restart proposal under owner review. Every number is a JUDGEMENT, not a validated result: the floor is a reading of "strong", the value margin is a cushion for unverified
-            Ontario prices and void rules, and the exposure limits follow from how shared legs raise the chance that no ticket wins. None was fitted to any losing or winning ticket,
+  PROPOSED  the restart proposal under owner review. Every number is a JUDGEMENT, not a validated result: the floor is a reading of "strong", the value margin is a plain safety margin (it does NOT verify
+            Ontario prices or the sportsbook's void and parlay-reduction rules, which stay unverified), and the exposure limits follow from how shared legs raise the chance that no ticket wins. None was fitted to any losing or winning ticket,
             and none has been validated against historical sportsbook prices (there are none). It cannot be switched on without the owner approving THIS policy by its hash
             (operational/ticket_policy.py); recording is paused until then.
 
@@ -55,8 +55,10 @@ class TicketPolicy:
 
 LEGACY = TicketPolicy(policy_id="legacy-2026-10-09", status="IN_FORCE_UNTIL_2026-10-10_PAUSED")
 # The proposal changes FOUR numbers and keeps the rest (the +100 bar, the 5% EV bar on recorded probabilities, the 3-point haircut, five slots):
-#   floor              0%  -> 25%  "strong": about one in four or better; for two legs, each at least a coin flip (0.5 x 0.5), the region where the validation data are densest
-#   min value after    0%  -> +3%  "meaningful": the edge that is left after the 3-point haircut must exceed what unverified Ontario price differences and the unknown void rules could take
+#   floor              0%  -> 25%  "strong": about one in four or better. A two-leg ticket reaches 25% when its legs' probabilities MULTIPLY to 0.25, i.e. their geometric average is 50%
+#                                    (50% x 50%, or 70% x 36%, or 56% x 45%); it is not a requirement that both legs exceed 50%. Three legs need an average of about 63%.
+#   min value after    0%  -> +3%  "meaningful": the edge that remains after the 3-point haircut must be at least 3%, so a ticket whose whole edge is a rounding of a price or a fraction of the model's error is
+#                                    skipped. It is a safety margin only. It does NOT verify Ontario prices or the sportsbook's void and parlay-reduction rules (both unverified); it just refuses razor-thin edges.
 #   per player         2   -> 1    one bad night cannot sink several tickets (docs/POSTMORTEM_2026-10-10.md: shared legs raise the chance that no ticket wins)
 #   per game           3   -> 2    and the same for a game
 # An earlier draft (30% floor, 5-point haircut) recorded nothing on either audited day on entry information alone, so it was not practical; that is why it was replaced, not any result.

@@ -98,6 +98,21 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         self.assertIn("DO NOT ADD UP", blob)
 
 
+class TestADeepLinkBeforeTheEntryScriptStillLooksRight(unittest.TestCase):
+    """After a restart the first visitor may open /Parlay_Builder directly: the page then runs without the entry script (no theme, raw page list)."""
+
+    def test_a_page_run_on_its_own_applies_the_theme_and_hides_the_raw_page_list(self):
+        at = run_page("21_Today.py", snapshot())
+        blob = " ".join(m.value for m in at.markdown)
+        self.assertIn("eggy-brand", blob)                                   # the theme is in
+        self.assertIn("stSidebarNav", blob)                                 # and the raw page list is hidden
+
+    def test_a_page_run_after_the_entry_script_does_not_inject_twice(self):
+        at = run_page("21_Today.py", snapshot(), setup=lambda a: a.session_state.__setitem__("_frame_ran", True))
+        blob = " ".join(m.value for m in at.markdown)
+        self.assertNotIn("eggy-brand", blob)
+
+
 class TestPagesRender(unittest.TestCase):
     def test_every_core_page_renders_and_has_no_simulated_wording(self):
         snap = snapshot()

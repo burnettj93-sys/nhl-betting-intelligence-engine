@@ -579,6 +579,40 @@ def policy_tradeoffs(games: dict, rows: list[dict]) -> dict:
     return out
 
 
+def retained_ticket_exhibit(games: dict) -> dict:
+    """The ticket(s) the proposed policy would have kept from the 2026-10-08 candidates, shown in full: selections, prices, the model's chance and its uncertainty, the expected return and why it qualified.
+    Entry information only; no result is used. The uncertainty is the validation's measured player-level model error (docs/validation/selector_audit_2026-10-08.json), applied to each leg."""
+    from operational.selection_variants import VARIANTS
+    legs, _ = oct8_pool(games)
+    kept = select(_candidates(legs), VARIANTS["proposed_restart"])
+    sel = json.loads(SELECTOR_OCT8.read_text())["model_uncertainty_2025_26"]
+    out = []
+    for c in kept:
+        dec = _dec(c["price"])
+        leg_rows = []
+        for l in c["legs"]:
+            sd = sel["shots>=2"]["between_player_model_error_sd"] if "SOG" in l["market"] else sel["points>=1"]["between_player_model_error_sd"]
+            imp = 100 / (l["price"] + 100) if l["price"] > 0 else -l["price"] / (-l["price"] + 100)
+            leg_rows.append({"selection": l["label"], "american_price": l["price"], "decimal_price": round(_dec(l["price"]), 3), "price_implied_probability_before_margin": round(imp, 3), "model_probability": round(l["p"], 3),
+                             "model_minus_price_points": round((l["p"] - imp) * 100, 1), "player_level_model_error_1sd_points": round(sd * 100, 1),
+                             "one_sd_range": [round(l["p"] - sd, 3), round(l["p"] + sd, 3)]})
+        p = c["p"]
+        sd_ticket = math.sqrt(sum((p / l["p"] * (r["player_level_model_error_1sd_points"] / 100)) ** 2 for l, r in zip(c["legs"], leg_rows)))
+        stake = 10.0
+        def ev(prob):
+            return round(stake * (prob * dec - 1.0), 2)
+        out.append({"ticket": " + ".join(r["selection"] for r in leg_rows), "legs": leg_rows, "combined_american_price": round(c["price"]), "combined_decimal": round(dec, 3), "games": len({l["game"] for l in c["legs"]}),
+                    "estimated_hit_chance": round(p, 3), "hit_chance_1sd_range_if_leg_errors_are_independent": [round(p - sd_ticket, 3), round(p + sd_ticket, 3)],
+                    "breakeven_hit_chance_at_this_price": round(1 / dec, 3), "payout_if_it_hits_on_10": round(stake * dec, 2), "profit_if_it_hits_on_10": round(stake * (dec - 1), 2),
+                    "expected_return_on_10": {"at_the_recorded_probabilities": ev(p), "after_lowering_each_leg_3_points": ev(_shaded_p(c, 0.03)), "after_lowering_each_leg_5_points": ev(_shaded_p(c, 0.05)),
+                                              "at_the_low_end_of_the_1sd_range": ev(p - sd_ticket)},
+                    "why_it_qualified": {"combined_price_at_least_plus_100": c["price"] >= 100, "estimated_hit_chance_at_least_25pct": p >= 0.25, "edge_on_recorded_probabilities_at_least_5pct": round(c["ev"], 3),
+                                         "edge_after_3_point_haircut_at_least_3pct": round(c["ev_haircut"], 4), "each_player_on_one_ticket": True, "legs_from_different_games": True},
+                    "what_it_does_not_show": "The 38.7% is the model's estimate, not a measured chance. One standard deviation of its player-level error spans the break-even hit chance, so the edge is inside the model's own uncertainty. "
+                                             "Prices are US-feed quotes, not verified for Ontario, and the sportsbook's void and parlay-reduction rules are unverified."})
+    return {"basis": "2026-10-08 candidates, entry information only", "tickets": out}
+
+
 def replay(rows: list[dict], games: dict) -> dict:
     out = {"variants_defined_before_any_replacement_result_was_viewed": {k: v["label"] for k, v in VARIANTS.items()}, "days": {}}
     ledger_legs = {}
@@ -673,7 +707,7 @@ def run(rows: list[dict] | None = None) -> dict:
         "ticket_acceptance_at_entry": ticket_acceptance(tickets, rows), "hit_chance_floors_by_entry_information_only": hit_floor_table(tickets),
         "what_decided_each_ticket": what_decided_each_ticket(checks, rows),
         "validation_evidence": validation_evidence(), "moneyline_single_bet_evidence": moneyline_evidence(),
-        "evidence_targets": evidence_targets(games, rows), "policy_tradeoffs_entry_information_only": policy_tradeoffs(games, rows),
+        "retained_ticket_under_the_proposal": retained_ticket_exhibit(games), "evidence_targets": evidence_targets(games, rows), "policy_tradeoffs_entry_information_only": policy_tradeoffs(games, rows),
         "candidate_pool_calibration_oct_8_and_9": pool_calibration(games, rows),
         "replay_of_the_original_decisions": replay(rows, games),
     }

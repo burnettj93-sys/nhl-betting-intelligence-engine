@@ -238,12 +238,47 @@ class TestTheFrozenPostmortemIsReproducible(unittest.TestCase):
         self.assertIn("long shots", t["why_each_element"]["value_after_a_haircut"]["side_effect"])
         self.assertIn("Not validated", t["why_each_element"]["hit_chance_floor"]["what_it_is_not"])
 
+    def test_the_ticket_the_proposal_retained_is_shown_in_full_with_its_uncertainty(self):
+        t = self.rep["retained_ticket_under_the_proposal"]["tickets"]
+        self.assertEqual(len(t), 1)
+        k = t[0]
+        self.assertEqual(k["ticket"], "Blake Coleman 2+ shots on goal + Anders Lee 2+ shots on goal")
+        self.assertEqual((k["combined_american_price"], k["estimated_hit_chance"]), (198, 0.387))
+        self.assertEqual([l["american_price"] for l in k["legs"]], [-135.0, -140.0])
+        lo, hi = k["hit_chance_1sd_range_if_leg_errors_are_independent"]
+        self.assertTrue(lo < k["breakeven_hit_chance_at_this_price"] < k["estimated_hit_chance"] < hi)       # the 1-SD range spans break-even
+        ev = k["expected_return_on_10"]
+        self.assertGreater(ev["at_the_recorded_probabilities"], ev["after_lowering_each_leg_3_points"])
+        self.assertLess(ev["after_lowering_each_leg_5_points"], 0)
+        self.assertTrue(all(v is True or (isinstance(v, float) and v > 0) for v in k["why_it_qualified"].values()))
+        self.assertIn("Ontario", k["what_it_does_not_show"])
+
     def test_the_live_ledger_if_present_matches_the_frozen_extract(self):
         if not pms.LEDGER.exists():
             self.skipTest("the live ledger is not on this machine")
         live = {r["paper_bet_id"]: (r["result_status"], r["profit_loss"]) for r in pms.load_ledger() if r["paper_bet_id"] in {x["paper_bet_id"] for x in pms.load_ledger(use_extract=True)}}
         frozen = {r["paper_bet_id"]: (r["result_status"], r["profit_loss"]) for r in pms.load_ledger(use_extract=True)}
         self.assertEqual(live, frozen)
+
+
+class TestTheWordingThatWasCorrected(unittest.TestCase):
+    """Two statements in the postmortem were wrong or too strong and were corrected; the corrections are pinned so they do not come back."""
+
+    doc = (REPO / "docs" / "POSTMORTEM_2026-10-10.md").read_text()
+    policy_src = (REPO / "research" / "real_market_parlay" / "policy.py").read_text()
+
+    def test_a_25_percent_ticket_does_not_need_both_legs_above_50_percent(self):
+        self.assertIn("geometric average is 50%", self.doc)
+        self.assertIn("70% × 36%", self.doc)
+        self.assertIn("not** a rule that both legs must exceed 50%", self.doc)
+        self.assertIn("geometric average", self.policy_src)
+        self.assertNotIn("each at least a coin flip", self.policy_src)
+        self.assertNotIn("Two legs reach 25% only if both are about a coin flip", self.doc)
+
+    def test_the_value_margin_is_not_described_as_verifying_ontario_or_settlement(self):
+        self.assertIn("does not verify Ontario prices or the sportsbook's settlement rules", " ".join(self.doc.split()))
+        self.assertIn("does NOT verify", self.policy_src)
+        self.assertNotIn("cushion for what the US-feed prices cannot show", self.doc)
 
 
 class TestDependenceEstimate(unittest.TestCase):

@@ -42,7 +42,7 @@ EXPECTED_JOBS = (
     "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.manual-order-job", "com.nhlengine.moneyline-pregame", "com.nhlengine.moneyline-snapshot",
     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second", "com.nhlengine.daily-props-pull", "com.nhlengine.daily-nhl-sync",
     "com.nhlengine.midday-schedule-refresh", "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement", "com.nhlengine.daily-postmortem",
-    "com.nhlengine.database-backup", "com.nhlengine.morning-update",
+    "com.nhlengine.database-backup", "com.nhlengine.morning-update", "com.nhlengine.moneypuck-refresh",
 )
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
