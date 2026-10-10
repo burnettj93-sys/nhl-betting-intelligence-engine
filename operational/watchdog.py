@@ -145,6 +145,9 @@ def check_reconciliation(ledger, personal) -> dict:
             problems.append(f"model {k}: account {helper[k]} != re-derived {ind[ik]}")
     if ind["cash_by_flows"] != ind["cash_by_pnl"]:
         problems.append(f"model cash by stake/return flows {ind['cash_by_flows']} != cash by P&L {ind['cash_by_pnl']}")
+    split = pb.book_breakdown(ledger, "REAL_MARKET_PAPER")["reconciliation"]            # the parlay experiment + the earlier single bets must add up to the whole account
+    if not split["all_agree"]:
+        problems.append("model account split does not add up: " + ", ".join(k for k, v in split["checks"].items() if not v))
     personal_ids = {r["bet_id"] for r in personal.execute("SELECT bet_id FROM bets")}
     clash = [r["paper_bet_id"] for r in ledger.execute("SELECT paper_bet_id FROM paper_bets") if r["paper_bet_id"] in personal_ids]
     if clash:
@@ -169,7 +172,7 @@ def check_reconciliation(ledger, personal) -> dict:
             problems.append(f"migrated ticket {m['bet_id']} differs from its original ledger row")
     if problems:
         return {"name": "reconciliation", "status": FAIL, "detail": "; ".join(problems)[:300]}
-    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways; {n_logs} personal account(s) agree with their rows and each reconciles its own $500 bankroll; no bet in both books"}
+    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways and splits into parlay tickets ({split['parlay_pnl']:+.2f}) and single bets ({split['single_bets_pnl']:+.2f}); {n_logs} personal account(s) agree with their rows and each reconciles its own $500 bankroll; no bet in both books"}
 
 
 def check_settlement_backlog(ledger, personal, now: dt.datetime) -> dict:

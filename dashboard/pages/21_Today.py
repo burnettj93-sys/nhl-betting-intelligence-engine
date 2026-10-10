@@ -39,6 +39,7 @@ st.caption(f"Model book (automatic tickets only) · \\$500 start, \\$10 per tick
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
+ui.book_split(origins)
 if tk.get("notice"):
     ui.banner(ui.esc(tk["notice"]), "warn")
 if tk.get("label"):
@@ -79,10 +80,16 @@ for t in tk["tickets"]:
 if slots["empty"]:
     theme.empty_state("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")),
                       "The engine leaves a slot empty rather than fill it with a ticket that fails the rules.")
-    pol = tk.get("policy") or {}
-    st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
-               f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
-               f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
+    tpol = tk.get("ticket_policy")
+    if tpol:
+        st.caption(f"Ticket policy ({tpol['policy_id']}): {tpol['summary']}. "
+                   + ("Approved by the owner." if tpol.get("approved") else "A proposal: the numbers are judgements, not validated results, and the owner has not approved them, so automatic recording stays paused.")
+                   + " A slot is left empty rather than filled with a ticket that fails these rules; an empty slot is a correct answer.")
+    else:
+        pol = tk.get("policy") or {}
+        st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
+                   f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
+                   f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
 
 ui.provisional_section(tk)
 ui.selection_report(tk, quiet=True)

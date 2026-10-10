@@ -55,7 +55,7 @@ class TestPause(Isolated):
     def test_ending_the_pause_restores_normal_recording(self):
         rp.pause("postmortem", now=NOW)
         dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
-        was = rp.resume()
+        was = rp.resume(require_policy_approval=False)
         self.assertTrue(was["paused"])
         res = dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=15), collected=collected(board(8)))
         self.assertEqual(res["newly_recorded"], 5)
@@ -119,7 +119,7 @@ class TestShadowLogWhilePaused(Isolated):
         r = recs[0]
         self.assertGreaterEqual(len(r["pool"]), 8)
         self.assertEqual(len(r["pool_fields"]), len(r["pool"][0]))
-        self.assertEqual(set(r["variants"]), {"rules_on_oct_8", "current_code", "floor_25", "floor_30", "margin_5pt", "one_per_player", "conservative_candidate"})
+        self.assertEqual(set(r["variants"]), {"rules_on_oct_8", "current_code", "floor_25", "floor_30", "margin_5pt", "one_per_player", "proposed_restart", "earlier_draft_30_and_5pt"})
         self.assertTrue(r["variants"]["current_code"]["tickets"])
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
 

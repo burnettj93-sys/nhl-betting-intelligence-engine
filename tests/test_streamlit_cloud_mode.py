@@ -447,7 +447,7 @@ class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
             conn.close()
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), before)
         self.assertEqual(set(state), {"account", "summary", "answer", "origins", "breakdowns", "bets"})
-        self.assertEqual(set(state["origins"]), {"AUTOMATIC", "ALL"})
+        self.assertEqual(set(state["origins"]), {"AUTOMATIC", "ALL", "PARLAY_TICKETS", "SINGLE_BETS", "RECONCILIATION"})
 
 
 class TestBoundedCachesAndQueries(unittest.TestCase):

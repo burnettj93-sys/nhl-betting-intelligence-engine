@@ -8,7 +8,7 @@ credits it takes, the minimum budget, and what the existing allowance can do ins
 
 | Requirement | Status | Why |
 |---|---|---|
-| Morning update at about 8 AM ET (games, statistics, prices, provisional picks) | **UNMET until proven** — built, tested, deployed; not yet observed on a scheduled morning or on the hosted app | The first scheduled run is 08:00 ET on the first morning after the release. The watchdog records each morning's outcome; `Diagnostics → Product readiness` says NOT VERIFIED until a day shows a first look within 45 minutes of 08:00. |
+| Morning update at about 8 AM ET (games, statistics, prices, provisional picks) | **PARTLY OBSERVED** — the first scheduled run (2026-10-10 08:00 ET) happened on its own and the hosted strip showed it; a populated morning card has not yet been seen | The first scheduled run is 08:00 ET on the first morning after the release. The watchdog records each morning's outcome; `Diagnostics → Product readiness` says NOT VERIFIED until a day shows a first look within 45 minutes of 08:00. |
 | Several price refreshes a day, for every game | **UNMET under the free allowance** | The existing 500-credit allowance buys a morning look at part of the slate and a pregame price for fewer games; it cannot also refresh every game midday. Meeting it for every game needs about **60 credits a day** (below). |
 | Re-check before recording an automatic ticket | Met in code and tests | Every selected ticket is re-judged on the clock at the moment of recording: each leg's price must still be inside the freshness limit, the game not started. |
 | Morning options usable, not just displayed | Met in code and tests | A morning price that is still fresh can be added to a personal log (once the write credential exists) and recorded on an automatic ticket. An aged price is shown as provisional and cannot be used. |
@@ -134,6 +134,13 @@ before this change was 27 a day against a 12 a day pace.
 * **Evening, same day (observed on the hosted app)**: the first pregame captures arrived at 5:16 PM ET (3 games, 7 credits) and the board populated: **12 option cards** on Best Options and **3 recorded automatic tickets** on Today (all on pregame-window prices, none early), checked on the desktop and at 390 px (price, stake, return, model chance with its range, value after the haircut, "why this selection"). The add control cannot be exercised on the hosted app until `LOG_WRITE_TOKEN` exists: a visitor is told to open a log on My Bets first. Today's strip first said "done" because of that pregame capture; it now says "Morning update was late" for a first look after 8:45 AM.
 * **Not observed**: a scheduled 08:00 run; points and goals at 8 AM; any provisional option or ticket on the hosted app (none could exist: no early price was bought today); the Tomorrow evening check
   (due 8:15 PM ET today). On 2026-10-10 the budget (about 11.9 credits for 14 games) buys a shots look at 3 games.
+
+## The first scheduled morning (2026-10-10) — observed
+
+* **The 08:00 ET run happened on its own**: `com.nhlengine.morning-update` started at 08:00:05 ET and finished DONE at 08:00:25 (14 games on the slate, all 14 looked at; 3 credits spent; shots posted for the 3 games the morning plan covered, the other 11 recorded as BUDGET_BLOCKED). The watchdog logged the morning as DONE, and the hosted Today page showed "Morning update done. 14 of 14 games looked at (first look Oct 10, 8:00 AM ET)".
+* **Points and goals at 8 AM are still unobserved**: the morning plan on the free allowance asked shots only (credits), so no points or goals market was fetched; one earlier check showed points NOT_POSTED for one game at 00:19 UTC (the evening before).
+* **No option or ticket resulted**: the three games' shot ladders gave only legs at −150 or shorter and no ticket cleared the rules. Automatic recording was paused at 08:23 ET for the postmortem, so no ticket could have been recorded either way.
+* **What remains owed**: a populated morning card on the hosted app (needs a morning price that qualifies) and the evening Tomorrow check.
 
 ## Verification still owed
 

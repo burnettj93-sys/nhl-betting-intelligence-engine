@@ -425,8 +425,21 @@ def _ident_label(combo, ident) -> str:
     return "a leg"
 
 
+def _policy_veto(combo: ParlayResult, policy) -> tuple[str, str] | None:
+    """The objective's two missing requirements. Returns (status, reason) or None."""
+    if combo.joint_probability < policy.floor:
+        return ("BELOW_HIT_CHANCE_FLOOR", f"estimated hit chance {combo.joint_probability:.1%} is under the {policy.floor:.0%} a strong ticket needs")
+    shaded = 1.0
+    for l in combo.legs:
+        shaded *= max(l.conservative_probability - policy.value_shade, 0.0)
+    value = shaded * combo.combined_decimal - 1.0
+    if value < policy.min_value_after_shade:
+        return ("VALUE_NOT_MEANINGFUL", f"edge is {value:+.1%} once every leg is lowered {policy.value_shade * 100:.0f} points; the policy needs at least {policy.min_value_after_shade:+.0%}")
+    return None
+
+
 def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegIdentity]] | None = None,
-                   max_tickets: int = MAX_TICKETS_PER_DAY, ticket_filter=None) -> dict:
+                   max_tickets: int = MAX_TICKETS_PER_DAY, ticket_filter=None, policy=None) -> dict:
     """Pick up to `max_tickets` NEW tickets, given the leg sets already
     recorded today (`existing`; they count toward every exposure limit and can
     never be re-selected). Ranked by hit probability, then EV, among tickets
@@ -434,8 +447,13 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
       {"tickets": [ParlayResult...], "pool_size": int, "qualifying": int, "reason": str|None}
     `reason` explains an empty or short result; it is never padded.
     `ticket_filter(combo, already_selected)` may veto a qualifying ticket by returning a reason string (used for the
-    recording-window reservation in operational/daily_tickets.py); it can only remove tickets, never admit one."""
+    recording-window reservation in operational/daily_tickets.py); it can only remove tickets, never admit one.
+    `policy` (research/real_market_parlay/policy.py) adds the objective's "strong chance" floor, a value test that survives a stated per-leg shading, and its own exposure limits;
+    with policy=None the module constants below apply, exactly as before."""
     existing = existing or []
+    max_leg = policy.max_per_leg if policy else MAX_TICKETS_PER_LEG
+    max_game = policy.max_per_game if policy else MAX_TICKETS_PER_GAME
+    max_player = (policy.max_per_player if policy else MAX_TICKETS_PER_PLAYER)
     pool = _prepare_pool(candidate_legs)
     result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None, "considered": []}
     if max_tickets <= 0:
@@ -468,6 +486,7 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
 
     qualifying.sort(key=lambda c: (-c.joint_probability, -c.ev_estimated, len(c.legs)))
     blocked = 0
+    policy_vetoes: dict = {}
     considered: list[dict] = []
 
     def note(combo, status, reason=None):
@@ -485,28 +504,35 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
         if frozenset(idents) in taken_sets:
             note(combo, "ALREADY_RECORDED", "this exact ticket is already on the book today")
             continue
+        if policy is not None:
+            why = _policy_veto(combo, policy)
+            if why:
+                blocked += 1
+                policy_vetoes[why[0]] = policy_vetoes.get(why[0], 0) + 1
+                note(combo, why[0], why[1])
+                continue
         if ticket_filter is not None:
             veto = ticket_filter(combo, result["tickets"])
             if veto is not None:
                 blocked += 1
                 note(combo, "BLOCKED_RECORDING_WINDOW", str(veto))
                 continue
-        over = next((i for i in idents if leg_use.get(i, 0) >= MAX_TICKETS_PER_LEG), None)
+        over = next((i for i in idents if leg_use.get(i, 0) >= max_leg), None)
         if over is not None:
             blocked += 1
-            note(combo, "BLOCKED_LEG_LIMIT", f"{_ident_label(combo, over)} is already on {MAX_TICKETS_PER_LEG} tickets")
+            note(combo, "BLOCKED_LEG_LIMIT", f"{_ident_label(combo, over)} is already on {max_leg} ticket{'s' if max_leg != 1 else ''}")
             continue
-        over = next((i for i in idents if game_use.get(i[0], 0) >= MAX_TICKETS_PER_GAME), None)
+        over = next((i for i in idents if game_use.get(i[0], 0) >= max_game), None)
         if over is not None:
             blocked += 1
-            note(combo, "BLOCKED_GAME_LIMIT", f"that game is already on {MAX_TICKETS_PER_GAME} tickets")
+            note(combo, "BLOCKED_GAME_LIMIT", f"that game is already on {max_game} tickets")
             continue
         players = {i[:2] for i in idents if i[2] != "MONEYLINE"}
-        over_pl = next((pl for pl in players if player_use.get(pl, 0) >= MAX_TICKETS_PER_PLAYER), None)
+        over_pl = next((pl for pl in players if max_player is not None and player_use.get(pl, 0) >= max_player), None)
         if over_pl is not None:
             blocked += 1
             name = next((l.participant_name for l in combo.legs if (l.game_id, l.participant_id) == over_pl), "a player")
-            note(combo, "BLOCKED_PLAYER_LIMIT", f"{name} is already on {MAX_TICKETS_PER_PLAYER} tickets")
+            note(combo, "BLOCKED_PLAYER_LIMIT", f"{name} is already on {max_player} ticket{'s' if max_player != 1 else ''}")
             continue
         if any(i[2] == "MONEYLINE" and ml_side.get(i[0], i[1]) != i[1] for i in idents):
             blocked += 1
@@ -523,7 +549,14 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
             if i[2] == "MONEYLINE":
                 ml_side[i[0]] = i[1]
     result["considered"] = considered
-    if len(result["tickets"]) < max_tickets:
+    result["policy_vetoes"] = policy_vetoes
+    if len(result["tickets"]) < max_tickets and policy is not None and policy_vetoes:
+        n_floor, n_value = policy_vetoes.get("BELOW_HIT_CHANCE_FLOOR", 0), policy_vetoes.get("VALUE_NOT_MEANINGFUL", 0)
+        head = (f"{len(result['tickets'])} worthwhile ticket(s) today" if result["tickets"] else "No ticket is worthwhile today")
+        result["reason"] = (f"{head} under the ticket policy. {len(qualifying)} combination(s) passed the basic +100 and edge rules; {n_floor} had an estimated hit chance under "
+                            f"{policy.floor:.0%}, {n_value} lost their edge once every leg was lowered {policy.value_shade * 100:.0f} points, and the rest were duplicates or hit an exposure limit. "
+                            f"A slot left empty is a correct answer, not a gap.")
+    elif len(result["tickets"]) < max_tickets:
         if result["tickets"]:
             result["reason"] = (f"only {len(result['tickets'])} more ticket(s) qualified; the other qualifying "
                                 f"combinations were duplicates or would exceed the shared-exposure limits")

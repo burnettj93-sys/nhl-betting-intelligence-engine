@@ -44,6 +44,16 @@ def account(cash=500.0):
     return {"track": "REAL_MARKET_PAPER", "starting_bankroll": 500.0, "available_cash": cash, "open_stakes": 500.0 - cash, "open_tickets": 0, "equity": 500.0, "settled_pnl": 0.0, "tickets": 0}
 
 
+def origins_with_split(**parlay):
+    """The model account's origins as the engine publishes them: whole account, its parlay tickets, its earlier single bets, and the reconciliation that ties them together."""
+    p = origin_block(tickets=11, settled=11, wins=2, losses=9, settled_stake=110, settled_pnl=-54.24, roi=-54.24 / 110, hit_rate=2 / 11, **parlay)
+    s = origin_block(tickets=1, settled=1, wins=0, losses=1, settled_stake=10, settled_pnl=-10.0, roi=-1.0, hit_rate=0.0)
+    whole = origin_block(tickets=12, settled=12, wins=2, losses=10, settled_stake=120, settled_pnl=-64.24, roi=-64.24 / 120, hit_rate=2 / 12)
+    rec = {"starting_bankroll": 500.0, "parlay_pnl": -54.24, "single_bets_pnl": -10.0, "combined_pnl": -64.24, "open_stakes": 0, "available_cash": 435.76, "all_agree": True,
+           "checks": {"pnl": True}, "sentence": "Cash $435.76 = $500 start -54.24 parlay tickets -10.00 single bets - $0.00 open"}
+    return {"AUTOMATIC": whole, "ALL": whole, "PARLAY_TICKETS": p, "SINGLE_BETS": s, "RECONCILIATION": rec}
+
+
 def origin_block(**kw):
     base = {"tickets": 0, "settled": 0, "wins": 0, "losses": 0, "voids": 0, "pending": 0, "unresolved": 0, "open_stake": 0, "settled_stake": 0, "settled_pnl": 0, "roi": None, "hit_rate": None}
     base.update(kw)
@@ -113,7 +123,7 @@ def snapshot(with_options=True) -> dict:
                "empty_slot_reason": "Nothing qualifies yet.", "notice": None, "label": "US-feed paper experiment.", "generated_at_utc": GEN, "date_et": "2026-10-08",
                "policy": {"min_combined_decimal": 2.0, "min_estimated_ev": 0.05, "leg_probability_margin": 0.03, "max_tickets_per_day": 5, "max_tickets_per_leg": 2, "max_tickets_per_game": 3, "stake": 10.0},
                "exposure": {"tickets_counted": 0, "recorded_stake_at_risk": 0, "players": [], "games": [], "note": ""},
-               "origins": {"AUTOMATIC": origin_block(), "ALL": origin_block()}, "singles": [], "diagnostics": {}, "coverage": {"rows": []}}
+               "origins": origins_with_split(), "singles": [], "diagnostics": {}, "coverage": {"rows": []}}
     if with_options:
         doc = po.build_options(board(4, price=-105, p=0.62), "2026-10-08")
         doc["generated_at_utc"] = GEN
@@ -129,7 +139,7 @@ def snapshot(with_options=True) -> dict:
                                                               "report": "docs/validation/skater_projection_validation.json", "method": "m"},
                                                "limits": ["a limit"], "markets": {"SHOTS": "PRICING_ACTIVE", "SAVES": "BLOCKED_NO_STARTER_CONFIRMATION"}}],
           "pipelines": [{"name": "Skater logs", "through": "2026-10-06", "source": "MoneyPuck"}], "market_coverage": {"rows": []}, "ticket_sources": {}}
-    perf = {"account": account(), "summary": {"roi": None, "bankroll_history": []}, "answer": "x", "origins": {"AUTOMATIC": origin_block(), "MANUALLY_ADDED": origin_block(), "ALL": origin_block()},
+    perf = {"account": account(), "summary": {"roi": None, "bankroll_history": []}, "answer": "x", "origins": {**origins_with_split(), "MANUALLY_ADDED": origin_block()},
             "breakdowns": {"ALL": {}, "AUTOMATIC": {}, "MANUALLY_ADDED": {}}, "bets": []}
     return {"schema_version": 2, "metadata": {"schema_version": 2, "generated_at": GEN, "generated_by": "test", "source_master_commit": "x", "engine_mode": "t", "data_as_of": GEN,
                                               "freshness": {"odds": GEN}},
