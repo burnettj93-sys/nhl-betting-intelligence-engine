@@ -34,7 +34,7 @@ cols[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_ticke
 cols[2].metric("Equity", ui.money(acct["equity"]), help="Cash plus open stakes at cost.")
 cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
-cols[5].metric("Tickets", acct["tickets"], help="All tickets ever recorded in this account.")
+cols[5].metric("Tickets", acct["tickets"], help="Every automatic bet ever recorded in this account: parlay tickets plus any single bets (the moneyline pre-game job records those). Personal bets are never here.")
 st.caption(f"Model book (automatic tickets only) · \\$500 start, \\$10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:

@@ -57,6 +57,9 @@ EXEMPT_DIR_PREFIXES = (
 # justified below. Anything found that is NOT on this list is a
 # temporal-integrity bug (see the failure message for what to do).
 JUSTIFIED_EXCEPTIONS = {
+    # deploy/score_selection_shadow.py scores shadow-logged legs AFTER their games are final (shots/goals/assists of a finished game) to measure how
+    # the model's earlier, frozen probabilities did. It reads outcomes, never "what was known at time T" for a prediction, and writes nothing.
+    ("deploy/score_selection_shadow.py", "player_game_stats"),
     # ingest/nhl_api.py's SELECTs are idempotency checks in the WRITE
     # path (spec item 5: "reingesting identical state stays idempotent")
     # -- they compare a candidate new row to the latest existing one to

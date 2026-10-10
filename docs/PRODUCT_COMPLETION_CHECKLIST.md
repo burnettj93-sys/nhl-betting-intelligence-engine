@@ -1,4 +1,4 @@
-# Product completion checklist (revision 9, 2026-10-09)
+# Product completion checklist (revision 10, 2026-10-10)
 
 Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
 **BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
@@ -39,7 +39,7 @@ Earlier "finished" claims were not used as evidence: every row below was re-chec
 | Goalie saves | **PARTIAL (BLOCKED: starter source)** | Model validated (16/16 markets beat baselines) and displayed; **no saves leg can be priced until a start is confirmed**, and no permitted automatic source exists (see 4). No saves ticket has ever existed. |
 | Moneyline | PARTIAL | All games priced by the T-35 pull; Elo path prices tickets; strength model **not promoted** (evidence gate: 150 finished game-sides). No moneyline ticket yet (legs go stale or games have started when evaluated). |
 | Spread / puck line | **BLOCKED** | Settlement, shape validator and leg builder are done and tested; the provider contract needs one real payload (1 credit — the capture was rejected by the approval layer, not bypassed) and the model is unvalidated and **kept out of selection**. |
-| $10 per automatic ticket vs the $500 model book; open bets, settlement, balance, P&L, postmortems tracked | WORKS | Model book $465.76 = $500 − $90 staked + $55.76 returned; 9 settled tickets, 2W–7L, −$34.24, no open tickets (hosted Today / Paper Performance; independent re-derivation in `audit_evidence/model_vs_personal_reconciliation.json`). |
+| $10 per automatic ticket vs the $500 model book; open bets, settlement, balance, P&L, postmortems tracked | WORKS | Model book as of 2026-10-10: **$435.76** = $500 − $120 staked + $55.76 returned; 12 settled bets (11 parlay tickets + 1 moneyline single), **2W–10L**, −$64.24, nothing open; independently re-derived and checked against official box scores (`docs/POSTMORTEM_2026-10-10.md`). **Automatic recording is PAUSED by owner request (2026-10-10)** pending review of the postmortem's restart policy. |
 
 ## 2a. Stale prices on the board
 Any displayed price is judged **when the page is opened** against the engine's own limit (180 min; 90 min within 4 h of puck drop): on Today, Games, Game Detail and option cards it is marked **STALE** with its age, a banner counts stale prices, a stale option card says so and **cannot be added**, and stale prices are never used for selection (tested: stale legs, including moneyline, never enter the pool). Verified on the hosted app: all 4 moneyline prices on Today show "STALE — quoted 9.5 h ago". Cause of the staleness: the moneyline refresh is limited by the odds-credit allowance (Data Status → budget-limited); the decision pulls happen about 35 minutes before each start cluster.
@@ -141,6 +141,18 @@ Any displayed price is judged **when the page is opened** against the engine's o
 
 ## 5a. Populated option cards
 **Verified on the hosted app, 2026-10-09 5:16 PM ET (desktop and 390 px)**: the first pregame captures produced 12 option cards on Best Options (quoted price, stake, return, model chance with its plausible range, value after the haircut, "why this selection", Ontario check) and 3 recorded automatic tickets on Today. **Not verifiable**: the add control (no write credential: a visitor is told to open a log first), a morning-priced card (no early price was bought on the release day), and the stale/provisional card states with real data. Those stay open.
+
+## 12. Losing-streak postmortem and the recording pause (owner request 2026-10-10) — `docs/POSTMORTEM_2026-10-10.md`
+
+| Item | Status | Evidence / limit |
+|---|---|---|
+| Automatic recording paused; collection, publishing, settlement and personal accounts running | **WORKS (paused since 2026-10-10 08:23 ET)** | `operational/recording_pause.py`; covers the ticket selector and every other automatic writer (`record_paper_bet`); fails safe; watchdog row (WARN after 3 days). Resume only with an explicit `python3 -m operational.recording_pause resume`. |
+| Which tickets lost; tickets vs legs; personal excluded | **DONE** | Nine consecutive losses = 8 parlay tickets + 1 moneyline single (11 distinct legs on 9 players); the personal ticket is excluded; model book 2W–10L, −$64.24. |
+| Independent settlement check | **DONE: no error** | 12 of 12 agree with the official box scores. |
+| Cause analysis (variance, exposure, probabilities, acceptance, inputs, settlement) | **DONE with demonstrated vs hypothesis separated** | Ordinary variance on the model's own numbers (17.1% exact for the eight tickets, 1.9× the independent figure); shared exposure and weak acceptance demonstrated; overstated probabilities a **hypothesis** (points legs 4 of 25 against 9.1 expected, six slices looked at). |
+| Replay of the original decisions | **DONE** | Reproduces the recorded tickets exactly on Oct 8 and Oct 9; variants fixed before results were viewed; no rule tuned. |
+| Forward evidence for the selected-edge legs | **COLLECTING** | `operational/shadow_selection.py` + `deploy/score_selection_shadow.py`; verdict "NOT ENOUGH YET" until about 620 resolved edge-filtered legs. |
+| Restart policy (hit-chance floor, margin, one ticket per player, three a day, moneyline singles shadow-only) | **PROPOSED, awaiting owner review** | `docs/POSTMORTEM_2026-10-10.md` section 12. Nothing was changed in the selector; no recalibration. |
 
 ## 10. QA
 
