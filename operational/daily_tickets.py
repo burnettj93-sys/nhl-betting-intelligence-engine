@@ -36,6 +36,7 @@ from operational import eastern_time as et
 from operational import market_coverage
 from operational import paper_bankroll as pb
 from operational import recording_pause
+from operational import shadow_selection
 from operational import state_paths
 from research.real_market_parlay import engine as rmp
 
@@ -751,7 +752,10 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     pause = recording_pause.status()
     if pause["paused"]:                      # owner pause: nothing is selected or recorded; collection, publishing, settlement and personal accounts carry on
         picked = {"tickets": [], "qualifying": 0, "pool_size": 0, "reason": recording_pause.notice(pause)}
-        selection_audit = {"paused": True}
+        try:                                 # forward evidence while paused: the pool and what each policy variant would pick, frozen before the games (nothing is staked)
+            selection_audit = {"paused": True, "shadow_log": shadow_selection.record(legs, now, code_version())}
+        except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
+            selection_audit = {"paused": True, "shadow_log": {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}}
     else:
         picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
         selection_audit = _record_selection_audit(et_date, now, picked, slots_left)

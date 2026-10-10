@@ -381,6 +381,25 @@ def morning_evidence() -> list[dict]:
         return []
 
 
+PAUSE_REMINDER_DAYS = 3
+
+
+def check_recording_pause(now: dt.datetime) -> dict:
+    """An owner pause on NEW automatic tickets (operational/recording_pause.py) is intended, so it is not a failure; it is shown, and it WARNs once it has lasted PAUSE_REMINDER_DAYS so a
+    pause cannot be forgotten. An unreadable pause file fails safe (paused) and WARNs at once."""
+    from operational import recording_pause as rp
+    st = rp.status()
+    if not st["paused"]:
+        return {"name": "recording_pause", "status": OK, "detail": "automatic recording is on"}
+    since = st.get("since_utc")
+    try:
+        days = (now - dt.datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)).total_seconds() / 86400.0
+    except (TypeError, ValueError):
+        return {"name": "recording_pause", "status": WARN, "detail": f"automatic recording is paused and the pause file has no readable start time ({st.get('reason') or 'no reason'})"}
+    detail = f"automatic recording is PAUSED by the owner since {since} ({days:.1f} days): {st.get('reason') or ''}".strip()
+    return {"name": "recording_pause", "status": WARN if days >= PAUSE_REMINDER_DAYS else OK, "detail": detail[:300]}
+
+
 def check_publishing_enabled() -> dict:
     """Publication to the hosted app must be ON. A demonstration that turned it off and was never restored is a FAIL, not a quiet gap."""
     try:
@@ -436,6 +455,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_age("publish_recent", (health.get("cloud_snapshot_publish") or {}).get("last_success_utc"), PUBLISH_MAX_AGE_MIN, now, "the hosted snapshot publication"))
     checks.append(check_database())
     checks.append(check_publishing_enabled())
+    checks.append(check_recording_pause(now))
     checks.append(check_morning_update(now))
     ready = None
     if deep:

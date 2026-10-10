@@ -85,6 +85,65 @@ class TestPause(Isolated):
         self.assertEqual(doc, on_disk)
 
 
+class TestWatchdogShowsThePause(Isolated):
+    def test_not_paused_is_ok(self):
+        from operational import watchdog as wd
+        self.assertEqual(wd.check_recording_pause(NOW)["status"], wd.OK)
+
+    def test_a_fresh_pause_is_shown_but_is_not_a_failure(self):
+        from operational import watchdog as wd
+        rp.pause("postmortem", now=NOW)
+        c = wd.check_recording_pause(NOW + dt.timedelta(hours=5))
+        self.assertEqual(c["status"], wd.OK)
+        self.assertIn("PAUSED", c["detail"])
+
+    def test_a_pause_that_lasts_warns_so_it_cannot_be_forgotten(self):
+        from operational import watchdog as wd
+        rp.pause("postmortem", now=NOW)
+        self.assertEqual(wd.check_recording_pause(NOW + dt.timedelta(days=4))["status"], wd.WARN)
+
+    def test_an_unreadable_pause_file_warns_at_once(self):
+        from operational import watchdog as wd
+        self.file.write_text("{bad")
+        self.assertEqual(wd.check_recording_pause(NOW)["status"], wd.WARN)
+
+
+class TestShadowLogWhilePaused(Isolated):
+    def test_a_paused_cycle_logs_the_pool_and_every_variants_picks_and_still_stakes_nothing(self):
+        from operational import shadow_selection as sh
+        rp.pause("postmortem", now=NOW)
+        res = dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
+        self.assertEqual(res["newly_recorded"], 0)
+        recs = sh.read_all()
+        self.assertEqual(len(recs), 1)
+        r = recs[0]
+        self.assertGreaterEqual(len(r["pool"]), 8)
+        self.assertEqual(len(r["pool_fields"]), len(r["pool"][0]))
+        self.assertEqual(set(r["variants"]), {"rules_on_oct_8", "current_code", "floor_25", "floor_30", "margin_5pt", "one_per_player", "conservative_candidate"})
+        self.assertTrue(r["variants"]["current_code"]["tickets"])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+
+    def test_an_unchanged_pool_is_not_logged_again_and_a_changed_one_is(self):
+        from operational import shadow_selection as sh
+        rp.pause("postmortem", now=NOW)
+        dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
+        dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=15), collected=collected(board(8)))
+        self.assertEqual(len(sh.read_all()), 1)
+        dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=30), collected=collected(board(8, price=-110)))
+        self.assertEqual(len(sh.read_all()), 2)
+
+    def test_nothing_is_logged_when_not_paused(self):
+        from operational import shadow_selection as sh
+        dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
+        self.assertEqual(sh.read_all(), [])
+
+    def test_a_failure_in_the_shadow_log_never_stops_the_cycle(self):
+        rp.pause("postmortem", now=NOW)
+        with mock.patch("operational.shadow_selection.record", side_effect=RuntimeError("disk full")):
+            res = dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
+        self.assertEqual((res["newly_recorded"], res["recording_paused"]), (0, True))
+
+
 class TestEveryAutomaticWriterIsCovered(Isolated):
     """The moneyline pre-game job and the prop jobs write through paper_bankroll.record_paper_bet, not through the ticket selector: the pause must stop those too."""
 

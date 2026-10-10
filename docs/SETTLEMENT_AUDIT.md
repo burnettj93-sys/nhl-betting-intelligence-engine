@@ -5,7 +5,7 @@ recomputes the ticket result and profit/loss from the stored odds and stake, and
 
 ## Result on 2026-10-09
 **11 of 11 bets agree** (leg actual values, leg hits, ticket status and profit/loss): the 9 automatic model tickets (2 wins, 7 losses), the earlier manual ticket kept in the ledger for audit, and its copy in the personal database.
-No bet is waiting on a final game; no saved value differs from today's official figure (no correction found). Model book arithmetic: $500 − $10 × 9 + returns = $465.76 (reconciled by the watchdog every 30 minutes).
+No bet is waiting on a final game; no saved value differs from today's official figure (no correction found). Model book arithmetic: $500 − $10 × 9 + returns = $465.76 on 2026-10-09 (since then three Oct 9 tickets settled: $435.76 on 2026-10-10, see docs/POSTMORTEM_2026-10-10.md) (reconciled by the watchdog every 30 minutes).
 
 ## What each case does (documented rules: `docs/PAPER_SETTLEMENT_RULES.md`)
 | Case | Behaviour | Where proved |

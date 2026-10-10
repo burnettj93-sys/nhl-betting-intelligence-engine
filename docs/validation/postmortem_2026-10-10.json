@@ -1,0 +1,1987 @@
+{
+ "as_of": "2026-10-10",
+ "ledger": {
+  "rows": 13,
+  "by_kind": {
+   "PARLAY_TICKET": 11,
+   "PERSONAL (manually added; not in the model book)": 1,
+   "SINGLE_BET": 1
+  }
+ },
+ "streak": {
+  "model_book_settled": 12,
+  "wins": 2,
+  "losses": 10,
+  "streak_length": 9,
+  "streak": [
+   {
+    "id": "T72833219796FC9",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-08T18:07:55+00:00",
+    "entry_odds": 320.0,
+    "model_probability": 0.2733,
+    "ev_at_entry": 0.148,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "T758AB336C3C110",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-08T18:07:55+00:00",
+    "entry_odds": 198.4,
+    "model_probability": 0.3872,
+    "ev_at_entry": 0.1553,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "T14E804CB71BFE2",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-08T18:07:56+00:00",
+    "entry_odds": 213.3,
+    "model_probability": 0.3542,
+    "ev_at_entry": 0.1098,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "T91EE69F28A2961",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-08T18:07:56+00:00",
+    "entry_odds": 458.0,
+    "model_probability": 0.208,
+    "ev_at_entry": 0.1607,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "TD58DA8BB492B00",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-08T18:07:56+00:00",
+    "entry_odds": 483.0,
+    "model_probability": 0.202,
+    "ev_at_entry": 0.1774,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "1eb2ce28-0d7f-4c00-acc7-4d2b8b7793b6",
+    "kind": "SINGLE_BET",
+    "recorded_utc": "2026-10-09T00:21:18.155761Z",
+    "entry_odds": 195.0,
+    "model_probability": 0.4944,
+    "ev_at_entry": 0.1014,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "T10D31F33A7FD61",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-09T21:16:02+00:00",
+    "entry_odds": 377.0,
+    "model_probability": 0.2457,
+    "ev_at_entry": 0.1722,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "TDCB72F92A68735",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-09T21:16:02+00:00",
+    "entry_odds": 509.5,
+    "model_probability": 0.2027,
+    "ev_at_entry": 0.2354,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   },
+   {
+    "id": "TED38AE570AC156",
+    "kind": "PARLAY_TICKET",
+    "recorded_utc": "2026-10-09T21:16:02+00:00",
+    "entry_odds": 611.0,
+    "model_probability": 0.166,
+    "ev_at_entry": 0.1801,
+    "stake": 10.0,
+    "profit_loss": -10.0
+   }
+  ],
+  "streak_parlay_tickets": 8,
+  "streak_single_bets": 1
+ },
+ "bankroll": {
+  "starting_balance": 500.0,
+  "settled_pnl": -64.24,
+  "cash_now": 435.76,
+  "open_stakes": 0,
+  "peak_equity": 525.76,
+  "largest_drawdown": 90.0,
+  "largest_drawdown_pct_of_peak": 17.1,
+  "lost_in_the_streak": 90.0,
+  "personal_bets_excluded": [
+   {
+    "id": "ME3D7C508EBFDD3",
+    "profit_loss": -10.0
+   }
+  ]
+ },
+ "independent_settlement_check": {
+  "all_agree": true,
+  "checked": 12,
+  "not_verifiable": [],
+  "tickets": [
+   {
+    "id": "T54F8E52D8B2D50",
+    "verified": true,
+    "ledger_status": "WIN",
+    "official_status": "WIN",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Ryan Leonard",
+      "line": "SOG 2+",
+      "price": -125.0,
+      "model_probability": 0.6915530833583704,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:53:34+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 2,
+      "hit": true,
+      "toi": "13:53",
+      "game_state": "OFF",
+      "score": "PIT 3 @ WSH 5 (REG)"
+     },
+     {
+      "player": "Gabriel Landeskog",
+      "line": "SOG 2+",
+      "price": -145.0,
+      "model_probability": 0.6437717738703279,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:32:39+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 3,
+      "hit": true,
+      "toi": "15:16",
+      "game_state": "OFF",
+      "score": "COL 2 @ WPG 3 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "TBDAC49EFEAAEDA",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Evgeni Malkin",
+      "line": "SOG 2+",
+      "price": -160.0,
+      "model_probability": 0.6794860595846136,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:53:34+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 1,
+      "hit": false,
+      "toi": "17:22",
+      "game_state": "OFF",
+      "score": "PIT 3 @ WSH 5 (REG)"
+     },
+     {
+      "player": "Nazem Kadri",
+      "line": "SOG 2+",
+      "price": -245.0,
+      "model_probability": 0.7152003452988993,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:32:39+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 4,
+      "hit": true,
+      "toi": "18:06",
+      "game_state": "OFF",
+      "score": "COL 2 @ WPG 3 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "TDD065E3FE00331",
+    "verified": true,
+    "ledger_status": "WIN",
+    "official_status": "WIN",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Ryan Leonard",
+      "line": "SOG 2+",
+      "price": -125.0,
+      "model_probability": 0.6915530833583704,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:53:34+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 2,
+      "hit": true,
+      "toi": "13:53",
+      "game_state": "OFF",
+      "score": "PIT 3 @ WSH 5 (REG)"
+     },
+     {
+      "player": "Nazem Kadri",
+      "line": "SOG 2+",
+      "price": -245.0,
+      "model_probability": 0.7152003452988993,
+      "quote_updated_utc": null,
+      "retrieved_utc": "2026-10-07T18:32:39+00:00",
+      "quote_age_min_at_entry": null,
+      "verified": true,
+      "official_value": 4,
+      "hit": true,
+      "toi": "18:06",
+      "game_state": "OFF",
+      "score": "COL 2 @ WPG 3 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "T72833219796FC9",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Tyler Seguin",
+      "line": "POINTS 1+",
+      "price": 145.0,
+      "model_probability": 0.4483,
+      "quote_updated_utc": "2026-10-08T18:07:07Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 0.8,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "15:40",
+      "game_state": "OFF",
+      "score": "DAL 4 @ BUF 0 (REG)"
+     },
+     {
+      "player": "Anders Lee",
+      "line": "SOG 2+",
+      "price": -140.0,
+      "model_probability": 0.6097,
+      "quote_updated_utc": "2026-10-08T18:06:36Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 1.3,
+      "verified": true,
+      "official_value": 1,
+      "hit": false,
+      "toi": "15:19",
+      "game_state": "OFF",
+      "score": "UTA 1 @ BOS 6 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "T758AB336C3C110",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Blake Coleman",
+      "line": "SOG 2+",
+      "price": -135.0,
+      "model_probability": 0.635,
+      "quote_updated_utc": "2026-10-08T18:07:38Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 0.2,
+      "verified": true,
+      "official_value": 6,
+      "hit": true,
+      "toi": "14:20",
+      "game_state": "OFF",
+      "score": "MIN 2 @ TBL 3 (REG)"
+     },
+     {
+      "player": "Anders Lee",
+      "line": "SOG 2+",
+      "price": -140.0,
+      "model_probability": 0.6097,
+      "quote_updated_utc": "2026-10-08T18:06:36Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 1.3,
+      "verified": true,
+      "official_value": 1,
+      "hit": false,
+      "toi": "15:19",
+      "game_state": "OFF",
+      "score": "UTA 1 @ BOS 6 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "T14E804CB71BFE2",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Blake Coleman",
+      "line": "SOG 2+",
+      "price": -135.0,
+      "model_probability": 0.635,
+      "quote_updated_utc": "2026-10-08T18:07:38Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 0.2,
+      "verified": true,
+      "official_value": 6,
+      "hit": true,
+      "toi": "14:20",
+      "game_state": "OFF",
+      "score": "MIN 2 @ TBL 3 (REG)"
+     },
+     {
+      "player": "Mavrik Bourque",
+      "line": "SOG 2+",
+      "price": -125.0,
+      "model_probability": 0.5578,
+      "quote_updated_utc": "2026-10-08T18:07:05Z",
+      "retrieved_utc": "2026-10-08T18:07:56Z",
+      "quote_age_min_at_entry": 0.8,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "08:15",
+      "game_state": "OFF",
+      "score": "NSH 5 @ MTL 2 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "T91EE69F28A2961",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Blake Coleman",
+      "line": "SOG 3+",
+      "price": 210.0,
+      "model_probability": 0.3729,
+      "quote_updated_utc": "2026-10-08T18:07:38Z",
+      "retrieved_utc": "2026-10-08T18:07:55Z",
+      "quote_age_min_at_entry": 0.2,
+      "verified": true,
+      "official_value": 6,
+      "hit": true,
+      "toi": "14:20",
+      "game_state": "OFF",
+      "score": "MIN 2 @ TBL 3 (REG)"
+     },
+     {
+      "player": "Mavrik Bourque",
+      "line": "SOG 2+",
+      "price": -125.0,
+      "model_probability": 0.5578,
+      "quote_updated_utc": "2026-10-08T18:07:05Z",
+      "retrieved_utc": "2026-10-08T18:07:56Z",
+      "quote_age_min_at_entry": 0.8,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "08:15",
+      "game_state": "OFF",
+      "score": "NSH 5 @ MTL 2 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "TD58DA8BB492B00",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Mavrik Bourque",
+      "line": "POINTS 1+",
+      "price": 165.0,
+      "model_probability": 0.4399,
+      "quote_updated_utc": "2026-10-08T18:07:05Z",
+      "retrieved_utc": "2026-10-08T18:07:56Z",
+      "quote_age_min_at_entry": 0.8,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "08:15",
+      "game_state": "OFF",
+      "score": "NSH 5 @ MTL 2 (REG)"
+     },
+     {
+      "player": "Christian Dvorak",
+      "line": "SOG 2+",
+      "price": 120.0,
+      "model_probability": 0.4591,
+      "quote_updated_utc": "2026-10-08T18:07:42Z",
+      "retrieved_utc": "2026-10-08T18:07:56Z",
+      "quote_age_min_at_entry": 0.2,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "16:02",
+      "game_state": "OFF",
+      "score": "PHI 1 @ OTT 2 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "T10D31F33A7FD61",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Aliaksei Protas",
+      "line": "POINTS 1+",
+      "price": 165.0,
+      "model_probability": 0.4415,
+      "quote_updated_utc": "2026-10-09T21:16:00Z",
+      "retrieved_utc": "2026-10-09T21:16:02Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "15:35",
+      "game_state": "OFF",
+      "score": "NYR 1 @ WSH 3 (REG)"
+     },
+     {
+      "player": "Bryan Rust",
+      "line": "POINTS 1+",
+      "price": -125.0,
+      "model_probability": 0.5566,
+      "quote_updated_utc": "2026-10-09T21:15:58Z",
+      "retrieved_utc": "2026-10-09T21:16:01Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 1,
+      "hit": true,
+      "toi": "18:21",
+      "game_state": "OFF",
+      "score": "PIT 2 @ CBJ 3 (SO)"
+     }
+    ]
+   },
+   {
+    "id": "TDCB72F92A68735",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Aliaksei Protas",
+      "line": "POINTS 1+",
+      "price": 165.0,
+      "model_probability": 0.4415,
+      "quote_updated_utc": "2026-10-09T21:16:00Z",
+      "retrieved_utc": "2026-10-09T21:16:02Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "15:35",
+      "game_state": "OFF",
+      "score": "NYR 1 @ WSH 3 (REG)"
+     },
+     {
+      "player": "Kaapo Kakko",
+      "line": "POINTS 1+",
+      "price": 130.0,
+      "model_probability": 0.4591,
+      "quote_updated_utc": "2026-10-09T21:15:59Z",
+      "retrieved_utc": "2026-10-09T21:16:02Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 1,
+      "hit": true,
+      "toi": "13:50",
+      "game_state": "OFF",
+      "score": "SEA 6 @ DET 3 (REG)"
+     }
+    ]
+   },
+   {
+    "id": "TED38AE570AC156",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "legs": [
+     {
+      "player": "Noah Laba",
+      "line": "POINTS 1+",
+      "price": 295.0,
+      "model_probability": 0.2982,
+      "quote_updated_utc": "2026-10-09T21:16:00Z",
+      "retrieved_utc": "2026-10-09T21:16:02Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 0,
+      "hit": false,
+      "toi": "13:42",
+      "game_state": "OFF",
+      "score": "NYR 1 @ WSH 3 (REG)"
+     },
+     {
+      "player": "Bryan Rust",
+      "line": "POINTS 1+",
+      "price": -125.0,
+      "model_probability": 0.5566,
+      "quote_updated_utc": "2026-10-09T21:15:58Z",
+      "retrieved_utc": "2026-10-09T21:16:01Z",
+      "quote_age_min_at_entry": 0.0,
+      "verified": true,
+      "official_value": 1,
+      "hit": true,
+      "toi": "18:21",
+      "game_state": "OFF",
+      "score": "PIT 2 @ CBJ 3 (SO)"
+     }
+    ]
+   },
+   {
+    "id": "1eb2ce28-0d7f-4c00-acc7-4d2b8b7793b6",
+    "verified": true,
+    "ledger_status": "LOSS",
+    "official_status": "LOSS",
+    "agrees": true,
+    "score": "COL 7 @ CGY 3 (REG)",
+    "bet": "CGY to win at +195"
+   }
+  ]
+ },
+ "exposure_by_day": [
+  {
+   "day_recorded_utc": "2026-10-07",
+   "tickets": 3,
+   "leg_slots": 6,
+   "distinct_legs": 4,
+   "distinct_players": 4,
+   "distinct_games": 2,
+   "players_on_more_than_one_ticket": {
+    "Ryan Leonard": 2,
+    "Nazem Kadri": 2
+   },
+   "most_tickets_any_one_player_is_on": 2
+  },
+  {
+   "day_recorded_utc": "2026-10-08",
+   "tickets": 5,
+   "leg_slots": 10,
+   "distinct_legs": 7,
+   "distinct_players": 5,
+   "distinct_games": 5,
+   "players_on_more_than_one_ticket": {
+    "Anders Lee": 2,
+    "Blake Coleman": 3,
+    "Mavrik Bourque": 3
+   },
+   "most_tickets_any_one_player_is_on": 3
+  },
+  {
+   "day_recorded_utc": "2026-10-09",
+   "tickets": 3,
+   "leg_slots": 6,
+   "distinct_legs": 4,
+   "distinct_players": 4,
+   "distinct_games": 3,
+   "players_on_more_than_one_ticket": {
+    "Bryan Rust": 2,
+    "Aliaksei Protas": 2
+   },
+   "most_tickets_any_one_player_is_on": 2
+  }
+ ],
+ "streak_probability": {
+  "parlay_tickets_in_the_streak": 8,
+  "expected_wins_among_them": 2.039,
+  "product_of_ticket_loss_chances_WRONG_independent": 0.0912,
+  "legs_shared_players_independent_across_markets": {
+   "all_tickets_lose": 0.171,
+   "if_every_leg_were_3_points_lower": 0.2131,
+   "if_every_leg_were_5_points_lower": 0.244,
+   "if_every_leg_were_8_points_lower": 0.2945
+  },
+  "legs_shared_same_player_fully_dependent_across_markets": {
+   "all_tickets_lose": 0.1837,
+   "if_every_leg_were_3_points_lower": 0.2261,
+   "if_every_leg_were_5_points_lower": 0.257,
+   "if_every_leg_were_8_points_lower": 0.3073
+  },
+  "including_the_moneyline_single": {
+   "model_raw": {
+    "moneyline_win_probability": 0.4944,
+    "all_streak_bets_lose": 0.0865
+   },
+   "model_conservative": {
+    "moneyline_win_probability": 0.3733,
+    "all_streak_bets_lose": 0.1072
+   },
+   "market_no_vig": {
+    "moneyline_win_probability": 0.325,
+    "all_streak_bets_lose": 0.1154
+   }
+  }
+ },
+ "sequence_probability_using_ml_conservative": {
+  "bets_in_the_record": 12,
+  "players_independent_across_markets": {
+   "n": 100000,
+   "tail_losses_ending_the_record": 0.1088,
+   "a_run_of_that_length_anywhere": 0.1342,
+   "at_most_the_wins_seen": 0.2594,
+   "expected_wins": 3.8328,
+   "sd_wins": 1.9215
+  },
+  "same_player_fully_dependent": {
+   "n": 100000,
+   "tail_losses_ending_the_record": 0.1147,
+   "a_run_of_that_length_anywhere": 0.1416,
+   "at_most_the_wins_seen": 0.2665,
+   "expected_wins": 3.8361,
+   "sd_wins": 1.9675
+  }
+ },
+ "recorded_legs": {
+  "unique_legs": 15,
+  "calibration": {
+   "all": {
+    "legs": 15,
+    "mean_predicted": 0.534,
+    "observed_hit_rate": 0.467,
+    "expected_hits": 8.01,
+    "observed_hits": 7
+   },
+   "by_market": {
+    "points": {
+     "legs": 6,
+     "mean_predicted": 0.441,
+     "observed_hit_rate": 0.333,
+     "expected_hits": 2.64,
+     "observed_hits": 2
+    },
+    "shots on goal": {
+     "legs": 9,
+     "mean_predicted": 0.596,
+     "observed_hit_rate": 0.556,
+     "expected_hits": 5.36,
+     "observed_hits": 5
+    }
+   },
+   "by_probability_band": {
+    "0.10-0.30": {
+     "legs": 1,
+     "mean_predicted": 0.298,
+     "observed_hit_rate": 0.0,
+     "expected_hits": 0.3,
+     "observed_hits": 0
+    },
+    "0.30-0.50": {
+     "legs": 6,
+     "mean_predicted": 0.437,
+     "observed_hit_rate": 0.333,
+     "expected_hits": 2.62,
+     "observed_hits": 2
+    },
+    "0.50-0.70": {
+     "legs": 7,
+     "mean_predicted": 0.625,
+     "observed_hit_rate": 0.571,
+     "expected_hits": 4.37,
+     "observed_hits": 4
+    },
+    "0.70+": {
+     "legs": 1,
+     "mean_predicted": 0.715,
+     "observed_hit_rate": 1.0,
+     "expected_hits": 0.72,
+     "observed_hits": 1
+    }
+   },
+   "chance_of_this_few_hits_or_fewer_if_the_probabilities_are_right": 0.391
+  },
+  "evidence_strength": {
+   "likelihood_ratio_if_probabilities_were_too_high_by": {
+    "3_points": 1.1,
+    "5_points": 1.13,
+    "8_points": 1.14
+   },
+   "reading": "1.0 means the results cannot tell a calibrated model from an overstated one; a ratio between 1/3 and 3 is 'barely anything'.",
+   "resolved_legs_needed_to_detect_a_5_point_overstatement_with_80_percent_power": 619,
+   "resolved_legs_needed_for_3_points": 1718,
+   "unique_legs_so_far": 15
+  },
+  "legs": [
+   {
+    "id": "2026020053:8484186:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020053",
+    "player": "8484186",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.6915530833583704,
+    "name": "Ryan Leonard",
+    "threshold": 2,
+    "hit": true,
+    "official_value": 2,
+    "toi": "13:53"
+   },
+   {
+    "id": "2026020054:8476455:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020054",
+    "player": "8476455",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.6437717738703279,
+    "name": "Gabriel Landeskog",
+    "threshold": 2,
+    "hit": true,
+    "official_value": 3,
+    "toi": "15:16"
+   },
+   {
+    "id": "2026020053:8471215:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020053",
+    "player": "8471215",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.6794860595846136,
+    "name": "Evgeni Malkin",
+    "threshold": 2,
+    "hit": false,
+    "official_value": 1,
+    "toi": "17:22"
+   },
+   {
+    "id": "2026020054:8475172:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020054",
+    "player": "8475172",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.7152003452988993,
+    "name": "Nazem Kadri",
+    "threshold": 2,
+    "hit": true,
+    "official_value": 4,
+    "toi": "18:06"
+   },
+   {
+    "id": "2026020057:8475794:PLAYER_POINTS:1",
+    "game": "2026020057",
+    "player": "8475794",
+    "market": "PLAYER_POINTS",
+    "p": 0.4483,
+    "name": "Tyler Seguin",
+    "threshold": 1,
+    "hit": false,
+    "official_value": 0,
+    "toi": "15:40"
+   },
+   {
+    "id": "2026020056:8475314:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020056",
+    "player": "8475314",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.6097,
+    "name": "Anders Lee",
+    "threshold": 2,
+    "hit": false,
+    "official_value": 1,
+    "toi": "15:19"
+   },
+   {
+    "id": "2026020060:8476399:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020060",
+    "player": "8476399",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.635,
+    "name": "Blake Coleman",
+    "threshold": 2,
+    "hit": true,
+    "official_value": 6,
+    "toi": "14:20"
+   },
+   {
+    "id": "2026020058:8482145:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020058",
+    "player": "8482145",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.5578,
+    "name": "Mavrik Bourque",
+    "threshold": 2,
+    "hit": false,
+    "official_value": 0,
+    "toi": "08:15"
+   },
+   {
+    "id": "2026020060:8476399:PLAYER_SOG_ALTERNATE:3",
+    "game": "2026020060",
+    "player": "8476399",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.3729,
+    "name": "Blake Coleman",
+    "threshold": 3,
+    "hit": true,
+    "official_value": 6,
+    "toi": "14:20"
+   },
+   {
+    "id": "2026020058:8482145:PLAYER_POINTS:1",
+    "game": "2026020058",
+    "player": "8482145",
+    "market": "PLAYER_POINTS",
+    "p": 0.4399,
+    "name": "Mavrik Bourque",
+    "threshold": 1,
+    "hit": false,
+    "official_value": 0,
+    "toi": "08:15"
+   },
+   {
+    "id": "2026020059:8477989:PLAYER_SOG_ALTERNATE:2",
+    "game": "2026020059",
+    "player": "8477989",
+    "market": "PLAYER_SOG_ALTERNATE",
+    "p": 0.4591,
+    "name": "Christian Dvorak",
+    "threshold": 2,
+    "hit": false,
+    "official_value": 0,
+    "toi": "16:02"
+   },
+   {
+    "id": "2026020067:8481656:PLAYER_POINTS:1",
+    "game": "2026020067",
+    "player": "8481656",
+    "market": "PLAYER_POINTS",
+    "p": 0.4415,
+    "name": "Aliaksei Protas",
+    "threshold": 1,
+    "hit": false,
+    "official_value": 0,
+    "toi": "15:35"
+   },
+   {
+    "id": "2026020068:8475810:PLAYER_POINTS:1",
+    "game": "2026020068",
+    "player": "8475810",
+    "market": "PLAYER_POINTS",
+    "p": 0.5566,
+    "name": "Bryan Rust",
+    "threshold": 1,
+    "hit": true,
+    "official_value": 1,
+    "toi": "18:21"
+   },
+   {
+    "id": "2026020066:8481554:PLAYER_POINTS:1",
+    "game": "2026020066",
+    "player": "8481554",
+    "market": "PLAYER_POINTS",
+    "p": 0.4591,
+    "name": "Kaapo Kakko",
+    "threshold": 1,
+    "hit": true,
+    "official_value": 1,
+    "toi": "13:50"
+   },
+   {
+    "id": "2026020067:8483690:PLAYER_POINTS:1",
+    "game": "2026020067",
+    "player": "8483690",
+    "market": "PLAYER_POINTS",
+    "p": 0.2982,
+    "name": "Noah Laba",
+    "threshold": 1,
+    "hit": false,
+    "official_value": 0,
+    "toi": "13:42"
+   }
+  ]
+ },
+ "ticket_acceptance_at_entry": [
+  {
+   "ticket": "T54F8E52D8B2D50",
+   "recorded_utc": "2026-10-07T18:53",
+   "est_hit_chance": 0.445,
+   "price": 204,
+   "ev_at_recorded_probabilities": 0.354,
+   "ev_after_the_3_point_haircut": 0.2349,
+   "result": "WIN"
+  },
+  {
+   "ticket": "TBDAC49EFEAAEDA",
+   "recorded_utc": "2026-10-07T18:53",
+   "est_hit_chance": 0.486,
+   "price": 129,
+   "ev_at_recorded_probabilities": 0.112,
+   "ev_after_the_3_point_haircut": 0.0183,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "TDD065E3FE00331",
+   "recorded_utc": "2026-10-07T18:53",
+   "est_hit_chance": 0.495,
+   "price": 153,
+   "ev_at_recorded_probabilities": 0.254,
+   "ev_after_the_3_point_haircut": 0.149,
+   "result": "WIN"
+  },
+  {
+   "ticket": "T72833219796FC9",
+   "recorded_utc": "2026-10-08T18:07",
+   "est_hit_chance": 0.273,
+   "price": 320,
+   "ev_at_recorded_probabilities": 0.148,
+   "ev_after_the_3_point_haircut": 0.0185,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "T758AB336C3C110",
+   "recorded_utc": "2026-10-08T18:07",
+   "est_hit_chance": 0.387,
+   "price": 198,
+   "ev_at_recorded_probabilities": 0.155,
+   "ev_after_the_3_point_haircut": 0.0466,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "T14E804CB71BFE2",
+   "recorded_utc": "2026-10-08T18:07",
+   "est_hit_chance": 0.354,
+   "price": 213,
+   "ev_at_recorded_probabilities": 0.11,
+   "ev_after_the_3_point_haircut": 0.0005,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "T91EE69F28A2961",
+   "recorded_utc": "2026-10-08T18:07",
+   "est_hit_chance": 0.208,
+   "price": 458,
+   "ev_at_recorded_probabilities": 0.161,
+   "ev_after_the_3_point_haircut": 0.0099,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "TD58DA8BB492B00",
+   "recorded_utc": "2026-10-08T18:07",
+   "est_hit_chance": 0.202,
+   "price": 483,
+   "ev_at_recorded_probabilities": 0.177,
+   "ev_after_the_3_point_haircut": 0.0254,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "T10D31F33A7FD61",
+   "recorded_utc": "2026-10-09T21:16",
+   "est_hit_chance": 0.246,
+   "price": 377,
+   "ev_at_recorded_probabilities": 0.172,
+   "ev_after_the_3_point_haircut": 0.0336,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "TDCB72F92A68735",
+   "recorded_utc": "2026-10-09T21:16",
+   "est_hit_chance": 0.203,
+   "price": 510,
+   "ev_at_recorded_probabilities": 0.235,
+   "ev_after_the_3_point_haircut": 0.0762,
+   "result": "LOSS"
+  },
+  {
+   "ticket": "TED38AE570AC156",
+   "recorded_utc": "2026-10-09T21:16",
+   "est_hit_chance": 0.166,
+   "price": 611,
+   "ev_at_recorded_probabilities": 0.18,
+   "ev_after_the_3_point_haircut": 0.0042,
+   "result": "LOSS"
+  }
+ ],
+ "hit_chance_floors_by_entry_information_only": {
+  ">=20%": {
+   "of_recorded_tickets_it_would_have_kept": "10 of 11",
+   "kept_by_day": {
+    "2026-10-07": 3,
+    "2026-10-08": 5,
+    "2026-10-09": 2
+   }
+  },
+  ">=25%": {
+   "of_recorded_tickets_it_would_have_kept": "6 of 11",
+   "kept_by_day": {
+    "2026-10-07": 3,
+    "2026-10-08": 3,
+    "2026-10-09": 0
+   }
+  },
+  ">=30%": {
+   "of_recorded_tickets_it_would_have_kept": "5 of 11",
+   "kept_by_day": {
+    "2026-10-07": 3,
+    "2026-10-08": 2,
+    "2026-10-09": 0
+   }
+  },
+  ">=35%": {
+   "of_recorded_tickets_it_would_have_kept": "5 of 11",
+   "kept_by_day": {
+    "2026-10-07": 3,
+    "2026-10-08": 2,
+    "2026-10-09": 0
+   }
+  },
+  ">=40%": {
+   "of_recorded_tickets_it_would_have_kept": "3 of 11",
+   "kept_by_day": {
+    "2026-10-07": 3,
+    "2026-10-08": 0,
+    "2026-10-09": 0
+   }
+  }
+ },
+ "what_decided_each_ticket": [
+  {
+   "ticket": "T54F8E52D8B2D50",
+   "result": "WIN",
+   "legs_that_missed": [],
+   "legs_that_hit": [
+    "Ryan Leonard SOG 2+ (official 2)",
+    "Gabriel Landeskog SOG 2+ (official 3)"
+   ]
+  },
+  {
+   "ticket": "TBDAC49EFEAAEDA",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Evgeni Malkin SOG 2+ (official 1; 17:22 on ice)"
+   ],
+   "legs_that_hit": [
+    "Nazem Kadri SOG 2+ (official 4)"
+   ]
+  },
+  {
+   "ticket": "TDD065E3FE00331",
+   "result": "WIN",
+   "legs_that_missed": [],
+   "legs_that_hit": [
+    "Ryan Leonard SOG 2+ (official 2)",
+    "Nazem Kadri SOG 2+ (official 4)"
+   ]
+  },
+  {
+   "ticket": "T72833219796FC9",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Tyler Seguin POINTS 1+ (official 0; 15:40 on ice)",
+    "Anders Lee SOG 2+ (official 1; 15:19 on ice)"
+   ],
+   "legs_that_hit": []
+  },
+  {
+   "ticket": "T758AB336C3C110",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Anders Lee SOG 2+ (official 1; 15:19 on ice)"
+   ],
+   "legs_that_hit": [
+    "Blake Coleman SOG 2+ (official 6)"
+   ]
+  },
+  {
+   "ticket": "T14E804CB71BFE2",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Mavrik Bourque SOG 2+ (official 0; 08:15 on ice)"
+   ],
+   "legs_that_hit": [
+    "Blake Coleman SOG 2+ (official 6)"
+   ]
+  },
+  {
+   "ticket": "T91EE69F28A2961",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Mavrik Bourque SOG 2+ (official 0; 08:15 on ice)"
+   ],
+   "legs_that_hit": [
+    "Blake Coleman SOG 3+ (official 6)"
+   ]
+  },
+  {
+   "ticket": "TD58DA8BB492B00",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Mavrik Bourque POINTS 1+ (official 0; 08:15 on ice)",
+    "Christian Dvorak SOG 2+ (official 0; 16:02 on ice)"
+   ],
+   "legs_that_hit": []
+  },
+  {
+   "ticket": "T10D31F33A7FD61",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Aliaksei Protas POINTS 1+ (official 0; 15:35 on ice)"
+   ],
+   "legs_that_hit": [
+    "Bryan Rust POINTS 1+ (official 1)"
+   ]
+  },
+  {
+   "ticket": "TDCB72F92A68735",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Aliaksei Protas POINTS 1+ (official 0; 15:35 on ice)"
+   ],
+   "legs_that_hit": [
+    "Kaapo Kakko POINTS 1+ (official 1)"
+   ]
+  },
+  {
+   "ticket": "TED38AE570AC156",
+   "result": "LOSS",
+   "legs_that_missed": [
+    "Noah Laba POINTS 1+ (official 0; 13:42 on ice)"
+   ],
+   "legs_that_hit": [
+    "Bryan Rust POINTS 1+ (official 1)"
+   ]
+  }
+ ],
+ "validation_evidence": {
+  "held_out_season": "2025-26, scored once, walk-forward (docs/validation/skater_projection_validation.json)",
+  "shipped_calibrated_model_players_with_80_plus_games": {
+   "shots>=2": {
+    "pred": 0.4366,
+    "obs": 0.448,
+    "ll": 0.61295
+   },
+   "shots>=3": {
+    "pred": 0.2178,
+    "obs": 0.2348,
+    "ll": 0.47451
+   },
+   "points>=1": {
+    "pred": 0.3569,
+    "obs": 0.3658,
+    "ll": 0.60376
+   },
+   "goals>=1": {
+    "pred": 0.1562,
+    "obs": 0.1612,
+    "ll": 0.40771
+   }
+  },
+  "same_in_the_probability_bands_the_tickets_used": {
+   "shots>=2": {
+    "band": [
+     0.5,
+     0.62
+    ],
+    "predictions": 7624,
+    "mean_predicted": 0.5592,
+    "observed": 0.5897,
+    "bias_observed_minus_predicted": 0.0305,
+    "players_with_5plus": 198,
+    "sd_of_player_mean_residual": 0.1133,
+    "binomial_noise_sd": 0.0796,
+    "between_player_model_error_sd": 0.0807
+   },
+   "points>=1": {
+    "band": [
+     0.38,
+     0.5
+    ],
+    "predictions": 8504,
+    "mean_predicted": 0.4361,
+    "observed": 0.4631,
+    "bias_observed_minus_predicted": 0.027,
+    "players_with_5plus": 231,
+    "sd_of_player_mean_residual": 0.1293,
+    "binomial_noise_sd": 0.0827,
+    "between_player_model_error_sd": 0.0993
+   }
+  },
+  "reading": "On 46,622 held-out player-games the calibrated model's average prediction is within about one point of what happened in every market the tickets used, and slightly UNDER-predicts in the 50-62% shots and 38-50% points bands. That is evidence about the model on ALL players. It is not evidence about the subset the selector picks (the legs where the model most disagrees with the price), and there are no historical sportsbook prices to test that subset on."
+ },
+ "moneyline_single_bet_evidence": {
+  "team_sides": 76,
+  "games": 38,
+  "log_loss_model": 0.6655,
+  "log_loss_market_no_vig": 0.6482,
+  "log_loss_coin_flip": 0.6931,
+  "spread_of_model_probabilities_sd": 0.063,
+  "spread_of_market_probabilities_sd": 0.1,
+  "by_market_band": {
+   "market says underdog (under 40%)": {
+    "team_sides": 12,
+    "market_probability": 0.343,
+    "model_probability": 0.443,
+    "actual_win_rate": 0.167
+   },
+   "market says near a coin flip (40-60%)": {
+    "team_sides": 52,
+    "market_probability": 0.5,
+    "model_probability": 0.5,
+    "actual_win_rate": 0.5
+   },
+   "market says favourite (over 60%)": {
+    "team_sides": 12,
+    "market_probability": 0.657,
+    "model_probability": 0.557,
+    "actual_win_rate": 0.833
+   }
+  },
+  "reading": "The legacy win model's probabilities are squeezed toward 50% (spread 0.063 against the market's 0.100). A model like that shows a large 'edge' on every big underdog by construction, and on 12 underdog sides it said 44% where the market said 34% and 2 of 12 won. 38 games cannot settle it, but it is the opposite of evidence of an edge."
+ },
+ "candidate_pool_calibration_oct_8_and_9": {
+  "all_candidate_legs": {
+   "legs": 41,
+   "model_said": 0.341,
+   "price_implied_before_margin": 0.315,
+   "happened": 0.268,
+   "expected_hits": 14.0,
+   "observed_hits": 11,
+   "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.198
+  },
+  "by_market": {
+   "goals": {
+    "legs": 3,
+    "model_said": 0.156,
+    "price_implied_before_margin": 0.116,
+    "happened": 0.667,
+    "expected_hits": 0.5,
+    "observed_hits": 2,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.996
+   },
+   "points": {
+    "legs": 25,
+    "model_said": 0.364,
+    "price_implied_before_margin": 0.336,
+    "happened": 0.16,
+    "expected_hits": 9.1,
+    "observed_hits": 4,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.022
+   },
+   "shots on goal": {
+    "legs": 13,
+    "model_said": 0.34,
+    "price_implied_before_margin": 0.321,
+    "happened": 0.385,
+    "expected_hits": 4.4,
+    "observed_hits": 5,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.76
+   }
+  },
+  "by_day": {
+   "2026-10-08": {
+    "legs": 26,
+    "model_said": 0.339,
+    "price_implied_before_margin": 0.313,
+    "happened": 0.192,
+    "expected_hits": 8.8,
+    "observed_hits": 5,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.071
+   },
+   "2026-10-09": {
+    "legs": 15,
+    "model_said": 0.345,
+    "price_implied_before_margin": 0.319,
+    "happened": 0.4,
+    "expected_hits": 5.2,
+    "observed_hits": 6,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.776
+   }
+  },
+  "by_probability_band": {
+   "under 30%": {
+    "legs": 16,
+    "model_said": 0.2,
+    "price_implied_before_margin": 0.174,
+    "happened": 0.312,
+    "expected_hits": 3.2,
+    "observed_hits": 5,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.921
+   },
+   "30-50%": {
+    "legs": 21,
+    "model_said": 0.401,
+    "price_implied_before_margin": 0.374,
+    "happened": 0.19,
+    "expected_hits": 8.4,
+    "observed_hits": 4,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.036
+   },
+   "50% and over": {
+    "legs": 4,
+    "model_said": 0.59,
+    "price_implied_before_margin": 0.567,
+    "happened": 0.5,
+    "expected_hits": 2.4,
+    "observed_hits": 2,
+    "chance_of_this_few_or_fewer_if_right_ignoring_same_game_clustering": 0.543
+   }
+  },
+  "legs_not_matched_to_an_official_player": {
+   "2026-10-08": [
+    "Olli Maatta 1+ point"
+   ],
+   "2026-10-09": []
+  },
+  "reading": "Small and clustered (legs in one game share the game's scoring): a hint at most. Across the two evenings the model said 0.341 on average and 0.268 happened (11 hits against 14.0 expected). The points legs account for most of the gap (4 hits against 9.1 expected); shots legs were in line. Six slices were looked at, so one that looks unusual is expected by chance alone; this is a thing to WATCH, not a finding. It is exactly the question the shadow log (operational/shadow_selection.py) now collects forward, before the games, for every priced leg."
+ },
+ "replay_of_the_original_decisions": {
+  "variants_defined_before_any_replacement_result_was_viewed": {
+   "rules_on_oct_8": "Rules in force on 2026-10-08 (no per-player limit)",
+   "current_code": "Rules in the code today (at most 2 tickets per player)",
+   "floor_25": "Today's rules + estimated hit chance of at least 25%",
+   "floor_30": "Today's rules + estimated hit chance of at least 30%",
+   "margin_5pt": "Today's rules + the edge must survive a 5-point haircut on every leg",
+   "one_per_player": "Today's rules + each player on at most one ticket",
+   "conservative_candidate": "25% floor + 5-point haircut + one ticket per player + at most 3 a day"
+  },
+  "days": {
+   "2026-10-08": {
+    "candidate_legs_reconstructed": 26,
+    "legs_not_reconstructable": [
+     "Olli Maatta 1+ point"
+    ],
+    "qualifying_tickets_regenerated": 101,
+    "the_replay_with_that_day's_rules_reproduces_the_tickets_that_were_recorded": true,
+    "recorded_tickets": 5,
+    "recorded_portfolio": {
+     "tickets": 5,
+     "distinct_players": 5,
+     "distinct_legs": 7,
+     "expected_winning_tickets": 1.42,
+     "chance_no_ticket_wins_exact_shared_legs": 0.299,
+     "chance_no_ticket_wins_if_independent_WRONG": 0.182,
+     "model_expected_profit_per_10_dollars_staked": 7.51,
+     "expected_profit_if_every_leg_were_5_points_lower": -3.11,
+     "best_estimated_hit_chance": 0.387,
+     "worst_estimated_hit_chance": 0.202,
+     "tickets_chosen": [
+      {
+       "legs": [
+        "Blake Coleman 2+ shots on goal",
+        "Anders Lee 2+ shots on goal"
+       ],
+       "hit_chance": 0.387,
+       "price": 198,
+       "ev_after_3pt_haircut": 0.0466
+      },
+      {
+       "legs": [
+        "Blake Coleman 2+ shots on goal",
+        "Mavrik Bourque 2+ shots on goal"
+       ],
+       "hit_chance": 0.354,
+       "price": 213,
+       "ev_after_3pt_haircut": 0.0005
+      },
+      {
+       "legs": [
+        "Tyler Seguin 1+ point",
+        "Anders Lee 2+ shots on goal"
+       ],
+       "hit_chance": 0.273,
+       "price": 320,
+       "ev_after_3pt_haircut": 0.0185
+      },
+      {
+       "legs": [
+        "Blake Coleman 3+ shots on goal",
+        "Mavrik Bourque 2+ shots on goal"
+       ],
+       "hit_chance": 0.208,
+       "price": 458,
+       "ev_after_3pt_haircut": 0.0099
+      },
+      {
+       "legs": [
+        "Mavrik Bourque 1+ point",
+        "Christian Dvorak 2+ shots on goal"
+       ],
+       "hit_chance": 0.202,
+       "price": 483,
+       "ev_after_3pt_haircut": 0.0254
+      }
+     ],
+     "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+    },
+    "variants": {
+     "rules_on_oct_8": {
+      "label": "Rules in force on 2026-10-08 (no per-player limit)",
+      "tickets": 5,
+      "distinct_players": 5,
+      "distinct_legs": 7,
+      "expected_winning_tickets": 1.42,
+      "chance_no_ticket_wins_exact_shared_legs": 0.299,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.182,
+      "model_expected_profit_per_10_dollars_staked": 7.51,
+      "expected_profit_if_every_leg_were_5_points_lower": -3.11,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.202,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
+       },
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Mavrik Bourque 2+ shots on goal"
+        ],
+        "hit_chance": 0.354,
+        "price": 213,
+        "ev_after_3pt_haircut": 0.0005
+       },
+       {
+        "legs": [
+         "Tyler Seguin 1+ point",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.273,
+        "price": 320,
+        "ev_after_3pt_haircut": 0.0185
+       },
+       {
+        "legs": [
+         "Blake Coleman 3+ shots on goal",
+         "Mavrik Bourque 2+ shots on goal"
+        ],
+        "hit_chance": 0.208,
+        "price": 458,
+        "ev_after_3pt_haircut": 0.0099
+       },
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Christian Dvorak 2+ shots on goal"
+        ],
+        "hit_chance": 0.202,
+        "price": 483,
+        "ev_after_3pt_haircut": 0.0254
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "current_code": {
+      "label": "Rules in the code today (at most 2 tickets per player)",
+      "tickets": 5,
+      "distinct_players": 6,
+      "distinct_legs": 7,
+      "expected_winning_tickets": 1.4,
+      "chance_no_ticket_wins_exact_shared_legs": 0.262,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.187,
+      "model_expected_profit_per_10_dollars_staked": 7.95,
+      "expected_profit_if_every_leg_were_5_points_lower": -2.85,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.185,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
+       },
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Mavrik Bourque 2+ shots on goal"
+        ],
+        "hit_chance": 0.354,
+        "price": 213,
+        "ev_after_3pt_haircut": 0.0005
+       },
+       {
+        "legs": [
+         "Tyler Seguin 1+ point",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.273,
+        "price": 320,
+        "ev_after_3pt_haircut": 0.0185
+       },
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Christian Dvorak 2+ shots on goal"
+        ],
+        "hit_chance": 0.202,
+        "price": 483,
+        "ev_after_3pt_haircut": 0.0254
+       },
+       {
+        "legs": [
+         "Tyler Seguin 1+ point",
+         "Ryan Hartman 1+ point"
+        ],
+        "hit_chance": 0.185,
+        "price": 549,
+        "ev_after_3pt_haircut": 0.0421
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "floor_25": {
+      "label": "Today's rules + estimated hit chance of at least 25%",
+      "tickets": 3,
+      "distinct_players": 4,
+      "distinct_legs": 4,
+      "expected_winning_tickets": 1.01,
+      "chance_no_ticket_wins_exact_shared_legs": 0.375,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.288,
+      "model_expected_profit_per_10_dollars_staked": 4.13,
+      "expected_profit_if_every_leg_were_5_points_lower": -1.56,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.273,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
+       },
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Mavrik Bourque 2+ shots on goal"
+        ],
+        "hit_chance": 0.354,
+        "price": 213,
+        "ev_after_3pt_haircut": 0.0005
+       },
+       {
+        "legs": [
+         "Tyler Seguin 1+ point",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.273,
+        "price": 320,
+        "ev_after_3pt_haircut": 0.0185
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "floor_30": {
+      "label": "Today's rules + estimated hit chance of at least 30%",
+      "tickets": 2,
+      "distinct_players": 3,
+      "distinct_legs": 3,
+      "expected_winning_tickets": 0.74,
+      "chance_no_ticket_wins_exact_shared_legs": 0.475,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.396,
+      "model_expected_profit_per_10_dollars_staked": 2.65,
+      "expected_profit_if_every_leg_were_5_points_lower": -0.92,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.354,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
+       },
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Mavrik Bourque 2+ shots on goal"
+        ],
+        "hit_chance": 0.354,
+        "price": 213,
+        "ev_after_3pt_haircut": 0.0005
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 2 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "margin_5pt": {
+      "label": "Today's rules + the edge must survive a 5-point haircut on every leg",
+      "tickets": 3,
+      "distinct_players": 4,
+      "distinct_legs": 4,
+      "expected_winning_tickets": 0.71,
+      "chance_no_ticket_wins_exact_shared_legs": 0.515,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.441,
+      "model_expected_profit_per_10_dollars_staked": 8.32,
+      "expected_profit_if_every_leg_were_5_points_lower": 0.69,
+      "best_estimated_hit_chance": 0.279,
+      "worst_estimated_hit_chance": 0.197,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Blake Coleman 2+ shots on goal"
+        ],
+        "hit_chance": 0.279,
+        "price": 361,
+        "ev_after_3pt_haircut": 0.144
+       },
+       {
+        "legs": [
+         "Peyton Krebs 1+ point",
+         "Blake Coleman 2+ shots on goal"
+        ],
+        "hit_chance": 0.238,
+        "price": 431,
+        "ev_after_3pt_haircut": 0.1072
+       },
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Tyler Seguin 1+ point"
+        ],
+        "hit_chance": 0.197,
+        "price": 549,
+        "ev_after_3pt_haircut": 0.1132
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "one_per_player": {
+      "label": "Today's rules + each player on at most one ticket",
+      "tickets": 5,
+      "distinct_players": 10,
+      "distinct_legs": 10,
+      "expected_winning_tickets": 1.04,
+      "chance_no_ticket_wins_exact_shared_legs": 0.3,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.3,
+      "model_expected_profit_per_10_dollars_staked": 9.8,
+      "expected_profit_if_every_leg_were_5_points_lower": -3.44,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.116,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
+        ],
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
+       },
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Christian Dvorak 2+ shots on goal"
+        ],
+        "hit_chance": 0.202,
+        "price": 483,
+        "ev_after_3pt_haircut": 0.0254
+       },
+       {
+        "legs": [
+         "Tyler Seguin 1+ point",
+         "Ryan Hartman 1+ point"
+        ],
+        "hit_chance": 0.185,
+        "price": 549,
+        "ev_after_3pt_haircut": 0.0421
+       },
+       {
+        "legs": [
+         "Peyton Krebs 1+ point",
+         "Lawson Crouse 1+ point"
+        ],
+        "hit_chance": 0.149,
+        "price": 724,
+        "ev_after_3pt_haircut": 0.0423
+       },
+       {
+        "legs": [
+         "Ryan McDonagh 1+ point",
+         "Jamie Benn 1+ point"
+        ],
+        "hit_chance": 0.116,
+        "price": 950,
+        "ev_after_3pt_haircut": 0.0088
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "conservative_candidate": {
+      "label": "25% floor + 5-point haircut + one ticket per player + at most 3 a day",
+      "tickets": 1,
+      "distinct_players": 2,
+      "distinct_legs": 2,
+      "expected_winning_tickets": 0.28,
+      "chance_no_ticket_wins_exact_shared_legs": 0.721,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.721,
+      "model_expected_profit_per_10_dollars_staked": 2.89,
+      "expected_profit_if_every_leg_were_5_points_lower": 0.52,
+      "best_estimated_hit_chance": 0.279,
+      "worst_estimated_hit_chance": 0.279,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Mavrik Bourque 1+ point",
+         "Blake Coleman 2+ shots on goal"
+        ],
+        "hit_chance": 0.279,
+        "price": 361,
+        "ev_after_3pt_haircut": 0.144
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 1 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     }
+    }
+   },
+   "2026-10-09": {
+    "candidate_legs_reconstructed": 15,
+    "legs_not_reconstructable": [],
+    "qualifying_tickets_regenerated": 28,
+    "the_replay_with_that_day's_rules_reproduces_the_tickets_that_were_recorded": true,
+    "recorded_tickets": 3,
+    "recorded_portfolio": {
+     "tickets": 3,
+     "distinct_players": 4,
+     "distinct_legs": 4,
+     "expected_winning_tickets": 0.61,
+     "chance_no_ticket_wins_exact_shared_legs": 0.572,
+     "chance_no_ticket_wins_if_independent_WRONG": 0.502,
+     "model_expected_profit_per_10_dollars_staked": 5.88,
+     "expected_profit_if_every_leg_were_5_points_lower": -1.84,
+     "best_estimated_hit_chance": 0.246,
+     "worst_estimated_hit_chance": 0.166,
+     "tickets_chosen": [
+      {
+       "legs": [
+        "Aliaksei Protas 1+ point",
+        "Bryan Rust 1+ point"
+       ],
+       "hit_chance": 0.246,
+       "price": 377,
+       "ev_after_3pt_haircut": 0.0336
+      },
+      {
+       "legs": [
+        "Aliaksei Protas 1+ point",
+        "Kaapo Kakko 1+ point"
+       ],
+       "hit_chance": 0.203,
+       "price": 510,
+       "ev_after_3pt_haircut": 0.0762
+      },
+      {
+       "legs": [
+        "Noah Laba 1+ point",
+        "Bryan Rust 1+ point"
+       ],
+       "hit_chance": 0.166,
+       "price": 611,
+       "ev_after_3pt_haircut": 0.0042
+      }
+     ],
+     "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+    },
+    "variants": {
+     "rules_on_oct_8": {
+      "label": "Rules in force on 2026-10-08 (no per-player limit)",
+      "tickets": 3,
+      "distinct_players": 4,
+      "distinct_legs": 4,
+      "expected_winning_tickets": 0.61,
+      "chance_no_ticket_wins_exact_shared_legs": 0.572,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.502,
+      "model_expected_profit_per_10_dollars_staked": 5.88,
+      "expected_profit_if_every_leg_were_5_points_lower": -1.84,
+      "best_estimated_hit_chance": 0.246,
+      "worst_estimated_hit_chance": 0.166,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Aliaksei Protas 1+ point",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.246,
+        "price": 377,
+        "ev_after_3pt_haircut": 0.0336
+       },
+       {
+        "legs": [
+         "Aliaksei Protas 1+ point",
+         "Kaapo Kakko 1+ point"
+        ],
+        "hit_chance": 0.203,
+        "price": 510,
+        "ev_after_3pt_haircut": 0.0762
+       },
+       {
+        "legs": [
+         "Noah Laba 1+ point",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.166,
+        "price": 611,
+        "ev_after_3pt_haircut": 0.0042
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "current_code": {
+      "label": "Rules in the code today (at most 2 tickets per player)",
+      "tickets": 3,
+      "distinct_players": 4,
+      "distinct_legs": 4,
+      "expected_winning_tickets": 0.61,
+      "chance_no_ticket_wins_exact_shared_legs": 0.572,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.502,
+      "model_expected_profit_per_10_dollars_staked": 5.88,
+      "expected_profit_if_every_leg_were_5_points_lower": -1.84,
+      "best_estimated_hit_chance": 0.246,
+      "worst_estimated_hit_chance": 0.166,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Aliaksei Protas 1+ point",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.246,
+        "price": 377,
+        "ev_after_3pt_haircut": 0.0336
+       },
+       {
+        "legs": [
+         "Aliaksei Protas 1+ point",
+         "Kaapo Kakko 1+ point"
+        ],
+        "hit_chance": 0.203,
+        "price": 510,
+        "ev_after_3pt_haircut": 0.0762
+       },
+       {
+        "legs": [
+         "Noah Laba 1+ point",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.166,
+        "price": 611,
+        "ev_after_3pt_haircut": 0.0042
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "floor_25": {
+      "label": "Today's rules + estimated hit chance of at least 25%",
+      "tickets": 0
+     },
+     "floor_30": {
+      "label": "Today's rules + estimated hit chance of at least 30%",
+      "tickets": 0
+     },
+     "margin_5pt": {
+      "label": "Today's rules + the edge must survive a 5-point haircut on every leg",
+      "tickets": 2,
+      "distinct_players": 3,
+      "distinct_legs": 3,
+      "expected_winning_tickets": 0.15,
+      "chance_no_ticket_wins_exact_shared_legs": 0.885,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.851,
+      "model_expected_profit_per_10_dollars_staked": 13.73,
+      "expected_profit_if_every_leg_were_5_points_lower": 0.3,
+      "best_estimated_hit_chance": 0.084,
+      "worst_estimated_hit_chance": 0.071,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Frederick Gaudreau to score a goal (anytime)",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.084,
+        "price": 1880,
+        "ev_after_3pt_haircut": 0.2533
+       },
+       {
+        "legs": [
+         "Frederick Gaudreau to score a goal (anytime)",
+         "Eeli Tolvanen 2+ shots on goal"
+        ],
+        "hit_chance": 0.071,
+        "price": 2320,
+        "ev_after_3pt_haircut": 0.2877
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "2 of 2 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "one_per_player": {
+      "label": "Today's rules + each player on at most one ticket",
+      "tickets": 3,
+      "distinct_players": 6,
+      "distinct_legs": 6,
+      "expected_winning_tickets": 0.45,
+      "chance_no_ticket_wins_exact_shared_legs": 0.605,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.605,
+      "model_expected_profit_per_10_dollars_staked": 11.34,
+      "expected_profit_if_every_leg_were_5_points_lower": -1.06,
+      "best_estimated_hit_chance": 0.246,
+      "worst_estimated_hit_chance": 0.071,
+      "tickets_chosen": [
+       {
+        "legs": [
+         "Aliaksei Protas 1+ point",
+         "Bryan Rust 1+ point"
+        ],
+        "hit_chance": 0.246,
+        "price": 377,
+        "ev_after_3pt_haircut": 0.0336
+       },
+       {
+        "legs": [
+         "Noah Laba 1+ point",
+         "Kaapo Kakko 1+ point"
+        ],
+        "hit_chance": 0.137,
+        "price": 808,
+        "ev_after_3pt_haircut": 0.0455
+       },
+       {
+        "legs": [
+         "Frederick Gaudreau to score a goal (anytime)",
+         "Eeli Tolvanen 2+ shots on goal"
+        ],
+        "hit_chance": 0.071,
+        "price": 2320,
+        "ev_after_3pt_haircut": 0.2877
+       }
+      ],
+      "for_completeness_only__what_happened_to_these_tickets_wins": "1 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     },
+     "conservative_candidate": {
+      "label": "25% floor + 5-point haircut + one ticket per player + at most 3 a day",
+      "tickets": 0
+     }
+    }
+   }
+  }
+ }
+}
