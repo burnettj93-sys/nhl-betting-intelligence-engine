@@ -1,0 +1,193 @@
+{
+  "by_fraction": {
+    "0.0": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.23845,
+          "log_loss": 0.66794,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25894,
+          "log_loss": 0.71465,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.24228,
+          "log_loss": 0.67792,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24285,
+          "log_loss": 0.68164,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24413,
+        "log_loss": 0.68204,
+        "n": 3936
+      }
+    },
+    "0.15": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.23735,
+          "log_loss": 0.66579,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25673,
+          "log_loss": 0.70871,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.24193,
+          "log_loss": 0.67704,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24125,
+          "log_loss": 0.67708,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24342,
+        "log_loss": 0.68022,
+        "n": 3936
+      }
+    },
+    "0.3": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.23708,
+          "log_loss": 0.6656,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25492,
+          "log_loss": 0.70411,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.24171,
+          "log_loss": 0.6765,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24037,
+          "log_loss": 0.67448,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24296,
+        "log_loss": 0.67908,
+        "n": 3936
+      }
+    },
+    "0.5": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.23815,
+          "log_loss": 0.66837,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25316,
+          "log_loss": 0.69983,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.2416,
+          "log_loss": 0.67621,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24034,
+          "log_loss": 0.67384,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24272,
+        "log_loss": 0.67847,
+        "n": 3936
+      }
+    },
+    "0.7": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.24098,
+          "log_loss": 0.67462,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25213,
+          "log_loss": 0.69745,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.24166,
+          "log_loss": 0.67633,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24162,
+          "log_loss": 0.67621,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24291,
+        "log_loss": 0.67882,
+        "n": 3936
+      }
+    },
+    "1.0": {
+      "by_bucket": {
+        "games_1-5": {
+          "brier": 0.24869,
+          "log_loss": 0.6905,
+          "n": 258
+        },
+        "games_11-20": {
+          "brier": 0.25194,
+          "log_loss": 0.69702,
+          "n": 487
+        },
+        "games_21+": {
+          "brier": 0.24206,
+          "log_loss": 0.67716,
+          "n": 2947
+        },
+        "games_6-10": {
+          "brier": 0.24596,
+          "log_loss": 0.68496,
+          "n": 244
+        }
+      },
+      "overall_post_boundary": {
+        "brier": 0.24396,
+        "log_loss": 0.68097,
+        "n": 3936
+      }
+    }
+  },
+  "corpus_n_games": 5248,
+  "corpus_seasons": [
+    20222023,
+    20232024,
+    20242025,
+    20252026
+  ],
+  "regression_fractions_tested": [
+    0.0,
+    0.15,
+    0.3,
+    0.5,
+    0.7,
+    1.0
+  ]
+}
