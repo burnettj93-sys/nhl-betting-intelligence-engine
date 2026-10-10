@@ -1,0 +1,139 @@
+{
+  "by_season": {
+    "20242025": {
+      "alpha_negbin": 0.1517,
+      "by_threshold": {
+        "1+": {
+          "event_rate": 0.5901,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.20254,
+          "m0_naive_log_loss": 0.5917,
+          "m1_glm_brier": 0.20138,
+          "m1_glm_log_loss": 0.58688,
+          "n_events": 27665,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "2+": {
+          "event_rate": 0.3097,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.17161,
+          "m0_naive_log_loss": 0.51935,
+          "m1_glm_brier": 0.1704,
+          "m1_glm_log_loss": 0.51422,
+          "n_events": 14520,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "3+": {
+          "event_rate": 0.1553,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.10804,
+          "m0_naive_log_loss": 0.3512,
+          "m1_glm_brier": 0.10728,
+          "m1_glm_log_loss": 0.34702,
+          "n_events": 7279,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "4+": {
+          "event_rate": 0.0752,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.06008,
+          "m0_naive_log_loss": 0.2135,
+          "m1_glm_brier": 0.05968,
+          "m1_glm_log_loss": 0.20997,
+          "n_events": 3528,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "5+": {
+          "event_rate": 0.0346,
+          "frac_resamples_improved": 0.9885,
+          "m0_naive_brier": 0.0301,
+          "m0_naive_log_loss": 0.11849,
+          "m1_glm_brier": 0.02992,
+          "m1_glm_log_loss": 0.11604,
+          "n_events": 1622,
+          "verdict_this_season": "CANDIDATE"
+        }
+      },
+      "n": 46885
+    },
+    "20252026": {
+      "alpha_negbin": 0.1517,
+      "by_threshold": {
+        "1+": {
+          "event_rate": 0.5748,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.19939,
+          "m0_naive_log_loss": 0.58385,
+          "m1_glm_brier": 0.19859,
+          "m1_glm_log_loss": 0.58059,
+          "n_events": 26930,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "2+": {
+          "event_rate": 0.2946,
+          "frac_resamples_improved": 1.0,
+          "m0_naive_brier": 0.16236,
+          "m0_naive_log_loss": 0.49438,
+          "m1_glm_brier": 0.16167,
+          "m1_glm_log_loss": 0.49093,
+          "n_events": 13800,
+          "verdict_this_season": "CANDIDATE"
+        },
+        "3+": {
+          "event_rate": 0.1437,
+          "frac_resamples_improved": 0.851,
+          "m0_naive_brier": 0.09822,
+          "m0_naive_log_loss": 0.32241,
+          "m1_glm_brier": 0.09805,
+          "m1_glm_log_loss": 0.32016,
+          "n_events": 6731,
+          "verdict_this_season": "NOT_CLEARED"
+        },
+        "4+": {
+          "event_rate": 0.0682,
+          "frac_resamples_improved": 0.354,
+          "m0_naive_brier": 0.05295,
+          "m0_naive_log_loss": 0.189,
+          "m1_glm_brier": 0.05299,
+          "m1_glm_log_loss": 0.18758,
+          "n_events": 3197,
+          "verdict_this_season": "NOT_CLEARED"
+        },
+        "5+": {
+          "event_rate": 0.0308,
+          "frac_resamples_improved": 0.976,
+          "m0_naive_brier": 0.02657,
+          "m0_naive_log_loss": 0.10462,
+          "m1_glm_brier": 0.02642,
+          "m1_glm_log_loss": 0.10301,
+          "n_events": 1441,
+          "verdict_this_season": "CANDIDATE"
+        }
+      },
+      "n": 46849
+    }
+  },
+  "corpus_n_total": 188863,
+  "eval_seasons": [
+    20242025,
+    20252026
+  ],
+  "examples_n": 185006,
+  "final_status_by_threshold": {
+    "1+": "VALIDATED",
+    "2+": "VALIDATED",
+    "3+": "PARTIAL",
+    "4+": "PARTIAL",
+    "5+": "VALIDATED"
+  },
+  "glm_weights": [
+    0.06855903598394747,
+    0.8352255793083584,
+    0.014915729531395784,
+    0.003171080070175072,
+    0.0,
+    0.0
+  ],
+  "train_n": 91272,
+  "warmup_season": 20222023
+}
