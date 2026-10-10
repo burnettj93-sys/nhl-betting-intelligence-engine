@@ -79,6 +79,7 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
             for expect in ("Parlay experiment (tickets)", "Single bets: moneyline and props", "Whole account", "$54.24", "$10.00", "$64.24"):
                 self.assertIn(expect, blob, f"{page}: {expect}")
             self.assertIn("The parts add up to the account", blob, page)
+            self.assertIn("Cash \\$435.76 = \\$500 start", blob, page)                 # dollar signs escaped, or the caption renders as maths
 
     def test_today_describes_the_ticket_policy_in_force_and_says_it_is_an_unapproved_proposal(self):
         snap = snapshot()

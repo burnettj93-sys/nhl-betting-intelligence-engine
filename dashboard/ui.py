@@ -607,7 +607,7 @@ def book_split(origins: dict | None, *, expanded: bool = False, as_table_only: b
 
     def render():
         st.dataframe(rows, hide_index=True, width="stretch")
-        st.caption(f"{rec['sentence']}. " + ("The parts add up to the account." if rec.get("all_agree") else "THE PARTS DO NOT ADD UP: this is a bookkeeping fault, not a result."))
+        st.caption(f"{rec['sentence']}".replace("$", "\\$") + ". " + ("The parts add up to the account." if rec.get("all_agree") else "THE PARTS DO NOT ADD UP: this is a bookkeeping fault, not a result."))
         st.caption("Single bets were taken out of this experiment on 2026-10-10: the book is now parlay tickets only. The earlier single bet stays on the record, nothing was reset or rewritten.")
     if as_table_only:
         render()
