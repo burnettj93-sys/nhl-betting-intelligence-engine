@@ -185,6 +185,43 @@ result was looked at; two of them were later revised for practicality, from entr
 Counts of candidate tickets by element (entry information; Oct 8 / Oct 9): qualified under the old rules 101 / 28 (median hit chance 13% / 6%); hit chance ≥ 20%: 17 / 2; ≥ 25%: 10 / 0; ≥ 30%: 2 / 0; edge
 surviving a 5-point haircut: 7 / 7 (best hit chance 27.9% / 8.4%); a 30% floor with a 5-point haircut: 0 / 0.
 
+## 12b. The ticket the proposal kept, and whether the engine can regularly find such tickets
+
+**The one ticket the proposal would have kept on 2026-10-08 (entry information only; `retained_ticket_under_the_proposal` in the JSON):**
+
+| | Coleman 2+ shots on goal | Lee 2+ shots on goal | **Ticket** |
+|---|---|---|---|
+| DraftKings price | −135 | −140 | **+198** (decimal 2.984; two different games) |
+| Price-implied chance (before the book's margin) | 57.4% | 58.3% | 33.5% = the break-even hit chance at +198 |
+| Model's estimate | 63.5% | 61.0% | **38.7%** (the product, 0.635 × 0.610) |
+| Model minus price | +6.1 points | +2.6 points | +5.2 points over break-even |
+| Model's player-level error, 1 SD | ±8.1 points | ±8.1 points | **31.6% to 45.8%** (if the two legs' errors are independent) |
+
+* **Expected return on a $10 stake** (it pays $29.84 if it hits, a $19.84 profit): **+$1.55** at the model's probabilities (+15.5%); **+$0.47** after lowering each leg by 3 points (+4.7%); **−$0.23** after lowering
+  each by 5 points; **−$0.57** at the low end of the 1-SD range.
+* **Why it qualified:** +198 is better than +100; 38.7% is above the 25% floor; its edge is +15.5% on the recorded probabilities (the 5% bar) and +4.7% after the 3-point haircut (the +3% bar); it uses two
+  different players in two different games, each on one ticket.
+* **What it does not show:** the 38.7% is the model's estimate, not a measured chance. One standard deviation of the model's own error covers the break-even point (33.5%), so the edge is **inside the model's
+  uncertainty**. The prices are US-feed quotes and the sportsbook's void and parlay-reduction rules are unverified. (This ticket was in fact recorded on Oct 8 and lost: Lee took one shot. One result says
+  nothing about whether the ticket was worth taking.) It is the best kind of ticket the policy can produce: strong legs, a real but thin edge.
+
+**Can the current engine regularly find similar or stronger options? On the evidence: not reliably, mainly because of coverage, and three days cannot say how often.**
+
+* **Coverage is the binding limit.** The free odds allowance is 500 credits a month. Today (Oct 10) there are 14 games; the plan can afford about 11 credits a day, which prices **3 games in the morning and
+  2 at pregame**. Pricing every game once in the morning and once before puck drop needs about 46 credits a day; every game and market, 79 (`credit_plan_state.json`; `docs/MORNING_WORKFLOW.md`). A ticket needs
+  strong legs from two different games, so a pool from 3 games has very few candidates. The paid tier that covers it (20K credits, $30 a month) has not been bought.
+* **What the three days showed.** Oct 8: 6 games priced, 546 priced legs, 27 with any positive edge, **3 strong ones** (a 55%+ estimate with an edge: Coleman, Lee, Bourque) → **1** ticket under the policy.
+  Oct 9: 3 games priced, 15 legs in the day's qualifying tickets, **1** strong one (Rust 1+ point, 55.7%) → **0** tickets. Oct 10 so far: 3 games priced, 158 legs, 3 with an edge, 2 strong (Gritsyuk 2+ shots 60%, Coleman 2+ shots
+  65%; both priced so near fair that their pair's edge is under the 5% bar) → **0**. So roughly **1 ticket in 3 days, from 3 to 6 games priced a day**. If a day with 6 games gave 1 ticket, a full slate of 14 might
+  give a few; that is **an extrapolation from one day and is not evidence**.
+* **Data and model limits that would remain even with full coverage.** (1) The player data come from a source that publishes the night's games late; the page said "through Oct 8" all morning on Oct 10 (a second
+  re-check at 13:30 and 17:30 was added today). (2) The model prices players **conditional on dressing**: it has no lineups, line combinations, power-play units or injury information, and no permitted source
+  for them (the Daily Faceoff scraper is off); it cannot see that a player will play 8 minutes. (3) Saves have no automatic starter source. (4) Points and goals are mostly not yet posted at 8 AM (shots are), so the morning
+  pool is shots-heavy. (5) The model is calibrated across all players on held-out seasons, but **whether its edges over the price are real on the legs that get selected has never been tested**, because there are no
+  historical sportsbook prices; the shadow log is collecting that. A strong chance and a bigger edge pull in opposite directions in this pool, because the likely legs are priced near fair.
+* **Honest conclusion.** The engine can produce a strong, thinly-valued ticket on a day with enough games priced, and most days with the free allowance it will produce none. Whether it can do so regularly on a
+  full slate, and whether the edges are real, is **not established**. The proposal's empty slots are the right behaviour; the experiment will mostly show how often "nothing worthwhile" is the answer.
+
 ## 13. The proposed restart policy (one policy, for your approval)
 
 **Up to five tickets a day, zero allowed; each +100 or better; an estimated hit chance of at least 25%; at least +3% edge left after lowering every leg by 3 points (and the existing 5% on the recorded
@@ -193,14 +230,17 @@ per game 3 → 2); the +100 bar, the 5% bar, the 3-point haircut and the five sl
 
 **Why each element, and its cost (none is validated; each is a judgement):**
 
-* **25% hit-chance floor (the "strong chance" the objective asks for).** Two legs reach 25% only if both are about a coin flip (0.5 × 0.5); three legs need about 63% each. That puts tickets in the
-  region where the held-out validation is densest (shots 2+ at 50–70%: 13,432 player-games; points 1+ above 50% is rare; goals 1+ above 40% has 111) and where the raw model was calibrated or
-  under-predicting (it over-predicted below about 40%: shots 2+ at 20–30% said 25.8%, happened 20.7%). *Cost:* fewer tickets and empty days (Oct 9 would have been empty); and a **side effect**: it removes most
-  tickets with a points or goals leg, because those legs rarely exceed 55% (80% of Oct 8's tickets at ≥ 25% still had one; at ≥ 30%, none). That is arithmetic, not a view on the market. 30% is as defensible as 25%: on the two audited days a 30% floor gives the same tickets as 25% (one on Oct 8, none on Oct 9) once the value margin and one-per-player apply, so the day-level evidence cannot choose between them; the owner can.
+* **25% hit-chance floor (the "strong chance" the objective asks for).** A two-leg ticket reaches 25% when its legs' probabilities **multiply** to 0.25, which means their geometric average is 50%: 50% × 50%
+  works, and so do 70% × 36% or 56% × 45%. It is **not** a rule that both legs must exceed 50% (an earlier version of this document said so; that was wrong). Three legs need an average of about 63%. *Cost:*
+  fewer tickets and empty days (Oct 9 would have been empty). *Effect on the mix:* at 25% a points leg can still qualify when paired with a strong shots leg (80% of Oct 8's tickets at 25% or more had a points or
+  goals leg), but at 30% none of Oct 8's survivors did, because the strongest points legs sit around 45–56%. Where the validation is densest: shots 2+ at 50–70% has 13,432 player-games; points 1+ above 50% is
+  rare; goals 1+ above 40% has 111. The raw model over-predicted below about 40% (shots 2+ at 20–30%: said 25.8%, happened 20.7%). 30% is as defensible as 25%: on the two audited days a 30% floor gives the
+  same tickets as 25% (one on Oct 8, none on Oct 9) once the value margin and one-per-player apply, so the day-level evidence cannot choose between them; the owner can.
 * **+3% edge after the 3-point haircut (the "meaningful value").** The haircut stands in for model uncertainty (the measured between-player error is 8.1 points for shots 2+ and 9.9 for points 1+, so 3 points is
-  about a third of a standard deviation, a small safety margin). The extra 3% is a cushion for what the US-feed prices cannot show: Ontario prices are not verified and the void and parlay-reduction rules are
-  unknown (`VOID_RULES_VERIFIED=False`). *Cost:* tickets whose entire edge is inside that cushion are skipped. The earlier draft's 5-point haircut (half a standard deviation) was **dropped as impractical**: with a
-  30% floor it recorded nothing on either audited day, and alone it favours long shots (on Oct 9 it kept two tickets whose best hit chance was 8.4%).
+  about a third of a standard deviation, a small safety margin). The extra 3% is a plain safety margin: it refuses edges that are a rounding of a quoted price or a sliver of the model's error. **It does not
+  verify Ontario prices or the sportsbook's settlement rules.** Both remain unverified (`VOID_RULES_VERIFIED=False`; the prices are US-feed quotes). A 3% margin cannot tell you what Ontario would pay or how a
+  void leg would be handled; only checking DraftKings Ontario can, and that is an external blocker. *Cost:* tickets whose edge is under 3% are skipped. The earlier draft's 5-point haircut (half a standard
+  deviation) was dropped as impractical: with a 30% floor it recorded nothing on either audited day, and alone it favours long shots (on Oct 9 it kept two tickets whose best hit chance was 8.4%).
 * **One ticket per player, two per game.** Shared legs raise the chance that no ticket wins (Oct 8: 29.9% against 18.2%; Oct 9: 57.2% against 50.2%); with one per player they cannot share a player. *Cost:*
   the best player is used once; this reduces concentration, it does not add value.
 * **Up to five, empty allowed.** The count of five was never evidence-based; an empty slot is a correct answer.

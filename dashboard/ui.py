@@ -195,7 +195,23 @@ def load(fn, what: str = "This page"):
         st.stop()
 
 
+def standalone_page_fallback() -> None:
+    """Streamlit decides between 'pages/ directory' mode and the entry script's own navigation only when a session first runs the entry script. After every restart, a visitor who opens a deep link
+    (for example /Parlay_Builder) BEFORE anyone has opened the app's root address gets the page script on its own: no theme, no Eggy, and the raw list of every page file in the sidebar.
+    The entry script marks its sessions (`_frame_ran`); a page that finds no mark applies the theme itself and hides the raw page list, so the first deep link looks right too. Opening the root address
+    restores the full navigation."""
+    if st.session_state.get("_frame_ran"):
+        return
+    try:
+        from dashboard import theme
+        theme.inject()
+        st.markdown("<style>[data-testid='stSidebarNav'], [data-testid='stSidebarNavItems'] { display: none !important; }</style>", unsafe_allow_html=True)
+    except Exception:  # noqa: BLE001 - a styling fallback must never break a page
+        pass
+
+
 def header(title: str, subtitle: str | None = None, *, meta: dict | None = None) -> None:
+    standalone_page_fallback()
     st.title(title)
     if subtitle:
         st.caption(subtitle)

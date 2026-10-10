@@ -1367,6 +1367,68 @@
   },
   "reading": "The legacy win model's probabilities are squeezed toward 50% (spread 0.063 against the market's 0.100). A model like that shows a large 'edge' on every big underdog by construction, and on 12 underdog sides it said 44% where the market said 34% and 2 of 12 won. 38 games cannot settle it, but it is the opposite of evidence of an edge."
  },
+ "retained_ticket_under_the_proposal": {
+  "basis": "2026-10-08 candidates, entry information only",
+  "tickets": [
+   {
+    "ticket": "Blake Coleman 2+ shots on goal + Anders Lee 2+ shots on goal",
+    "legs": [
+     {
+      "selection": "Blake Coleman 2+ shots on goal",
+      "american_price": -135.0,
+      "decimal_price": 1.741,
+      "price_implied_probability_before_margin": 0.574,
+      "model_probability": 0.635,
+      "model_minus_price_points": 6.1,
+      "player_level_model_error_1sd_points": 8.1,
+      "one_sd_range": [
+       0.554,
+       0.716
+      ]
+     },
+     {
+      "selection": "Anders Lee 2+ shots on goal",
+      "american_price": -140.0,
+      "decimal_price": 1.714,
+      "price_implied_probability_before_margin": 0.583,
+      "model_probability": 0.61,
+      "model_minus_price_points": 2.6,
+      "player_level_model_error_1sd_points": 8.1,
+      "one_sd_range": [
+       0.529,
+       0.69
+      ]
+     }
+    ],
+    "combined_american_price": 198,
+    "combined_decimal": 2.984,
+    "games": 2,
+    "estimated_hit_chance": 0.387,
+    "hit_chance_1sd_range_if_leg_errors_are_independent": [
+     0.316,
+     0.458
+    ],
+    "breakeven_hit_chance_at_this_price": 0.335,
+    "payout_if_it_hits_on_10": 29.84,
+    "profit_if_it_hits_on_10": 19.84,
+    "expected_return_on_10": {
+     "at_the_recorded_probabilities": 1.55,
+     "after_lowering_each_leg_3_points": 0.47,
+     "after_lowering_each_leg_5_points": -0.23,
+     "at_the_low_end_of_the_1sd_range": -0.57
+    },
+    "why_it_qualified": {
+     "combined_price_at_least_plus_100": true,
+     "estimated_hit_chance_at_least_25pct": true,
+     "edge_on_recorded_probabilities_at_least_5pct": 0.155,
+     "edge_after_3_point_haircut_at_least_3pct": 0.0466,
+     "each_player_on_one_ticket": true,
+     "legs_from_different_games": true
+    },
+    "what_it_does_not_show": "The 38.7% is the model's estimate, not a measured chance. One standard deviation of its player-level error spans the break-even hit chance, so the edge is inside the model's own uncertainty. Prices are US-feed quotes, not verified for Ontario, and the sportsbook's void and parlay-reduction rules are unverified."
+   }
+  ]
+ },
  "evidence_targets": {
   "the_620_figure": {
    "what_it_is": "619 resolved, independent legs: the sample needed to detect that probabilities are 5 points too high (one-sided 5% test, 80% power), using the outcome variance p(1-p) at p = 0.5.",

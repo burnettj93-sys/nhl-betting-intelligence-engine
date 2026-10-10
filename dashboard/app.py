@@ -39,6 +39,7 @@ st.set_page_config(
 # fresh install with zero accounts yet) only ever sees a login/
 # bootstrap form -- st.stop() below means none of the real navigation,
 # page registration, or per-page content below this point executes.
+st.session_state["_frame_ran"] = True        # tells a page that the entry script (theme, gate, navigation) ran for this session; see ui.standalone_page_fallback
 theme.inject()
 st.logo(str(theme.EGGY_ICON), size="large")        # Eggy at the top of the sidebar, above the navigation
 _user = auth.render_auth_gate()
