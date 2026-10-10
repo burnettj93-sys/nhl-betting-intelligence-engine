@@ -10,7 +10,7 @@ the only thing missing. Everything else was proved with the real pages and the r
 3. **Resource owner** `burnettj93-sys`; **Repository access** → *Only select repositories* → `nhl-betting-intelligence-engine`.
 4. **Repository permissions** → **Issues: Read and write**. Leave every other permission *No access* (Metadata: Read-only is added automatically). No account or organisation permissions.
 5. **Generate token** and copy it (it starts with `github_pat_`). Do not send it to me or paste it anywhere else.
-6. Open https://nhl-betting-intelligence-engine.streamlit.app → **Manage app** (bottom right) → ⋮ → **Settings** → **Secrets**, and add one line:
+6. Open the app in your browser → **Manage app** (bottom right) → ⋮ → **Settings** → **Secrets**, and add one line:
 
    ```toml
    LOG_WRITE_TOKEN = "github_pat_…the token…"
