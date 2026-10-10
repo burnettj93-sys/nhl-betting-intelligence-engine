@@ -35,6 +35,7 @@ from pathlib import Path
 from operational import eastern_time as et
 from operational import market_coverage
 from operational import paper_bankroll as pb
+from operational import recording_pause
 from operational import state_paths
 from research.real_market_parlay import engine as rmp
 
@@ -286,6 +287,8 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
 
 def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.datetime) -> list[dict]:
     """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS."""
+    if combos and recording_pause.is_paused():          # second guard: whoever calls this, a paused model records nothing new
+        return [{"status": "PAUSED", "ticket_id": None, "reason": recording_pause.notice()}]
     results = []
     version = code_version()
     for combo in combos:
@@ -745,9 +748,14 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
 
     def ticket_filter(combo, already):
         return wave_filter(combo, already) or early_filter(combo, already)
-    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
+    pause = recording_pause.status()
+    if pause["paused"]:                      # owner pause: nothing is selected or recorded; collection, publishing, settlement and personal accounts carry on
+        picked = {"tickets": [], "qualifying": 0, "pool_size": 0, "reason": recording_pause.notice(pause)}
+        selection_audit = {"paused": True}
+    else:
+        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
+        selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
     singles = rmp.select_singles(legs)
-    selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
 
     account = pb.account_state(bankroll_conn, TRACK)
     revalidated, held_back = [], []
@@ -755,7 +763,9 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         why = revalidate_before_recording(combo, now)
         (held_back if why else revalidated).append((combo, why))
     record_results = record_tickets(bankroll_conn, [c for c, _ in revalidated], now) if revalidated else []
-    if slots_left == 0:
+    if pause["paused"]:
+        reason = recording_pause.notice(pause)
+    elif slots_left == 0:
         reason = f"All {SLOT_COUNT} of today's ticket slots are recorded."
     else:
         reason = picked["reason"]
@@ -783,9 +793,12 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     options["generated_at_utc"] = now.isoformat()
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
                         diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional)
+    if pause["paused"]:
+        state["notice"] = recording_pause.notice(pause)
+        state["recording_paused"] = pause
     changed = _write_state(state)
     return {
-        "eastern_date": et_date, "qualifying_tickets_found": picked["qualifying"],
+        "eastern_date": et_date, "qualifying_tickets_found": picked["qualifying"], "recording_paused": pause["paused"],
         "newly_recorded": sum(1 for r in record_results if r["status"] == "INSERTED"),
         "already_recorded": sum(1 for r in record_results if r["status"] == "DUPLICATE"),
         "insufficient_funds": sum(1 for r in record_results if r["status"] == "INSUFFICIENT_FUNDS"),
