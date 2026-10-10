@@ -591,6 +591,31 @@ def account_bankroll(log: dict | None) -> dict | None:
     return ((log or {}).get("doc") or {}).get("bankroll")
 
 
+def book_split(origins: dict | None, *, expanded: bool = False, as_table_only: bool = False) -> None:
+    """The model account read apart: the parlay experiment's own result, the earlier single bets (moneyline and props, no longer recorded), and the whole account they add up to.
+    Nothing is reset; the account is the combined one."""
+    o = origins or {}
+    p, s_, rec = o.get("PARLAY_TICKETS"), o.get("SINGLE_BETS"), o.get("RECONCILIATION")
+    if not p or not s_ or not rec:
+        return
+
+    def row(label, b):
+        opened = b.get("open", b.get("pending", 0) + b.get("unresolved", 0))
+        return {"Part of the account": label, "Bets": b.get("bets", b.get("tickets", 0)), "Won": b["wins"], "Lost": b["losses"], "Open": opened, "Settled P&L": signed_money(b["settled_pnl"]),
+                "ROI": pct(b["roi"], 1) if b.get("roi") is not None else "—"}
+    rows = [row("Parlay experiment (tickets)", p), row("Single bets: moneyline and props (earlier; no longer recorded)", s_), row("Whole account", o.get("ALL") or {})]
+
+    def render():
+        st.dataframe(rows, hide_index=True, width="stretch")
+        st.caption(f"{rec['sentence']}. " + ("The parts add up to the account." if rec.get("all_agree") else "THE PARTS DO NOT ADD UP: this is a bookkeeping fault, not a result."))
+        st.caption("Single bets were taken out of this experiment on 2026-10-10: the book is now parlay tickets only. The earlier single bet stays on the record, nothing was reset or rewritten.")
+    if as_table_only:
+        render()
+    else:
+        with st.expander("How the account splits: parlay tickets and single bets", expanded=expanded):
+            render()
+
+
 def forget_log() -> None:
     st.session_state.pop("_personal_log", None)
 

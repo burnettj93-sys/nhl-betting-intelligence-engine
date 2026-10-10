@@ -642,6 +642,123 @@
    }
   }
  },
+ "streak_probability_dependence_sensitivity": {
+  "label": "CONDITIONAL on the model's recorded probabilities being the true ones, and on the stated dependence structure. Not the probability of the streak 'in reality'.",
+  "rows": [
+   {
+    "assumptions": "Tickets share legs (a leg on two tickets is one event; a player's 2+ and 3+ shots are one nested event). Different players independent. The same player's different markets independent.",
+    "includes": [
+     "shared legs",
+     "nested lines"
+    ],
+    "p_all_lose": 0.171,
+    "method": "exact enumeration"
+   },
+   {
+    "assumptions": "+ the same player's different markets move together at the historical binary correlation (+0.15 for his shots 2+ and points 1+).",
+    "includes": [
+     "shared legs",
+     "nested lines",
+     "same player across markets"
+    ],
+    "p_all_lose": 0.1719,
+    "method": "Monte Carlo, 100,000 draws"
+   },
+   {
+    "assumptions": "+ the same player's different markets fully dependent (the upper bound for that kind of dependence).",
+    "includes": [
+     "shared legs",
+     "nested lines",
+     "same player across markets (bound)"
+    ],
+    "p_all_lose": 0.1837,
+    "method": "exact enumeration"
+   },
+   {
+    "assumptions": "+ a shared daily shift in every leg's TRUE probability, Normal(0, 2 points): uncertainty about the model, common to all legs that day (not estimated; shown as a range).",
+    "includes": [
+     "shared legs",
+     "nested lines",
+     "same player across markets",
+     "day-level model uncertainty"
+    ],
+    "p_all_lose": 0.1736,
+    "method": "Monte Carlo, 100,000 draws"
+   },
+   {
+    "assumptions": "+ a shared daily shift in every leg's TRUE probability, Normal(0, 4 points): uncertainty about the model, common to all legs that day (not estimated; shown as a range).",
+    "includes": [
+     "shared legs",
+     "nested lines",
+     "same player across markets",
+     "day-level model uncertainty"
+    ],
+    "p_all_lose": 0.1734,
+    "method": "Monte Carlo, 100,000 draws"
+   },
+   {
+    "assumptions": "+ a shared daily shift in every leg's TRUE probability, Normal(0, 6 points): uncertainty about the model, common to all legs that day (not estimated; shown as a range).",
+    "includes": [
+     "shared legs",
+     "nested lines",
+     "same player across markets",
+     "day-level model uncertainty"
+    ],
+    "p_all_lose": 0.174,
+    "method": "Monte Carlo, 100,000 draws"
+   }
+  ],
+  "historical_estimates": {
+   "source": "deploy/estimate_dependence.py on 89,470 skater games since 2024-10-01 (docs/validation/dependence_estimates_2026-10-10.json)",
+   "opposite_teams_same_game_points": {
+    "correlation": -0.0106,
+    "se": 0.0032,
+    "pairs": 744801
+   },
+   "same_team_same_game_points": {
+    "correlation": 0.0978,
+    "se": 0.0028,
+    "pairs": 703259
+   },
+   "shots_2plus_any_pair_in_game_or_day": {
+    "opposite_teams": {
+     "correlation": -0.0037,
+     "se": 0.0014,
+     "pairs": 744801
+    },
+    "same_team": {
+     "correlation": 0.009,
+     "se": 0.0015,
+     "pairs": 703259
+    },
+    "different_games_same_date": {
+     "correlation": 0.0002,
+     "se": 0.0004,
+     "pairs": 12877661
+    }
+   },
+   "same_player_two_markets": {
+    "shots>=2 with points>=1": {
+     "pairs": 89470,
+     "correlation": 0.1477
+    },
+    "shots>=3 with points>=1": {
+     "pairs": 89470,
+     "correlation": 0.1221
+    },
+    "shots>=2 with goals>=1": {
+     "pairs": 89470,
+     "correlation": 0.2339
+    }
+   }
+  },
+  "what_applies_to_these_tickets": "Oct 8: the five tickets use five players in five different games, so same-game dependence between different players cannot arise; the only extra dependence is Bourque's shots and points. Oct 9: Protas (WSH) and Laba (NYR) share a game (opposite teams, correlation about -0.01); Rust and Kakko are in other games. Teammates on one ticket, where the history shows real dependence for points (+0.10), do not occur in any of the eight tickets.",
+  "not_modelled": [
+   "players in one game beyond the sign and size estimated above (about -0.01 between opponents, 0 across games on a date)",
+   "any common error in the model itself that does not shift every leg equally (shown only as the daily-shift range)",
+   "dependence between days (a model that is wrong in a persistent way)"
+  ]
+ },
  "sequence_probability_using_ml_conservative": {
   "bets_in_the_record": 12,
   "players_independent_across_markets": {
@@ -1250,6 +1367,220 @@
   },
   "reading": "The legacy win model's probabilities are squeezed toward 50% (spread 0.063 against the market's 0.100). A model like that shows a large 'edge' on every big underdog by construction, and on 12 underdog sides it said 44% where the market said 34% and 2 of 12 won. 38 games cannot settle it, but it is the opposite of evidence of an edge."
  },
+ "evidence_targets": {
+  "the_620_figure": {
+   "what_it_is": "619 resolved, independent legs: the sample needed to detect that probabilities are 5 points too high (one-sided 5% test, 80% power), using the outcome variance p(1-p) at p = 0.5.",
+   "formula": "n = (1.645 + 0.8416)^2 * p(1-p) / 0.05^2",
+   "assumptions": [
+    "outcomes independent (they are not: see below)",
+    "one pooled comparison of the average prediction with the observed rate (each market tested alone needs its own sample: points and shots separately is about twice as many)",
+    "p near 0.5, the largest variance, so it overstates the need for long shots and understates nothing",
+    "a single fixed test, no allowance for looking at several bands or markets",
+    "the bias to detect is the same for every leg, but the selection effect (winner's curse) is larger for the legs with the biggest model-minus-price gap, so a pooled average understates it for the legs actually chosen"
+   ],
+   "unit": "an independent player-and-market-and-night, NOT a leg row: a player's 2+, 3+, 4+ and 5+ shots resolve together (the Oct 8 pool had 26 leg rows but 19 player-markets and 17 players; Oct 9 had 15, 14 and 12)",
+   "dependence_inflates_it": [
+    {
+     "assumption": "no shared nightly model error",
+     "design_effect": 1.12,
+     "independent_units_needed": 691,
+     "priced_game_nights_at_the_measured_rate": 42
+    },
+    {
+     "assumption": "shared nightly model error, correlation 0.02",
+     "design_effect": 1.46,
+     "independent_units_needed": 905,
+     "priced_game_nights_at_the_measured_rate": 55
+    },
+    {
+     "assumption": "shared nightly model error, correlation 0.05",
+     "design_effect": 1.98,
+     "independent_units_needed": 1226,
+     "priced_game_nights_at_the_measured_rate": 74
+    }
+   ],
+   "per_night_units_measured": {
+    "2026-10-08": {
+     "candidate_legs": 26,
+     "distinct_player_markets": 19,
+     "distinct_players": 17,
+     "games": 6
+    },
+    "2026-10-09": {
+     "candidate_legs": 15,
+     "distinct_player_markets": 14,
+     "distinct_players": 12,
+     "games": 3
+    }
+   },
+   "mean_player_markets_per_night": 16.5,
+   "mean_games_priced_per_night": 4.5,
+   "what_it_evaluates": "the legs that PASS THE EDGE FILTER (the pool a ticket can be built from), not the handful of tickets actually chosen. That is the right thing to test for selection bias, and it is a proxy: the chosen legs are the extreme end of that pool, so the shadow scorer also reports the top edge slice separately. It is NOT the general player pool, where the held-out validation (46,622 player-games) already shows the calibrated model within about a point.",
+   "so_in_practice": "About 691 to 1226 independent units, which at 16 a night is roughly 42 to 74 priced game nights, longer when fewer games are priced."
+  },
+  "the_150_figure": {
+   "what_it_is": "MIN_GAMES_FOR_A_CLAIM = 150 finished game-sides in operational/moneyline_model_path.py: below it the scoreboard says 'too few games'; at or above it the strength model may replace Elo ONLY IF the paired 95% interval of (strength - Elo) log loss lies wholly below zero.",
+   "it_is_a_floor_not_a_power_calculation": "It was set as a minimum before a verdict is allowed, not derived from an effect size. It compares two MODELS (strength vs Elo), not a model with the market, and not the bets.",
+   "what_it_can_detect": {
+    "per_game_sd_of_the_paired_log_loss_difference": 0.1146,
+    "source": "1,312 held-out games, docs/validation/moneyline_model_comparison.json (the paired interval implies this sd)",
+    "smallest_gap_150_games_can_detect": 0.0233,
+    "gap_the_held_out_data_actually_shows": 0.0058,
+    "games_needed_to_detect_that_gap": 2414
+   },
+   "against_the_market": {
+    "per_game_sd_legacy_model_minus_market_log_loss_on_38_live_games": 0.1553,
+    "mean_gap_so_far": "+0.017 (the model is WORSE than the no-vig market)",
+    "games_needed_to_detect_a_0.01_gap": 1492
+   },
+   "selected_bets_are_a_different_and_harder_test": "A moneyline bet is placed only where the model disagrees with the market. The live record shows 1 BET in 38 games; even at 1 game in 6 (illustrative) 150 games give about 25 bets, and to see a 5-point overstatement among BETS takes about 619 of them: about 3,714 games at 1 in 6, about 23,522 at the observed 1 in 38. A season has about 1,300 games. The moneyline singles cannot be validated forward in any practical time, and there are no historical moneyline prices here to test them on.",
+   "assumptions": [
+    "independent games (reasonable; games on one night are very weakly related)",
+    "one pooled comparison, one-sided 5%, 80% power",
+    "evaluates ALL games, not the bets",
+    "the variance figures come from one held-out season and 38 live games"
+   ]
+  }
+ },
+ "policy_tradeoffs_entry_information_only": {
+  "basis": "the tickets the rules in force on 2026-10-08/09 qualified (65-101 on Oct 8, 28 on Oct 9), reconstructed from the stored selection reports; entry information only",
+  "days": {
+   "2026-10-08": {
+    "qualified_under_the_old_rules": {
+     "tickets": 101,
+     "median_hit_chance": 0.13,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.92,
+     "median_margin_after_3pt_haircut": 0.057
+    },
+    "hit_chance_at_least_20pct": {
+     "tickets": 17,
+     "median_hit_chance": 0.252,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.71,
+     "median_margin_after_3pt_haircut": 0.044
+    },
+    "hit_chance_at_least_25pct": {
+     "tickets": 10,
+     "median_hit_chance": 0.273,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.8,
+     "median_margin_after_3pt_haircut": 0.047
+    },
+    "hit_chance_at_least_30pct": {
+     "tickets": 2,
+     "median_hit_chance": 0.387,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.0,
+     "median_margin_after_3pt_haircut": 0.047
+    },
+    "hit_chance_at_least_35pct": {
+     "tickets": 2,
+     "median_hit_chance": 0.387,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.0,
+     "median_margin_after_3pt_haircut": 0.047
+    },
+    "hit_chance_at_least_40pct": {
+     "tickets": 0
+    },
+    "edge_survives_3pt_haircut": {
+     "tickets": 101,
+     "median_hit_chance": 0.13,
+     "best_hit_chance": 0.387,
+     "share_with_a_points_or_goals_leg": 0.92,
+     "median_margin_after_3pt_haircut": 0.057
+    },
+    "edge_survives_5pt_haircut": {
+     "tickets": 7,
+     "median_hit_chance": 0.165,
+     "best_hit_chance": 0.279,
+     "share_with_a_points_or_goals_leg": 1.0,
+     "median_margin_after_3pt_haircut": 0.144
+    },
+    "edge_survives_8pt_haircut": {
+     "tickets": 0
+    },
+    "floor_30_and_5pt_haircut": {
+     "tickets": 0
+    }
+   },
+   "2026-10-09": {
+    "qualified_under_the_old_rules": {
+     "tickets": 28,
+     "median_hit_chance": 0.061,
+     "best_hit_chance": 0.246,
+     "share_with_a_points_or_goals_leg": 1.0,
+     "median_margin_after_3pt_haircut": 0.089
+    },
+    "hit_chance_at_least_20pct": {
+     "tickets": 2,
+     "median_hit_chance": 0.246,
+     "best_hit_chance": 0.246,
+     "share_with_a_points_or_goals_leg": 1.0,
+     "median_margin_after_3pt_haircut": 0.076
+    },
+    "hit_chance_at_least_25pct": {
+     "tickets": 0
+    },
+    "hit_chance_at_least_30pct": {
+     "tickets": 0
+    },
+    "hit_chance_at_least_35pct": {
+     "tickets": 0
+    },
+    "hit_chance_at_least_40pct": {
+     "tickets": 0
+    },
+    "edge_survives_3pt_haircut": {
+     "tickets": 28,
+     "median_hit_chance": 0.061,
+     "best_hit_chance": 0.246,
+     "share_with_a_points_or_goals_leg": 1.0,
+     "median_margin_after_3pt_haircut": 0.089
+    },
+    "edge_survives_5pt_haircut": {
+     "tickets": 7,
+     "median_hit_chance": 0.063,
+     "best_hit_chance": 0.084,
+     "share_with_a_points_or_goals_leg": 1.0,
+     "median_margin_after_3pt_haircut": 0.309
+    },
+    "edge_survives_8pt_haircut": {
+     "tickets": 0
+    },
+    "floor_30_and_5pt_haircut": {
+     "tickets": 0
+    }
+   }
+  },
+  "why_each_element": {
+   "hit_chance_floor": {
+    "what_it_means": "A ticket of two legs reaches 30% only if the legs average about 55% each (0.55 x 0.55 = 0.30); three legs need about 67% each. So a 30% floor is mostly a requirement for strong legs.",
+    "validation_fact": "The held-out season has the most data where such legs live: shots 2+ at 50-70% has 13,432 player-games; points 1+ at 50-60% has 5,444 and above 50% is rare; goals 1+ above 40% has 111. The raw model over-predicted below about 40% (shots 2+ at 20-30%: said 25.8%, happened 20.7%) and under-predicted above 50%. The shipped model is calibrated on top of that; the bin-level table for the calibrated model is not stored.",
+    "side_effect": "It removes most tickets with a points or goals leg, because those legs rarely exceed 55%. That is a consequence of the arithmetic, not a judgement about the market; the live signal on points legs is weak and unvalidated against prices.",
+    "cost": "Fewer tickets and some empty days (Oct 9 would have been empty at 25% and at 30%).",
+    "what_it_is_not": "Not validated. 30% is a reading of 'strong'; 25% and 35% are as defensible. The owner sets it."
+   },
+   "value_after_a_haircut": {
+    "what_it_means": "The ticket must still show an edge after every leg's probability is lowered by 5 points.",
+    "validation_fact": "The measured between-player model error is 8.1 points for shots 2+ and 9.9 for points 1+ (docs/validation/selector_audit_2026-10-08.json), so 5 points is about 0.6 and 0.5 of a standard deviation: a modest margin of safety, not a worst case. The 3-point haircut in force was about a third of a standard deviation.",
+    "side_effect": "Alone it favours long shots (their edges are larger in relative terms): on Oct 9 it would have kept two tickets whose best hit chance was 8.4%. It only makes sense together with the floor.",
+    "cost": "Fewer tickets.",
+    "what_it_is_not": "Not validated. It is a stand-in for the model's uncertainty until the shadow log measures it on the legs that are actually selected."
+   },
+   "exposure_one_ticket_per_player": {
+    "what_it_means": "A player may be on one ticket a day (the rules in force allowed two, and before 2026-10-09 any number).",
+    "evidence": "Shared legs raise the chance that no ticket wins (Oct 8: 29.9% against 18.2%; Oct 9: 57.2% against 50.2%): the replay in this report. With one per player the shared-leg effect disappears by construction.",
+    "cost": "Fewer tickets built from the same best legs: the book spreads over more players but the best player is used once.",
+    "what_it_is_not": "It reduces concentration; it does not add value. It cannot make a ticket better, only stop one bad night sinking several tickets."
+   },
+   "five_slots_empty_allowed": {
+    "what_it_means": "Up to five tickets; zero is a normal day. The page says why a slot is empty.",
+    "evidence": "The count of five was never evidence-based; the earlier proposal of three is withdrawn."
+   }
+  }
+ },
  "candidate_pool_calibration_oct_8_and_9": {
   "all_candidate_legs": {
    "legs": 41,
@@ -1354,7 +1685,8 @@
    "floor_30": "Today's rules + estimated hit chance of at least 30%",
    "margin_5pt": "Today's rules + the edge must survive a 5-point haircut on every leg",
    "one_per_player": "Today's rules + each player on at most one ticket",
-   "conservative_candidate": "25% floor + 5-point haircut + one ticket per player + at most 3 a day"
+   "proposed_restart": "THE PROPOSED RESTART POLICY: hit chance of at least 25%, edge of at least +3% after the 3-point haircut, one ticket per player, two per game, up to five a day (not validated, not approved)",
+   "earlier_draft_30_and_5pt": "The earlier draft (30% floor + 5-point haircut + one per player, two per game): too strict to be practical on entry information (kept for the record)"
   },
   "days": {
    "2026-10-08": {
@@ -1422,8 +1754,7 @@
        "price": 483,
        "ev_after_3pt_haircut": 0.0254
       }
-     ],
-     "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     ]
     },
     "variants": {
      "rules_on_oct_8": {
@@ -1484,8 +1815,7 @@
         "price": 483,
         "ev_after_3pt_haircut": 0.0254
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "current_code": {
       "label": "Rules in the code today (at most 2 tickets per player)",
@@ -1545,8 +1875,7 @@
         "price": 549,
         "ev_after_3pt_haircut": 0.0421
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "floor_25": {
       "label": "Today's rules + estimated hit chance of at least 25%",
@@ -1588,8 +1917,7 @@
         "price": 320,
         "ev_after_3pt_haircut": 0.0185
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "floor_30": {
       "label": "Today's rules + estimated hit chance of at least 30%",
@@ -1622,8 +1950,7 @@
         "price": 213,
         "ev_after_3pt_haircut": 0.0005
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 2 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "margin_5pt": {
       "label": "Today's rules + the edge must survive a 5-point haircut on every leg",
@@ -1665,8 +1992,7 @@
         "price": 549,
         "ev_after_3pt_haircut": 0.1132
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "one_per_player": {
       "label": "Today's rules + each player on at most one ticket",
@@ -1726,33 +2052,35 @@
         "price": 950,
         "ev_after_3pt_haircut": 0.0088
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 5 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
-     "conservative_candidate": {
-      "label": "25% floor + 5-point haircut + one ticket per player + at most 3 a day",
+     "proposed_restart": {
+      "label": "THE PROPOSED RESTART POLICY: hit chance of at least 25%, edge of at least +3% after the 3-point haircut, one ticket per player, two per game, up to five a day (not validated, not approved)",
       "tickets": 1,
       "distinct_players": 2,
       "distinct_legs": 2,
-      "expected_winning_tickets": 0.28,
-      "chance_no_ticket_wins_exact_shared_legs": 0.721,
-      "chance_no_ticket_wins_if_independent_WRONG": 0.721,
-      "model_expected_profit_per_10_dollars_staked": 2.89,
-      "expected_profit_if_every_leg_were_5_points_lower": 0.52,
-      "best_estimated_hit_chance": 0.279,
-      "worst_estimated_hit_chance": 0.279,
+      "expected_winning_tickets": 0.39,
+      "chance_no_ticket_wins_exact_shared_legs": 0.613,
+      "chance_no_ticket_wins_if_independent_WRONG": 0.613,
+      "model_expected_profit_per_10_dollars_staked": 1.55,
+      "expected_profit_if_every_leg_were_5_points_lower": -0.23,
+      "best_estimated_hit_chance": 0.387,
+      "worst_estimated_hit_chance": 0.387,
       "tickets_chosen": [
        {
         "legs": [
-         "Mavrik Bourque 1+ point",
-         "Blake Coleman 2+ shots on goal"
+         "Blake Coleman 2+ shots on goal",
+         "Anders Lee 2+ shots on goal"
         ],
-        "hit_chance": 0.279,
-        "price": 361,
-        "ev_after_3pt_haircut": 0.144
+        "hit_chance": 0.387,
+        "price": 198,
+        "ev_after_3pt_haircut": 0.0466
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 1 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
+     },
+     "earlier_draft_30_and_5pt": {
+      "label": "The earlier draft (30% floor + 5-point haircut + one per player, two per game): too strict to be practical on entry information (kept for the record)",
+      "tickets": 0
      }
     }
    },
@@ -1801,8 +2129,7 @@
        "price": 611,
        "ev_after_3pt_haircut": 0.0042
       }
-     ],
-     "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+     ]
     },
     "variants": {
      "rules_on_oct_8": {
@@ -1845,8 +2172,7 @@
         "price": 611,
         "ev_after_3pt_haircut": 0.0042
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "current_code": {
       "label": "Rules in the code today (at most 2 tickets per player)",
@@ -1888,8 +2214,7 @@
         "price": 611,
         "ev_after_3pt_haircut": 0.0042
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "0 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "floor_25": {
       "label": "Today's rules + estimated hit chance of at least 25%",
@@ -1930,8 +2255,7 @@
         "price": 2320,
         "ev_after_3pt_haircut": 0.2877
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "2 of 2 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
      "one_per_player": {
       "label": "Today's rules + each player on at most one ticket",
@@ -1973,11 +2297,14 @@
         "price": 2320,
         "ev_after_3pt_haircut": 0.2877
        }
-      ],
-      "for_completeness_only__what_happened_to_these_tickets_wins": "1 of 3 (not used to choose any rule; a handful of tickets cannot validate or reject one)"
+      ]
      },
-     "conservative_candidate": {
-      "label": "25% floor + 5-point haircut + one ticket per player + at most 3 a day",
+     "proposed_restart": {
+      "label": "THE PROPOSED RESTART POLICY: hit chance of at least 25%, edge of at least +3% after the 3-point haircut, one ticket per player, two per game, up to five a day (not validated, not approved)",
+      "tickets": 0
+     },
+     "earlier_draft_30_and_5pt": {
+      "label": "The earlier draft (30% floor + 5-point haircut + one per player, two per game): too strict to be practical on entry information (kept for the record)",
       "tickets": 0
      }
     }

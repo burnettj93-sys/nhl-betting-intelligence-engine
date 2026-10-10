@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import math
 import json
 import re
 import sqlite3
@@ -187,6 +188,43 @@ def streak_probability(tickets: list[dict], streak_ids: list[str], moneyline_ps:
         nine[name] = {"moneyline_win_probability": q, "all_streak_bets_lose": round(pm.prob_all_lose([t["legs"] for t in streak_tickets], extra_independent=[q]), 4)}
     res["including_the_moneyline_single"] = nine
     return res
+
+
+DEPENDENCE_ESTIMATES = REPO / "docs" / "validation" / "dependence_estimates_2026-10-10.json"
+
+
+def dependence_sensitivity(tickets: list[dict], streak_ids: list[str], n: int = 100_000) -> dict:
+    """The streak probability under successively fuller dependence assumptions. EVERY figure is conditional on the recorded probabilities being the true ones (before any shading) and on the
+    assumptions in the row; it is not the probability of the streak 'in reality'. Which dependencies each version includes is spelled out so the difference between them is visible."""
+    st = [{"day": t["date"], "legs": t["legs"]} for t in tickets if t["ticket_id"] in streak_ids]
+    legs = [t["legs"] for t in st]
+    est = json.loads(DEPENDENCE_ESTIMATES.read_text()) if DEPENDENCE_ESTIMATES.exists() else {}
+    phi = (est.get("same_player_two_markets") or {}).get("shots>=2 with points>=1", {}).get("correlation", 0.15)
+    rows = [
+        {"assumptions": "Tickets share legs (a leg on two tickets is one event; a player's 2+ and 3+ shots are one nested event). Different players independent. The same player's different markets independent.",
+         "includes": ["shared legs", "nested lines"], "p_all_lose": round(pm.prob_all_lose(legs), 4), "method": "exact enumeration"},
+        {"assumptions": f"+ the same player's different markets move together at the historical binary correlation ({phi:+.2f} for his shots 2+ and points 1+).",
+         "includes": ["shared legs", "nested lines", "same player across markets"], "p_all_lose": round(pm.prob_all_lose_dependent(st, n=n, same_player_phi=phi), 4), "method": f"Monte Carlo, {n:,} draws"},
+        {"assumptions": "+ the same player's different markets fully dependent (the upper bound for that kind of dependence).",
+         "includes": ["shared legs", "nested lines", "same player across markets (bound)"], "p_all_lose": round(pm.prob_all_lose(legs, scope=pm.SAME_PLAYER_TOGETHER), 4), "method": "exact enumeration"},
+    ]
+    for sd in (0.02, 0.04, 0.06):
+        rows.append({"assumptions": f"+ a shared daily shift in every leg's TRUE probability, Normal(0, {sd * 100:.0f} points): uncertainty about the model, common to all legs that day (not estimated; shown as a range).",
+                     "includes": ["shared legs", "nested lines", "same player across markets", "day-level model uncertainty"],
+                     "p_all_lose": round(pm.prob_all_lose_dependent(st, n=n, same_player_phi=phi, day_shift_sd=sd), 4), "method": f"Monte Carlo, {n:,} draws"})
+    return {"label": "CONDITIONAL on the model's recorded probabilities being the true ones, and on the stated dependence structure. Not the probability of the streak 'in reality'.",
+            "rows": rows,
+            "historical_estimates": {"source": "deploy/estimate_dependence.py on 89,470 skater games since 2024-10-01 (docs/validation/dependence_estimates_2026-10-10.json)",
+                                     "opposite_teams_same_game_points": (est.get("markets") or {}).get("points>=1", {}).get("opposite_teams"),
+                                     "same_team_same_game_points": (est.get("markets") or {}).get("points>=1", {}).get("same_team"),
+                                     "shots_2plus_any_pair_in_game_or_day": {k: (est.get("markets") or {}).get("shots>=2", {}).get(k) for k in ("opposite_teams", "same_team", "different_games_same_date")},
+                                     "same_player_two_markets": est.get("same_player_two_markets")},
+            "what_applies_to_these_tickets": ("Oct 8: the five tickets use five players in five different games, so same-game dependence between different players cannot arise; the only extra dependence is Bourque's "
+                                              "shots and points. Oct 9: Protas (WSH) and Laba (NYR) share a game (opposite teams, correlation about -0.01); Rust and Kakko are in other games. Teammates on one ticket, "
+                                              "where the history shows real dependence for points (+0.10), do not occur in any of the eight tickets."),
+            "not_modelled": ["players in one game beyond the sign and size estimated above (about -0.01 between opponents, 0 across games on a date)",
+                             "any common error in the model itself that does not shift every leg equally (shown only as the daily-shift range)",
+                             "dependence between days (a model that is wrong in a persistent way)"]}
 
 
 def sequence_probability(rows: list[dict], tickets: list[dict], ml_p: float, tail: int, wins_seen: int, n: int = 100_000) -> dict:
@@ -371,11 +409,6 @@ def _portfolio(picked: list[dict], games: dict) -> dict:
            "expected_profit_if_every_leg_were_5_points_lower": round(sum(10 * (_shaded_p(c, 0.05) * dd - 1) for c, dd in zip(picked, d)), 2),
            "best_estimated_hit_chance": round(max(c["p"] for c in picked), 3), "worst_estimated_hit_chance": round(min(c["p"] for c in picked), 3),
            "tickets_chosen": [{"legs": [l["label"] if "label" in l else l["name"] for l in c["legs"]], "hit_chance": round(c["p"], 3), "price": round(c["price"]), "ev_after_3pt_haircut": round(c["ev_haircut"], 4)} for c in picked]}
-    wins = 0
-    for c in picked:
-        if all(leg_result({"game_id": l["game"], "participant_id": l["player"], "market_family": l["market"], "threshold": l["threshold"]}, games).get("hit") for l in c["legs"]):
-            wins += 1
-    out["for_completeness_only__what_happened_to_these_tickets_wins"] = f"{wins} of {len(picked)} (not used to choose any rule; a handful of tickets cannot validate or reject one)"
     return out
 
 
@@ -414,6 +447,135 @@ def pool_calibration(games: dict, rows: list[dict]) -> dict:
                        f"({row([x for x in legs if x['market'] == 'points']).get('observed_hits')} hits against {row([x for x in legs if x['market'] == 'points']).get('expected_hits')} expected); shots legs were in line. "
                        "Six slices were looked at, so one that looks unusual is expected by chance alone; this is a thing to WATCH, not a finding. It is exactly the question the shadow log "
                        "(operational/shadow_selection.py) now collects forward, before the games, for every priced leg.")}
+    return out
+
+
+def pool_units(games: dict, rows: list[dict]) -> dict:
+    """How many INDEPENDENT-ish units the candidate pool gives per night. A player's 2+, 3+, 4+ and 5+ shots are one nested event, so the unit is the player-and-market, not the leg row."""
+    ledger_legs = {}
+    for r in rows:
+        if r["is_combo"] and r["origin"] == "AUTOMATIC" and r["created_at_utc"].startswith("2026-10-09"):
+            for l in json.loads(r["legs_json"]):
+                th = int(l["threshold"])
+                lab = {"PLAYER_POINTS": f"{l['participant_name']} {th}+ point", "PLAYER_SOG_ALTERNATE": f"{l['participant_name']} {th}+ shots on goal"}[l["market_family"]]
+                ledger_legs[lab] = float(l["conservative_probability"])
+    out = {}
+    for day, builder in (("2026-10-08", lambda: oct8_pool(games)), ("2026-10-09", lambda: oct9_pool(games, ledger_legs))):
+        legs, _ = builder()
+        out[day] = {"candidate_legs": len(legs), "distinct_player_markets": len({(l.game_id, l.participant_id, l.market_family) for l in legs}), "distinct_players": len({(l.game_id, l.participant_id) for l in legs}),
+                    "games": len({l.game_id for l in legs})}
+    return out
+
+
+def evidence_targets(games: dict, rows: list[dict]) -> dict:
+    """What the 620-leg and 150-game targets assume, what they test, and what they do NOT test. Every figure is computed here from the formulas in operational/postmortem_math.py."""
+    units = pool_units(games, rows)
+    nights = list(units.values())
+    per_night = sum(u["distinct_player_markets"] for u in nights) / len(nights)
+    games_per_night = sum(u["games"] for u in nights) / len(nights)
+    est = json.loads(DEPENDENCE_ESTIMATES.read_text()) if DEPENDENCE_ESTIMATES.exists() else {}
+    pts = (est.get("markets") or {}).get("points>=1", {})
+    shots = (est.get("markets") or {}).get("shots>=2", {})
+    icc_game_points = ((pts.get("same_team") or {}).get("correlation", 0.0) + (pts.get("opposite_teams") or {}).get("correlation", 0.0)) / 2
+    icc_game_shots = ((shots.get("same_team") or {}).get("correlation", 0.0) + (shots.get("opposite_teams") or {}).get("correlation", 0.0)) / 2
+    m_game = per_night / games_per_night
+    base = pm.legs_needed(0.05)
+    scenarios = []
+    for label, icc_night in (("no shared nightly model error", 0.0), ("shared nightly model error, correlation 0.02", 0.02), ("shared nightly model error, correlation 0.05", 0.05)):
+        deff = pm.design_effect(per_night, icc_night) * pm.design_effect(m_game, max(icc_game_points, 0.0))
+        n = pm.legs_needed(0.05, deff=deff)
+        scenarios.append({"assumption": label, "design_effect": round(deff, 2), "independent_units_needed": n, "priced_game_nights_at_the_measured_rate": round(n / per_night)})
+    sd_models = 0.1146                                        # per-game sd of the paired log-loss difference, strength vs Elo, 1,312 held-out games (docs/validation/moneyline_model_comparison.json)
+    sd_legacy = 0.1553                                        # per-game sd of (legacy win model - market no-vig) log loss over the 38 live games
+    return {
+        "the_620_figure": {
+            "what_it_is": f"{base} resolved, independent legs: the sample needed to detect that probabilities are 5 points too high (one-sided 5% test, 80% power), using the outcome variance p(1-p) at p = 0.5.",
+            "formula": "n = (1.645 + 0.8416)^2 * p(1-p) / 0.05^2",
+            "assumptions": ["outcomes independent (they are not: see below)", "one pooled comparison of the average prediction with the observed rate (each market tested alone needs its own sample: points and shots separately is about twice as many)",
+                            "p near 0.5, the largest variance, so it overstates the need for long shots and understates nothing", "a single fixed test, no allowance for looking at several bands or markets",
+                            "the bias to detect is the same for every leg, but the selection effect (winner's curse) is larger for the legs with the biggest model-minus-price gap, so a pooled average understates it for the legs actually chosen"],
+            "unit": "an independent player-and-market-and-night, NOT a leg row: a player's 2+, 3+, 4+ and 5+ shots resolve together (the Oct 8 pool had 26 leg rows but 19 player-markets and 17 players; Oct 9 had 15, 14 and 12)",
+            "dependence_inflates_it": scenarios,
+            "per_night_units_measured": units, "mean_player_markets_per_night": round(per_night, 1), "mean_games_priced_per_night": round(games_per_night, 1),
+            "what_it_evaluates": ("the legs that PASS THE EDGE FILTER (the pool a ticket can be built from), not the handful of tickets actually chosen. That is the right thing to test for selection bias, and it is a proxy: the chosen legs are the "
+                                  "extreme end of that pool, so the shadow scorer also reports the top edge slice separately. It is NOT the general player pool, where the held-out validation (46,622 player-games) already shows the "
+                                  "calibrated model within about a point."),
+            "so_in_practice": f"About {scenarios[0]['independent_units_needed']} to {scenarios[2]['independent_units_needed']} independent units, which at {per_night:.0f} a night is roughly {scenarios[0]['priced_game_nights_at_the_measured_rate']} to {scenarios[2]['priced_game_nights_at_the_measured_rate']} priced game nights, longer when fewer games are priced."},
+        "the_150_figure": {
+            "what_it_is": "MIN_GAMES_FOR_A_CLAIM = 150 finished game-sides in operational/moneyline_model_path.py: below it the scoreboard says 'too few games'; at or above it the strength model may replace Elo ONLY IF the paired 95% interval of (strength - Elo) log loss lies wholly below zero.",
+            "it_is_a_floor_not_a_power_calculation": "It was set as a minimum before a verdict is allowed, not derived from an effect size. It compares two MODELS (strength vs Elo), not a model with the market, and not the bets.",
+            "what_it_can_detect": {"per_game_sd_of_the_paired_log_loss_difference": sd_models, "source": "1,312 held-out games, docs/validation/moneyline_model_comparison.json (the paired interval implies this sd)",
+                                   "smallest_gap_150_games_can_detect": round((1.645 + 0.8416) * sd_models / math.sqrt(150), 4), "gap_the_held_out_data_actually_shows": 0.0058,
+                                   "games_needed_to_detect_that_gap": pm.games_needed_for_log_loss_gap(sd_models, 0.0058)},
+            "against_the_market": {"per_game_sd_legacy_model_minus_market_log_loss_on_38_live_games": sd_legacy, "mean_gap_so_far": "+0.017 (the model is WORSE than the no-vig market)",
+                                   "games_needed_to_detect_a_0.01_gap": pm.games_needed_for_log_loss_gap(sd_legacy, 0.01)},
+            "selected_bets_are_a_different_and_harder_test": ("A moneyline bet is placed only where the model disagrees with the market. The live record shows 1 BET in 38 games; even at 1 game in 6 "
+                                                              f"(illustrative) 150 games give about 25 bets, and to see a 5-point overstatement among BETS takes about {pm.legs_needed(0.05)} of them: about {round(pm.legs_needed(0.05) * 6):,} games "
+                                                              f"at 1 in 6, about {round(pm.legs_needed(0.05) * 38):,} at the observed 1 in 38. A season has about 1,300 games. The moneyline singles cannot be validated forward in any practical time, "
+                                                              "and there are no historical moneyline prices here to test them on."),
+            "assumptions": ["independent games (reasonable; games on one night are very weakly related)", "one pooled comparison, one-sided 5%, 80% power", "evaluates ALL games, not the bets",
+                            "the variance figures come from one held-out season and 38 live games"]},
+    }
+
+
+def policy_tradeoffs(games: dict, rows: list[dict]) -> dict:
+    """What each element of the proposed policy does to the candidate tickets of the two audited days, counted from ENTRY INFORMATION ONLY (no result is used anywhere in this function),
+    next to the validation facts that motivate it. The aim is to show cost and effect, not to pick whatever would have won."""
+    ledger_legs = {}
+    for r in rows:
+        if r["is_combo"] and r["origin"] == "AUTOMATIC" and r["created_at_utc"].startswith("2026-10-09"):
+            for l in json.loads(r["legs_json"]):
+                th = int(l["threshold"])
+                lab = {"PLAYER_POINTS": f"{l['participant_name']} {th}+ point", "PLAYER_SOG_ALTERNATE": f"{l['participant_name']} {th}+ shots on goal"}[l["market_family"]]
+                ledger_legs[lab] = float(l["conservative_probability"])
+    days = {}
+    for day, builder in (("2026-10-08", lambda: oct8_pool(games)), ("2026-10-09", lambda: oct9_pool(games, ledger_legs))):
+        legs, _ = builder()
+        days[day] = _candidates(legs)
+
+    def stats(c):
+        n = len(c)
+        if not n:
+            return {"tickets": 0}
+        pts = sum(1 for t in c if any("POINTS" in l["market"] or "GOALS" in l["market"] for l in t["legs"]))
+        return {"tickets": n, "median_hit_chance": round(sorted(t["p"] for t in c)[n // 2], 3), "best_hit_chance": round(max(t["p"] for t in c), 3),
+                "share_with_a_points_or_goals_leg": round(pts / n, 2), "median_margin_after_3pt_haircut": round(sorted(t["ev_haircut"] for t in c)[n // 2], 3)}
+
+    def shaded_ok(t, shade):
+        return _shaded_p(t, shade) * _dec(t["price"]) - 1.0 >= 0.0
+    out = {"basis": "the tickets the rules in force on 2026-10-08/09 qualified (65-101 on Oct 8, 28 on Oct 9), reconstructed from the stored selection reports; entry information only", "days": {}}
+    for day, c in days.items():
+        out["days"][day] = {
+            "qualified_under_the_old_rules": stats(c),
+            **{f"hit_chance_at_least_{int(f * 100)}pct": stats([t for t in c if t["p"] >= f]) for f in (0.20, 0.25, 0.30, 0.35, 0.40)},
+            **{f"edge_survives_{int(sh * 100)}pt_haircut": stats([t for t in c if shaded_ok(t, sh)]) for sh in (0.03, 0.05, 0.08)},
+            "floor_30_and_5pt_haircut": stats([t for t in c if t["p"] >= 0.30 and shaded_ok(t, 0.05)])}
+    v = json.loads(VALIDATION.read_text())["markets"]
+    dens = {m: {b["bin"]: b["n"] for b in v[m]["calibration_raw"]} for m in ("shots>=2", "points>=1", "goals>=1")}
+    sel = json.loads(SELECTOR_OCT8.read_text())["model_uncertainty_2025_26"]
+    out["why_each_element"] = {
+        "hit_chance_floor": {
+            "what_it_means": "A ticket of two legs reaches 30% only if the legs average about 55% each (0.55 x 0.55 = 0.30); three legs need about 67% each. So a 30% floor is mostly a requirement for strong legs.",
+            "validation_fact": ("The held-out season has the most data where such legs live: shots 2+ at 50-70% has " + f"{dens['shots>=2'].get('0.5-0.6', 0) + dens['shots>=2'].get('0.6-0.7', 0):,} player-games; "
+                                f"points 1+ at 50-60% has {dens['points>=1'].get('0.5-0.6', 0):,} and above 50% is rare; goals 1+ above 40% has {dens['goals>=1'].get('0.4-0.5', 0)}. The raw model over-predicted below about 40% "
+                                "(shots 2+ at 20-30%: said 25.8%, happened 20.7%) and under-predicted above 50%. The shipped model is calibrated on top of that; the bin-level table for the calibrated model is not stored."),
+            "side_effect": "It removes most tickets with a points or goals leg, because those legs rarely exceed 55%. That is a consequence of the arithmetic, not a judgement about the market; the live signal on points legs is weak and unvalidated against prices.",
+            "cost": "Fewer tickets and some empty days (Oct 9 would have been empty at 25% and at 30%).",
+            "what_it_is_not": "Not validated. 30% is a reading of 'strong'; 25% and 35% are as defensible. The owner sets it."},
+        "value_after_a_haircut": {
+            "what_it_means": "The ticket must still show an edge after every leg's probability is lowered by 5 points.",
+            "validation_fact": f"The measured between-player model error is {sel['shots>=2']['between_player_model_error_sd'] * 100:.1f} points for shots 2+ and {sel['points>=1']['between_player_model_error_sd'] * 100:.1f} for points 1+ "
+                               f"(docs/validation/selector_audit_2026-10-08.json), so 5 points is about {5 / (sel['shots>=2']['between_player_model_error_sd'] * 100):.1f} and {5 / (sel['points>=1']['between_player_model_error_sd'] * 100):.1f} of a standard deviation: "
+                               "a modest margin of safety, not a worst case. The 3-point haircut in force was about a third of a standard deviation.",
+            "side_effect": "Alone it favours long shots (their edges are larger in relative terms): on Oct 9 it would have kept two tickets whose best hit chance was 8.4%. It only makes sense together with the floor.",
+            "cost": "Fewer tickets.", "what_it_is_not": "Not validated. It is a stand-in for the model's uncertainty until the shadow log measures it on the legs that are actually selected."},
+        "exposure_one_ticket_per_player": {
+            "what_it_means": "A player may be on one ticket a day (the rules in force allowed two, and before 2026-10-09 any number).",
+            "evidence": "Shared legs raise the chance that no ticket wins (Oct 8: 29.9% against 18.2%; Oct 9: 57.2% against 50.2%): the replay in this report. With one per player the shared-leg effect disappears by construction.",
+            "cost": "Fewer tickets built from the same best legs: the book spreads over more players but the best player is used once.",
+            "what_it_is_not": "It reduces concentration; it does not add value. It cannot make a ticket better, only stop one bad night sinking several tickets."},
+        "five_slots_empty_allowed": {"what_it_means": "Up to five tickets; zero is a normal day. The page says why a slot is empty.", "evidence": "The count of five was never evidence-based; the earlier proposal of three is withdrawn."},
+    }
     return out
 
 
@@ -505,11 +667,13 @@ def run(rows: list[dict] | None = None) -> dict:
                                          "not_verifiable": [c["id"] for c in checks if not c.get("verified")], "tickets": checks},
         "exposure_by_day": exposure_by_day(tickets),
         "streak_probability": streak_probability(tickets, streak_ids, ml_ps) if ml_ps else None,
+        "streak_probability_dependence_sensitivity": dependence_sensitivity(tickets, streak_ids) if ml_ps else None,
         "sequence_probability_using_ml_conservative": sequence_probability(rows, tickets, ml_ps.get("model_conservative", 0.4), streak["streak_length"], streak["wins"]) if ml_ps else None,
         "recorded_legs": {"unique_legs": len(legs), "calibration": calibration_of_recorded_legs(legs), "evidence_strength": evidence_strength(legs), "legs": legs},
         "ticket_acceptance_at_entry": ticket_acceptance(tickets, rows), "hit_chance_floors_by_entry_information_only": hit_floor_table(tickets),
         "what_decided_each_ticket": what_decided_each_ticket(checks, rows),
         "validation_evidence": validation_evidence(), "moneyline_single_bet_evidence": moneyline_evidence(),
+        "evidence_targets": evidence_targets(games, rows), "policy_tradeoffs_entry_information_only": policy_tradeoffs(games, rows),
         "candidate_pool_calibration_oct_8_and_9": pool_calibration(games, rows),
         "replay_of_the_original_decisions": replay(rows, games),
     }

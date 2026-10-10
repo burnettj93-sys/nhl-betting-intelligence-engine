@@ -1,0 +1,91 @@
+{
+ "since": "2024-10-01",
+ "player_games": 89470,
+ "games": 2689,
+ "players_per_game": 33.3,
+ "method": "average product of standardised surprises (hit minus the player's own prior-30-game rate, over sqrt(p(1-p))) between two players; 0 = unrelated",
+ "markets": {
+  "points>=1": {
+   "opposite_teams": {
+    "correlation": -0.0106,
+    "se": 0.0032,
+    "pairs": 744801
+   },
+   "same_team": {
+    "correlation": 0.0978,
+    "se": 0.0028,
+    "pairs": 703259
+   },
+   "different_games_same_date": {
+    "correlation": -0.0003,
+    "se": 0.0007,
+    "pairs": 12877661
+   }
+  },
+  "shots>=2": {
+   "opposite_teams": {
+    "correlation": -0.0037,
+    "se": 0.0014,
+    "pairs": 744801
+   },
+   "same_team": {
+    "correlation": 0.009,
+    "se": 0.0015,
+    "pairs": 703259
+   },
+   "different_games_same_date": {
+    "correlation": 0.0002,
+    "se": 0.0004,
+    "pairs": 12877661
+   }
+  },
+  "shots>=3": {
+   "opposite_teams": {
+    "correlation": -0.0061,
+    "se": 0.0015,
+    "pairs": 744801
+   },
+   "same_team": {
+    "correlation": 0.0102,
+    "se": 0.0016,
+    "pairs": 703259
+   },
+   "different_games_same_date": {
+    "correlation": 0.001,
+    "se": 0.0004,
+    "pairs": 12877661
+   }
+  },
+  "goals>=1": {
+   "opposite_teams": {
+    "correlation": -0.0053,
+    "se": 0.0014,
+    "pairs": 744801
+   },
+   "same_team": {
+    "correlation": 0.0012,
+    "se": 0.0012,
+    "pairs": 703259
+   },
+   "different_games_same_date": {
+    "correlation": 0.0,
+    "se": 0.0003,
+    "pairs": 12877661
+   }
+  }
+ },
+ "same_player_two_markets": {
+  "shots>=2 with points>=1": {
+   "pairs": 89470,
+   "correlation": 0.1477
+  },
+  "shots>=3 with points>=1": {
+   "pairs": 89470,
+   "correlation": 0.1221
+  },
+  "shots>=2 with goals>=1": {
+   "pairs": 89470,
+   "correlation": 0.2339
+  }
+ }
+}

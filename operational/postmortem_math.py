@@ -152,3 +152,77 @@ def poisson_binomial(ps: list[float]) -> dict:
     mean = sum(ps)
     sd = math.sqrt(sum(p * (1 - p) for p in ps))
     return {"mean": mean, "sd": sd, "cdf": lambda k: sum(dist[: k + 1]), "dist": dist}
+
+
+# --------------------------------------------------------------------- dependence beyond shared legs ----
+
+def _phi(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def latent_from_phi(phi_corr: float) -> float:
+    """The correlation of two latent normals that gives two ~50% events this binary (phi) correlation: r = sin(pi * phi / 2). Exact at p = 0.5, close for p in 0.3-0.7."""
+    return math.sin(math.pi * max(min(phi_corr, 0.999), -0.999) / 2.0)
+
+
+def prob_all_lose_dependent(tickets: list[dict], *, n: int = 200_000, seed: int = 20261010, same_player_phi: float = 0.0, day_shift_sd: float = 0.0, shade: float = 0.0,
+                            extra_independent: list[float] | None = None) -> float:
+    """Monte Carlo probability that every ticket loses, with dependence BEYOND the shared legs, so it can be compared with the exact figure from `prob_all_lose`.
+    Each ticket is {"day": str, "legs": [leg dicts as in prob_all_lose]}. Conditional on every recorded probability being the true one (before `shade`) and on these assumptions:
+      * legs on the same player and market (a player's 2+ and 3+ shots) move together exactly (one random number);
+      * the same player's different markets have binary correlation `same_player_phi` (0 = independent, 1 ~ the same random number): the figure the history gives is about 0.12-0.23;
+      * different players are independent (the history gives about -0.01 between opposite teams and 0 across games, see deploy/estimate_dependence.py);
+      * every day's true leg probabilities are the recorded ones plus one shared shift ~ Normal(0, day_shift_sd), the same for all legs that day: this is uncertainty about the MODEL, not about luck,
+        and it makes tickets on the same day lose together more often than luck alone would."""
+    import random
+    rng = random.Random(seed)
+    r_latent = latent_from_phi(same_player_phi)
+    sq_r, sq_1r = math.sqrt(max(r_latent, 0.0)), math.sqrt(max(1.0 - max(r_latent, 0.0), 0.0))
+    groups: dict = {}
+    for t in tickets:
+        for l in t["legs"]:
+            groups.setdefault((l["game"], l["player"], l["market"]), []).append(l["id"])
+    group_of = {i: g for g, ids in groups.items() for i in ids}
+    players = sorted({(g[0], g[1]) for g in groups})
+    days = sorted({t["day"] for t in tickets})
+    lose = 0
+    for _ in range(n):
+        z = {p: rng.gauss(0.0, 1.0) for p in players}
+        u = {g: _phi(sq_r * z[(g[0], g[1])] + sq_1r * rng.gauss(0.0, 1.0)) for g in groups}
+        shift = {d: rng.gauss(0.0, day_shift_sd) if day_shift_sd > 0 else 0.0 for d in days}
+        any_win = False
+        for t in tickets:
+            if all(u[group_of[l["id"]]] < min(max(l["p"] - shade + shift[t["day"]], 0.0), 1.0) for l in t["legs"]):
+                any_win = True
+                break
+        if any_win:
+            continue
+        ok = True
+        for q in (extra_independent or []):
+            if rng.random() < max(q - shade, 0.0):
+                ok = False
+                break
+        if ok:
+            lose += 1
+    return lose / n
+
+
+# --------------------------------------------------------------------- how many resolved bets does a test need? ----
+
+def design_effect(cluster_size: float, icc: float) -> float:
+    """Variance inflation when outcomes in a cluster (a game, a night) are correlated: 1 + (m - 1) * icc. Independent outcomes: 1."""
+    return 1.0 + max(cluster_size - 1.0, 0.0) * max(icc, 0.0)
+
+
+def legs_needed(overstated_by: float, *, p: float = 0.5, alpha_z: float = 1.645, power_z: float = 0.8416, deff: float = 1.0, comparisons: int = 1) -> int:
+    """Resolved legs needed to detect that a model's probabilities are `overstated_by` too high, for ONE pooled comparison of the average prediction with the observed hit rate:
+    n = (z_alpha + z_power)^2 * p(1-p) / delta^2, times a design effect for clustering, times the number of separate comparisons (each market tested alone needs its own sample).
+    Assumes: independent outcomes unless `deff` says otherwise; a one-sided 5% test; 80% power; outcome variance p(1-p) with p near 0.5 (the largest, so it overstates the need for long shots);
+    the model's average prediction is compared with the observed rate; no allowance for testing several bands at once."""
+    return math.ceil(((alpha_z + power_z) ** 2) * p * (1 - p) / (overstated_by ** 2) * deff) * comparisons
+
+
+def games_needed_for_log_loss_gap(sd_per_game: float, gap: float, *, alpha_z: float = 1.645, power_z: float = 0.8416) -> int:
+    """Games needed to see an average log-loss difference of `gap` (model better than the market) given the standard deviation of the per-game difference:
+    n = ((z_alpha + z_power) * sd / gap)^2. Assumes independent games, one pooled comparison, one-sided 5%, 80% power. It evaluates ALL games, not the bets."""
+    return math.ceil(((alpha_z + power_z) * sd_per_game / gap) ** 2)

@@ -51,8 +51,19 @@ def pause(reason: str, *, now: dt.datetime | None = None, set_by: str = "owner r
     return doc
 
 
-def resume(*, now: dt.datetime | None = None) -> dict:
-    """Ends the pause (removes the file). Returns the status that was in force."""
+class ResumeRefused(RuntimeError):
+    """Raised when someone tries to resume automatic recording before the owner has approved the active ticket policy."""
+
+
+def resume(*, now: dt.datetime | None = None, require_policy_approval: bool = True) -> dict:
+    """Ends the pause (removes the file). Returns the status that was in force. Refuses unless the owner has approved the ACTIVE ticket policy by its digest
+    (operational/ticket_policy.py): the pause exists so that nothing restarts on rules the owner has not reviewed."""
+    if require_policy_approval:
+        from operational import ticket_policy
+        if not ticket_policy.is_approved():
+            d = ticket_policy.describe()
+            raise ResumeRefused(f"automatic recording stays paused: the owner has not approved the active ticket policy ({d['policy_id']}, digest {d['digest']}). "
+                                f"Review it with `python3 -m operational.ticket_policy show`.")
     prior = status()
     p = _path()
     if p.exists():
@@ -74,6 +85,10 @@ if __name__ == "__main__":
     if cmd == "pause":
         print(json.dumps(pause(" ".join(sys.argv[2:]) or "paused"), indent=1))
     elif cmd == "resume":
-        print(json.dumps({"was": resume()}, indent=1))
+        try:
+            print(json.dumps({"was": resume()}, indent=1))
+        except ResumeRefused as exc:
+            print(str(exc))
+            raise SystemExit(2)
     else:
         print(json.dumps(status(), indent=1))

@@ -10,6 +10,8 @@ exposure (one player, one ticket). They were fixed before any replacement ticket
 """
 from __future__ import annotations
 
+from research.real_market_parlay import policy as _policy
+
 VARIANTS = {
     "rules_on_oct_8": {"label": "Rules in force on 2026-10-08 (no per-player limit)", "leg": 2, "game": 3, "player": None, "floor": 0.0, "shade": 0.03, "slots": 5},
     "current_code": {"label": "Rules in the code today (at most 2 tickets per player)", "leg": 2, "game": 3, "player": 2, "floor": 0.0, "shade": 0.03, "slots": 5},
@@ -17,7 +19,11 @@ VARIANTS = {
     "floor_30": {"label": "Today's rules + estimated hit chance of at least 30%", "leg": 2, "game": 3, "player": 2, "floor": 0.30, "shade": 0.03, "slots": 5},
     "margin_5pt": {"label": "Today's rules + the edge must survive a 5-point haircut on every leg", "leg": 2, "game": 3, "player": 2, "floor": 0.0, "shade": 0.05, "slots": 5},
     "one_per_player": {"label": "Today's rules + each player on at most one ticket", "leg": 2, "game": 3, "player": 1, "floor": 0.0, "shade": 0.03, "slots": 5},
-    "conservative_candidate": {"label": "25% floor + 5-point haircut + one ticket per player + at most 3 a day", "leg": 2, "game": 3, "player": 1, "floor": 0.25, "shade": 0.05, "slots": 3},
+    "proposed_restart": {"label": "THE PROPOSED RESTART POLICY: hit chance of at least 25%, edge of at least +3% after the 3-point haircut, one ticket per player, two per game, up to five a day (not validated, not approved)",
+                         "leg": _policy.PROPOSED.max_per_leg, "game": _policy.PROPOSED.max_per_game, "player": _policy.PROPOSED.max_per_player, "floor": _policy.PROPOSED.floor,
+                         "shade": _policy.PROPOSED.value_shade, "min_value": _policy.PROPOSED.min_value_after_shade, "slots": _policy.PROPOSED.slots},
+    "earlier_draft_30_and_5pt": {"label": "The earlier draft (30% floor + 5-point haircut + one per player, two per game): too strict to be practical on entry information (kept for the record)",
+                                 "leg": 1, "game": 2, "player": 1, "floor": 0.30, "shade": 0.05, "min_value": 0.0, "slots": 5},
 }
 
 
@@ -47,7 +53,7 @@ def shaded_probability(c: dict, shade: float) -> float:
 def select(cands: list[dict], rule: dict) -> list[dict]:
     """The selector's loop (research/real_market_parlay/engine.py::select_tickets): rank by estimated hit chance, then EV; skip a ticket that breaks the leg, game or player
     limit; stop at the day's slots. `floor` and `shade` are the only things the variants add to the live rules."""
-    ok = [c for c in cands if c["p"] >= rule["floor"] and shaded_probability(c, rule["shade"]) * dec(c["price"]) - 1.0 >= 0.0]
+    ok = [c for c in cands if c["p"] >= rule["floor"] and shaded_probability(c, rule["shade"]) * dec(c["price"]) - 1.0 >= rule.get("min_value", 0.0)]
     ok.sort(key=lambda c: (-c["p"], -c["ev"], len(c["legs"])))
     picked, leg_use, game_use, player_use = [], {}, {}, {}
     for c in ok:

@@ -70,6 +70,33 @@ CORE = ["38_My_Bets.py", "21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "
         "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py", "39_Tomorrow.py"]
 
 
+class TestTheAccountIsShownSplit(unittest.TestCase):
+    def test_today_and_paper_performance_show_the_parlay_experiment_the_single_bets_and_the_whole_account(self):
+        for page in ("21_Today.py", "33_Paper_Performance.py"):
+            at = run_page(page, snapshot())
+            self.assertEqual(len(at.exception), 0, f"{page}: {[str(e.value)[:200] for e in at.exception]}")
+            blob = text(at) + " ".join(str(df.value.to_dict("records")) for df in at.dataframe)
+            for expect in ("Parlay experiment (tickets)", "Single bets: moneyline and props", "Whole account", "$54.24", "$10.00", "$64.24"):
+                self.assertIn(expect, blob, f"{page}: {expect}")
+            self.assertIn("The parts add up to the account", blob, page)
+
+    def test_today_describes_the_ticket_policy_in_force_and_says_it_is_an_unapproved_proposal(self):
+        snap = snapshot()
+        snap["tickets"]["ticket_policy"] = {"policy_id": "restart-proposal-x", "status": "PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", "digest": "abc", "approved": False,
+                                           "summary": "up to 5 tickets a day (zero is allowed); each +100 or better; estimated hit chance of at least 25%"}
+        blob = text(run_page("21_Today.py", snap))
+        self.assertIn("up to 5 tickets a day (zero is allowed)", blob)
+        self.assertIn("A proposal", blob)
+        self.assertIn("automatic recording stays paused", blob)
+        self.assertIn("an empty slot is a correct answer", blob)
+
+    def test_a_split_that_does_not_reconcile_is_called_a_bookkeeping_fault(self):
+        snap = snapshot()
+        snap["tickets"]["origins"]["RECONCILIATION"]["all_agree"] = False
+        blob = text(run_page("21_Today.py", snap))
+        self.assertIn("DO NOT ADD UP", blob)
+
+
 class TestPagesRender(unittest.TestCase):
     def test_every_core_page_renders_and_has_no_simulated_wording(self):
         snap = snapshot()

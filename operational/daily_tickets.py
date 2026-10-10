@@ -37,6 +37,7 @@ from operational import market_coverage
 from operational import paper_bankroll as pb
 from operational import recording_pause
 from operational import shadow_selection
+from operational import ticket_policy
 from operational import state_paths
 from research.real_market_parlay import engine as rmp
 
@@ -757,7 +758,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
             selection_audit = {"paused": True, "shadow_log": {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}}
     else:
-        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter)
+        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter, policy=ticket_policy.active())
         selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
     singles = rmp.select_singles(legs)
 
@@ -797,6 +798,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     options["generated_at_utc"] = now.isoformat()
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
                         diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional)
+    state["ticket_policy"] = ticket_policy.describe()
     if pause["paused"]:
         state["notice"] = recording_pause.notice(pause)
         state["recording_paused"] = pause

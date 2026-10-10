@@ -313,6 +313,19 @@ def _validate_stake_and_odds(track: str, stake, entry_odds) -> None:
         raise InvalidPaperBetError(f"entry_odds must be American odds (|odds| >= 100), got {entry_odds!r}")
 
 
+PARLAY_EXPERIMENT_ONLY = True      # automatic single bets (moneyline, props) stay out of the model book; the owner's decision of 2026-10-10 (docs/POSTMORTEM_2026-10-10.md)
+ENV_ALLOW_SINGLES = "NHL_ENGINE_ALLOW_SINGLES"
+
+
+def singles_excluded() -> bool:
+    """True in production. Only inside a unit-test run may NHL_ENGINE_ALLOW_SINGLES=1 let the older machinery tests (settlement, accounting) keep recording single bets; it has no effect anywhere else."""
+    import os
+    from operational import state_paths
+    if os.environ.get(ENV_ALLOW_SINGLES, "").strip() == "1" and state_paths.under_test():
+        return False
+    return PARLAY_EXPERIMENT_ONLY
+
+
 def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str, market_id: str,
                       entry_odds: float, event_id=None, game_date=None, player_id=None,
                       player_name_snapshot=None, team=None, opponent=None, market_family=None,
@@ -337,6 +350,9 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         raise InvalidPaperBetError(f"unknown track {track!r}")
     if price_source not in PRICE_SOURCES:
         raise InvalidPaperBetError(f"unknown price_source {price_source!r}")
+    if track == "REAL_MARKET_PAPER" and origin == "AUTOMATIC" and not is_combo and singles_excluded():
+        return {"status": "EXCLUDED_SINGLE", "paper_bet_id": None,
+                "reason": "The model book is a parlay experiment: automatic moneyline and prop single bets are not recorded in it (their observations are still logged). Earlier single bets stay on the record, reported separately."}
     if track == "REAL_MARKET_PAPER" and origin == "AUTOMATIC":
         from operational import recording_pause          # the owner pause covers EVERY automatic writer to the model book (tickets, moneyline, props), not just the ticket selector
         if recording_pause.is_paused():
@@ -978,7 +994,40 @@ def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER
                 "settled_pnl": round(pnl, 2), "roi": (pnl / staked) if staked > 0 else None,
                 "hit_rate": (wins / decided) if decided else None}
 
-    return {"AUTOMATIC": block(rows), "ALL": block(rows)}
+    parlays, singles = [r for r in rows if r["is_combo"]], [r for r in rows if not r["is_combo"]]
+    return {"AUTOMATIC": block(rows), "ALL": block(rows), "PARLAY_TICKETS": block(parlays), "SINGLE_BETS": block(singles),
+            "RECONCILIATION": book_breakdown(conn, track)["reconciliation"]}
+
+
+def book_breakdown(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -> dict:
+    """The model account read three ways, with the arithmetic that ties them together. Nothing is reset or moved: the account is the combined one (cash $500 + every settled result - open
+    stakes), and its parlay tickets and its earlier single bets (moneyline, props) are reported apart so the parlay experiment's own result is visible and the two add up to the whole."""
+    rows = query_paper_bets(conn, track=track)
+
+    def block(subset: list[dict]) -> dict:
+        settled = [r for r in subset if r["result_status"] in ("WIN", "LOSS", "VOID")]
+        wins, losses = sum(1 for r in settled if r["result_status"] == "WIN"), sum(1 for r in settled if r["result_status"] == "LOSS")
+        staked, pnl = sum(r["stake"] for r in settled), sum(r["profit_loss"] or 0.0 for r in settled)
+        open_rows = [r for r in subset if r["result_status"] in ("PENDING", "UNRESOLVED")]
+        return {"bets": len(subset), "settled": len(settled), "wins": wins, "losses": losses, "open": len(open_rows), "open_stake": round(sum(r["stake"] for r in open_rows), 2),
+                "settled_stake": round(staked, 2), "settled_pnl": round(pnl, 2), "roi": (pnl / staked) if staked > 0 else None, "hit_rate": (wins / (wins + losses)) if (wins + losses) else None}
+
+    parlays = [r for r in rows if r["is_combo"]]
+    singles = [r for r in rows if not r["is_combo"]]
+    money = [r for r in singles if r.get("market_family") == "MONEYLINE"]
+    props = [r for r in singles if r.get("market_family") != "MONEYLINE"]
+    out = {"combined": block(rows), "parlay_tickets": block(parlays), "single_bets": block(singles),
+           "single_bets_by_kind": {"moneyline": block(money), "props": block(props)}}
+    acct = account_state(conn, track)
+    c, p, sb = out["combined"], out["parlay_tickets"], out["single_bets"]
+    checks = {"pnl": round(p["settled_pnl"] + sb["settled_pnl"], 2) == c["settled_pnl"], "bets": p["bets"] + sb["bets"] == c["bets"],
+              "settled_stake": round(p["settled_stake"] + sb["settled_stake"], 2) == c["settled_stake"], "open_stake": round(p["open_stake"] + sb["open_stake"], 2) == c["open_stake"],
+              "cash": round(PAPER_STARTING_BANKROLL + c["settled_pnl"] - c["open_stake"], 2) == acct["available_cash"]}
+    out["reconciliation"] = {"starting_bankroll": PAPER_STARTING_BANKROLL, "parlay_pnl": p["settled_pnl"], "single_bets_pnl": sb["settled_pnl"], "combined_pnl": c["settled_pnl"],
+                             "open_stakes": c["open_stake"], "available_cash": acct["available_cash"], "checks": checks, "all_agree": all(checks.values()),
+                             "sentence": (f"Cash ${acct['available_cash']:,.2f} = ${PAPER_STARTING_BANKROLL:,.0f} start {p['settled_pnl']:+,.2f} parlay tickets {sb['settled_pnl']:+,.2f} single bets "
+                                          f"- ${c['open_stake']:,.2f} open")}
+    return out
 
 
 def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str) -> str:

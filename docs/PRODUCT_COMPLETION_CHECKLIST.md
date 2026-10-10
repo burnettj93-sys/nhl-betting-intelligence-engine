@@ -1,4 +1,4 @@
-# Product completion checklist (revision 10, 2026-10-10)
+# Product completion checklist (revision 11, 2026-10-10)
 
 Status words, used strictly: **WORKS** (built, tested, and checked on the hosted app — evidence named) · **PARTIAL** (works, but a stated part does not) · **BROKEN** (does not work; none open at delivery) ·
 **BLOCKED** (needs an action only the owner or a third party can take; the exact action is stated) · **PENDING** (needs a live event that has not happened yet). Nothing here claims a betting edge.
@@ -142,17 +142,21 @@ Any displayed price is judged **when the page is opened** against the engine's o
 ## 5a. Populated option cards
 **Verified on the hosted app, 2026-10-09 5:16 PM ET (desktop and 390 px)**: the first pregame captures produced 12 option cards on Best Options (quoted price, stake, return, model chance with its plausible range, value after the haircut, "why this selection", Ontario check) and 3 recorded automatic tickets on Today. **Not verifiable**: the add control (no write credential: a visitor is told to open a log first), a morning-priced card (no early price was bought on the release day), and the stale/provisional card states with real data. Those stay open.
 
-## 12. Losing-streak postmortem and the recording pause (owner request 2026-10-10) — `docs/POSTMORTEM_2026-10-10.md`
+## 12. Losing-streak postmortem, the pause, the objective and the singles (owner requests 2026-10-10) — `docs/POSTMORTEM_2026-10-10.md`
 
 | Item | Status | Evidence / limit |
 |---|---|---|
-| Automatic recording paused; collection, publishing, settlement and personal accounts running | **WORKS (paused since 2026-10-10 08:23 ET)** | `operational/recording_pause.py`; covers the ticket selector and every other automatic writer (`record_paper_bet`); fails safe; watchdog row (WARN after 3 days). Resume only with an explicit `python3 -m operational.recording_pause resume`. |
-| Which tickets lost; tickets vs legs; personal excluded | **DONE** | Nine consecutive losses = 8 parlay tickets + 1 moneyline single (11 distinct legs on 9 players); the personal ticket is excluded; model book 2W–10L, −$64.24. |
+| Automatic recording paused; collection, publishing, settlement, personal accounts and shadow logging running | **WORKS (paused since 2026-10-10 08:23 ET)** | `operational/recording_pause.py` covers the ticket selector and every other automatic writer; fails safe; watchdog row. **Resume is refused until the owner approves the active ticket policy by digest.** |
+| Which tickets lost; tickets vs legs; personal excluded | **DONE** | Nine consecutive losses = 8 parlay tickets + 1 moneyline single; parlay tickets 2W–9L −$54.24; single 0W–1L −$10; whole account 2W–10L −$64.24. |
 | Independent settlement check | **DONE: no error** | 12 of 12 agree with the official box scores. |
-| Cause analysis (variance, exposure, probabilities, acceptance, inputs, settlement) | **DONE with demonstrated vs hypothesis separated** | Ordinary variance on the model's own numbers (17.1% exact for the eight tickets, 1.9× the independent figure); shared exposure and weak acceptance demonstrated; overstated probabilities a **hypothesis** (points legs 4 of 25 against 9.1 expected, six slices looked at). |
-| Replay of the original decisions | **DONE** | Reproduces the recorded tickets exactly on Oct 8 and Oct 9; variants fixed before results were viewed; no rule tuned. |
-| Forward evidence for the selected-edge legs | **COLLECTING** | `operational/shadow_selection.py` + `deploy/score_selection_shadow.py`; verdict "NOT ENOUGH YET" until about 620 resolved edge-filtered legs. |
-| Restart policy (hit-chance floor, margin, one ticket per player, three a day, moneyline singles shadow-only) | **PROPOSED, awaiting owner review** | `docs/POSTMORTEM_2026-10-10.md` section 12. Nothing was changed in the selector; no recalibration. |
+| Streak assessed with shared exposure, dependencies stated, conditional label | **DONE** | 17.1% (shared legs exact) to at most 18.4% (same-player upper bound); conditional on the recorded probabilities; wording is "compatible with variance under the model's assumptions". Same-game/opposite-team dependence measured at about −0.01, teammates +0.10 (none share a ticket). |
+| Causes: demonstrated vs hypothesis | **DONE** | Shared exposure and weak acceptance demonstrated; overstated probabilities a **hypothesis**. |
+| Selector enforces the objective (strong estimated chance, meaningful value, up to five, empty slots allowed) | **DONE in code as a PROPOSAL, not live** | `TicketPolicy`; floor 25%, +3% after the 3-point haircut, one ticket per player, two per game; each number a judgement, none validated; digest `cb34b5563d244396`; unapproved. |
+| Automatic moneyline and prop singles out of the parlay experiment; results shown separately; reconciled | **DONE** | `record_paper_bet` refuses automatic singles (observations still logged); `book_breakdown` + Today / Paper Performance + watchdog: parlay + singles = whole = cash. Nothing reset. |
+| 620-leg and 150-game targets: assumptions, dependence, selected vs general pool | **DONE (documented)** | 620 = independent player-market-nights, realistically 690–1,230 for the edge-filtered legs; 150 is a model-vs-model floor, cannot validate moneyline bets. |
+| Replay of the original decisions | **DONE** | Reproduces the recorded tickets exactly; entry information only; no result reported. |
+| Forward evidence | **COLLECTING** | Shadow selection log + scorer (units, clustering, top-edge slice, model-vs-price blend); verdict "NOT ENOUGH YET". |
+| Restart | **AWAITING OWNER APPROVAL** | `python3 -m operational.ticket_policy show` then `approve <digest>`, then `python3 -m operational.recording_pause resume`. |
 
 ## 10. QA
 
@@ -160,7 +164,8 @@ Every page was opened on the hosted app by direct link at 390 px width: no excep
 
 ## Owner actions that remain (only these)
 
-1. **`LOG_WRITE_TOKEN`** Streamlit secret (section 6) — enables one-click adding for friends. Also invite friends to the private app.
+0. **Review the restart policy** (`docs/POSTMORTEM_2026-10-10.md` section 13): approve it (`python3 -m operational.ticket_policy show`, then `approve <digest>`, then `python3 -m operational.recording_pause resume`) or tell me what to change. Recording stays paused until then.
+1. **`LOG_WRITE_TOKEN`** Streamlit secret (section 6) — enables one-click adding, the Parlay Builder submit and account creation for friends (the app itself is public).
 2. **Rotate the Odds API key** (`docs/CREDENTIAL_ROTATION.md`).
 3. **Budget decision**: stay on A (78/163 games), switch to A2 (`NHL_ENGINE_PROP_MARKETS=player_points`, 132/163, no shots), or buy the 20K tier ($30/month, not bought).
 4. **Source permissions** if lineups/starters should be automatic (Nation Network or another permitted feed — see the audit); until then confirmations are manual.

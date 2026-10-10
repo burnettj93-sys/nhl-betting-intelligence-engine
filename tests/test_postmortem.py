@@ -12,6 +12,7 @@ sys.path.insert(0, str(REPO / "deploy"))
 
 import postmortem_losing_streak as pms  # noqa: E402
 import score_selection_shadow as sss  # noqa: E402
+import estimate_dependence as ed  # noqa: E402
 
 from operational import postmortem_math as pm  # noqa: E402
 
@@ -183,7 +184,59 @@ class TestTheFrozenPostmortemIsReproducible(unittest.TestCase):
     def test_the_variants_were_fixed_in_advance_and_include_the_rules_that_ran(self):
         v = self.rep["replay_of_the_original_decisions"]["variants_defined_before_any_replacement_result_was_viewed"]
         self.assertIn("rules_on_oct_8", v)
-        self.assertIn("conservative_candidate", v)
+        self.assertIn("proposed_restart", v)
+
+    def test_the_streak_probability_is_labelled_conditional_and_lists_what_each_version_includes(self):
+        d = self.rep["streak_probability_dependence_sensitivity"]
+        self.assertIn("CONDITIONAL", d["label"])
+        self.assertIn("not the probability", d["label"].lower())
+        for row in d["rows"]:
+            self.assertTrue(row["includes"] and row["assumptions"])
+        self.assertIn("not_modelled", d)
+
+    def test_extra_same_game_and_player_dependence_changes_the_figure_only_slightly(self):
+        rows = self.rep["streak_probability_dependence_sensitivity"]["rows"]
+        base = rows[0]["p_all_lose"]
+        self.assertAlmostEqual(base, 0.171, places=3)
+        for r in rows[1:]:
+            self.assertGreaterEqual(r["p_all_lose"] + 0.004, base)              # more dependence never makes all-lose rarer (beyond Monte Carlo error)
+            self.assertLess(r["p_all_lose"], base + 0.02)                        # and here it adds under two points
+        self.assertGreater(base, self.rep["streak_probability"]["product_of_ticket_loss_chances_WRONG_independent"] + 0.07)
+
+    def test_the_historical_dependence_estimates_say_opponents_are_unrelated_and_teammates_share_points(self):
+        h = self.rep["streak_probability_dependence_sensitivity"]["historical_estimates"]
+        self.assertLess(abs(h["opposite_teams_same_game_points"]["correlation"]), 0.02)
+        self.assertGreater(h["same_team_same_game_points"]["correlation"], 0.05)
+
+    def test_the_620_and_150_targets_state_their_assumptions_and_what_they_do_not_test(self):
+        e = self.rep["evidence_targets"]
+        self.assertEqual(e["the_620_figure"]["what_it_is"].split(" ")[0], "619")
+        sc = e["the_620_figure"]["dependence_inflates_it"]
+        self.assertGreater(sc[0]["independent_units_needed"], 619)
+        self.assertGreater(sc[-1]["independent_units_needed"], sc[0]["independent_units_needed"])
+        self.assertIn("NOT the general player pool", e["the_620_figure"]["what_it_evaluates"])
+        self.assertIn("NOT a leg row", e["the_620_figure"]["unit"])
+        f = e["the_150_figure"]
+        self.assertIn("not derived from an effect size", f["it_is_a_floor_not_a_power_calculation"])
+        self.assertGreater(f["what_it_can_detect"]["games_needed_to_detect_that_gap"], 2000)
+        self.assertGreater(f["what_it_can_detect"]["smallest_gap_150_games_can_detect"], 0.02)
+        self.assertIn("BETS", f["selected_bets_are_a_different_and_harder_test"])
+
+    def test_the_replay_uses_no_result_and_the_proposal_may_leave_a_day_empty(self):
+        days = self.rep["replay_of_the_original_decisions"]["days"]
+        blob = json.dumps(days)
+        self.assertNotIn("what_happened", blob)
+        self.assertNotIn("for_completeness", blob)
+        self.assertLessEqual(days["2026-10-08"]["variants"]["proposed_restart"]["tickets"], 5)
+        self.assertEqual(days["2026-10-09"]["variants"]["proposed_restart"]["tickets"], 0)
+
+    def test_policy_tradeoffs_are_counted_from_entry_information_and_name_the_side_effects(self):
+        t = self.rep["policy_tradeoffs_entry_information_only"]
+        self.assertIn("ENTRY INFORMATION ONLY", pms.policy_tradeoffs.__doc__)
+        self.assertGreater(t["days"]["2026-10-08"]["qualified_under_the_old_rules"]["tickets"], t["days"]["2026-10-08"]["hit_chance_at_least_30pct"]["tickets"])
+        self.assertIn("points or goals", t["why_each_element"]["hit_chance_floor"]["side_effect"])
+        self.assertIn("long shots", t["why_each_element"]["value_after_a_haircut"]["side_effect"])
+        self.assertIn("Not validated", t["why_each_element"]["hit_chance_floor"]["what_it_is_not"])
 
     def test_the_live_ledger_if_present_matches_the_frozen_extract(self):
         if not pms.LEDGER.exists():
@@ -191,6 +244,44 @@ class TestTheFrozenPostmortemIsReproducible(unittest.TestCase):
         live = {r["paper_bet_id"]: (r["result_status"], r["profit_loss"]) for r in pms.load_ledger() if r["paper_bet_id"] in {x["paper_bet_id"] for x in pms.load_ledger(use_extract=True)}}
         frozen = {r["paper_bet_id"]: (r["result_status"], r["profit_loss"]) for r in pms.load_ledger(use_extract=True)}
         self.assertEqual(live, frozen)
+
+
+class TestDependenceEstimate(unittest.TestCase):
+    """On synthetic games where teammates share a team-level shock and nothing else is shared, the estimator finds teammate dependence and none between opponents or across games."""
+
+    @classmethod
+    def setUpClass(cls):
+        import random
+        rng = random.Random(11)
+        rows = []
+        gid = 0
+        for day in range(70):
+            date = f"2025-{1 + day // 28:02d}-{1 + day % 28:02d}"
+            for pair in range(4):
+                gid += 1
+                for team in ("AAA", "BBB"):
+                    shock = rng.gauss(0, 1)                                         # a team-level shock for this game
+                    for pl in range(6):
+                        pid = f"{team}{pair}{pl}"
+                        base = 0.45 + 0.04 * pl
+                        p = min(max(base + 0.12 * shock, 0.02), 0.98)
+                        hit = rng.random() < p
+                        rows.append({"player_id": pid, "game_id": gid, "date": date, "team": team, "pos": "F", "toi": 15.0, "shots": 2 if hit else 0, "goals": 1 if (hit and rng.random() < 0.3) else 0, "assists": 1 if hit else 0, "points": 1 if hit else 0})
+        cls.rep = ed.estimate(sorted(rows, key=lambda r: (r["player_id"], r["date"], r["game_id"])), since="2025-01-25")
+
+    def test_teammates_who_share_a_shock_are_positively_dependent(self):
+        self.assertGreater(self.rep["markets"]["points>=1"]["same_team"]["correlation"], 0.04)
+
+    def test_opponents_and_other_games_are_not(self):
+        self.assertLess(abs(self.rep["markets"]["points>=1"]["opposite_teams"]["correlation"]), 0.04)
+        self.assertLess(abs(self.rep["markets"]["points>=1"]["different_games_same_date"]["correlation"]), 0.04)
+
+    def test_the_same_player_across_markets_is_strongly_related_here_because_one_event_drives_both(self):
+        self.assertGreater(self.rep["same_player_two_markets"]["shots>=2 with points>=1"]["correlation"], 0.9)
+
+    def test_it_reports_how_many_player_games_it_used(self):
+        self.assertGreater(self.rep["player_games"], 500)
+        self.assertGreater(self.rep["markets"]["points>=1"]["same_team"]["pairs"], 1000)
 
 
 class TestShadowScorer(unittest.TestCase):
@@ -217,6 +308,7 @@ class TestShadowScorer(unittest.TestCase):
         self.assertEqual((out["all_priced_legs"]["all"]["legs"], out["legs_that_passed_the_edge_filter"]["all"]["legs"]), (10, 5))
         self.assertEqual(out["enough_to_judge"]["verdict"], "NOT ENOUGH YET")
         self.assertEqual(out["enough_to_judge"]["needed_to_see_a_5_point_overstatement"], 619)
+        self.assertGreater(out["enough_to_judge"]["needed_allowing_for_clustering"]["heavy"], out["enough_to_judge"]["needed_allowing_for_clustering"]["light"])
 
     def test_variant_tickets_are_counted_once_per_day_and_resolved_on_all_legs(self):
         t = {"legs": [["g1:p1:PLAYER_POINTS:1", "A 1+ point", 150, .4], ["g2:p2:PLAYER_POINTS:1", "B 1+ point", 150, .4]], "hit_probability": .16, "price": 525, "ev": .1, "ev_after_haircut": .02}
@@ -224,6 +316,31 @@ class TestShadowScorer(unittest.TestCase):
         out = sss.score(recs, lambda g, *a: {"status": "FINAL", "hit": g == "g1"})
         v = out["policy_variants"]["floor_25"]
         self.assertEqual((v["tickets_logged"], v["tickets_resolved"], v["wins"]), (1, 1, 0))
+
+    def test_a_players_nested_lines_are_one_independent_unit(self):
+        pool = [["g1", "p1", "PLAYER_SOG_ALTERNATE", k, 100 + 50 * k, .5 - .1 * k, "A", "AAA", "s", "q", True] for k in (2, 3, 4, 5)] + [["g1", "p1", "PLAYER_POINTS", 1, 150, .4, "A", "AAA", "s", "q", True]]
+        out = sss.score([self.rec("d", pool)], lambda *a: {"status": "FINAL", "hit": True})
+        self.assertEqual(out["enough_to_judge"]["resolved_edge_legs"], 5)
+        self.assertEqual(out["enough_to_judge"]["independent_units_player_market_nights"], 2)          # his shots (four lines) and his points
+
+    def test_the_blend_fit_recovers_a_price_that_carries_the_information(self):
+        import random
+        rng = random.Random(7)
+        legs = []
+        for night in range(40):
+            for i in range(30):
+                true = rng.uniform(0.2, 0.8)
+                model = min(max(true + rng.gauss(0, 0.12), 0.03), 0.97)          # a noisy model
+                price = min(max(true + rng.gauss(0, 0.02), 0.03), 0.97)           # a price that nearly knows the truth
+                legs.append({"p": model, "implied": price, "hit": rng.random() < true, "date": f"d{night}", "game": f"g{night}{i % 5}", "player": f"p{i}", "family": "PLAYER_POINTS", "edge": True})
+        b = sss.logistic_blend(legs)
+        self.assertLess(b[1], 0.5)                                                # little weight on the noisy model
+        self.assertGreater(b[2], 0.6)                                              # most of it on the price
+        self.assertGreater(b[2], 2 * b[1])
+
+    def test_the_blend_report_says_not_enough_data_for_a_handful_of_legs(self):
+        legs = [{"p": .5, "implied": .5, "hit": True, "date": "d", "game": "g", "player": "p", "family": "PLAYER_POINTS", "edge": True}] * 5
+        self.assertEqual(sss.blend_report(legs)["status"], "NOT ENOUGH DATA")
 
     def test_implied_probability(self):
         self.assertAlmostEqual(sss.implied(100), .5)

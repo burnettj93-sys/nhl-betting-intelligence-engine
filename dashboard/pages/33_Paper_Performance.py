@@ -25,6 +25,8 @@ a[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 a[4].metric("ROI on settled", ui.pct(summ["roi"], 1) if summ.get("roi") is not None else "—")
 st.caption("Model book: \\$500 start, \\$10 per ticket, no top-ups. Cash returns as tickets settle. Hit rates and ROI on a handful of tickets say almost nothing about skill.")
 
+st.subheader("The account, split")
+ui.book_split(origins, as_table_only=True)
 st.subheader("Results")
 rows = []
 for key, label in (("ALL", "Model book (automatic tickets)"),):
