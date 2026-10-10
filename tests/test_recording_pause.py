@@ -85,5 +85,32 @@ class TestPause(Isolated):
         self.assertEqual(doc, on_disk)
 
 
+class TestEveryAutomaticWriterIsCovered(Isolated):
+    """The moneyline pre-game job and the prop jobs write through paper_bankroll.record_paper_bet, not through the ticket selector: the pause must stop those too."""
+
+    def single(self, **kw):
+        return pb.record_paper_bet(self.conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id="MONEYLINE", entry_odds=195.0, event_id="g1", game_date="2026-10-10",
+                                   team="CGY", opponent="COL", market_family="MONEYLINE", side="CGY", model_probability=0.49, conservative_probability=0.37,
+                                   market_no_vig_probability=0.32, edge=0.05, ev=0.1, model_version="t", prediction_checkpoint="PRIMARY_DAILY", event_start_utc="2026-10-10T23:00:00Z", **kw)
+
+    def test_a_paused_single_leg_automatic_bet_is_refused_and_nothing_is_written(self):
+        rp.pause("postmortem", now=NOW)
+        res = self.single()
+        self.assertEqual(res["status"], "PAUSED")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+
+    def test_the_same_bet_is_recorded_when_not_paused(self):
+        self.assertEqual(self.single()["status"], "INSERTED")
+        rp.pause("postmortem", now=NOW)
+        self.assertEqual(self.single()["status"], "PAUSED")                      # the same key is refused as paused, never re-staked
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 1)
+
+    def test_the_pause_does_not_touch_the_demo_track_or_personal_accounts(self):
+        rp.pause("postmortem", now=NOW)
+        res = pb.record_paper_bet(self.conn, track="DEMO_PAPER", price_source="SIMULATED_DEMO", market_id="DEMO", entry_odds=150.0, event_id="d1", game_date="2026-10-10",
+                                  team="A", opponent="B", market_family="MONEYLINE", side="A", model_probability=0.5, model_version="t", event_start_utc="2026-10-10T23:00:00Z")
+        self.assertNotEqual(res["status"], "PAUSED")
+
+
 if __name__ == "__main__":
     unittest.main()

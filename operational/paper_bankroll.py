@@ -337,6 +337,10 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         raise InvalidPaperBetError(f"unknown track {track!r}")
     if price_source not in PRICE_SOURCES:
         raise InvalidPaperBetError(f"unknown price_source {price_source!r}")
+    if track == "REAL_MARKET_PAPER" and origin == "AUTOMATIC":
+        from operational import recording_pause          # the owner pause covers EVERY automatic writer to the model book (tickets, moneyline, props), not just the ticket selector
+        if recording_pause.is_paused():
+            return {"status": "PAUSED", "paper_bet_id": None, "reason": recording_pause.notice()}
     if track == "REAL_MARKET_PAPER" and price_source != "LIVE_DRAFTKINGS":
         raise InvalidPaperBetError("REAL_MARKET_PAPER bets must be priced with LIVE_DRAFTKINGS -- "
                                     "never mix a simulated price into the real-market track")
