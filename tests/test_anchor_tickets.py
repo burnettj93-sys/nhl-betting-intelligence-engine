@@ -233,6 +233,19 @@ class TestPausedBoard(unittest.TestCase):
         self.assertEqual([l["evidence"]["hits"] for l in card["legs"]], [24, 26])
         self.assertIn("anchor", card)
 
+    def test_with_only_stale_prices_the_board_says_so_and_records_nothing(self):
+        from operational import daily_tickets as dtk
+        from operational import paper_bankroll as pb
+        legs = [dataclasses.replace(l, game_start_utc="2026-10-11T23:00:00Z", provisional=True, price_fresh=False, freshness_status="STALE_QUOTE", quote_age_min=200.0) for l in
+                (shots(1, 1, 24, -185, 0.63, name="Ehlers"), shots(2, 2, 26, -260, 0.695, name="McMann"))]
+        res = dtk.run_cycle(None, self.conn, NOW, collected={"legs": legs, "sources": {}, "second_opinion": {}})        # recording is NOT paused here
+        self.assertEqual((res["newly_recorded"], res["recording_paused"]), (0, False))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+        st = dtk.read_state()
+        self.assertEqual(len(st["provisional"]["tickets"]), 1)                       # shown, never back-filled
+        self.assertIn("No fresh prices right now", st["empty_slot_reason"])
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 500.0)
+
 
 if __name__ == "__main__":
     unittest.main()

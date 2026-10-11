@@ -795,6 +795,9 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     still_recommended = [c for c in picked["tickets"]
                          if pb.compute_ticket_id(et_date, c.legs) not in recorded_now]
     provisional = _provisional_section(legs, existing, now, et_date)
+    if not pause["paused"] and slots_left and not picked["tickets"] and provisional["provisional_legs"] and picked["pool_size"] == 0:
+        reason = ("No fresh prices right now: today's earlier prices are past their freshness limit, so nothing can be recorded on them (the provisional ticket below is not recorded and is never "
+                  "back-filled). A ticket is recorded only on prices that are fresh when it is recorded; the pregame look refreshes them.")
     diagnostics = {
         "legs_considered": len(legs), "pool_after_edge_filter": picked["pool_size"],
         "qualifying_tickets": picked["qualifying"], "funnel": rmp.selection_funnel(legs),
