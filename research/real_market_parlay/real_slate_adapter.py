@@ -93,7 +93,7 @@ def _game_not_open_exclusion(game_id, game_row) -> dict:
             "scheduled_start_utc": game_row["scheduled_start_utc"]}
 
 
-def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list[ParlayLeg], list[dict]]:
+def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_limit_min=None) -> tuple[list[ParlayLeg], list[dict]]:
     """Real, current MONEYLINE candidates for every SCHEDULED game, using the
     REAL, unmodified T-35 decision engine (pricing.engine.evaluate_moneyline_for_game)
     -- this function itself already enforces real freshness (dynamic staleness
@@ -109,6 +109,10 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
     now = now or dt.datetime.now(dt.timezone.utc)
     legs: list[ParlayLeg] = []
     excluded: list[dict] = []
+    # `freshness_limit_min(hours_to_puck_drop)`: when given (the anchor ticket policy passes the same limit the shots legs use, operational/best_bets.price_age_limit_min), a moneyline
+    # quote is a usable leg for as long as it is FRESH under that limit -- morning and daytime pulls included -- instead of only inside the T-35 decision window's tiers. A quote older than
+    # the limit is not fresh (not recordable); if it is still today's look it is flagged provisional, exactly as a shots price is. None keeps the T-35 tiers (every other caller).
+    from operational import pricing_policy, quote_freshness
 
     contract_verified = pa.is_contract_verified("draftkings", "MONEYLINE")
 
@@ -150,7 +154,10 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
             continue
 
         label = f"{pred.away_team} @ {pred.home_team} ({pred.game_date[:10]})"
-        reports = pricing_engine.evaluate_moneyline_for_game(conn, pred, label)
+        hours_out = (dt.datetime.fromisoformat(pred.scheduled_start_utc).replace(tzinfo=dt.timezone.utc) - now).total_seconds() / 3600.0
+        limit = freshness_limit_min(hours_out) if freshness_limit_min is not None else None
+        reports = pricing_engine.evaluate_moneyline_for_game(
+            conn, pred, label, max_staleness_minutes=pricing_policy.PROVISIONAL_MAX_AGE_MIN if limit is not None else None)
         for report in reports:
             identifier = f"game:{game_id}:{report.selection}"
             if report.action == "DATA_UNAVAILABLE":
@@ -187,20 +194,34 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None) -> tuple[list
                                   report.current_draftkings_price)
                 _true, conservative = mmp.apply_switch(report, is_home, pred.home_team, pred.away_team)
             except Exception:  # noqa: BLE001 - the shadow record and the switch must never remove a leg
-                conservative = report.model_conservative_probability
+                _true, conservative = report.model_true_probability, report.model_conservative_probability
 
+            fresh, provisional, early, status, age = True, False, False, "FRESH", _age_minutes(captured_at_utc, now)
+            if limit is not None:
+                a = quote_freshness.assess(captured_at_utc, captured_at_utc, now, limit)
+                fresh, status, age = bool(a["fresh"]), a["status"], a["quote_age_min"]
+                if not fresh:
+                    wide = quote_freshness.assess(captured_at_utc, captured_at_utc, now, pricing_policy.PROVISIONAL_MAX_AGE_MIN)
+                    provisional = bool(wide["fresh"]) and et.eastern_today(quote_freshness.parse_utc(captured_at_utc) or now) == today_et
+                    if not provisional:
+                        excluded.append({"identifier": identifier, "market_family": "MONEYLINE", "reason": f"STALE_PRICE: {status} ({age} min old, limit {limit:.0f})"})
+                        continue
+                else:
+                    from operational import capture_schedule as _sched
+                    started = quote_freshness.parse_utc(captured_at_utc)
+                    early = bool(started is not None and started < dt.datetime.fromisoformat(pred.scheduled_start_utc).replace(tzinfo=dt.timezone.utc) - dt.timedelta(hours=_sched.SLOT_CLOSE_HOURS))
             legs.append(ParlayLeg(
                 game_id=str(game_id), event_id=None, market_family="MONEYLINE",
                 participant_id=report.selection, participant_name=report.selection,
                 side="HOME" if report.selection == pred.home_team else "AWAY", threshold=None,
                 american_price=report.current_draftkings_price,
-                conservative_probability=conservative, model_probability=conservative,
+                conservative_probability=conservative, model_probability=_true,
                 market_probability=report.market_no_vig_probability,
                 sportsbook="draftkings", captured_at_utc=captured_at_utc,
-                quote_updated_utc=captured_at_utc, freshness_status="FRESH",
-                quote_age_min=_age_minutes(captured_at_utc, now),
+                quote_updated_utc=captured_at_utc, freshness_status=status,
+                quote_age_min=age, retrieved_at_utc=captured_at_utc, provisional=provisional, early=early,
                 provider_contract_verified=True, model_threshold_eligible=True,
-                identity_resolved=True, price_fresh=True, event_not_started=True,
+                identity_resolved=True, price_fresh=fresh, event_not_started=True,
             ))
     return legs, excluded
 

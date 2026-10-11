@@ -96,7 +96,7 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         leg = lambda name, price, hits, model, est, gid: {  # noqa: E731
             "label": f"{name} 2+ shots on goal", "market_family": "PLAYER_SOG_ALTERNATE", "game_id": gid, "participant_id": name, "participant_name": name, "team": "T", "opponent": "O",
             "game_start_utc": "2026-10-08T23:00:00Z", "american_price": price, "decimal_price": 1.0, "price_captured_at_utc": "2026-10-08T14:00:00Z", "probability": est, "model_version": "m",
-            "outcome": None, "provisional": False, "evidence": {"kind": "player_record", "hits": hits, "games": 30, "model": model, "estimate": est, "price_implied": 0.65, "record_rate": est}}
+            "outcome": None, "provisional": False, "evidence": {"kind": "player_record", "hits": hits, "games": 30, "recent_hit_rate": hits / 30, "model": model, "estimate": est, "price_implied": 0.65, "record_shrunk": est}}
         snap["tickets"]["tickets"] = [{
             "ticket_id": "TPROP1", "status": "RECOMMENDED", "recorded": False, "proposed": True, "origin": "AUTOMATIC", "provenance": None, "alerts": [], "result": None,
             "legs": [leg("Ehlers", -185, 24, 0.63, 0.726, "1"), leg("McMann", -260, 26, 0.695, 0.779, "2")], "combined_decimal": 2.13, "combined_american": 113.0, "price_label": "x",
@@ -109,8 +109,8 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         blob = text(at)
         self.assertIn("Proposed — not recorded", blob)
         self.assertIn("nothing is staked", blob)
-        self.assertIn("24 of last 30 games", blob)
-        self.assertIn("Estimate 73%", blob)
+        self.assertIn("recent 24 of last 30 games (80%)", blob)
+        self.assertIn("Final estimate 73%", blob)
         self.assertIn("range 47–66%", blob)
 
     def test_a_split_that_does_not_reconcile_is_called_a_bookkeeping_fault(self):

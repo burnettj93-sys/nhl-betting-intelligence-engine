@@ -53,7 +53,8 @@ class TestLegEstimate(unittest.TestCase):
     def test_a_moneyline_is_estimated_at_the_markets_own_chance_and_only_if_elo_agrees(self):
         ml = moneyline(1, "TOR", -150, 0.58, elo=0.57)
         self.assertEqual(anchor.leg_estimate(ml).p, 0.58)
-        self.assertIsNone(anchor.leg_estimate(moneyline(1, "TOR", -150, 0.58, elo=0.50)))              # Elo disagrees by more than 5 points
+        self.assertEqual(anchor.leg_estimate(moneyline(1, "TOR", -150, 0.62, elo=0.54)).p, 0.62)       # Elo is less confident than the market (it always is): not a disagreement
+        self.assertIsNone(anchor.leg_estimate(moneyline(1, "TOR", -150, 0.58, elo=0.46)))              # Elo has the other side as the favourite
         self.assertIsNone(anchor.leg_estimate(moneyline(1, "TOR", 120, 0.45, elo=0.45)))               # an underdog is not a supported leg
 
     def test_points_and_goal_legs_are_never_used(self):
@@ -145,12 +146,24 @@ class TestSelection(unittest.TestCase):
     def test_describe_states_the_evidence_range_and_value_at_three_assumptions(self):
         t = self.pick([shots(1, 1, 24, -185, 0.63, name="Ehlers"), shots(2, 2, 26, -260, 0.695, name="McMann")])["tickets"][0]
         info = anchor.describe(t, POL)
-        self.assertIn("Ehlers 2+ shots in 24 of his last 30 games", info["rationale"])
-        self.assertIn("the model says", info["rationale"])
+        self.assertIn("Ehlers 2+ shots: recent hit rate 24 of 30 games (80%); model 63%; final estimate 73%", info["rationale"])
+        self.assertIn("price implies", info["rationale"])
         self.assertIn("not verified for Ontario", info["rationale"])
         self.assertLess(info["hit_low"], t.joint_probability)
         self.assertGreater(info["hit_high"], t.joint_probability)
         self.assertLess(info["midpoint_ev"], t.ev_estimated)
+
+
+class TestFourNumbersKeptApart(unittest.TestCase):
+    def test_recent_rate_model_final_estimate_and_price_are_four_different_numbers(self):
+        leg = anchor.prepare_pool([shots(1, 1, 24, -185, 0.63)])[0]
+        ev = anchor.leg_evidence(leg)
+        self.assertEqual((ev["hits"], ev["games"], ev["recent_hit_rate"]), (24, 30, 0.8))               # unshrunk: 24 / 30
+        self.assertEqual(ev["model"], 0.63)
+        self.assertAlmostEqual(ev["record_shrunk"], 0.7263, places=3)                                    # shrunk toward the league rate
+        self.assertAlmostEqual(ev["estimate"], 0.7263, places=3)                                         # what the ticket uses (not capped here)
+        self.assertAlmostEqual(ev["price_implied"], 0.6491, places=3)
+        self.assertEqual(len({ev["recent_hit_rate"], ev["model"], round(ev["estimate"], 3), round(ev["price_implied"], 3)}), 4)
 
 
 class TestShotFrequencies(unittest.TestCase):
@@ -205,7 +218,7 @@ class TestPausedBoard(unittest.TestCase):
         t = st["tickets"][0]
         self.assertTrue(t["proposed"] and not t["recorded"])
         self.assertEqual([l["evidence"]["hits"] for l in t["legs"]], [24, 26])
-        self.assertIn("Ehlers 2+ shots in 24 of his last 30 games", t["rationale"])
+        self.assertIn("recent hit rate 24 of 30 games (80%)", t["rationale"])
         self.assertLess(t["anchor"]["hit_low"], t["hit_probability"])
         self.assertIn("proposed, not recorded", st["empty_slot_reason"] or "proposed, not recorded")
 

@@ -527,7 +527,7 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
     else:
         summary["plan"] = {"day": plan.get("day"), "D": plan["budget"].get("D"), "games_priced": len(plan["games_priced"]),
-                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]),
+                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]), "points_games": len(plan.get("points_games") or []),
                            "morning_games": len(plan.get("morning_games") or []), "morning_markets": plan.get("morning_markets")}
 
     def start_of(e):
@@ -558,8 +558,12 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
                 decision, why = planned_decision(plan, gid, hours, age_min, now)
                 klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
                 with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
-                markets = ",".join(base_list + ([GOALS_MARKET_KEY] if with_goals else []))
-                est_cost = cp.base_cost() + (cp.GOALS_COST if with_goals else 0)
+                with_points = (decision == "FIRST" and cp.points_addon_enabled() and str(gid) in set(plan.get("points_games") or []))
+                markets = ",".join(base_list + ([POINTS_MARKET_KEY] if with_points else []) + ([GOALS_MARKET_KEY] if with_goals else []))
+                est_cost = cp.base_cost() + (cp.POINTS_COST if with_points else 0) + (cp.GOALS_COST if with_goals else 0)
+                if decision == "FIRST" and cp.points_addon_enabled() and not with_points:
+                    pa.note_unfetched(day, gid, POINTS_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots are bought first; today's credits did not cover points for this game",
+                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
                 if decision is None and why == "NOT_IN_CREDIT_PLAN":
                     summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})
                     for m in base_list:
@@ -596,8 +600,12 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         else:
             # the goals market is its own class in the plan (its own allowance); a denied goals credit drops the goals market, not the game
             gate = cp.authorize(klass, est_cost if klass == cp.MORNING else cp.base_cost(), now, plan=plan)
+            if gate.get("allow") and POINTS_MARKET_KEY in markets.split(",") and POINTS_MARKET_KEY not in base_list and not cp.authorize(cp.POINTS_ADDON, cp.POINTS_COST, now, plan=plan).get("allow"):
+                markets = ",".join(m for m in markets.split(",") if m != POINTS_MARKET_KEY)                  # a denied points credit drops the points market, not the game
+                est_cost -= cp.POINTS_COST
             if gate.get("allow") and markets.endswith(GOALS_MARKET_KEY) and not cp.authorize(cp.GOALS, cp.GOALS_COST, now, plan=plan).get("allow"):
-                markets, est_cost = ",".join(base_list), cp.base_cost()
+                markets = ",".join(m for m in markets.split(",") if m != GOALS_MARKET_KEY)
+                est_cost -= cp.GOALS_COST
         if not gate.get("allow"):
             summary["skipped"].append({"event_id": e["id"], "reason": gate.get("reason")})
             if plan is not None:
@@ -616,8 +624,12 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         cost = int(r.requests_last or 0)
         if plan is not None:
             _record_answer(day, gid, markets.split(","), r, now, hours, matchup, day, gstart.isoformat())
-            goals_part = cp.GOALS_COST if markets.endswith(GOALS_MARKET_KEY) and cost > cp.base_cost() else 0
-            cp.record(klass, cost - goals_part, now, event=e["id"], game_id=gid, markets=markets, slot=slot)
+            extra = max(cost - cp.base_cost(), 0)                    # a market the bookmaker has not posted costs nothing, so credits above the base are attributed in order: points, then goals
+            points_part = min(cp.POINTS_COST, extra) if (POINTS_MARKET_KEY in markets.split(",") and POINTS_MARKET_KEY not in base_list) else 0
+            goals_part = min(cp.GOALS_COST, extra - points_part) if markets.endswith(GOALS_MARKET_KEY) else 0
+            cp.record(klass, cost - points_part - goals_part, now, event=e["id"], game_id=gid, markets=markets, slot=slot)
+            if points_part:
+                cp.record(cp.POINTS_ADDON, points_part, now, event=e["id"], game_id=gid, markets=markets)
             if goals_part:
                 cp.record(cp.GOALS, goals_part, now, event=e["id"], game_id=gid, markets=markets)
         spent_today += cost
