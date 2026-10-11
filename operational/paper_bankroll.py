@@ -663,7 +663,11 @@ def _freeze_leg(l) -> dict:
             "quote_updated_utc": getattr(l, "quote_updated_utc", None),
             "quote_age_min_at_entry": getattr(l, "quote_age_min", None),
             "freshness_status": getattr(l, "freshness_status", "") or None,
-            "model_version": getattr(l, "model_version", "")}
+            "model_version": getattr(l, "model_version", ""),
+            # the evidence behind the stated probability (anchor tickets): the validated model's number, the player's record, the market's no-vig chance
+            "model_probability": getattr(l, "model_probability", None), "empirical_probability": getattr(l, "empirical_probability", None),
+            "empirical_hits": getattr(l, "empirical_hits", None), "empirical_games": getattr(l, "empirical_games", None),
+            "market_probability": getattr(l, "market_probability", None)}
 
 
 def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:

@@ -137,6 +137,13 @@ class ParlayLeg:
     freshness_status: str = ""               # FRESH or the specific reason the quote is not fresh
     provisional: bool = False                # a price older than the freshness limit but from today's earlier look (operational/pricing_policy.PROVISIONAL_MAX_AGE_MIN):
                                              # may be SHOWN as a provisional recommendation; it is not fresh, so nothing can be recorded or added on it
+    # Evidence behind the hit-chance estimate, shown beside it (anchor policy, research/real_market_parlay/anchor.py). conservative_probability stays the
+    # validated model's number; these carry the other evidence so nothing is hidden or replaced silently.
+    model_probability: float | None = None        # the validated model's calibrated probability (shots legs)
+    empirical_probability: float | None = None    # share of the player's last empirical_games games with at least `threshold` shots, shrunk toward the league rate
+    empirical_hits: int | None = None
+    empirical_games: int | None = None
+    market_probability: float | None = None       # moneyline: the no-vig probability from the two DraftKings prices
     early: bool = False                      # a FRESH price retrieved more than SLOT_CLOSE_HOURS before puck drop (a morning/midday look): usable like any fresh price for
                                              # options and personal-log adds; automatic tickets built on it are capped per day (operational/daily_tickets.EARLY_TICKET_CAP)
 
@@ -435,7 +442,23 @@ def _policy_veto(combo: ParlayResult, policy) -> tuple[str, str] | None:
     value = shaded * combo.combined_decimal - 1.0
     if value < policy.min_value_after_shade:
         return ("VALUE_NOT_MEANINGFUL", f"edge is {value:+.1%} once every leg is lowered {policy.value_shade * 100:.0f} points; the policy needs at least {policy.min_value_after_shade:+.0%}")
+    if getattr(policy, "mode", "legacy") == "anchor":
+        from research.real_market_parlay import anchor
+        mid = anchor.midpoint_ev(combo.legs)
+        if mid < 0.0:
+            return ("VALUE_NOT_SUPPORTED_BY_MARKET", f"if the true chance is halfway between the player's record and what the price implies, the ticket's value is {mid:+.1%}")
     return None
+
+
+def anchor_reason(diag: dict, policy) -> str:
+    best = diag.get("best_reaching_plus_100")
+    head = (f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s); "
+            f"{diag['reaching_plus_100']} of {diag['combinations_checked']} cross-game combinations reach +100")
+    if best is None:
+        return f"No ticket today: {head}. No combination of the supported legs gets to +100 at today's prices."
+    return (f"No ticket today: {head}, but none has enough value at the real prices. The best of them hits about {best['hit_probability']:.0%} of the time "
+            f"with estimated value {best['ev_estimated']:+.1%} ({best['ev_after_shade']:+.1%} with every leg lowered {policy.value_shade * 100:.0f} points); "
+            f"the policy needs at least {policy.min_estimated_ev:+.0%} and {policy.min_value_after_shade:+.0%}. A slot left empty is a correct answer.")
 
 
 def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegIdentity]] | None = None,
@@ -454,17 +477,29 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
     max_leg = policy.max_per_leg if policy else MAX_TICKETS_PER_LEG
     max_game = policy.max_per_game if policy else MAX_TICKETS_PER_GAME
     max_player = (policy.max_per_player if policy else MAX_TICKETS_PER_PLAYER)
-    pool = _prepare_pool(candidate_legs)
+    anchor_mode = policy is not None and getattr(policy, "mode", "legacy") == "anchor"
+    if anchor_mode:
+        from research.real_market_parlay import anchor
+        pool = anchor.prepare_pool(dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)]))
+    else:
+        pool = _prepare_pool(candidate_legs)
     result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None, "considered": []}
     if max_tickets <= 0:
         result["reason"] = "all of today's ticket slots are already used"
         return result
-    if len(pool) < MIN_LEGS:
-        result["reason"] = (f"only {len(pool)} eligible leg(s) with a positive edge; a ticket needs at least "
-                            f"{MIN_LEGS} legs from different games")
+    if len(pool) < MIN_LEGS or (anchor_mode and len({l.game_id for l in pool}) < MIN_LEGS):
+        result["reason"] = (f"only {len(pool)} well-supported leg(s) in {len({l.game_id for l in pool})} game(s); a ticket needs at least "
+                            f"{MIN_LEGS} legs from different games" if anchor_mode else
+                            f"only {len(pool)} eligible leg(s) with a positive edge; a ticket needs at least {MIN_LEGS} legs from different games")
         return result
-    qualifying = _qualifying_tickets(pool)
+    if anchor_mode:
+        qualifying, result["anchor"] = anchor.qualifying(pool, policy, _evaluate_combo, _policy_veto)
+    else:
+        qualifying = _qualifying_tickets(pool)
     result["qualifying"] = len(qualifying)
+    if not qualifying and anchor_mode:
+        result["reason"] = anchor_reason(result["anchor"], policy)
+        return result
     if not qualifying:
         result["reason"] = (f"no cross-game combination reaches +100 with estimated EV >= "
                             f"{MIN_ESTIMATED_EV:.0%} that also survives the uncertainty haircut")

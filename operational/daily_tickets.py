@@ -39,6 +39,7 @@ from operational import recording_pause
 from operational import shadow_selection
 from operational import ticket_policy
 from operational import state_paths
+from research.real_market_parlay import anchor
 from research.real_market_parlay import engine as rmp
 
 STATE_NAME = "tickets_state.json"
@@ -134,6 +135,8 @@ def _merge_and_add_context(nhl_conn, adapter_legs: list[rmp.ParlayLeg], bb_legs:
             notes["shots_legs_both_sources_min"] += 1
             leg = dataclasses.replace(
                 leg, conservative_probability=low, team=partner.team, opponent=partner.opponent,
+                model_probability=partner.model_probability, empirical_probability=partner.empirical_probability,
+                empirical_hits=partner.empirical_hits, empirical_games=partner.empirical_games,
                 game_start_utc=partner.game_start_utc, model_version=f"{leg.model_version}+{partner.model_version}(min)")
             out.append(leg)
             continue
@@ -413,10 +416,12 @@ def _builder_rationale(prov: dict, p, decimal_price: float) -> str:
     return f"Built by the person on the Paper Parlay Builder: their own selection, with no edge or +100 requirement. The price is {price}. {chance}Prices are US-feed quotes, not verified for Ontario."
 
 
-def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
+def ticket_from_combo(combo: rmp.ParlayResult, et_date: str, *, proposed: bool = False) -> dict:
+    policy = ticket_policy.active()
+    anchor_mode = getattr(policy, "mode", "legacy") == "anchor"
     legs = []
     for l in combo.legs:
-        legs.append({
+        legs.append({"evidence": anchor.leg_evidence(l) if anchor_mode else None,
             "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
             "participant_id": l.participant_id, "participant_name": l.participant_name,
             "provider_start_utc": l.provider_start_utc,
@@ -427,7 +432,7 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
             "probability": l.conservative_probability, "model_version": l.model_version, "outcome": None,
             "provisional": bool(getattr(l, "provisional", False))})
     stake = pb.PAPER_BET_STAKE
-    return {
+    card = {
         "ticket_id": pb.compute_ticket_id(et_date, combo.legs), "status": STATUS_RECOMMENDED, "recorded": False,
         "legs": legs, "combined_decimal": round(combo.combined_decimal, 4),
         "combined_american": combo.estimated_combo_price,
@@ -439,7 +444,11 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str) -> dict:
         "rationale": _rationale(combo.joint_probability, 1.0 / combo.combined_decimal, combo.ev_conservative,
                                 len(combo.legs), combo.leg_probability_margin),
         "recorded_at_utc": None, "event_start_utc": _earliest_start(combo), "result": None, "alerts": [],
-        "origin": "AUTOMATIC", "provenance": None}
+        "origin": "AUTOMATIC", "provenance": None, "proposed": proposed}
+    if anchor_mode:
+        info = anchor.describe(combo, policy)
+        card.update(rationale=info.pop("rationale"), anchor=info)
+    return card
 
 
 def exposure(cards: list[dict]) -> dict:
@@ -500,7 +509,7 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
 
 def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.ParlayResult], singles: list[rmp.ParlayLeg],
                 empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None,
-                provisional: dict | None = None) -> dict:
+                provisional: dict | None = None, proposed: bool = False) -> dict:
     et_date = et.eastern_today(now)
     rows = recorded_today(bankroll_conn, et_date)
     alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in rows])
@@ -508,7 +517,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
     recorded_ids = {c["ticket_id"] for c in cards}
     account = pb.account_state(bankroll_conn, TRACK)
     for combo in recommended:
-        card = ticket_from_combo(combo, et_date)
+        card = ticket_from_combo(combo, et_date, proposed=proposed)
         if card["ticket_id"] not in recorded_ids:
             cards.append(card)
     slots_used = len(cards)
@@ -751,10 +760,10 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     def ticket_filter(combo, already):
         return wave_filter(combo, already) or early_filter(combo, already)
     pause = recording_pause.status()
-    if pause["paused"]:                      # owner pause: nothing is selected or recorded; collection, publishing, settlement and personal accounts carry on
-        picked = {"tickets": [], "qualifying": 0, "pool_size": 0, "reason": recording_pause.notice(pause)}
+    if pause["paused"]:                      # owner pause: nothing is recorded or staked. The selector still runs so the board can show what it WOULD record (proposed, unrecorded), for the owner's review.
+        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter, policy=ticket_policy.active())
         try:                                 # forward evidence while paused: the pool and what each policy variant would pick, frozen before the games (nothing is staked)
-            selection_audit = {"paused": True, "shadow_log": shadow_selection.record(legs, now, code_version())}
+            selection_audit = {"paused": True, "shadow_log": shadow_selection.record(legs, now, code_version(), proposed=picked["tickets"])}
         except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
             selection_audit = {"paused": True, "shadow_log": {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}}
     else:
@@ -764,12 +773,14 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
 
     account = pb.account_state(bankroll_conn, TRACK)
     revalidated, held_back = [], []
-    for combo in picked["tickets"]:
+    for combo in ([] if pause["paused"] else picked["tickets"]):
         why = revalidate_before_recording(combo, now)
         (held_back if why else revalidated).append((combo, why))
     record_results = record_tickets(bankroll_conn, [c for c, _ in revalidated], now) if revalidated else []
     if pause["paused"]:
-        reason = recording_pause.notice(pause)
+        n = len(picked["tickets"])
+        reason = (recording_pause.notice(pause) + (f" The {n} ticket(s) below are what the selector would record: proposed, not recorded, nothing staked." if n else
+                                                     f" Nothing would be recorded right now: {picked['reason']}"))
     elif slots_left == 0:
         reason = f"All {SLOT_COUNT} of today's ticket slots are recorded."
     else:
@@ -797,7 +808,8 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         options = {"date_et": et_date, "options": [], "persons": {}, "error": f"{exc.__class__.__name__}: {exc}"}
     options["generated_at_utc"] = now.isoformat()
     state = build_state(bankroll_conn, now, recommended=still_recommended, singles=singles, empty_reason=reason,
-                        diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional)
+                        diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional,
+                        proposed=bool(pause["paused"]))
     state["ticket_policy"] = ticket_policy.describe()
     if pause["paused"]:
         state["notice"] = recording_pause.notice(pause)

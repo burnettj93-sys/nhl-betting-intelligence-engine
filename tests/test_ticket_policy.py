@@ -34,7 +34,7 @@ class TestPolicyObject(unittest.TestCase):
         a = P.PROPOSED
         self.assertNotEqual(a.digest(), P.LEGACY.digest())
         import dataclasses
-        self.assertNotEqual(a.digest(), dataclasses.replace(a, floor=0.30).digest())
+        self.assertNotEqual(a.digest(), dataclasses.replace(a, floor=0.35).digest())
         self.assertEqual(a.digest(), dataclasses.replace(a).digest())
 
     def test_the_proposal_keeps_five_slots_and_allows_none(self):
@@ -56,7 +56,7 @@ class TestSelectorEnforcesTheObjective(unittest.TestCase):
     def test_a_weak_ticket_that_the_old_rules_accept_is_refused_with_the_reason(self):
         weak = [leg(1, 10, 0.45, 150, "A"), leg(2, 20, 0.45, 150, "B")]                 # 20% hit chance at +525: clears the old EV tests
         old = rmp.select_tickets(weak, max_tickets=5)
-        new = rmp.select_tickets(weak, max_tickets=5, policy=P.PROPOSED)
+        new = rmp.select_tickets(weak, max_tickets=5, policy=P.EARLIER_PROPOSAL)
         self.assertEqual(len(old["tickets"]), 1)
         self.assertEqual(new["tickets"], [])
         self.assertEqual(new["considered"][0]["status"], "BELOW_HIT_CHANCE_FLOOR")
@@ -68,32 +68,32 @@ class TestSelectorEnforcesTheObjective(unittest.TestCase):
         # 62% x 62% = 38% hit chance (above the floor) but priced so that, after the 3-point haircut, less than +3% edge is left (EV +1.5%)
         pool = [leg(1, 10, 0.62, -142, "A"), leg(2, 20, 0.62, -142, "B")]
         old = rmp.select_tickets(pool, max_tickets=5)
-        new = rmp.select_tickets(pool, max_tickets=5, policy=P.PROPOSED)
+        new = rmp.select_tickets(pool, max_tickets=5, policy=P.EARLIER_PROPOSAL)
         self.assertEqual(len(old["tickets"]), 1)
         self.assertEqual(new["tickets"], [])
         self.assertEqual(new["considered"][0]["status"], "VALUE_NOT_MEANINGFUL")
 
     def test_up_to_five_tickets_are_allowed_when_five_worthwhile_ones_exist(self):
         pool = strong_pool(10)                                                      # 10 games, each leg usable once: five disjoint pairs
-        new = rmp.select_tickets(pool, max_tickets=P.PROPOSED.slots, policy=P.PROPOSED)
+        new = rmp.select_tickets(pool, max_tickets=P.EARLIER_PROPOSAL.slots, policy=P.EARLIER_PROPOSAL)
         self.assertEqual(len(new["tickets"]), 5)
         players = [l.participant_id for t in new["tickets"] for l in t.legs]
         self.assertEqual(len(players), len(set(players)))                           # one ticket per player
 
     def test_the_proposed_policy_limits_a_player_to_one_ticket(self):
         pool = strong_pool(3)                                                       # three players: only one disjoint pair exists
-        new = rmp.select_tickets(pool, max_tickets=5, policy=P.PROPOSED)
+        new = rmp.select_tickets(pool, max_tickets=5, policy=P.EARLIER_PROPOSAL)
         self.assertEqual(len(new["tickets"]), 1)
         old = rmp.select_tickets(pool, max_tickets=5, policy=P.LEGACY)
         self.assertGreater(len(old["tickets"]), 1)
 
     def test_every_ticket_the_proposal_takes_meets_its_own_floor_and_value_rule(self):
-        for t in rmp.select_tickets(strong_pool(10), max_tickets=5, policy=P.PROPOSED)["tickets"]:
-            self.assertGreaterEqual(t.joint_probability, P.PROPOSED.floor)
+        for t in rmp.select_tickets(strong_pool(10), max_tickets=5, policy=P.EARLIER_PROPOSAL)["tickets"]:
+            self.assertGreaterEqual(t.joint_probability, P.EARLIER_PROPOSAL.floor)
             shaded = 1.0
             for l in t.legs:
-                shaded *= l.conservative_probability - P.PROPOSED.value_shade
-            self.assertGreaterEqual(shaded * t.combined_decimal - 1.0, P.PROPOSED.min_value_after_shade - 1e-12)
+                shaded *= l.conservative_probability - P.EARLIER_PROPOSAL.value_shade
+            self.assertGreaterEqual(shaded * t.combined_decimal - 1.0, P.EARLIER_PROPOSAL.min_value_after_shade - 1e-12)
             self.assertGreaterEqual(t.combined_decimal, 2.0)
 
 
@@ -138,7 +138,7 @@ class TestApprovalGate(unittest.TestCase):
     def test_changing_the_policy_voids_an_earlier_approval(self):
         tp.approve(P.PROPOSED.digest(), now=NOW)
         import dataclasses
-        changed = dataclasses.replace(P.PROPOSED, floor=0.30)
+        changed = dataclasses.replace(P.PROPOSED, floor=0.35)
         self.assertFalse(tp.is_approved(changed))
 
     def test_the_legacy_selector_is_only_reachable_inside_a_test_run(self):

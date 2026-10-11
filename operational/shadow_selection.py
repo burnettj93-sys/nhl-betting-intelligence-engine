@@ -25,7 +25,8 @@ STATE = "selection_shadow_state.json"
 def _compact(l) -> list:
     from research.real_market_parlay import engine as rmp
     return [str(l.game_id), str(l.participant_id), l.market_family, l.threshold, l.american_price, round(l.conservative_probability, 5), l.participant_name, l.team, l.game_start_utc,
-            l.quote_updated_utc or l.captured_at_utc, bool(rmp.leg_has_edge(l))]
+            l.quote_updated_utc or l.captured_at_utc, bool(rmp.leg_has_edge(l)),
+            l.empirical_probability, l.empirical_hits, l.empirical_games, l.model_probability, l.market_probability]
 
 
 def _ticket(c: dict) -> dict:
@@ -33,7 +34,7 @@ def _ticket(c: dict) -> dict:
             "ev": round(c["ev"], 5), "ev_after_haircut": round(c["ev_haircut"], 5)}
 
 
-def record(legs: list, now: dt.datetime, code_version: str | None = None) -> dict:
+def record(legs: list, now: dt.datetime, code_version: str | None = None, proposed: list | None = None) -> dict:
     """Append the pool and the variants' picks unless the pool is unchanged. Returns {"status": "WRITTEN"|"UNCHANGED"|"EMPTY", ...}."""
     from operational import selection_variants as sv
     from research.real_market_parlay import engine as rmp
@@ -52,8 +53,11 @@ def record(legs: list, now: dt.datetime, code_version: str | None = None) -> dic
     cands = sv.candidates_from_legs(legs)
     variants = {name: {"label": rule["label"], "tickets": [_ticket(c) for c in sv.select(cands, rule)]} for name, rule in sv.VARIANTS.items()}
     rec = {"at_utc": now.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "et_date": et.eastern_today(now), "code_version": code_version, "pool_key": key,
-           "pool_fields": ["game_id", "player_id", "market_family", "threshold", "american_price", "probability", "name", "team", "game_start_utc", "quote_time_utc", "passed_edge_filter"],
-           "pool": pool, "qualifying_tickets": len(cands), "variants": variants}
+           "pool_fields": ["game_id", "player_id", "market_family", "threshold", "american_price", "probability", "name", "team", "game_start_utc", "quote_time_utc", "passed_edge_filter",
+                          "empirical_probability", "empirical_hits", "empirical_games", "model_probability", "market_probability"],
+           "pool": pool, "qualifying_tickets": len(cands), "variants": variants,
+           "proposed_tickets": [{"legs": [[str(l.game_id), str(l.participant_id), l.market_family, l.threshold, l.american_price, l.conservative_probability, l.participant_name] for l in c.legs],
+                                 "hit_probability": round(c.joint_probability, 5), "price": round(c.estimated_combo_price, 1), "ev": round(c.ev_estimated, 5)} for c in (proposed or [])]}
     path = state_paths.path(NAME)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:

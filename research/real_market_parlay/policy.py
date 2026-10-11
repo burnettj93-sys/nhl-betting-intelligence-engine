@@ -37,6 +37,7 @@ class TicketPolicy:
     max_per_leg: int = 2
     max_per_game: int = 3
     max_per_player: int | None = 2       # None = no per-player limit
+    mode: str = "legacy"                 # "anchor": legs are scored by the player's own record / the market, ticket-level value, up to five legs (research/real_market_parlay/anchor.py)
 
     def as_dict(self) -> dict:
         return dataclasses.asdict(self)
@@ -45,6 +46,11 @@ class TicketPolicy:
         return hashlib.sha256(json.dumps(self.as_dict(), sort_keys=True).encode()).hexdigest()[:16]
 
     def summary(self) -> str:
+        if self.mode == "anchor":
+            return (f"up to {self.slots} tickets a day (zero is allowed); each +100 or better, 2 to 5 legs, every leg from a different game; legs are well supported (2+ shots for a player who reaches the line in "
+                    f"most of his last 30 games, or a moneyline at the market's own chance), never points or goal bets; estimated hit chance of at least {self.floor:.0%}; estimated value of at least "
+                    f"{self.min_estimated_ev:+.0%}, at least {self.min_value_after_shade:+.0%} after lowering every leg by {self.value_shade * 100:.0f} points, and not negative if the true chance is halfway "
+                    f"between the player's record and the price; ranked by estimated hit chance; each player on at most {self.max_per_player} ticket a day")
         parts = [f"up to {self.slots} tickets a day (zero is allowed)", "each +100 or better"]
         if self.floor > 0:
             parts.append(f"estimated hit chance of at least {self.floor:.0%}")
@@ -54,7 +60,8 @@ class TicketPolicy:
 
 
 LEGACY = TicketPolicy(policy_id="legacy-2026-10-09", status="IN_FORCE_UNTIL_2026-10-10_PAUSED")
-# The proposal changes FOUR numbers and keeps the rest (the +100 bar, the 5% EV bar on recorded probabilities, the 3-point haircut, five slots):
+# 2026-10-11 anchor policy (below): replaces the 2026-10-10 numbers. The rules it follows are documented in research/real_market_parlay/anchor.py.
+# (The earlier proposal) changed FOUR numbers and keeps the rest (the +100 bar, the 5% EV bar on recorded probabilities, the 3-point haircut, five slots):
 #   floor              0%  -> 25%  "strong": about one in four or better. A two-leg ticket reaches 25% when its legs' probabilities MULTIPLY to 0.25, i.e. their geometric average is 50%
 #                                    (50% x 50%, or 70% x 36%, or 56% x 45%); it is not a requirement that both legs exceed 50%. Three legs need an average of about 63%.
 #   min value after    0%  -> +3%  "meaningful": the edge that remains after the 3-point haircut must be at least 3%, so a ticket whose whole edge is a rounding of a price or a fraction of the model's error is
@@ -62,5 +69,8 @@ LEGACY = TicketPolicy(policy_id="legacy-2026-10-09", status="IN_FORCE_UNTIL_2026
 #   per player         2   -> 1    one bad night cannot sink several tickets (docs/POSTMORTEM_2026-10-10.md: shared legs raise the chance that no ticket wins)
 #   per game           3   -> 2    and the same for a game
 # An earlier draft (30% floor, 5-point haircut) recorded nothing on either audited day on entry information alone, so it was not practical; that is why it was replaced, not any result.
-PROPOSED = TicketPolicy(policy_id="restart-proposal-2026-10-10b", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL",
-                        floor=0.25, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=2, max_per_player=1)
+# The 2026-10-10 restart proposal, kept (never active) so the floor/value/exposure mechanism it exercises stays tested and the shadow evidence logged under it stays interpretable.
+EARLIER_PROPOSAL = TicketPolicy(policy_id="restart-proposal-2026-10-10b", status="SUPERSEDED_BY_ANCHOR_POLICY",
+                                floor=0.25, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=2, max_per_player=1)
+PROPOSED = TicketPolicy(policy_id="anchor-tickets-2026-10-11", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",
+                        floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1)

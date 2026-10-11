@@ -220,7 +220,9 @@ class TestOwnerMarketChoice(unittest.TestCase):
         with mock.patch.dict("os.environ", {}, clear=False):
             import os
             os.environ.pop(cp.PROP_MARKETS_ENV, None)
-            self.assertEqual((cp.prop_markets(), cp.base_cost()), (cp.DEFAULT_PROP_MARKETS, 2))
+            self.assertEqual((cp.prop_markets(), cp.base_cost()), ((cp.SHOTS_KEY,), 1))        # the default buys each game's shots ladder only
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"}):
+            self.assertEqual((cp.prop_markets(), cp.base_cost()), ((cp.SHOTS_KEY, cp.POINTS_KEY), 2))   # points are an owner opt-in
         with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points"}):
             self.assertEqual((cp.prop_markets(), cp.base_cost()), (("player_points",), 1))
         with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points,not_a_market"}):
