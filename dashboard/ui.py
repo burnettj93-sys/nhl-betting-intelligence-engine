@@ -284,11 +284,12 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
         else:
             note = f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None
         ev = l.get("evidence") or {}
-        record = (f"{ev['hits']} of last {ev['games']} games · model {pct(ev.get('model'))}" if ev.get("kind") == "player_record" and ev.get("hits") is not None
-                  else "market no-vig chance" if ev.get("kind") == "market" else None)
+        record = (f"recent {ev['hits']} of last {ev['games']} games ({pct(ev.get('recent_hit_rate') if ev.get('recent_hit_rate') is not None else ev['hits'] / max(ev['games'], 1))}) · model {pct(ev.get('model'))}"
+                  if ev.get("kind") == "player_record" and ev.get("hits") is not None
+                  else "estimate = market no-vig chance" if ev.get("kind") == "market" else None)
         meta = " · ".join(x for x in (game, when if when != "—" else None, record, note) if x)
         res = {"WIN": ("won", "Won"), "LOSS": ("lost", "Lost"), "VOID": ("void", "Void")}.get(l.get("outcome") or "") if outcomes else None
-        chance = f"{'Estimate' if ev else 'Model'} {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
+        chance = f"{'Final estimate' if ev else 'Model'} {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
         if edge is not None and edge < 1.0:
             chance += " <span class='edge flat'>· no edge of its own</span>"
         rows.append(f"<div class='leg {res[0] if res else ''}{' stale' if stale['stale'] else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"

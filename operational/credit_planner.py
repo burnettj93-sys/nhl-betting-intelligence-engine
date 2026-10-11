@@ -34,6 +34,7 @@ PLAN_NAME = "credit_plan_state.json"
 MONEYLINE_DECISION, MONEYLINE_UI, PROPS, SAVES, GOALS, REFRESH = ("MONEYLINE_DECISION", "MONEYLINE_UI", "PROPS_PREGAME", "SAVES_CONFIRMED",
                                                                    "GOALS", "REFRESH")
 MORNING, TOMORROW = "PROPS_MORNING", "TOMORROW_CHECK"
+POINTS_ADDON = "PROPS_POINTS"  # player_points added to a game's pregame shots capture: one more credit, funded after shots coverage (the lead games first), so shots never lose a game to points
 PREGAME_MIN_GAMES = 2         # two priced games are the least that makes a cross-game ticket possible, so they are funded before any morning breadth
 TOMORROW_COST = 1             # the evening availability check of tomorrow's games: at most one market, and a market not yet posted costs 0
 DECISION_RESERVE = 3          # T-35 pulls per day the plan always funds (typical day: 2-3 start clusters)
@@ -43,7 +44,7 @@ VALID_PROP_MARKETS = (SHOTS_KEY, POINTS_KEY)
 DEFAULT_PROP_MARKETS = (SHOTS_KEY,)       # shots ladders only (2026-10-11): the tickets are built from shots legs and moneylines, so a credit buys a game's ladder, not its points prices
 PROP_MARKETS_ENV = "NHL_ENGINE_PROP_MARKETS"
 BASE_COST = 1                 # shots (alternate) only by default; NHL_ENGINE_PROP_MARKETS=player_shots_on_goal_alternate,player_points buys points too (two credits a game); see base_cost()
-SAVES_COST, GOALS_COST = 1, 1
+SAVES_COST, GOALS_COST, POINTS_COST = 1, 1, 1
 SAVES_MAX_PER_DAY = 3
 FIRST_CAPTURE_HOURS = 1.75    # one capture per game at or inside this many hours before puck drop; fresh through puck drop
 WAVE_MINUTES = 90
@@ -174,6 +175,11 @@ def morning_enabled() -> bool:
     return raw.strip().lower() not in ("off", "0", "false", "no")
 
 
+def points_addon_enabled() -> bool:
+    """Points ride along on the pregame capture as an add-on unless the owner already buys them with every game's shots (NHL_ENGINE_PROP_MARKETS)."""
+    return POINTS_KEY not in prop_markets()
+
+
 def base_cost() -> int:
     return len(prop_markets())
 
@@ -196,6 +202,9 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     ui = take(UI_FIRST); left -= ui
     order = rank_games(starts)
     k_pre = min(n, PREGAME_MIN_GAMES, int(max(left, 0.0) // BASE_COST)); left -= k_pre * BASE_COST
+    addon = points_addon_enabled()
+    k_pts_lead = min(k_pre, int(max(left, 0.0) // POINTS_COST)) if addon else 0       # the lead games keep their points prices (the personal builder and Players pages use them)
+    left -= k_pts_lead * POINTS_COST
     both = left - n * 1 - (n - k_pre) * BASE_COST >= n            # can every game afford shots AND points this morning, with the pregame still funded?
     owner_markets = list(prop_markets())[:max(BASE_COST, 1)]       # the owner's market choice also bounds the morning look
     morning_markets = tuple(owner_markets) if (both and n) else tuple(owner_markets[:1])
@@ -209,17 +218,21 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     saves_games = _take(saves_games, k_saves); left -= k_saves * SAVES_COST
     ui_extra = take(UI_SECOND) if k_pre == n else 0.0; left -= ui_extra
     tomorrow = take(TOMORROW_COST); left -= tomorrow
+    k_pts_extra = min(max(len(props_games) - k_pts_lead, 0), int(max(left, 0.0) // POINTS_COST)) if addon else 0     # then any other priced game, with what shots coverage leaves over
+    left -= k_pts_extra * POINTS_COST
+    points_games = _take(props_games, k_pts_lead + k_pts_extra)
     k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))
     goals_games = _take(props_games, k_goals); left -= k_goals * GOALS_COST
     refresh = max(left, 0.0)
-    full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + TOMORROW_COST + n * (BASE_COST + GOALS_COST) + n * 2 + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
+    full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + TOMORROW_COST + n * (BASE_COST + GOALS_COST + (POINTS_COST if addon else 0)) + n * 2 + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
     base_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST
     morning_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST + n * 1
     return {"D": D, "games_today": n, "games_priced": props_games, "games_not_priced": [g for g in order if g not in props_games],
             "morning_games": morning_games, "morning_markets": list(morning_markets),
-            "goals_games": goals_games, "saves_games": saves_games,
+            "goals_games": goals_games, "points_games": points_games, "saves_games": saves_games,
             "allowance": {MONEYLINE_DECISION: decision, MONEYLINE_UI: ui + ui_extra, PROPS: float(k_pre * BASE_COST), SAVES: float(k_saves * SAVES_COST),
-                          MORNING: float(k_morn * mcost), TOMORROW: float(tomorrow), GOALS: float(k_goals * GOALS_COST), REFRESH: round(refresh, 2)},
+                          MORNING: float(k_morn * mcost), TOMORROW: float(tomorrow), GOALS: float(k_goals * GOALS_COST), POINTS_ADDON: float(len(points_games) * POINTS_COST),
+                          REFRESH: round(refresh, 2)},
             "need_for_all_games_and_markets": full_need, "need_for_required_only": base_need, "need_for_morning_and_pregame": morning_need,
             "shortfall_per_day_required_only": round(max(base_need - D, 0.0), 1), "shortfall_per_day_everything": round(max(full_need - D, 0.0), 1),
             "shortfall_per_day_morning_and_pregame": round(max(morning_need - D, 0.0), 1)}
@@ -252,6 +265,8 @@ def day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *, rema
         return plan
     # keep the chosen priced set and goals subset; update everything that legitimately changes during the day
     plan = {**saved, "saves_games": fresh["saves_games"], "budget": budget, "allowance": {**saved["allowance"], SAVES: fresh["allowance"][SAVES]}}
+    plan.setdefault("points_games", [])                 # a plan saved before the points add-on existed buys none today
+    plan["allowance"].setdefault(POINTS_ADDON, 0.0)
     if "morning_games" not in plan:
         # A plan saved before the morning slot existed (the transition day) already commits the whole day budget to its other classes. The morning look may only use what
         # those classes leave over, so introducing it can never push the day past its budget.

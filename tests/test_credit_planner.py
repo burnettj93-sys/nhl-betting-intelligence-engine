@@ -183,6 +183,41 @@ class TestCaptureDecisions(unittest.TestCase):
         self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 2), (cp.GOALS, 1)])      # goals are accounted in their own class
         self.assertEqual(out["events_captured"], 1)
 
+    def _capture(self, plan, requests_last):
+        class Client:
+            def __init__(self):
+                self.calls = []
+            def get_nhl_events(self):
+                return mock.Mock(ok=True, data=[{"id": "e1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": "2026-10-08T20:15:00Z"}])
+            def get_event_odds(self, eid, markets):
+                self.calls.append(markets)
+                return mock.Mock(ok=True, requests_last=requests_last)
+        games = {"1": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-08T20:15:00Z"}}
+        client = Client()
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}), mock.patch.object(cp, "record") as rec, mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(bb, "decision_age_min", return_value=None), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
+            out = bb.capture_prices(NOW, client=client, archive_mod=mock.Mock(), games=games, plan=plan)
+        return client, rec, out
+
+    def test_points_ride_on_the_pregame_shots_capture_for_planned_games_and_are_accounted_apart(self):
+        plan = {**PLAN, "goals_games": [], "points_games": ["1"], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 1.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
+        client, rec, out = self._capture(plan, requests_last=2)
+        self.assertEqual(client.calls, [f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"])
+        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 1), (cp.POINTS_ADDON, 1)])
+
+    def test_a_game_without_a_points_credit_buys_shots_alone_and_says_points_were_not_fetched(self):
+        plan = {**PLAN, "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 0.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
+        with mock.patch("operational.price_availability.note_unfetched") as note:
+            client, rec, _ = self._capture(plan, requests_last=1)
+        self.assertEqual(client.calls, [cp.SHOTS_KEY])
+        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 1)])
+        self.assertTrue(any(c.args[2] == cp.POINTS_KEY and "BUDGET" in str(c.args[3]) for c in note.call_args_list))
+
+    def test_a_denied_points_credit_drops_points_not_the_game(self):
+        plan = {**PLAN, "goals_games": [], "points_games": ["1"], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 0.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
+        client, _, out = self._capture(plan, requests_last=1)
+        self.assertEqual((client.calls, out["events_captured"]), ([cp.SHOTS_KEY], 1))
+
     def test_a_goals_capture_does_not_eat_the_next_games_base_allowance(self):
         """2026-10-08: BOS's 3-credit capture was recorded as PROPS, so the third planned game (2 more credits) was denied against an allowance of 6."""
         plan = {**PLAN, "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}}
@@ -213,6 +248,42 @@ class TestSweeps(unittest.TestCase):
     def test_planned_sweeps_never_buy_shots(self):
         self.assertNotIn("shots", lop.PLANNED_SWEEP_MARKETS)
         self.assertEqual(lop.PLANNED_SWEEP_MARKETS, "player_total_saves")
+
+
+class TestPointsAddOn(unittest.TestCase):
+    """Shots are bought first; points ride on the pregame capture as an add-on, lead games first, so shots never lose a game to points and points are not silently dropped."""
+    SHOTS_ONLY = {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate"}
+
+    def test_the_lead_games_keep_their_points_before_morning_breadth_is_bought(self):
+        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
+            a = cp.allocate(11.5, SEVEN)
+        self.assertEqual(len(a["points_games"]), 2)
+        self.assertEqual(a["points_games"], a["games_priced"][:2])
+        self.assertEqual(a["allowance"][cp.POINTS_ADDON], 2.0)
+        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])          # the morning look stays shots-only
+
+    def test_a_tight_day_buys_shots_not_points(self):
+        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
+            a = cp.allocate(5.0, SEVEN)                                   # decision 3 + display 1 leave one credit: one game's shots, no points
+        self.assertEqual((len(a["games_priced"]), a["points_games"]), (1, []))
+
+    def test_a_generous_day_adds_points_to_every_priced_game(self):
+        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
+            a = cp.allocate(40.0, SEVEN)
+        self.assertEqual(sorted(a["points_games"]), sorted(a["games_priced"]))
+
+    def test_no_add_on_when_the_owner_already_buys_points_with_every_game(self):
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"}):
+            a = cp.allocate(11.5, SEVEN)
+        self.assertEqual(a["points_games"], [])
+
+    def test_the_add_on_has_its_own_allowance_in_authorize(self):
+        plan = {"allowance": {cp.POINTS_ADDON: 2.0}}
+        with mock.patch.object(cp, "spent_today", return_value={cp.POINTS_ADDON: 2.0}):
+            self.assertFalse(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan=plan)["allow"])
+        with mock.patch.object(cp, "spent_today", return_value={cp.POINTS_ADDON: 1.0}):
+            self.assertTrue(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan=plan)["allow"])
+        self.assertFalse(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan={"allowance": {}})["allow"])    # a plan without the class buys none
 
 
 class TestOwnerMarketChoice(unittest.TestCase):

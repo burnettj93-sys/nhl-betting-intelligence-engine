@@ -115,7 +115,7 @@ def walk(config: P.ModelConfig, seasons: tuple[int, ...], rows: list[dict], with
                 recent = proj["recent_toi"]
                 role_change = bool(len(recent) >= 5 and st.toi / max(st.w_toi, 1e-9) > 0 and
                                    abs(sum(recent[-3:]) / 3 - sum(recent) / len(recent)) / max(sum(recent) / len(recent), 1e-9) > 0.2)
-                rec = {"season": season, "pid": r["player_id"], "grp": proj["position_group"], "n_prior": n_prior,
+                rec = {"season": season, "date": day, "pid": r["player_id"], "grp": proj["position_group"], "n_prior": n_prior,
                        "role_change": role_change, "mean": {s: proj[s] for s in P.STATS}, "toi": proj["toi"],
                        "toi_pp": proj["toi_pp"], "actual": {s: r[s] for s in P.STATS},
                        "actual_toi": r["toi"], "actual_pp": r["toi_pp"]}

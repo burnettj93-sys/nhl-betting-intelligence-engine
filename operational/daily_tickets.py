@@ -99,7 +99,10 @@ def _adapter_legs(nhl_conn, now: dt.datetime) -> tuple[list[rmp.ParlayLeg], dict
         report[name] = {"legs": len(got), "excluded": len(excluded), "exclusion_reasons": reasons}
 
     from operational import moneyline_model_path
-    add("MONEYLINE", moneyline_model_path.version(), adapter.moneyline_candidate_legs(nhl_conn, now=now))
+    from operational import best_bets
+    # Under the anchor policy a moneyline is a ticket leg for as long as its quote is fresh by the same limit as a shots price (morning and daytime pulls count); otherwise the T-35 tiers apply.
+    limit = best_bets.price_age_limit_min if getattr(ticket_policy.active(), "mode", "legacy") == "anchor" else None
+    add("MONEYLINE", moneyline_model_path.version(), adapter.moneyline_candidate_legs(nhl_conn, now=now, freshness_limit_min=limit))
     sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
     add("PLAYER_SOG_ALTERNATE", "sog-alternate-validated-v1",
         adapter.sog_alternate_candidate_legs(nhl_conn, sog_alt, now=now))

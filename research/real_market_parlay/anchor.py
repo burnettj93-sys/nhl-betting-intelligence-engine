@@ -6,20 +6,21 @@ and other supported markets -- ranked by estimated hit chance, each with value t
 
 What changed from the earlier selector, and why (each item is a fact about the evidence, not a tuned number):
 
-  * The estimate for a shots leg is the player's own record, not the model alone. The calibrated skater model under-predicts consistent shooters: on the held-out 2023, 2024 and 2025
-    seasons its 0.64-0.83 estimates were 3-8 points below what happened, while the share of his last 30 games in which the player reached the threshold (shrunk toward the league rate
-    by 8 pseudo-games, research/product_models/live.shot_frequencies) was calibrated in every one of those seasons for 2+ shots at 0.60-1.00 and for 3+ shots at 0.60-0.70 (docs/validation/anchor_calibration.json; above 0.70 for 3+ there is too little data, so nothing higher is claimed).
-    The estimate used is that frequency, capped at the model's number plus ANCHOR_CAP so one hot month cannot run away from the model. Both numbers, the sample (k of n games) and the
-    price-implied probability are shown beside the estimate.
+  * The estimate for a shots leg is the player's own record, not the model alone. The record is the share of his last 30 games with at least the line's shots, shrunk toward the league rate by 8
+    pseudo-games (research/product_models/live.shot_frequencies). On the project's walk-forward evaluation (deploy/anchor_calibration.py -> docs/validation/anchor_calibration.json, the live model's own
+    configuration and Platt parameters) the calibrated model under-predicted consistent shooters by about 2-4 points at 0.70+ for 2+ shots, and the exact estimate used here -- the record, capped at the
+    model plus ANCHOR_CAP and at HIGH_LINE_CAP for 3+ shots -- was within 2 points of what happened on 2025, the only season out of sample for the model (2023 and 2024 are model-fitting seasons and are
+    reported as such). Three numbers are always kept apart: the recent hit rate (k of n games), the model's probability and the final estimate, with the price-implied probability beside them.
   * A moneyline is estimated at the market's own no-vig probability. No model here beats a DraftKings moneyline, so the honest estimate is the market's, which is worth -(the margin) by
-    construction; such a leg never creates value, it can only make a ticket clear +100. It is used only when the Elo model does not disagree with the market by more than ELO_DISAGREE.
+    construction; such a leg never creates value, it can only make a ticket clear +100. It is used only when the Elo model also has that side as the favourite (Elo's probabilities are compressed toward 50%, so its size is not compared to the price).
   * Points and anytime-goal legs are not used. They are speculative (no ticket needs them) and have no calibration evidence of the kind above.
   * The per-leg "must beat its own price" test is replaced by a ticket-level test at the price actually offered. A leg may cost up to LEG_MIN_EV (about a bookmaker's margin) so a
     moneyline can complete a ticket, but the ticket as a whole must show estimated value of at least MIN_ESTIMATED_EV and must stay non-negative with every leg lowered by LEG_PROBABILITY_MARGIN.
   * Up to MAX_LEGS legs, from different games, one leg per game: two legs from one game would need a joint price that DraftKings has not quoted and this code cannot honestly derive.
   * A longer ticket is kept only when no shorter ticket from its own legs already passes (an extra leg must be needed, never merely possible).
 
-Nothing here is a validated edge. The estimates are calibrated on held-out player-games, not on sportsbook prices (none exist), and Ontario prices and settlement rules are unverified.
+Nothing here is a validated edge. The estimates were checked for calibration on walk-forward player-games (out of sample for the model only in 2025), not on sportsbook prices (none exist),
+not on the subset where a sportsbook prices a leg cheaper than the estimate, and Ontario prices and settlement rules are unverified.
 """
 from __future__ import annotations
 
@@ -28,12 +29,11 @@ import math
 from collections import defaultdict
 from itertools import combinations, product
 
-ANCHOR_CAP = 0.10            # an estimate never exceeds the model's probability by more than this (held-out gaps were 0.03-0.08)
+ANCHOR_CAP = 0.10            # an estimate never exceeds the model's calibrated probability by more than this (the average gap at 0.70+ was 2-4 points; this bounds an individual player)
 MIN_SAMPLE_GAMES = 20        # games behind a shots estimate (the window is 30; an early-season player carries last season's games)
-HIGH_LINE_CAP = 0.70         # 3+ shots and above: the record was calibrated for 0.60-0.70 estimates only (above that there are few player-games and 2024 over-stated it), so nothing higher is claimed
-SHOTS_LEG_FLOOR = 0.60       # the calibrated band is 0.60-1.00; a leg below it is not "well supported"
+HIGH_LINE_CAP = 0.70         # 3+ shots and above: the final estimate was calibrated at 0.60-0.70 only (above that there are few player-games and 2024 over-stated it), so nothing higher is claimed
+SHOTS_LEG_FLOOR = 0.60       # "well supported" starts here; below it the record is not a strong case
 MONEYLINE_LEG_FLOOR = 0.55
-ELO_DISAGREE = 0.05
 LEG_MIN_EV = -0.05           # a leg may give up at most about a bookmaker's margin at the price offered
 MAX_LEGS = 5
 MAX_GAMES_SEARCHED = 10
@@ -65,8 +65,8 @@ def leg_estimate(leg) -> Estimate | None:
     if leg.market_family == "MONEYLINE":
         if leg.market_probability is None or not (0.0 < leg.market_probability < 1.0):
             return None
-        if leg.market_probability < MONEYLINE_LEG_FLOOR or leg.conservative_probability < leg.market_probability - ELO_DISAGREE:
-            return None
+        if leg.market_probability < MONEYLINE_LEG_FLOOR or (leg.model_probability is not None and leg.model_probability < 0.5):
+            return None                       # the Elo model must at least agree on who the favourite is (its probabilities are compressed toward 50%, so it is not compared to the price)
         return Estimate(leg.market_probability, MONEYLINE_SE, "the market's own no-vig probability")
     return None
 
@@ -172,13 +172,15 @@ def qualifying(pool: list, policy, evaluate, veto) -> tuple[list, dict]:
 
 
 def leg_evidence(leg) -> dict:
-    """What stands behind one leg's number, for display: the estimate, where it came from, the model's number and the price-implied probability."""
+    """What stands behind one leg's number, for display, with the four numbers kept apart: the recent hit rate (k of n, unshrunk), the model's probability, the final estimate and the price-implied probability."""
     est = leg_estimate(leg)
     d = _decimal(leg)
     out = {"estimate": leg.conservative_probability, "price_implied": round(1.0 / d, 4), "model": leg.model_probability,
            "basis": est.basis if est else None, "standard_error": round(est.se, 4) if est else None}
     if leg.market_family in SHOT_FAMILIES:
-        out.update(kind="player_record", hits=leg.empirical_hits, games=leg.empirical_games, record_rate=leg.empirical_probability)
+        games = leg.empirical_games or 0
+        out.update(kind="player_record", hits=leg.empirical_hits, games=games, recent_hit_rate=(round(leg.empirical_hits / games, 4) if games and leg.empirical_hits is not None else None),
+                   record_shrunk=leg.empirical_probability)
     else:
         out.update(kind="market", elo=leg.model_probability)
     return out
@@ -197,10 +199,12 @@ def describe(combo, policy) -> dict:
     for l in legs:
         ev = leg_evidence(l)
         if ev["kind"] == "player_record":
-            parts.append(f"{l.participant_name} {l.threshold}+ shots in {ev['hits']} of his last {ev['games']} games ({ev['record_rate']:.0%}; the model says {ev['model']:.0%}, the price implies {ev['price_implied']:.0%})")
+            parts.append(f"{l.participant_name} {l.threshold}+ shots: recent hit rate {ev['hits']} of {ev['games']} games ({ev['recent_hit_rate']:.0%}); model {ev['model']:.0%}; final estimate "
+                         f"{ev['estimate']:.0%}; price implies {ev['price_implied']:.0%}")
         else:
-            parts.append(f"{l.participant_name} to win (the market's own chance {ev['estimate']:.0%}; it adds price, not value)")
+            parts.append(f"{l.participant_name} to win: final estimate {ev['estimate']:.0%} is the market's own no-vig chance (price implies {ev['price_implied']:.0%}); it adds price, not value")
     text = (f"{'; '.join(parts)}. Together about {combo.joint_probability:.0%} (plausible range {rng['low']:.0%}-{rng['high']:.0%}) against {1.0 / combo.combined_decimal:.0%} implied by the prices. "
-            f"Estimated value {combo.ev_estimated:+.0%}; {shaded_ev:+.0%} with every leg lowered {policy.value_shade * 100:.0f} points; {mid:+.0%} if the true chance is halfway between the record and the price. "
-            "The record was calibrated on three held-out seasons, but DraftKings prices these legs lower, so the value depends on the record being the better guide; prices are US-feed quotes, not verified for Ontario.")
+            f"Estimated value {combo.ev_estimated:+.0%}; {shaded_ev:+.0%} with every leg lowered {policy.value_shade * 100:.0f} points; {mid:+.0%} if the true chance is halfway between the final estimate and the price. "
+            "The final estimate is the recent record shrunk toward the league rate and held to the model plus 10 points (70% for 3+ shots); that rule was within 2 points of what happened on the 2025 evaluation "
+            "(docs/validation/anchor_calibration.json), but DraftKings prices these legs lower, so the value depends on the record being the better guide. Prices are US-feed quotes, not verified for Ontario.")
     return {"hit_low": rng["low"], "hit_high": rng["high"], "midpoint_ev": round(mid, 4), "ev_after_shade": round(shaded_ev, 4), "rationale": text}
