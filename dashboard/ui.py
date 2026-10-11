@@ -283,9 +283,12 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
             note = f"⚠ STALE — quoted {age_short(stale['age_min'])} ago, past its {age_short(stale['limit_min'])} limit"
         else:
             note = f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None
-        meta = " · ".join(x for x in (game, when if when != "—" else None, note) if x)
+        ev = l.get("evidence") or {}
+        record = (f"{ev['hits']} of last {ev['games']} games · model {pct(ev.get('model'))}" if ev.get("kind") == "player_record" and ev.get("hits") is not None
+                  else "market no-vig chance" if ev.get("kind") == "market" else None)
+        meta = " · ".join(x for x in (game, when if when != "—" else None, record, note) if x)
         res = {"WIN": ("won", "Won"), "LOSS": ("lost", "Lost"), "VOID": ("void", "Void")}.get(l.get("outcome") or "") if outcomes else None
-        chance = f"Model {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
+        chance = f"{'Estimate' if ev else 'Model'} {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
         if edge is not None and edge < 1.0:
             chance += " <span class='edge flat'>· no edge of its own</span>"
         rows.append(f"<div class='leg {res[0] if res else ''}{' stale' if stale['stale'] else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"
@@ -406,9 +409,13 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
         _slip(legs, [("Estimated price" if len(legs) > 1 else "DraftKings quote", american(t["combined_american"]), "product of leg prices" if len(legs) > 1 else "US feed", "accent"),
                      ("Stake", money(t["stake"]), None, ""),
                      ("To return", money(t["potential_return"]), f"profit {money(t['potential_profit'])}" if t.get("potential_profit") is not None else None, ""),
-                     ("Model chance", pct(t.get("hit_probability")), (f"{chance_range_text(legs) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·") if decimal else chance_range_text(legs), ""),
+                     ("Estimated chance" if t.get("anchor") else "Model chance", pct(t.get("hit_probability")),
+                      (f"range {t['anchor']['hit_low'] * 100:.0f}–{t['anchor']['hit_high'] * 100:.0f}% · price implies {pct(1.0 / decimal)}" if t.get("anchor") else
+                       (f"{chance_range_text(legs) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·") if decimal else chance_range_text(legs)), ""),
                      ("Result", signed_money(pnl) if pnl is not None else ("Not recorded" if t.get("provisional") else "Open"), None,
                       ("good" if (pnl or 0) > 0 else "bad" if (pnl or 0) < 0 else "") if pnl is not None else "open")], outcomes=not t.get("provisional"))
+        if t.get("proposed"):
+            banner("<b>Proposed — not recorded.</b> Automatic recording is paused until you approve the ticket policy, so nothing is staked. This is what the selector would record right now, at current prices.", "info")
         if t.get("provisional"):
             banner("<b>Provisional — not recorded.</b> Built from an earlier look at DraftKings' prices that is now older than the freshness limit. It uses no slot and no money. "
                    "It is recorded only if, once its prices are refreshed, it still qualifies.", "warn")

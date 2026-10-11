@@ -39,9 +39,10 @@ TOMORROW_COST = 1             # the evening availability check of tomorrow's gam
 DECISION_RESERVE = 3          # T-35 pulls per day the plan always funds (typical day: 2-3 start clusters)
 UI_FIRST, UI_SECOND = 1, 1
 SHOTS_KEY, POINTS_KEY, GOALS_KEY, SAVES_KEY = "player_shots_on_goal_alternate", "player_points", "player_goal_scorer_anytime", "player_total_saves"
-DEFAULT_PROP_MARKETS = (SHOTS_KEY, POINTS_KEY)
+VALID_PROP_MARKETS = (SHOTS_KEY, POINTS_KEY)
+DEFAULT_PROP_MARKETS = (SHOTS_KEY,)       # shots ladders only (2026-10-11): the tickets are built from shots legs and moneylines, so a credit buys a game's ladder, not its points prices
 PROP_MARKETS_ENV = "NHL_ENGINE_PROP_MARKETS"
-BASE_COST = 2                 # shots (alternate) + points (the default pair); see base_cost() for an owner override
+BASE_COST = 1                 # shots (alternate) only by default; NHL_ENGINE_PROP_MARKETS=player_shots_on_goal_alternate,player_points buys points too (two credits a game); see base_cost()
 SAVES_COST, GOALS_COST = 1, 1
 SAVES_MAX_PER_DAY = 3
 FIRST_CAPTURE_HOURS = 1.75    # one capture per game at or inside this many hours before puck drop; fresh through puck drop
@@ -140,8 +141,8 @@ def _take(items: list, n: int) -> list:
 
 
 def prop_markets() -> tuple[str, ...]:
-    """The per-game markets bought in step 3. Default: shots (alternate) + points. The owner may trade market depth for game coverage by listing fewer
-    (`NHL_ENGINE_PROP_MARKETS=player_points` prices every game with one credit instead of three games with two)."""
+    """The per-game markets bought in step 3. Default: shots (alternate) only, one credit a game. The owner may add points
+    (`NHL_ENGINE_PROP_MARKETS=player_shots_on_goal_alternate,player_points`, two credits a game, half the games)."""
     import os
     raw = os.environ.get(PROP_MARKETS_ENV) or ""
     if not raw:
@@ -151,7 +152,7 @@ def prop_markets() -> tuple[str, ...]:
                 k, sep, v = line.strip().partition("=")
                 if sep and k.strip() == PROP_MARKETS_ENV:
                     raw = v.strip().strip("\"'")
-    chosen = tuple(m for m in (x.strip() for x in raw.split(",")) if m in DEFAULT_PROP_MARKETS)
+    chosen = tuple(m for m in (x.strip() for x in raw.split(",")) if m in VALID_PROP_MARKETS)
     return chosen or DEFAULT_PROP_MARKETS
 
 

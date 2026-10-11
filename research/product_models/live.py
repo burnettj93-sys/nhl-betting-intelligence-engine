@@ -114,6 +114,37 @@ def season_totals(recent_all: list[dict], season: int) -> dict:
             **{k: tot[k] for k in ("shots", "goals", "assists", "points", "hits", "blocks")}}
 
 
+FREQ_WINDOW = 30            # most recent games counted, across seasons -- the same window the validation baseline uses
+FREQ_PRIOR_GAMES = 8        # pseudo-games of league base rate blended in (validate._EmpiricalBaseline)
+
+
+def shot_frequencies(rows: list[dict]) -> dict[str, dict[int, dict]]:
+    """Per player and shots threshold k: how often he reached k shots in his last FREQ_WINDOW games, shrunk toward the league
+    rate by FREQ_PRIOR_GAMES pseudo-games. Identical in construction to validate._EmpiricalBaseline, which stayed calibrated
+    for 0.60-1.00 estimates in each of the 2023, 2024 and 2025 held-out seasons (docs/validation/anchor_calibration.json)."""
+    ks = EVENTS["shots"]
+    hist: dict[str, list[int]] = defaultdict(list)
+    base = {k: [0, 0] for k in ks}
+    for _date, day in _by_date(rows):
+        for r in day:
+            hist[r["player_id"]].append(r["shots"])
+            for k in ks:
+                base[k][0] += 1 if r["shots"] >= k else 0
+                base[k][1] += 1
+    out: dict[str, dict[int, dict]] = {}
+    for pid, h in hist.items():
+        recent = h[-FREQ_WINDOW:]
+        if len(recent) < 5:
+            continue
+        cell = {}
+        for k in ks:
+            hits = sum(1 for v in recent if v >= k)
+            prior = base[k][0] / base[k][1] if base[k][1] else 0.2
+            cell[k] = {"p": round((hits + FREQ_PRIOR_GAMES * prior) / (len(recent) + FREQ_PRIOR_GAMES), 4), "hits": hits, "n": len(recent)}
+        out[pid] = cell
+    return out
+
+
 def build(rows: list[dict] | None = None, season: int = history.CURRENT_SEASON, as_of_date: str | None = None) -> dict:
     """Projection state as of the newest observed game: per-player current numbers plus a `project(pid, opp)` closure
     result for every upcoming opponent supplied later by the caller."""
@@ -151,6 +182,7 @@ def build(rows: list[dict] | None = None, season: int = history.CURRENT_SEASON, 
         }
     infer_roles(players)
     return {"model": model, "players": players, "newest_game_date": newest, "alphas": alphas, "platt": platt,
+            "shot_freq": shot_frequencies(rows),
             "verdicts": market_verdicts(validation), "validation_version": validation["model_version"]}
 
 

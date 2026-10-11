@@ -75,6 +75,10 @@ slots = tk["slots"]
 st.subheader("Automatic tickets")
 st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket is a distinct cross-game bet at +100 or better; recorded tickets are paper bets and never change, "
            "recommended ones can still move with the next price refresh.")
+_proposed = [t for t in tk["tickets"] if t.get("proposed")]
+if _proposed:
+    st.caption(f"{len(_proposed)} of the tickets below are **proposed, not recorded**: automatic recording is paused until the ticket policy is approved, so they are what the selector would "
+               "record at the prices shown now, ranked by estimated hit chance. Each shows the evidence behind every leg's number.")
 for t in tk["tickets"]:
     ui.ticket_card(t)
 if slots["empty"]:

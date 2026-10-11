@@ -60,6 +60,7 @@ EST_COST_PER_EVENT = 2
 
 SOG_K = (1, 2, 3, 4, 5)
 MODEL_VERSION = "player-rate-toi-v2+platt-2026-10"          # live probability source (validated; see docs/MODEL_VALIDATION.md)
+MODEL_CACHE_SCHEMA = 2                                              # 2: entries carry "emp" (last-30-game shot frequencies)
 PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
 MIN_EXPECTED_TOI = 12.0
 from operational.pricing_policy import PROVISIONAL_MAX_AGE_MIN  # noqa: E402  (shared with the hosted pages; see that module)
@@ -279,8 +280,10 @@ def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, ro
         probs = {f"SOG{k}": pr[f"shots>={k}"]["calibrated"] for k in SOG_K}
         probs["PTS1"], probs["PTS2"] = pr["points>=1"]["calibrated"], pr["points>=2"]["calibrated"]
         probs["GOAL1"] = pr["goals>=1"]["calibrated"]
+        freq = state.get("shot_freq", {}).get(pid) or {}
+        emp = {f"SOG{k}": {"p": c["p"], "hits": c["hits"], "n": c["n"]} for k, c in freq.items() if k in SOG_K}
         model[f"{norm_name(p['name'])}|{team}"] = {"player_id": str(pid), "name": p["name"], "team": team, "opp": opp,
-                                                    "home": is_home, "probs": probs}
+                                                    "home": is_home, "probs": probs, "emp": emp}
     return model
 
 
@@ -295,14 +298,14 @@ def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None =
         cached = json.loads(cache_path.read_text())
         _, checksum = _current_season_rows()
         if (cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature
-                    and cached.get("version") == MODEL_VERSION
+                    and cached.get("version") == MODEL_VERSION and cached.get("schema") == MODEL_CACHE_SCHEMA
                     and cached.get("min_games") == live.MIN_GAMES_FOR_PRICING):
             return cached["model"]
     _rows, checksum = _current_season_rows()
     model = compute_model_v2(today, dressed, curteam, date)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature,
-                                      "version": MODEL_VERSION, "model": model,
+                                      "version": MODEL_VERSION, "schema": MODEL_CACHE_SCHEMA, "model": model,
                                       "min_games": live.MIN_GAMES_FOR_PRICING}))
     return model
 
@@ -384,6 +387,12 @@ def capture_decision(hours_to_start: float, last_capture_age_min: float | None) 
 SOG_MARKET_KEY = "player_shots_on_goal_alternate"
 POINTS_MARKET_KEY = "player_points"
 GOALS_MARKET_KEY = "player_goal_scorer_anytime"       # optional: captured only when the month balances (operational/credit_allocation.py)
+
+
+def _bought_markets() -> tuple[str, ...]:
+    """The per-game markets the credit plan buys (shots only unless the owner adds points); the legacy un-planned path buys both."""
+    from operational import credit_planner as cp
+    return tuple(cp.prop_markets()) if cp.enforced() else (SOG_MARKET_KEY, POINTS_MARKET_KEY)
 
 
 def decision_age_min(event_id: str, now: dt.datetime, markets: tuple[str, ...] = (SOG_MARKET_KEY, POINTS_MARKET_KEY)) -> float | None:
@@ -675,6 +684,15 @@ def _cp_enforced() -> bool:
     return cp.enforced()
 
 
+def _evidence(entry: dict, family: str, prob_prefix: str, k: int) -> dict:
+    """The model's probability and, for shots legs, the player's last-30-game frequency, as ParlayLeg fields."""
+    out = {"model_probability": entry["probs"].get(f"{prob_prefix}{k}")}
+    emp = (entry.get("emp") or {}).get(f"{prob_prefix}{k}") if family == "PLAYER_SOG_ALTERNATE" else None
+    if emp:
+        out.update(empirical_probability=emp["p"], empirical_hits=emp["hits"], empirical_games=emp["n"])
+    return out
+
+
 def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, now: dt.datetime,
                        only_market: str | None = None) -> list:
     """ParlayLegs for DraftKings' Over prices -- shots-on-goal alternate ladder
@@ -760,7 +778,8 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
                     identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
-                    provider_start_utc=payload.get("commence_time"), model_version=MODEL_VERSION))
+                    provider_start_utc=payload.get("commence_time"), model_version=MODEL_VERSION,
+                    **_evidence(entry, family, prob_prefix, k)))
     return legs
 
 
@@ -825,7 +844,7 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
             continue
         opens = start - dt.timedelta(hours=CAPTURE_HORIZON_H)
         shots, pts = latest_capture(e["id"], market=SOG_MARKET_KEY), latest_capture(e["id"], market=POINTS_MARKET_KEY)
-        age = decision_age_min(e["id"], now)
+        age = decision_age_min(e["id"], now, _bought_markets())
         decision = capture_decision(hours, age)
         fmt = lambda t: t.strftime("%b %-d %H:%M") + " UTC"  # noqa: E731
         slots = None
@@ -834,7 +853,9 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
             w = _sched.windows(now, start)
             opens = min(v[0] for k, v in w.items() if k != _sched.PREGAME) if len(w) > 1 else w[_sched.PREGAME][0]
             slots = {k: {"opens_utc": v[0].isoformat().replace("+00:00", "Z"), "closes_utc": v[1].isoformat().replace("+00:00", "Z")} for k, v in w.items()}
-            slot, why = _sched.decide(now, start, _captured_times(e["id"], [SOG_MARKET_KEY, POINTS_MARKET_KEY]), [SOG_MARKET_KEY, POINTS_MARKET_KEY])
+            from operational import credit_planner as _cpl
+            bought = list(_cpl.prop_markets())
+            slot, why = _sched.decide(now, start, _captured_times(e["id"], bought), bought)
             nxt = (f"{slot.lower()} look on the next 15-minute trader cycle ({why})" if slot else
                    f"{why.replace('_', ' ').lower()}; next window opens {fmt(min((v[0] for v in w.values() if v[0] > now), default=start))}")
         elif age is None and now < opens:
@@ -842,7 +863,7 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
         elif decision:
             nxt = f"{decision} on the next 15-minute trader cycle"
         else:
-            oldest = min(c[0] for c in (shots, pts))
+            oldest = min(c[0] for c in (shots, pts) if c)
             far_t = oldest + dt.timedelta(minutes=MAX_PRICE_AGE_MIN_FAR - REFRESH_LEAD_MIN)
             if (start - far_t).total_seconds() / 3600.0 >= 2.0:
                 due = far_t
@@ -851,8 +872,8 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
                           start - dt.timedelta(hours=2.0))
             nxt = f"refresh on the first cycle at or after {fmt(due)}" if due < start else "none planned before puck drop"
         stale_at = None
-        if shots and pts:
-            oldest = min(shots[0], pts[0])
+        if shots and (pts or "player_points" not in _bought_markets()):
+            oldest = min(c[0] for c in (shots, pts) if c)
             stale_at = (oldest + dt.timedelta(minutes=price_age_limit_min(hours))).isoformat()
         plan.append({
             "provider_event_id": e["id"], "matchup": f"{e['away_team']} at {e['home_team']}",

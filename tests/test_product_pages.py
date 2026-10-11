@@ -91,6 +91,28 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         self.assertIn("automatic recording stays paused", blob)
         self.assertIn("an empty slot is a correct answer", blob)
 
+    def test_today_shows_a_proposed_anchor_ticket_with_its_evidence_and_says_nothing_is_staked(self):
+        snap = snapshot()
+        leg = lambda name, price, hits, model, est, gid: {  # noqa: E731
+            "label": f"{name} 2+ shots on goal", "market_family": "PLAYER_SOG_ALTERNATE", "game_id": gid, "participant_id": name, "participant_name": name, "team": "T", "opponent": "O",
+            "game_start_utc": "2026-10-08T23:00:00Z", "american_price": price, "decimal_price": 1.0, "price_captured_at_utc": "2026-10-08T14:00:00Z", "probability": est, "model_version": "m",
+            "outcome": None, "provisional": False, "evidence": {"kind": "player_record", "hits": hits, "games": 30, "model": model, "estimate": est, "price_implied": 0.65, "record_rate": est}}
+        snap["tickets"]["tickets"] = [{
+            "ticket_id": "TPROP1", "status": "RECOMMENDED", "recorded": False, "proposed": True, "origin": "AUTOMATIC", "provenance": None, "alerts": [], "result": None,
+            "legs": [leg("Ehlers", -185, 24, 0.63, 0.726, "1"), leg("McMann", -260, 26, 0.695, 0.779, "2")], "combined_decimal": 2.13, "combined_american": 113.0, "price_label": "x",
+            "stake": 10.0, "potential_return": 21.3, "potential_profit": 11.3, "hit_probability": 0.565, "ev_estimated": 0.2, "ev_after_haircut": 0.1, "haircut_margin": 0.03,
+            "rationale": "Ehlers 2+ shots in 24 of his last 30 games.", "recorded_at_utc": None, "event_start_utc": "2026-10-08T23:00:00Z",
+            "anchor": {"hit_low": 0.47, "hit_high": 0.66, "midpoint_ev": 0.1, "ev_after_shade": 0.11}}]
+        snap["tickets"]["slots"] = {"total": 5, "used": 1, "empty": 4}
+        at = run_page("21_Today.py", snap)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
+        blob = text(at)
+        self.assertIn("Proposed — not recorded", blob)
+        self.assertIn("nothing is staked", blob)
+        self.assertIn("24 of last 30 games", blob)
+        self.assertIn("Estimate 73%", blob)
+        self.assertIn("range 47–66%", blob)
+
     def test_a_split_that_does_not_reconcile_is_called_a_bookkeeping_fault(self):
         snap = snapshot()
         snap["tickets"]["origins"]["RECONCILIATION"]["all_agree"] = False

@@ -1,0 +1,208 @@
+{
+ "method": "Reproduces docs/validation/anchor_calibration.json: how often NHL skaters reached 2+ and 3+ shots, grouped by what each estimate said beforehand.",
+ "seasons": {
+  "2023": {
+   "shots>=2": {
+    "player_games": 46573,
+    "model_is": "raw",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 8666,
+      "last30_said": 0.558,
+      "happened": 0.56,
+      "model_said_on_same_rows": 0.549
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 5116,
+      "last30_said": 0.65,
+      "happened": 0.652,
+      "model_said_on_same_rows": 0.62
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 4197,
+      "last30_said": 0.74,
+      "happened": 0.762,
+      "model_said_on_same_rows": 0.697
+     },
+     {
+      "bin": "0.8-1.0",
+      "n": 1258,
+      "last30_said": 0.834,
+      "happened": 0.874,
+      "model_said_on_same_rows": 0.779
+     }
+    ]
+   },
+   "shots>=3": {
+    "player_games": 46573,
+    "model_is": "raw",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 2746,
+      "last30_said": 0.535,
+      "happened": 0.557,
+      "model_said_on_same_rows": 0.47
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 1157,
+      "last30_said": 0.638,
+      "happened": 0.664,
+      "model_said_on_same_rows": 0.544
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 336,
+      "last30_said": 0.733,
+      "happened": 0.771,
+      "model_said_on_same_rows": 0.643
+     },
+     {
+      "bin": "0.8-1.0",
+      "n": 6,
+      "last30_said": 0.818,
+      "happened": 0.667,
+      "model_said_on_same_rows": 0.683
+     }
+    ]
+   }
+  },
+  "2024": {
+   "shots>=2": {
+    "player_games": 46654,
+    "model_is": "raw",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 7726,
+      "last30_said": 0.556,
+      "happened": 0.555,
+      "model_said_on_same_rows": 0.546
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 4444,
+      "last30_said": 0.649,
+      "happened": 0.65,
+      "model_said_on_same_rows": 0.617
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 3832,
+      "last30_said": 0.733,
+      "happened": 0.749,
+      "model_said_on_same_rows": 0.684
+     },
+     {
+      "bin": "0.8-1.0",
+      "n": 697,
+      "last30_said": 0.824,
+      "happened": 0.811,
+      "model_said_on_same_rows": 0.756
+     }
+    ]
+   },
+   "shots>=3": {
+    "player_games": 46654,
+    "model_is": "raw",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 2048,
+      "last30_said": 0.541,
+      "happened": 0.552,
+      "model_said_on_same_rows": 0.468
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 747,
+      "last30_said": 0.627,
+      "happened": 0.598,
+      "model_said_on_same_rows": 0.54
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 81,
+      "last30_said": 0.732,
+      "happened": 0.63,
+      "model_said_on_same_rows": 0.639
+     },
+     {
+      "bin": "0.8-1.0",
+      "n": 1,
+      "last30_said": 0.817,
+      "happened": 0.0,
+      "model_said_on_same_rows": 0.637
+     }
+    ]
+   }
+  },
+  "2025": {
+   "shots>=2": {
+    "player_games": 46622,
+    "model_is": "platt-calibrated",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 7921,
+      "last30_said": 0.555,
+      "happened": 0.569,
+      "model_said_on_same_rows": 0.524
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 4580,
+      "last30_said": 0.647,
+      "happened": 0.648,
+      "model_said_on_same_rows": 0.603
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 3083,
+      "last30_said": 0.734,
+      "happened": 0.751,
+      "model_said_on_same_rows": 0.694
+     },
+     {
+      "bin": "0.8-1.0",
+      "n": 582,
+      "last30_said": 0.82,
+      "happened": 0.823,
+      "model_said_on_same_rows": 0.759
+     }
+    ]
+   },
+   "shots>=3": {
+    "player_games": 46622,
+    "model_is": "platt-calibrated",
+    "bins_by_last30_estimate": [
+     {
+      "bin": "0.5-0.6",
+      "n": 1401,
+      "last30_said": 0.548,
+      "happened": 0.577,
+      "model_said_on_same_rows": 0.474
+     },
+     {
+      "bin": "0.6-0.7",
+      "n": 693,
+      "last30_said": 0.624,
+      "happened": 0.622,
+      "model_said_on_same_rows": 0.525
+     },
+     {
+      "bin": "0.7-0.8",
+      "n": 32,
+      "last30_said": 0.727,
+      "happened": 0.719,
+      "model_said_on_same_rows": 0.646
+     }
+    ]
+   }
+  }
+ }
+}

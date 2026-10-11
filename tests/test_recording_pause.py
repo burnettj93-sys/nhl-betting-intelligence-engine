@@ -43,14 +43,16 @@ class TestPause(Isolated):
         acct = pb.account_state(self.conn, "REAL_MARKET_PAPER")
         self.assertEqual((acct["available_cash"], acct["open_stakes"]), (500.0, 0.0))
 
-    def test_the_published_state_says_it_is_paused_and_shows_no_recommended_tickets(self):
+    def test_the_published_state_says_it_is_paused_and_shows_what_would_be_recorded_as_proposed(self):
         rp.pause("postmortem", now=NOW)
         dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
         st = dtk.read_state()
         self.assertIn("PAUSED", st["notice"])
         self.assertTrue(st["recording_paused"]["paused"])
-        self.assertEqual(st["tickets"], [])
-        self.assertIn("PAUSED", st["empty_slot_reason"])
+        self.assertTrue(st["tickets"])                                                 # the selector's picks are shown...
+        self.assertTrue(all(t["proposed"] and not t["recorded"] and t["status"] == "RECOMMENDED" for t in st["tickets"]))   # ...as proposed, never recorded
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+        self.assertIn("PAUSED", st["empty_slot_reason"] or "PAUSED")
 
     def test_ending_the_pause_restores_normal_recording(self):
         rp.pause("postmortem", now=NOW)
