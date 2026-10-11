@@ -723,7 +723,7 @@ def _provisional_section(legs: list, existing: list, now: dt.datetime, et_date: 
     if not prov_legs:
         return section
     try:
-        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=SLOT_COUNT)
+        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=SLOT_COUNT, policy=ticket_policy.active())
     except Exception as exc:  # noqa: BLE001 - informational only
         section["error"] = f"{exc.__class__.__name__}: {exc}"
         return section

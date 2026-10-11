@@ -209,6 +209,17 @@ class TestPausedBoard(unittest.TestCase):
         self.assertLess(t["anchor"]["hit_low"], t["hit_probability"])
         self.assertIn("proposed, not recorded", st["empty_slot_reason"] or "proposed, not recorded")
 
+    def test_the_provisional_board_uses_the_same_anchor_rules_on_earlier_prices(self):
+        from operational import daily_tickets as dtk
+        legs = [dataclasses.replace(l, game_start_utc="2026-10-11T23:00:00Z", provisional=True, price_fresh=False, freshness_status="STALE_QUOTE", quote_age_min=200.0) for l in
+                (shots(1, 1, 24, -185, 0.63, name="Ehlers"), shots(2, 2, 26, -260, 0.695, name="McMann"))]
+        sec = dtk._provisional_section(legs, [], NOW, "2026-10-11")
+        self.assertEqual(len(sec["tickets"]), 1)
+        card = sec["tickets"][0]
+        self.assertTrue(card["provisional"])
+        self.assertEqual([l["evidence"]["hits"] for l in card["legs"]], [24, 26])
+        self.assertIn("anchor", card)
+
 
 if __name__ == "__main__":
     unittest.main()
