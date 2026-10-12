@@ -53,7 +53,7 @@ def verify(now: dt.datetime | None = None, *, nxt: dict | None = None, runner: C
     if not nxt:
         return {"state": "WAITING_FOR_EVENT", "detail": "no provider-listed cluster ahead", "scheduled": None}
     events = ka.scheduled_wakes(runner or ka._run)      # resolved at call time (patchable), never bound at import
-    hit = ka.wake_covers(nxt["window"], events)
+    hit = ka.wake_covers(nxt["window"], events, ours_only=True)     # only a wake scheduled for this engine counts; OS-owned events can disappear
     if hit:
         return {"state": "SCHEDULED", "scheduled": True, "when_utc": hit["when_utc"].isoformat(), "type": hit["type"], "owner": hit["owner"],
                 "covers_cluster": nxt["window"]["cluster"],

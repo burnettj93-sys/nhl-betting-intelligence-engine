@@ -247,13 +247,18 @@ def scheduled_wakes(runner: Callable = _run) -> list[dict]:
     return [e for e in parse_sched(runner(["pmset", "-g", "sched"])) if e["type"] in ("wake", "poweron", "wakepoweron")]
 
 
-def wake_covers(window: dict, events: list[dict]) -> dict | None:
+OUR_WAKE_OWNER = "nhl-engine"
+
+
+def wake_covers(window: dict, events: list[dict], ours_only: bool = False) -> dict | None:
     """An event covers a cluster if the Mac will be awake in time for the assertion to take over: the event lies in
     [assert_from - 20 min, capture window opens (T-40)] -- early enough to be ready, late enough that the wake-guard
     holds it before the idle timer can put it back to sleep."""
     lo = window["assert_from_utc"] - dt.timedelta(minutes=20)
     hi = window["capture_window"][0]
     for e in events:
+        if ours_only and not str(e.get("owner", "")).startswith(OUR_WAKE_OWNER):
+            continue                # a wake the OS or another app scheduled for its own reasons (a Do Not Disturb timer, an analytics task) can vanish and is not our commitment
         if lo <= e["when_utc"] <= hi:
             return e
     return None
