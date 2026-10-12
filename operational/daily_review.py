@@ -181,6 +181,64 @@ def proposals(cal: dict) -> list[dict]:
     return out
 
 
+def _score_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("score_selection_shadow", Path(__file__).resolve().parent.parent / "deploy" / "score_selection_shadow.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def predictions_block(review_date: str, bets: list[dict], nhl_conn, records: list[dict] | None = None) -> dict:
+    """The day's FROZEN predictions scored against official results, with the entry numbers untouched: what the selector logged before the games (every priced leg with its recent hit rate, the
+    model's probability, the final estimate and its decision), how the supported legs and the legs on selected tickets fared, shared exposure on the day's recorded tickets, participation and data
+    problems, and the concrete corrective actions the evidence supports (none when there is nothing demonstrated). It never retunes anything."""
+    from operational import shadow_selection
+    records = records if records is not None else shadow_selection.read_all()
+    day = [r for r in records if r.get("et_date") == review_date]
+    out = {"review_date_et": review_date, "snapshots_logged": len(day), "supported_legs_logged": 0, "resolved": 0, "awaiting_games": 0, "did_not_play": 0, "anchor_estimates": None,
+           "selected_tickets": [], "exposure": {"players_on_several_tickets": [], "games_on_several_tickets": []}, "participation_and_data": [], "corrective_actions": []}
+    if day:
+        try:
+            sss = _score_module()
+            rep = sss.score(day, sss.db_resolver(Path(nhl_conn.execute("PRAGMA database_list").fetchone()[2])))
+            out.update(resolved=rep["resolved"], awaiting_games=rep["awaiting_games"], did_not_play=rep["player_did_not_play"], anchor_estimates=rep["anchor_estimates"])
+            out["supported_legs_logged"] = (rep["anchor_estimates"]["supported_pool"] or {}).get("legs", 0)
+            seen = {}
+            resolve = sss.db_resolver(Path(nhl_conn.execute("PRAGMA database_list").fetchone()[2]))
+            for r in day:
+                for t in r.get("proposed_tickets") or []:
+                    key = tuple(sorted(f"{l[0]}:{l[1]}:{l[2]}:{l[3]}" for l in t["legs"]))
+                    if key in seen:
+                        continue
+                    outs = [resolve(l[0], l[1], l[2], l[3]) for l in t["legs"]]
+                    done = all(o["status"] == "FINAL" for o in outs)
+                    seen[key] = {"legs": [f"{l[6]} {l[3]}+ ({l[4]:+.0f})" for l in t["legs"]], "estimated_hit_probability": t["hit_probability"], "recorded": bool(t.get("recorded")),
+                                 "result": ("HIT" if all(o.get("hit") for o in outs) else "MISSED") if done else ("DID_NOT_PLAY" if any(o["status"] == "NO_PARTICIPATION" for o in outs) else "PENDING")}
+            out["selected_tickets"] = list(seen.values())
+        except Exception as exc:  # noqa: BLE001 - the review must still render
+            out["participation_and_data"].append(f"The frozen-prediction scoring could not run: {exc.__class__.__name__}: {exc}")
+    todays = [b for b in bets if et.eastern_date_of(b["created_at_utc"]) == review_date and (b.get("origin") or "AUTOMATIC") == "AUTOMATIC"]
+    players: dict = defaultdict(set)
+    games: dict = defaultdict(set)
+    for b in todays:
+        for l in json.loads(b.get("legs_json") or "[]"):
+            if l.get("market_family") != "MONEYLINE":
+                players[l.get("participant_name")].add(b["paper_bet_id"])
+            games[l.get("game_id")].add(b["paper_bet_id"])
+    out["exposure"] = {"tickets_recorded_that_day": len(todays), "players_on_several_tickets": [{"player": k, "tickets": sorted(v)} for k, v in players.items() if len(v) > 1],
+                       "games_on_several_tickets": [{"game_id": k, "tickets": sorted(v)} for k, v in games.items() if len(v) > 1]}
+    if out["did_not_play"]:
+        out["participation_and_data"].append(f"{out['did_not_play']} logged leg(s) belong to players who did not play; the selector's dress check uses the team's last game, so a late scratch is a known gap (no lineup source is permitted).")
+    if any(t["result"] == "DID_NOT_PLAY" for t in out["selected_tickets"]):
+        out["corrective_actions"].append("A selected ticket had a player who did not play: confirm the participation check ran at recording time and that the leg was left open, not guessed.")
+    if not day:
+        out["participation_and_data"].append("No frozen predictions were logged for this day (the log writes only when fresh priced legs exist).")
+    if not out["corrective_actions"]:
+        out["corrective_actions"].append("None demonstrated by this day's evidence. A day's results are too few to change a threshold; no threshold was changed.")
+    return out
+
+
 def build_review(bankroll_conn, nhl_conn, now: dt.datetime | None = None, *, review_date: str | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     review_date = review_date or (dt.date.fromisoformat(et.eastern_today(now)) - dt.timedelta(days=1)).isoformat()
@@ -200,7 +258,7 @@ def build_review(bankroll_conn, nhl_conn, now: dt.datetime | None = None, *, rev
             "defects": [dict(d, ticket_id=t["ticket_id"]) for t in tickets for d in t["defects"] if d["severity"] == "DEFECT"],
             "notes": [dict(d, ticket_id=t["ticket_id"]) for t in tickets for d in t["defects"] if d["severity"] != "DEFECT"],
             "variance": [{"ticket_id": t["ticket_id"], "note": t["variance_note"]} for t in tickets if t["reading"] == "VARIANCE" and t["variance_note"]],
-            "calibration": cal, "proposals": proposals(cal),
+            "calibration": cal, "proposals": proposals(cal), "predictions": predictions_block(review_date, bets, nhl_conn),
             "open_tickets": [{"ticket_id": b["paper_bet_id"], "origin": b.get("origin") or "AUTOMATIC", "status": b["result_status"]} for b in open_now],
             "policy": {"min_legs_for_a_conclusion": MIN_LEGS, "z_bar": Z_BAR, "auto_retune": False}}}
 

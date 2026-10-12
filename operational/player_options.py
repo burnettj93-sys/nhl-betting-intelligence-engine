@@ -90,8 +90,86 @@ def _option_from_combo(kind: str, combo: rmp.ParlayResult, et_date: str) -> dict
     }
 
 
+REASON_NO_SUPPORTED_LEG = "NO_LEG_SUPPORTED_FOR_AUTOMATIC_TICKETS"
+REASON_NO_QUALIFYING = "NO_COMBINATION_QUALIFIES_AT_TODAYS_PRICES"
+MAX_COMPANIONS = 3
+
+
+def _anchor_options(legs: list[rmp.ParlayLeg], et_date: str, policy) -> dict:
+    """The anchor-policy version: a person's option is built from the SAME estimates and tests as the automatic tickets (research/real_market_parlay/anchor.py): his own supported legs, the fewest
+    companion legs from other games that reach +100 with defensible value, ranked by estimated hit chance. A person with only points, goals or saves prices (or a goalie) has no supported leg and gets
+    no option: nothing is made up for him."""
+    from itertools import combinations
+    from research.real_market_parlay import anchor
+    priced = [l for l in legs if rmp.leg_is_eligible(l)]
+    deduped = rmp.dedupe_legs_by_economic_identity(priced)
+    supported = anchor.prepare_pool(deduped)
+    by_person_all: dict[str, list] = defaultdict(list)
+    for l in deduped:
+        if l.market_family != "MONEYLINE":
+            by_person_all[l.participant_id].append(l)
+    by_game: dict[str, list] = defaultdict(list)
+    for l in supported:
+        by_game[l.game_id].append(l)
+    fronts = {g: anchor._frontier(ls) for g, ls in by_game.items()}
+
+    def passes(group):
+        combo = rmp._evaluate_combo(list(group))
+        if combo is None or combo.combined_decimal < policy.min_combined_decimal or combo.ev_estimated < policy.min_estimated_ev or combo.ev_conservative < 0.0:
+            return None
+        return None if rmp._policy_veto(combo, policy) else combo
+
+    persons: dict[str, dict] = {}
+    distinct: dict[str, dict] = {}
+    for pid, plegs_all in by_person_all.items():
+        name = plegs_all[0].participant_name
+        own = [l for l in supported if l.participant_id == pid]
+        chosen, reason = None, REASON_NO_SUPPORTED_LEG
+        if own:
+            reason = REASON_NO_QUALIFYING
+            for size in range(1, MAX_COMPANIONS + 2):                    # fewest legs first: a longer ticket is offered only when no shorter one works
+                best = None
+                for a in own:
+                    others = [g for g in fronts if g != a.game_id]
+                    for games in combinations(others, size - 1):
+                        from itertools import product
+                        for group in product(*(fronts[g] for g in games)):
+                            if any(c.participant_id == pid for c in group):
+                                continue
+                            combo = passes((a,) + group)
+                            if combo and (best is None or (combo.joint_probability, combo.ev_estimated) > (best.joint_probability, best.ev_estimated)):
+                                best = combo
+                if best is not None:
+                    chosen, reason = best, None
+                    break
+        entry = {"person_id": pid, "name": name, "team": plegs_all[0].team, "priced_legs": len(plegs_all), "option_id": None, "reason_no_option": reason}
+        if chosen is not None:
+            oid = option_id(et_date, chosen.legs)
+            entry["option_id"] = oid
+            opt = distinct.get(oid)
+            if opt is None:
+                kind = SINGLE if len(chosen.legs) == 1 else PARLAY
+                info = anchor.describe(chosen, policy)
+                opt = distinct[oid] = {**_option_from_combo(kind, chosen, et_date), "best_for": [], "rationale": info.pop("rationale"), "anchor": info}
+                opt["legs"] = [{**card, "evidence": anchor.leg_evidence(l)} for card, l in zip(opt["legs"], chosen.legs)]
+            opt["best_for"].append({"person_id": pid, "name": name})
+        persons[pid] = entry
+    options = sorted(distinct.values(), key=lambda o: (-o["hit_probability"], -o["ev_estimated"]))
+    diagnostics = {"legs_offered": len(legs), "priced_prop_legs": len(priced), "legs_after_dedupe": len(deduped), "supported_legs": len(supported),
+                   "people_with_priced_props": len(by_person_all), "people_with_option": sum(1 for p in persons.values() if p["option_id"]),
+                   "singles": sum(1 for o in options if o["kind"] == SINGLE), "parlays": sum(1 for o in options if o["kind"] == PARLAY),
+                   "no_option_reasons": {r: sum(1 for p in persons.values() if p["reason_no_option"] == r) for r in (REASON_NO_SUPPORTED_LEG, REASON_NO_QUALIFYING)}}
+    return {"date_et": et_date, "options": options, "persons": persons, "diagnostics": diagnostics,
+            "policy": {"mode": "anchor", "policy_id": policy.policy_id, "digest": policy.digest(), "min_combined_decimal": policy.min_combined_decimal, "min_estimated_ev": policy.min_estimated_ev,
+                       "leg_probability_margin": policy.value_shade, "max_legs_offered": MAX_COMPANIONS + 1, "stake": STAKE}}
+
+
 def build_options(legs: list[rmp.ParlayLeg], et_date: str) -> dict:
     """{"options": [distinct options, each with "best_for"], "persons": {person_id: {...}}, "diagnostics": {...}}"""
+    from operational import ticket_policy
+    policy = ticket_policy.active()
+    if getattr(policy, "mode", "legacy") == "anchor":
+        return _anchor_options(legs, et_date, policy)
     priced = [l for l in legs if l.market_family != "MONEYLINE" and rmp.leg_is_eligible(l)]
     pool = rmp.dedupe_legs_by_economic_identity(priced)
     with_edge = [l for l in pool if rmp.leg_has_edge(l)]

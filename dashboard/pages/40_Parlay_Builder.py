@@ -146,17 +146,19 @@ with right:
     lo = float(pl.MIN_STAKE)
     hi = max(min(float(pl.MAX_STAKE), float(cash)), lo) if cash is not None else float(pl.MAX_STAKE)
     stake = st.number_input("Stake (paper \\$)", min_value=lo, max_value=hi, value=min(10.0, hi), step=5.0, key=STAKE)
-    kind = ("DraftKings quote" if len(slip) == 1 else
-            ("Multiplied from the leg prices — NOT a DraftKings quote (DraftKings prices legs from one game together, with its own adjustment)" if same_game else
-             "Estimated: the product of each leg's own price, not a quoted parlay price"))
-    st.markdown(f"<div class='slip'><div class='stats'><div class='stat accent'><span class='k'>{'Quoted price' if len(slip) == 1 else ('Multiplied price' if same_game else 'Estimated price')}</span>"
-                f"<span class='v'>{ui.american(comb['american'])}</span><span class='sub'>{ui.esc(kind)}</span></div>"
-                f"<div class='stat'><span class='k'>Stake</span><span class='v'>{ui.money(stake)}</span></div>"
-                f"<div class='stat'><span class='k'>To return</span><span class='v'>{ui.money(stake * comb['return_decimal'])}</span><span class='sub'>profit {ui.money(stake * (comb['return_decimal'] - 1))}</span></div></div></div>",
-                unsafe_allow_html=True)
-    ack = True
     if same_game:
-        ack = st.checkbox("I understand this slip has legs from the same game: its number is multiplied from the leg prices and is not a DraftKings quote.", key=ACK)
+        st.markdown("<div class='slip'><div class='stats'><div class='stat accent'><span class='k'>Unpriced draft</span><span class='v'>—</span>"
+                    "<span class='sub'>DraftKings prices legs from one game together and no combined price is available</span></div></div></div>", unsafe_allow_html=True)
+        st.warning("**This slip cannot be submitted.** It has legs from the same game, and there is no genuine combined price for them; multiplying the leg prices would not be a price. "
+                   "Remove a leg so every leg is from a different game, or keep a single leg. The draft stays here.")
+    else:
+        kind = ("DraftKings quote" if len(slip) == 1 else "Estimated: the product of each leg's own price, not a quoted parlay price")
+        st.markdown(f"<div class='slip'><div class='stats'><div class='stat accent'><span class='k'>{'Quoted price' if len(slip) == 1 else 'Estimated price'}</span>"
+                    f"<span class='v'>{ui.american(comb['american'])}</span><span class='sub'>{ui.esc(kind)}</span></div>"
+                    f"<div class='stat'><span class='k'>Stake</span><span class='v'>{ui.money(stake)}</span></div>"
+                    f"<div class='stat'><span class='k'>To return</span><span class='v'>{ui.money(stake * comb['return_decimal'])}</span><span class='sub'>profit {ui.money(stake * (comb['return_decimal'] - 1))}</span></div></div></div>",
+                    unsafe_allow_html=True)
+    ack = not same_game
 
     st.markdown("**Destination**")
     if log is None:
@@ -201,7 +203,7 @@ with right:
     elif st.button(f"Submit to {log['name']} — {ui.money(stake)}" if log else "Submit", key="pb_submit", type="primary", disabled=not (can_submit and ack and not any_blocked and not any_moved),
                    help="Files one order. The engine rechecks every price and your cash first. Nothing is added by browsing."):
         order = order_client.build_builder_order(slip, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=pool.get("generated_at_utc"),
-                                                 stake=float(stake), same_game_ack=bool(same_game and ack), combined_american=comb["american"])
+                                                 stake=float(stake), same_game_ack=False, combined_american=comb["american"])
         order["via"] = "direct"
         res = ui.file_order(log_signing.sign(order, log["write_key"], log["hash"]))
         if not res["ok"]:

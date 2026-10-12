@@ -13,7 +13,7 @@ from dashboard import order_client
 from operational import log_signing
 from operational import paper_bet_settlement_driver as drv
 from operational import personal_logs as pl
-from tests.product_fixture import builder_pool_doc
+from tests.product_fixture import builder_pool_doc, builder_pool_two_games_doc
 from tests.test_daily_tickets import fresh_ledger
 from tests.test_personal_logs import fresh_logs, ledger_fingerprint
 
@@ -53,7 +53,7 @@ class Acct:
 class Base(unittest.TestCase):
     def setUp(self):
         self.logs = fresh_logs()
-        self.pool = builder_pool_doc()
+        self.pool = builder_pool_two_games_doc()
         self.casey = Acct("Casey")
         self.burnett = Acct("Burnett", passcode=PASS_B)
 
@@ -215,16 +215,24 @@ class TestBuilderOrders(Base):
         self.assertEqual(res["status"], pl.REJECTED)
         self.assertIn("UNAVAILABLE", res["reason"])
 
-    def test_same_game_legs_need_an_acknowledgement_and_are_labelled_multiplied(self):
+    def test_same_game_legs_are_an_unpriced_draft_and_are_refused_even_when_acknowledged(self):
         two = [leg(), leg(pid=P2, name="Test Skater Two", price=120.0)]
-        no = self.add(self.casey, two)
-        self.assertEqual(no["status"], pl.REJECTED)
-        self.assertIn("SAME_GAME", no["reason"])
-        yes = self.add(self.casey, two, ack=True)
-        self.assertEqual(yes["status"], pl.RECORDED)
+        self.open(self.casey)
+        before = pl.account_state(self.logs, self.casey.hash)["available_cash"]
+        for ack in (False, True):
+            res = self.add(self.casey, two, ack=ack)
+            self.assertEqual(res["status"], pl.REJECTED)
+            self.assertIn("SAME_GAME_NOT_PRICED", res["reason"])
+        self.assertEqual(self.logs.execute("SELECT COUNT(*) FROM bets").fetchone()[0], 0)               # nothing recorded, nothing debited
+        self.assertEqual(pl.account_state(self.logs, self.casey.hash)["available_cash"], before)
+
+    def test_legs_from_different_games_are_recorded_as_an_estimate_not_a_quote(self):
+        cross = [leg(), leg(pid="P4", name="Test Skater Four", price=-150.0, game="2026020901")]
+        self.open(self.casey)
+        res = self.add(self.casey, cross)
+        self.assertEqual(res["status"], pl.RECORDED)
         bet = dict(self.logs.execute("SELECT * FROM bets").fetchone())
-        self.assertIn("SAME_GAME_MULTIPLIED_NOT_A_QUOTE", bet["provenance_json"])
-        self.assertIsNone(bet["model_probability"])                                         # a product of probabilities would be wrong for correlated legs
+        self.assertIn("ESTIMATED_PRODUCT_OF_LEG_PRICES", bet["provenance_json"])
 
     def test_the_same_player_twice_in_one_market_is_one_bet_not_two(self):
         res = self.add(self.casey, [leg(k=2), leg(k=3, price=180.0)], ack=True)
@@ -333,7 +341,7 @@ class TestModelBookAndIsolation(Base):
         before = ledger_fingerprint(ledger)
         self.open(self.casey, self.burnett)
         self.assertEqual(self.add(self.casey, [leg()], stake=40)["status"], pl.RECORDED)
-        self.assertEqual(self.add(self.burnett, [leg(pid=P2, name="Test Skater Two", price=120.0), leg(k=3, price=180.0)], stake=25, ack=True)["status"], pl.RECORDED)
+        self.assertEqual(self.add(self.burnett, [leg(pid="P4", name="Test Skater Four", price=-150.0, game="2026020901"), leg(k=3, price=180.0)], stake=25)["status"], pl.RECORDED)
         with mock.patch.object(drv, "resolve_combo_bet", side_effect=[{"status": "WIN", "leg_results": []}, {"status": "LOSS", "leg_results": []}]):
             self.assertEqual(pl.settle_open(self.logs, None, NOW + dt.timedelta(days=1))["settled"], 2)
         self.assertEqual(ledger_fingerprint(ledger), before)

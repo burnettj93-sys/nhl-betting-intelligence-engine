@@ -136,6 +136,33 @@ def rank_games(starts: dict[str, dt.datetime]) -> list[str]:
     return order
 
 
+def connected_order(starts: dict[str, dt.datetime]) -> list[str]:
+    """The order pregame captures are bought in: whole waves, biggest first (earliest first on a tie), so the games priced together are games that can sit on one ticket at one evaluation
+    time. A wave is the set of games whose puck drops are within WAVE_MINUTES of its first; a ticket needs prices fresh at the same moment, before the first of its games starts, so one game
+    from each of two waves can never be compared (the earlier game has started before the later one is priced). Single-game waves come last."""
+    ws = waves(starts)
+    ws.sort(key=lambda w: (-(len(w) if len(w) >= 2 else 0), starts[w[0]]))
+    return [g for w in ws for g in w]
+
+
+def connected_prefix(starts: dict[str, dt.datetime], k: int) -> list[str]:
+    """The first k games of connected_order, minus an isolated tail: a budget cut-off that would leave exactly one game of a wave (or a single-game wave) alone is dropped when other games
+    are already chosen, because a capture that cannot be compared with another game's fresh price at the same time buys nothing the selector can use. Its credit stays for other classes.
+    (A single priced game stays: with nothing else chosen it is the best use of the credit, and moneylines from the league-wide pull can still pair with it.)"""
+    order = connected_order(starts)
+    pick = order[:k]
+    if len(pick) <= 1:
+        return pick
+    wave_of = {g: i for i, w in enumerate(waves(starts)) for g in w}
+    counts: dict[int, int] = {}
+    for g in pick:
+        counts[wave_of[g]] = counts.get(wave_of[g], 0) + 1
+    alone = [g for g in pick if counts[wave_of[g]] == 1]
+    if alone and len(alone) < len(pick):
+        pick = [g for g in pick if g not in alone]
+    return pick
+
+
 def _take(items: list, n: int) -> list:
     """The first n of a priority-ordered list (a budget cut-off for today's price purchases; nothing here decides what any model learns)."""
     return [x for i, x in enumerate(items) if i < n]
@@ -211,7 +238,8 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     mcost = len(morning_markets)
     k_morn = min(n, int(max(left, 0.0) // mcost)) if morning_enabled() else 0; left -= k_morn * mcost
     extra_pre = min(n - k_pre, int(max(left, 0.0) // BASE_COST)); k_pre += extra_pre; left -= extra_pre * BASE_COST
-    props_games = _take(order, k_pre)
+    props_games = connected_prefix(starts, k_pre) if k_pre else []
+    left += (k_pre - len(props_games)) * BASE_COST; k_pre = len(props_games)     # an isolated capture is not bought; its credit stays in the day
     morning_games = _take(order, k_morn)
     saves_games = _take([g for g in order if g in confirmed_games], SAVES_MAX_PER_DAY)
     k_saves = min(len(saves_games), int(max(left, 0.0) // SAVES_COST))

@@ -1,6 +1,8 @@
 import datetime as dt
 import json
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from operational import watchdog as wd
 
@@ -48,7 +50,7 @@ class TestRun(unittest.TestCase):
     def test_run_writes_state_and_view_reages_it(self):
         state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
-        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "morning_update"})
+        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "prediction_log", "morning_update"})
         stored = wd.load_state()
         self.assertEqual(stored["checked_at_utc"], "2026-10-09T12:00:00Z")
         self.assertEqual(wd.view(stored, NOW + dt.timedelta(minutes=20))["status"], stored["status"])
@@ -62,6 +64,34 @@ class TestRun(unittest.TestCase):
         from operational import cloud_snapshot_schema as schema
         blob = json.dumps(wd.load_state())
         self.assertIsNone(schema._ABSOLUTE_PATH_RE.search(blob))
+
+
+class TestPredictionLogCheck(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from operational import state_paths
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        patcher = mock.patch.object(state_paths, "path", side_effect=lambda n, **kw: Path(self.tmp.name) / n)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_a_logger_that_stopped_is_a_warning_and_a_quiet_pool_is_not(self):
+        import json
+        from operational import shadow_selection as sh
+        now = dt.datetime(2026, 10, 12, 12, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(wd.check_prediction_log(now)["status"], wd.WARN)                      # never written
+        (Path(self.tmp.name) / sh.STATE).write_text(json.dumps({"pool_key": "x", "written_at_utc": "2026-10-11T12:00:00Z", "checked_at_utc": "2026-10-12T11:50:00Z"}))
+        self.assertEqual(wd.check_prediction_log(now)["status"], wd.OK)                        # nothing changed since yesterday, but it looked 10 minutes ago
+        (Path(self.tmp.name) / sh.STATE).write_text(json.dumps({"pool_key": "x", "written_at_utc": "2026-10-12T09:00:00Z", "checked_at_utc": "2026-10-12T09:00:00Z"}))
+        self.assertEqual(wd.check_prediction_log(now)["status"], wd.WARN)                      # not looked at for three hours: it stopped
+
+    def test_every_look_stamps_the_state_even_when_nothing_changes(self):
+        from operational import shadow_selection as sh
+        now = dt.datetime(2026, 10, 12, 12, 0, tzinfo=dt.timezone.utc)
+        self.assertEqual(sh.record([], now)["status"], "EMPTY")
+        import json
+        self.assertEqual(json.loads((Path(self.tmp.name) / sh.STATE).read_text())["checked_at_utc"], "2026-10-12T12:00:00Z")
 
 
 class TestMorningUpdateCheck(unittest.TestCase):

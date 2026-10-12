@@ -51,6 +51,32 @@ for origin, label in (("AUTOMATIC", "Model book (automatic tickets)"),):
     o = rv["origins"][origin]
     st.caption(f"{label}: {o['tickets']} total · {o['wins']}W-{o['losses']}L-{o['voids']}V · {o['pending'] + o['unresolved']} open · settled P&L {ui.signed_money(o['settled_pnl'])}")
 
+pr = rv.get("predictions")
+if pr:
+    st.subheader("Frozen predictions against official results")
+    st.caption("Logged before the games and never rewritten. This is predictive accuracy; software correctness, estimated value and realised profit are separate questions.")
+    ae = pr.get("anchor_estimates") or {}
+    rows = []
+    for label, key in (("Supported legs priced that day", "supported_pool"), ("Legs on selected tickets", "on_selected_tickets")):
+        r = ae.get(key) or {}
+        if r.get("legs"):
+            rows.append({"Group": label, "Player-games": r["legs"], "Games": r["games"], "Recent hit rate": ui.pct(r["recent_hit_rate"]), "Model": ui.pct(r["model_calibrated"]), "Final estimate": ui.pct(r["final_estimate"]),
+                         "Price implies": ui.pct(r["price_implied_before_margin"]), "Happened": ui.pct(r["happened"])})
+    if rows:
+        st.dataframe(rows, hide_index=True, width="stretch")
+        st.caption(ae.get("reading", ""))
+    else:
+        st.caption(f"{pr['snapshots_logged']} snapshot(s) logged; {pr['awaiting_games']} leg(s) awaiting games, {pr['did_not_play']} did not play. Nothing to compare yet.")
+    if pr.get("selected_tickets"):
+        st.dataframe([{"Ticket": " + ".join(t["legs"]), "Estimated hit chance": ui.pct(t["estimated_hit_probability"]), "Recorded": "yes" if t["recorded"] else "proposed only", "Result": t["result"].replace("_", " ").title()}
+                      for t in pr["selected_tickets"]], hide_index=True, width="stretch")
+    ex = pr.get("exposure") or {}
+    shared = ex.get("players_on_several_tickets") or []
+    st.markdown("**Shared exposure:** " + (", ".join(f"{x['player']} on {len(x['tickets'])} tickets" for x in shared) if shared else f"no player on more than one of the {ex.get('tickets_recorded_that_day', 0)} ticket(s) recorded that day."))
+    for line in pr.get("participation_and_data") or []:
+        st.caption(ui.esc(line))
+    st.markdown("**Corrective actions:** " + " ".join(pr.get("corrective_actions") or ["None."]))
+
 tickets = rv["tickets"]
 st.subheader("Tickets settled that day")
 if not tickets:

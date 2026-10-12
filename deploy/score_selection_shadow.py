@@ -67,10 +67,11 @@ def score(records: list[dict], resolve) -> dict:
     first: dict = {}
     for r in records:
         for row in r["pool"]:
-            gid, pid, fam, k, price, p, name, team, start, qt, edge = row
+            gid, pid, fam, k, price, p, name, team, start, qt, edge = row[:11]
+            extra = dict(zip(r.get("pool_fields", [])[11:], row[11:]))
             key = (r["et_date"], gid, pid, fam, k)
             if key not in first:
-                first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"]}
+                first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"], "extra": extra}
     legs, pending, no_part = [], 0, 0
     for key, l in first.items():
         res = resolve(l["game"], l["player"], l["family"], l["threshold"])
@@ -119,18 +120,46 @@ def score(records: list[dict], resolve) -> dict:
                     slot["expected_wins_of_resolved"] += t["hit_probability"]
     for v in variants.values():
         v["expected_wins_of_resolved"] = round(v["expected_wins_of_resolved"], 2)
+    anchor = anchor_report(legs)
     needed = pm.legs_needed(0.05)
     needed_clustered = (pm.legs_needed(0.05, deff=1.12), pm.legs_needed(0.05, deff=1.98))
     edge_units = len({_unit(l) for l in edge_legs})
     return {"records": len(records), "days": sorted({r["et_date"] for r in records}), "distinct_legs_logged": len(first), "resolved": len(legs), "awaiting_games": pending, "player_did_not_play": no_part,
             "all_priced_legs": table(legs), "legs_that_passed_the_edge_filter": table(edge_legs), "policy_variants": variants,
-            "top_quarter_by_edge_size": table(top), "model_versus_price_information": blend_report(legs),
+            "top_quarter_by_edge_size": table(top), "model_versus_price_information": blend_report(legs), "anchor_estimates": anchor,
             "enough_to_judge": {"resolved_edge_legs": len(edge_legs), "independent_units_player_market_nights": edge_units, "needed_to_see_a_5_point_overstatement": needed,
                                 "needed_allowing_for_clustering": {"light": needed_clustered[0], "heavy": needed_clustered[1]},
                                 "verdict": "NOT ENOUGH YET" if edge_units < needed_clustered[0] else "enough to read, with the usual care",
                                 "note": ("The count that matters is independent units, not leg rows: a player's 2+ and 3+ shots are one event. The clustering figures allow for legs in a game or night sharing luck or model error. "
                                          "This tests the edge-filtered legs (what a ticket can be built from); the chosen legs are the extreme end of that group, so the top quarter by edge is shown apart. "
                                          "Each market tested alone needs its own sample.")}}
+
+
+def _anchor_row(legs: list[dict]) -> dict:
+    """The four numbers side by side for the same legs: the recent hit rate (unshrunk), the model's calibrated probability, the final estimate a ticket used and the price-implied probability, against what
+    happened. `independent_player_nights` and `games` say how few independent observations there are (a player's nested lines resolve together; a game's players share luck)."""
+    n = len(legs)
+    if not n:
+        return {"legs": 0}
+    mean = lambda f: sum(f(l) for l in legs) / n  # noqa: E731
+    return {"legs": n, "independent_player_nights": len({_unit(l) for l in legs}), "games": len({(l["date"], l["game"]) for l in legs}),
+            "recent_hit_rate": round(mean(lambda l: l["extra"]["recent_hits"] / l["extra"]["recent_games"]), 3), "model_calibrated": round(mean(lambda l: l["extra"]["model_probability"]), 3),
+            "final_estimate": round(mean(lambda l: l["extra"]["final_estimate"]), 3), "price_implied_before_margin": round(mean(lambda l: l["implied"]), 3),
+            "happened": round(mean(lambda l: 1.0 if l["hit"] else 0.0), 3), "final_minus_happened": round(mean(lambda l: l["extra"]["final_estimate"]) - mean(lambda l: 1.0 if l["hit"] else 0.0), 3)}
+
+
+def anchor_report(legs: list[dict]) -> dict:
+    """Frozen anchor-estimate evidence: every supported shots leg the selector priced (the candidate pool), and the subset that went onto a proposed or recorded ticket. Software correctness
+    (did it log and settle), predictive calibration (final estimate against what happened), estimated value and realised profit are different questions; this is the second one only.
+    Legs logged before the anchor fields existed (no decision field) are not counted."""
+    ok = [l for l in legs if l.get("extra", {}).get("decision") == "SUPPORTED" and l["extra"].get("final_estimate") is not None and l["extra"].get("recent_games")
+          and l["extra"].get("model_probability") is not None]
+    out = {"supported_pool": _anchor_row(ok), "on_selected_tickets": _anchor_row([l for l in ok if l["extra"].get("in_selected_ticket")]), "by_line": {}}
+    for k in sorted({l["threshold"] for l in ok}):
+        out["by_line"][f"{k}+"] = _anchor_row([l for l in ok if l["threshold"] == k])
+    out["reading"] = ("Counts are player-games, not independent bets: nested lines of one player resolve together and a game's players share luck. A handful of nights says almost nothing; "
+                      "the pool-wide calibration (docs/validation/anchor_calibration.json) is the longer record. The pool is not the subset where the price is cheaper than the estimate unless that is stated.")
+    return out
 
 
 def _logit(p: float) -> float:

@@ -763,15 +763,19 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     def ticket_filter(combo, already):
         return wave_filter(combo, already) or early_filter(combo, already)
     pause = recording_pause.status()
-    if pause["paused"]:                      # owner pause: nothing is recorded or staked. The selector still runs so the board can show what it WOULD record (proposed, unrecorded), for the owner's review.
-        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter, policy=ticket_policy.active())
-        try:                                 # forward evidence while paused: the pool and what each policy variant would pick, frozen before the games (nothing is staked)
-            selection_audit = {"paused": True, "shadow_log": shadow_selection.record(legs, now, code_version(), proposed=picked["tickets"])}
-        except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
-            selection_audit = {"paused": True, "shadow_log": {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}}
+    # The selector runs every cycle. While paused its picks are shown as proposed and nothing is staked; otherwise they are revalidated and recorded below.
+    picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter, policy=ticket_policy.active())
+    if pause["paused"]:
+        selection_audit = {"paused": True}
     else:
-        picked = rmp.select_tickets(legs, existing=existing, max_tickets=slots_left, ticket_filter=ticket_filter, policy=ticket_policy.active())
         selection_audit = _record_selection_audit(et_date, now, picked, slots_left)
+    try:                                     # frozen predictions: every priced leg with its evidence and the selector's decision, written before any game starts (the log is append-only; nothing is staked here)
+        pol = ticket_policy.active()
+        rejected = [c for c in (picked.get("considered") or []) if c.get("status") != "SELECTED"][:8]
+        selection_audit["shadow_log"] = shadow_selection.record(legs, now, code_version(), proposed=picked["tickets"], recorded=not pause["paused"], rejected=rejected,
+                                                                selector={"policy_id": pol.policy_id, "digest": pol.digest(), "mode": getattr(pol, "mode", "legacy"), "recording": not pause["paused"]})
+    except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
+        selection_audit["shadow_log"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
     singles = rmp.select_singles(legs)
 
     account = pb.account_state(bankroll_conn, TRACK)

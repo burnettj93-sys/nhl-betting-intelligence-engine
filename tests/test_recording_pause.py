@@ -134,10 +134,16 @@ class TestShadowLogWhilePaused(Isolated):
         dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=30), collected=collected(board(8, price=-110)))
         self.assertEqual(len(sh.read_all()), 2)
 
-    def test_nothing_is_logged_when_not_paused(self):
+    def test_the_frozen_prediction_log_keeps_running_after_recording_resumes(self):
+        """Regression (2026-10-11): the log was written only while paused, so the first recording day left no frozen predictions."""
         from operational import shadow_selection as sh
-        dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
-        self.assertEqual(sh.read_all(), [])
+        res = dtk.run_cycle(None, self.conn, NOW, collected=collected(board(8)))
+        recs = sh.read_all()
+        self.assertEqual(len(recs), 1)
+        self.assertTrue(recs[0]["decisions"]["selected_tickets_recorded"])
+        self.assertEqual(res["newly_recorded"], len(recs[0]["proposed_tickets"]))
+        self.assertTrue(all(t["recorded"] for t in recs[0]["proposed_tickets"]))
+        self.assertIn("digest", recs[0]["selector"])
 
     def test_a_failure_in_the_shadow_log_never_stops_the_cycle(self):
         rp.pause("postmortem", now=NOW)

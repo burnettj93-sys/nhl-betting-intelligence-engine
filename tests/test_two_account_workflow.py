@@ -15,14 +15,15 @@ from unittest import mock
 from operational import paper_bankroll as pb
 from operational import paper_bet_settlement_driver as drv
 from operational import personal_logs as pl
-from tests.product_fixture import builder_pool_doc, snapshot
+from tests.product_fixture import builder_pool_two_games_doc, snapshot
 from tests.test_daily_tickets import fresh_ledger
 from tests.test_parlay_builder_page import GAME, NOW, Runner
 from tests.test_personal_logs import ledger_fingerprint
 from tests.test_product_pages import rerun, run_page, text, with_token
 from dashboard import ui
 
-POOL = builder_pool_doc()
+POOL = builder_pool_two_games_doc()
+GAME_OF = {"P4": "2026020901"}                                   # P4 plays in the second game; everyone else in GAME
 
 
 class Platform:
@@ -69,10 +70,9 @@ def build_and_submit(platform, acct_hash, name, passcode, legs, stake, ack=False
     r.at.session_state["_personal_log"] = sel
     r.at.run()
     for pid, code, k in legs:
-        if pid != "P1":
-            r.at.selectbox(key="pb_player").set_value((pid, GAME))
-            r.at.run()
-        r.add(pid, code, k)
+        r.at.selectbox(key="pb_player").set_value((pid, GAME_OF.get(pid, GAME)))
+        r.at.run()
+        r.add(pid, code, k, gid=GAME_OF.get(pid, GAME))
     r.at.number_input(key="_slip_stake").set_value(float(stake))
     r.at.run()
     if ack:
@@ -100,9 +100,9 @@ class TestTwoPeopleOnTheRealPages(unittest.TestCase):
             self.assertEqual(pl.account_state(self.p.logs, h)["available_cash"], 500.0)                  # each starts with its own $500
         self.assertEqual(ledger_fingerprint(self.p.ledger), self.model_before)
 
-        # 2. each builds and submits a different slip on the Parlay Builder (A: one leg $40; B: a same-game slip, acknowledged, $25)
+        # 2. each builds and submits a different slip on the Parlay Builder (A: one leg $40; B: a two-leg slip from different games, an Estimated price, $25)
         ra = build_and_submit(self.p, ha, name_a, pass_a, [("P1", "SOG", 2)], 40)
-        rb = build_and_submit(self.p, hb, name_b, pass_b, [("P1", "SOG", 3), ("P2", "SOG", 2)], 25, ack=True)
+        rb = build_and_submit(self.p, hb, name_b, pass_b, [("P1", "SOG", 3), ("P4", "SOG", 2)], 25)
         for r in (ra, rb):
             r.close()
         orders = [o for o in self.p.orders if o["type"] == "PERSONAL_BET"]
@@ -142,6 +142,8 @@ class TestTwoPeopleOnTheRealPages(unittest.TestCase):
         # A tries to submit a slip to B's account with A's passcode: the page refuses (view-only), and a forged order is refused by the engine
         r = Runner(self.p.snap(), account=False)
         r.at.session_state["_personal_log"] = {"hash": hb, "name": name_b, "creation": None, "write_key": pass_a.replace("-", "")}
+        r.at.run()
+        r.at.selectbox(key="pb_player").set_value(("P1", GAME))
         r.at.run()
         r.add("P1", "SOG", 2)
         self.assertTrue(r.at.button(key="pb_submit").disabled)

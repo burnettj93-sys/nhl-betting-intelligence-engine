@@ -27,7 +27,7 @@ class TestWaterfall(unittest.TestCase):
     def test_ranking_takes_one_game_from_each_wave_in_turn(self):
         self.assertEqual(cp.rank_games(SEVEN)[:4], ["a", "e", "b", "f"])
 
-    def test_tight_budget_prices_few_games_but_every_wave_is_represented(self):
+    def test_tight_budget_prices_few_games_that_can_be_compared_at_the_same_time(self):
         a = cp.allocate(11.5, SEVEN)
         self.assertEqual(a["allowance"][cp.MONEYLINE_DECISION], 3)
         self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 1)
@@ -35,8 +35,7 @@ class TestWaterfall(unittest.TestCase):
         self.assertEqual(len(a["games_priced"]), 2)
         self.assertEqual(a["morning_games"], cp.rank_games(SEVEN)[:3])
         self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])
-        self.assertIn("a", a["games_priced"])
-        self.assertIn("e", a["games_priced"])                              # the later wave is not starved
+        self.assertEqual(a["games_priced"], ["a", "b"])                    # two games of ONE wave: their pregame prices can be compared at one evaluation time (one game from each wave never can)
         self.assertEqual(a["goals_games"], [])                             # nothing is left for goals
         self.assertGreater(a["shortfall_per_day_required_only"], 0)
 
@@ -218,6 +217,37 @@ class TestCaptureDecisions(unittest.TestCase):
         client, _, out = self._capture(plan, requests_last=1)
         self.assertEqual((client.calls, out["events_captured"]), ([cp.SHOTS_KEY], 1))
 
+    def _two_game_run(self, now, second_offset_min, plan):
+        t1 = now + dt.timedelta(minutes=90)
+        t2 = t1 + dt.timedelta(minutes=second_offset_min)
+        iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+
+        class Client:
+            def __init__(self):
+                self.calls = []
+            def get_nhl_events(self):
+                return mock.Mock(ok=True, data=[{"id": "e1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": iso(t1)},
+                                                {"id": "e2", "home_team": "Toronto Maple Leafs", "away_team": "Montréal Canadiens", "commence_time": iso(t2)}])
+            def get_event_odds(self, eid, markets):
+                self.calls.append(eid)
+                return mock.Mock(ok=True, requests_last=1)
+        games = {"1": {"home": "BOS", "away": "UTA", "start_utc": iso(t1)}, "2": {"home": "TOR", "away": "MTL", "start_utc": iso(t2)}}
+        client = Client()
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}), mock.patch.object(cp, "record"), mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(bb, "decision_age_min", return_value=None), mock.patch.object(bb, "_captured_times", return_value={cp.SHOTS_KEY: None}), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
+            bb.capture_prices(now, client=client, archive_mod=mock.Mock(), games=games, plan=plan)
+        return client.calls
+
+    def test_games_of_one_wave_are_captured_together_when_the_first_game_reaches_its_window(self):
+        now = dt.datetime(2026, 10, 8, 19, 0, tzinfo=dt.timezone.utc)                               # game 1 in 90 minutes (inside 105), game 2 an hour after it
+        plan = {**PLAN, "games_priced": ["1", "2"], "games_not_priced": [], "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
+        self.assertEqual(self._two_game_run(now, 60, plan), ["e1", "e2"])                          # game 2 is 150 minutes away: on its own it would wait another 45 minutes
+
+    def test_a_game_in_a_later_wave_waits_for_its_own_window(self):
+        now = dt.datetime(2026, 10, 8, 19, 0, tzinfo=dt.timezone.utc)
+        plan = {**PLAN, "games_priced": ["1", "2"], "games_not_priced": [], "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
+        self.assertEqual(self._two_game_run(now, 150, plan), ["e1"])                               # 150 minutes later is a different wave
+
     def test_a_goals_capture_does_not_eat_the_next_games_base_allowance(self):
         """2026-10-08: BOS's 3-credit capture was recorded as PROPS, so the third planned game (2 more credits) was denied against an allowance of 6."""
         plan = {**PLAN, "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}}
@@ -248,6 +278,24 @@ class TestSweeps(unittest.TestCase):
     def test_planned_sweeps_never_buy_shots(self):
         self.assertNotIn("shots", lop.PLANNED_SWEEP_MARKETS)
         self.assertEqual(lop.PLANNED_SWEEP_MARKETS, "player_total_saves")
+
+
+class TestConnectedCaptures(unittest.TestCase):
+    def test_games_are_bought_a_whole_wave_at_a_time_biggest_wave_first(self):
+        starts_ = starts(("a", 0), ("b", 30), ("c", 200), ("d", 215), ("e", 230), ("f", 400))
+        self.assertEqual(cp.connected_order(starts_), ["c", "d", "e", "a", "b", "f"])                # the three-game wave, then the two-game wave, then the lone game
+
+    def test_an_isolated_tail_is_not_bought_when_other_games_are_chosen(self):
+        starts_ = starts(("a", 0), ("b", 30), ("c", 200), ("d", 215))
+        self.assertEqual(cp.connected_prefix(starts_, 3), ["a", "b"])                                  # one game of the next wave would be alone: not bought
+        self.assertEqual(cp.connected_prefix(starts_, 4), ["a", "b", "c", "d"])
+        self.assertEqual(cp.connected_prefix(starts_, 1), ["a"])                                       # a single affordable game is still the best use of the credit
+
+    def test_the_credit_of_a_dropped_isolated_capture_stays_in_the_day(self):
+        starts_ = starts(("a", 0), ("b", 30), ("c", 200))
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate"}):
+            a = cp.allocate(2.0 + 3 + 1 + 3.0, starts_)                                                # decisions 3 + display 1, then 3 credits: pregame for two games (2) ...
+        self.assertEqual(a["games_priced"], ["a", "b"])
 
 
 class TestPointsAddOn(unittest.TestCase):

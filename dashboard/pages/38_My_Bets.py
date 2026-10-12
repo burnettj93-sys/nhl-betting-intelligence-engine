@@ -103,6 +103,7 @@ def model_section(compact: bool = False) -> None:
 
 
 # ---------------------------------------------------------------- choosing an account ----
+ui.reopen_from_address()
 log = ui.selected_log()
 SHORT = ("<b>Open</b> your account with your last name. You can look at it without a passcode. <b>Adding a bet</b> needs your 8-character passcode, shown once when you create the account. "
          "Each account starts with its own \\$500 of paper money.")
@@ -116,6 +117,8 @@ DETAILS = """**What is public and what is protected**
   CPU-years. It never leaves your browser session: only signatures are sent. Close the page and you will need it again.
 * **Your cash is its own.** It is worked out from your own bets every time (\\$500 + settled profit/loss − open stakes), so opening the account again never resets it, and no other account or the model book shares it.
 * **Two people with the same last name** are two accounts: the second becomes “Smith 2”, the third “Smith 3”, each with its own passcode and cash. Open yours by typing the number.
+* **Another device, or after a refresh:** once you open your account the address shows `?account=YourName`. Bookmark or send yourself that address: it reopens your account read-only on any device,
+  and you type the passcode only when you add a bet. The passcode itself is never kept in the address, a cookie or on the server.
 * **Lost passcode:** it cannot be recovered (the engine never has it). The account stays readable; create a new one.
 """
 with st.expander("Open or create your account", expanded=log is None):
@@ -215,6 +218,15 @@ if log is None:
 if not log["can_write"]:
     ui.banner("This account is open <b>view-only</b>: " + ("the passcode does not match. " if log["key_given"] else "no passcode was entered. ")
               + "You can read it, but adding bets needs the passcode (open it again with the passcode).", "info")
+if not log["can_write"]:
+    with st.expander("Add the passcode to place bets in this account", expanded=bool(log["key_given"])):
+        pk = st.text_input("Passcode", key="mb_unlock_key", type="password", placeholder="ABCD-EFGH")
+        if st.button("Unlock adding bets", key="mb_unlock", disabled=not pk.strip()):
+            if log["doc"] and log_signing.valid_key_shape(pk) and ui._write_pub(log_signing.normalize_key(pk), log["hash"]) == log["doc"].get("write_pub"):
+                st.session_state["_personal_log"]["write_key"] = log_signing.normalize_key(pk)
+                st.rerun()
+            else:
+                st.error("That passcode does not belong to this account.")
 top = st.columns([4, 1])
 top[0].markdown(f"### {ui.esc(log['name'])}")
 if top[1].button("Switch account", key="mb_switch"):
