@@ -27,7 +27,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections import defaultdict
-from itertools import combinations, product
+from itertools import combinations
 
 ANCHOR_CAP = 0.10            # an estimate never exceeds the model's calibrated probability by more than this (the average gap at 0.70+ was 2-4 points; this bounds an individual player)
 MIN_SAMPLE_GAMES = 20        # games behind a shots estimate (the window is 30; an early-season player carries last season's games)
@@ -36,8 +36,6 @@ SHOTS_LEG_FLOOR = 0.60       # "well supported" starts here; below it the record
 MONEYLINE_LEG_FLOOR = 0.55
 LEG_MIN_EV = -0.05           # a leg may give up at most about a bookmaker's margin at the price offered
 MAX_LEGS = 5
-MAX_GAMES_SEARCHED = 10
-FRONTIER_PER_GAME = 4
 MONEYLINE_SE = 0.03
 
 SHOT_FAMILIES = ("PLAYER_SOG_ALTERNATE", "PLAYER_SOG")
@@ -50,12 +48,20 @@ class Estimate:
     basis: str
 
 
+def shots_final_estimate(model_p: float | None, record_p: float | None, threshold: int | None) -> float | None:
+    """The final estimate for a shots line from the model's probability and the shrunk last-30 record: the record, held to the model + ANCHOR_CAP and to HIGH_LINE_CAP for 3+ shots. One definition,
+    used by the ticket legs and by the Paper Parlay Builder's line display, so a card never shows a different estimate from the one a ticket would use. None without both inputs."""
+    if model_p is None or record_p is None:
+        return None
+    return min(record_p, model_p + ANCHOR_CAP, HIGH_LINE_CAP if (threshold or 0) >= 3 else 1.0)
+
+
 def leg_estimate(leg) -> Estimate | None:
     """The hit-chance estimate for one leg, or None if the leg is not well supported."""
     if leg.market_family in SHOT_FAMILIES:
         if (leg.empirical_probability is None or leg.model_probability is None or (leg.empirical_games or 0) < MIN_SAMPLE_GAMES):
             return None
-        p = min(leg.empirical_probability, leg.model_probability + ANCHOR_CAP, HIGH_LINE_CAP if (leg.threshold or 0) >= 3 else 1.0)
+        p = shots_final_estimate(leg.model_probability, leg.empirical_probability, leg.threshold)
         if p < SHOTS_LEG_FLOOR:
             return None
         se = math.sqrt(p * (1.0 - p) / ((leg.empirical_games or 0) + 8))
@@ -109,16 +115,6 @@ def prepare_pool(eligible_legs: list) -> list:
     return pool
 
 
-def _frontier(legs: list) -> list:
-    """Legs of one game not beaten on both hit chance and payout by another leg of that game."""
-    out, best_dec = [], 0.0
-    for leg in sorted(legs, key=lambda l: (-l.conservative_probability, -_decimal(l))):
-        if _decimal(leg) > best_dec + 1e-9:
-            out.append(leg)
-            best_dec = _decimal(leg)
-    return out[:FRONTIER_PER_GAME]
-
-
 def midpoint_probability(leg) -> float:
     """Halfway between the leg's estimate and the probability its own price implies (before removing the bookmaker's margin, so the midpoint is, if anything, high-side generous to the price).
     A shots leg's estimate comes from the player's record; the market is an independent opinion that sees the opponent, the lineup and the news. A ticket whose value survives if the truth
@@ -147,46 +143,99 @@ def uncertainty(legs: list) -> dict:
     return {"low": round(low, 4), "high": round(high, 4)}
 
 
+def ticket_passes(combo, policy, veto) -> bool:
+    """The policy's acceptance test for ONE ticket, in one place (used by the search above and by Best Options for single-leg offers)."""
+    return (combo.combined_decimal >= policy.min_combined_decimal and combo.ev_estimated >= policy.min_estimated_ev and combo.ev_conservative >= 0.0 and veto(combo, policy) is None)
+
+
+MAX_SEARCH_NODES = 5_000_000   # a safety bound, not a tuning knob: a search that reaches it says so (diag["truncated"]) instead of silently dropping tickets
+
+
 def qualifying(pool: list, policy, evaluate, veto) -> tuple[list, dict]:
-    """Every cross-game ticket of 2..MAX_LEGS legs (one leg per game) that passes the +100 and value tests, minus tickets made redundant by a passing shorter one.
-    `evaluate(legs)` builds the ParlayResult; `veto(combo, policy)` is the policy's own floor/value test. Also returns diagnostics for the empty-board explanation."""
+    """EVERY cross-game ticket of 2..MAX_LEGS legs (one leg per game) that passes the policy, minus tickets made redundant by a passing shorter one. This is the ONE candidate evaluation: the recording
+    selector, the Today board, the provisional board and the Best Options list all read it, so they cannot disagree about what qualifies.
+
+    Nothing is pruned by a heuristic that could hide a ticket (an earlier version kept only 4 legs per game and ten games, and lost tickets that passed every test: docs/validation/selector_cap_2026-10-12.md).
+    The only pruning is exact: a ticket's hit chance can only fall as legs are added, so a partial ticket already under the policy's floor is abandoned; and a ticket reaches +100, the value tests and the floor
+    only if its own numbers do, which are checked on plain floats before any object is built. `evaluate(legs)` builds the ParlayResult; `veto(combo, policy)` is the policy's own floor/value/market test.
+    Also returns diagnostics for the empty-board explanation."""
+    from research.real_market_parlay import engine as _eng
+    cache_key = (policy.digest(), tuple(pool), evaluate, veto)           # legs are frozen dataclasses: identical content, identical key
+    hit = _SEARCH_CACHE.get(cache_key)
+    if hit is not None:
+        return list(hit[0]), dict(hit[1])
+    found_list, diagnostics = _search(pool, policy, evaluate, veto, _eng)
+    if len(_SEARCH_CACHE) >= 4:
+        _SEARCH_CACHE.pop(next(iter(_SEARCH_CACHE)))
+    _SEARCH_CACHE[cache_key] = (found_list, diagnostics)
+    return list(found_list), dict(diagnostics)
+
+
+_SEARCH_CACHE: dict = {}      # one trader cycle asks the same question three times (recording, Today's provisional board, Best Options): answer it once
+
+
+def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
+    margin = _eng.LEG_PROBABILITY_MARGIN
     by_game: dict[str, list] = defaultdict(list)
     for leg in pool:
-        by_game[leg.game_id].append(leg)
-    fronts = {g: _frontier(ls) for g, ls in by_game.items()}
-    games = sorted(fronts, key=lambda g: -max(l.conservative_probability * _decimal(l) for l in fronts[g]))[:MAX_GAMES_SEARCHED]
-    diag = {"games_with_supported_legs": len(by_game), "supported_legs": len(pool), "combinations_checked": 0, "reaching_plus_100": 0,
-            "best_reaching_plus_100": None}
-    passing: dict[frozenset, object] = {}
+        by_game[leg.game_id].append((leg, leg.conservative_probability, _decimal(leg), max(leg.conservative_probability - margin, 0.0), max(leg.conservative_probability - policy.value_shade, 0.0)))
+    games = sorted(by_game)
+    for g in games:
+        by_game[g].sort(key=lambda t: -t[1])                     # most likely leg first, so the floor test can stop a game's loop at the first leg that fails it (exact: the rest are lower)
+    top_p = [by_game[g][0][1] for g in games]
+    diag = {"games_with_supported_legs": len(by_game), "supported_legs": len(pool), "combinations_checked": 0, "reaching_plus_100": 0, "best_reaching_plus_100": None, "truncated": False}
     if len(games) < 2:
         return [], diag
-    for size in range(2, min(MAX_LEGS, len(games)) + 1):
-        for gs in combinations(games, size):
-            for group in product(*(fronts[g] for g in gs)):
-                diag["combinations_checked"] += 1
-                dec = 1.0
-                for l in group:
-                    dec *= _decimal(l)
-                if dec < policy.min_combined_decimal:
-                    continue
-                combo = evaluate(list(group))
-                if combo is None:
-                    continue
-                diag["reaching_plus_100"] += 1
-                best = diag["best_reaching_plus_100"]
-                shaded = 1.0
-                for l in combo.legs:
-                    shaded *= max(l.conservative_probability - policy.value_shade, 0.0)
-                cand = {"hit_probability": combo.joint_probability, "ev_estimated": combo.ev_estimated, "ev_after_shade": shaded * combo.combined_decimal - 1.0,
-                        "price": combo.estimated_combo_price, "legs": [(l.participant_name, l.threshold, l.market_family, l.american_price) for l in combo.legs]}
-                if best is None or cand["ev_after_shade"] > best["ev_after_shade"]:
-                    diag["best_reaching_plus_100"] = cand
-                if combo.ev_estimated < policy.min_estimated_ev or veto(combo, policy) is not None or combo.ev_conservative < 0.0:
-                    continue
-                keys = frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in combo.legs)
-                if size > 2 and any(frozenset(sub) in passing for n in range(2, size) for sub in combinations(keys, n)):
-                    continue
-                passing[keys] = combo
+    found: dict[frozenset, object] = {}
+    nodes = 0
+    floor = policy.floor
+    value_bar = 1.0 + policy.min_value_after_shade
+    ev_bar = 1.0 + policy.min_estimated_ev
+    chosen: list = []
+
+    def key_of(legs):
+        return frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in legs)
+
+    def visit(start: int, P: float, D: float, Pm: float, Ps: float):
+        nonlocal nodes
+        for gi in range(start, len(games)):
+            if P * top_p[gi] < floor:
+                continue                                          # no leg of this game keeps the hit chance at the floor
+            for leg, p, d, pm, ps in by_game[games[gi]]:
+                P2 = P * p
+                if P2 < floor:
+                    break
+                nodes += 1
+                if nodes > MAX_SEARCH_NODES:
+                    diag["truncated"] = True
+                    return
+                D2, Pm2, Ps2 = D * d, Pm * pm, Ps * ps
+                chosen.append(leg)
+                if len(chosen) >= 2:
+                    diag["combinations_checked"] += 1
+                    if D2 >= policy.min_combined_decimal:
+                        diag["reaching_plus_100"] += 1
+                        best = diag["best_reaching_plus_100"]
+                        if best is None or Ps2 * D2 - 1.0 > best["ev_after_shade"]:
+                            diag["best_reaching_plus_100"] = {"hit_probability": P2, "ev_estimated": P2 * D2 - 1.0, "ev_after_shade": Ps2 * D2 - 1.0,
+                                                              "price": 100.0 * (D2 - 1.0), "legs": [(l.participant_name, l.threshold, l.market_family, l.american_price) for l in chosen]}
+                        if P2 * D2 >= ev_bar and Ps2 * D2 >= value_bar and Pm2 * D2 >= 1.0:
+                            combo = evaluate(list(chosen))
+                            if combo is not None and ticket_passes(combo, policy, veto):
+                                found[key_of(chosen)] = combo
+                if len(chosen) < MAX_LEGS:
+                    visit(gi + 1, P2, D2, Pm2, Ps2)
+                chosen.pop()
+                if diag["truncated"]:
+                    return
+
+    visit(0, 1.0, 1.0, 1.0, 1.0)
+    passing = {}
+    for keys, combo in sorted(found.items(), key=lambda kv: len(kv[0])):          # shortest first: a longer ticket is kept only when no shorter ticket from its own legs passes
+        n = len(keys)
+        if n > 2 and any(frozenset(sub) in passing for m in range(2, n) for sub in combinations(keys, m)):
+            continue
+        passing[keys] = combo
     return list(passing.values()), diag
 
 

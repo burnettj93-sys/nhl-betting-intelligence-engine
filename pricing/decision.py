@@ -27,7 +27,7 @@ def persist_bare_prediction(conn: sqlite3.Connection, pred) -> int:
         (pred.game_id, "MONEYLINE", pred.home_team, pred.prediction_time_utc,
          pred.model_version, pred.feature_version, json.dumps(pred.feature_snapshot),
          pred.model_prob_home, pred.conservative_prob_home, pred.ci_low, pred.ci_high,
-         pred.home_goalie_status, pred.away_goalie_status, dt.datetime.utcnow().isoformat()),
+         pred.home_goalie_status, pred.away_goalie_status, dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()),
     )
     return cur.lastrowid
 
@@ -53,7 +53,7 @@ def persist_full_decision(conn: sqlite3.Connection, pred, report) -> int:
          report.odds_snapshot_id_selection, report.odds_snapshot_id_opponent,
          report.conservative_edge, report.expected_value, report.maximum_acceptable_draftkings_price,
          report.action, report.action_reason, report.kelly_stake_fraction,
-         pred.home_goalie_status, pred.away_goalie_status, dt.datetime.utcnow().isoformat()),
+         pred.home_goalie_status, pred.away_goalie_status, dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()),
     )
     conn.commit()
     return cur.lastrowid

@@ -141,6 +141,17 @@ class TestSlip(Case):
         r.press(f"pb_rm_0_P1_PLAYER_SOG_ALTERNATE")
         self.assertEqual(r.at.session_state["_slip"], [])
 
+    def test_a_shots_line_shows_the_recent_record_the_model_the_estimate_and_the_price_apart(self):
+        pool = builder_pool_doc()
+        pool["games"][GAME]["players"]["P1"]["m"]["SOG"]["rec"] = {"2": [24, 30, 0.7263]}
+        r = self.run_(snap_with(pool))
+        t = r.text()
+        self.assertIn("Recent 24/30 (80%)", t)
+        self.assertIn("Model 56%", t)
+        self.assertIn("Estimate 73%", t)
+        self.assertIn("Price implies 52%", t)                                                  # -110 implies 52.4%
+        self.assertIn("Model 31%", t)                                                          # a line without a record keeps the plain model caption
+
     def test_clear_slip(self):
         r = self.run_().add("P1", "SOG", 2).press("pb_clear")
         self.assertEqual(r.at.session_state["_slip"], [])

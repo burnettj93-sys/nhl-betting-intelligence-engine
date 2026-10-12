@@ -43,12 +43,73 @@ def _ticket(c: dict) -> dict:
             "ev": round(c["ev"], 5), "ev_after_haircut": round(c["ev_haircut"], 5)}
 
 
+GAPS_NAME = "selection_shadow_gaps.jsonl"
+GAP_MIN = 90.0        # minutes without a look, inside the Eastern day's 08:00-23:00, that is written down as a gap (the Mac asleep, a job stopped or the logger down)
+
+
+def note_gap(from_utc: str, to_utc: str, kind: str, reason: str, *, now: dt.datetime | None = None) -> dict:
+    """Append one line to the gap notes (append-only, never edited). A gap is a stretch in which predictions that could have been frozen were NOT: it is stated, not filled in. Nothing is ever
+    back-dated or reconstructed into the prediction log."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    rec = {"type": "GAP", "from_utc": from_utc, "to_utc": to_utc, "kind": kind, "reason": reason, "noted_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    path = state_paths.path(GAPS_NAME)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(rec, separators=(",", ":")) + "\n")
+    return rec
+
+
+def gaps() -> list[dict]:
+    path = state_paths.path(GAPS_NAME)
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def gaps_on(et_date: str) -> list[dict]:
+    """Gap notes that overlap the given Eastern day."""
+    from zoneinfo import ZoneInfo
+    z = ZoneInfo("America/New_York")
+    day = dt.date.fromisoformat(et_date)
+    lo = dt.datetime.combine(day, dt.time(0, 0), tzinfo=z).astimezone(dt.timezone.utc)
+    hi = lo + dt.timedelta(days=1)
+    out = []
+    for g in gaps():
+        a, b = (dt.datetime.fromisoformat(g[k].replace("Z", "+00:00")) for k in ("from_utc", "to_utc"))
+        if a < hi and b > lo:
+            out.append(g)
+    return out
+
+
+def _daytime_minutes(a: dt.datetime, b: dt.datetime) -> float:
+    """Minutes of [a, b] that fall between 08:00 and 23:00 Eastern."""
+    from zoneinfo import ZoneInfo
+    z = ZoneInfo("America/New_York")
+    total, t = 0.0, a
+    while t < b:
+        nxt = min(b, t + dt.timedelta(minutes=5))
+        h = t.astimezone(z).hour
+        if 8 <= h < 23:
+            total += (nxt - t).total_seconds() / 60.0
+        t = nxt
+    return total
+
+
 def _touch(state_path, now: dt.datetime, **extra) -> None:
     """Stamp the state file with the time of THIS look (even when nothing changed), so the watchdog can tell a quiet pool from a logger that has stopped."""
     try:
         cur = json.loads(state_path.read_text())
     except (OSError, json.JSONDecodeError):
         cur = {}
+    prev = cur.get("checked_at_utc")
+    if prev:
+        try:
+            a = dt.datetime.fromisoformat(prev.replace("Z", "+00:00"))
+            b = now.astimezone(dt.timezone.utc)
+            if (b - a).total_seconds() / 60.0 > GAP_MIN and _daytime_minutes(a, b) > GAP_MIN:
+                note_gap(prev, b.strftime("%Y-%m-%dT%H:%M:%SZ"), "NO_CHECKS", "no prediction-log check for more than 90 minutes in the daytime: the machine was asleep, a job was stopped, or the logger was down. Nothing was frozen in this stretch.", now=now)
+        except (ValueError, OverflowError):
+            pass
     cur.update(extra)
     cur["checked_at_utc"] = now.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
@@ -101,3 +162,11 @@ def read_all() -> list[dict]:
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) >= 6 and sys.argv[1] == "note-gap":
+        print(json.dumps(note_gap(sys.argv[2], sys.argv[3], sys.argv[4], " ".join(sys.argv[5:])), indent=1))
+    else:
+        print(json.dumps({"records": len(read_all()), "gaps": gaps()}, indent=1)[:2000])

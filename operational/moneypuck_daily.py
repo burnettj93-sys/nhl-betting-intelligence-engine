@@ -84,7 +84,7 @@ def check_dataset(dataset: str, season: int, session: requests.Session | None = 
         raise ValueError(f"unknown dataset {dataset!r}")
     session = session or requests.Session()
     url = DATASET_URLS[dataset].format(season=season)
-    checked_at = dt.datetime.utcnow().isoformat()
+    checked_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()
 
     try:
         resp = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
@@ -205,7 +205,7 @@ def ingest_local_file(dataset: str, season: int, local_path: str) -> dict:
         raise FileNotFoundError(local_path)
     content = path.read_bytes()
     checksum = sha256_hex_of_bytes(content)
-    checked_at = dt.datetime.utcnow().isoformat()
+    checked_at = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()
     manifest = load_manifest(dataset, season)
     if manifest is not None and manifest.get("latest_accepted_checksum") == checksum:
         return {"status": "NO_CHANGE", "dataset": dataset, "season": season, "checksum": checksum}

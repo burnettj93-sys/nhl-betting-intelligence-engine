@@ -145,6 +145,11 @@ def build(nhl_conn, now: dt.datetime) -> dict:
                     p = players.setdefault(pid, {"n": o["description"], "t": team, "m": {}})
                     mk = p["m"].setdefault(code, {"q": quote_updated, "r": retrieved.strftime("%Y-%m-%dT%H:%M:%SZ"), "l": []})
                     mk["l"].append([k, float(o["price"]), None if prob is None else round(float(prob), 4)])
+                    emp = (entry.get("emp") or {}).get(f"SOG{k}") if code == "SOG" else None
+                    if emp:                                                   # the other numbers behind a shots line: recent record, and the estimate a ticket would use (anchor.shots_final_estimate)
+                        from research.real_market_parlay import anchor
+                        final = anchor.shots_final_estimate(prob, emp["p"], k)
+                        mk.setdefault("rec", {})[str(k)] = [emp["hits"], emp["n"], None if final is None else round(final, 4)]
         for p in players.values():
             for mk in p["m"].values():
                 mk["l"].sort()

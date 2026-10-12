@@ -89,7 +89,12 @@ with left:
             row = st.columns([4, 2, 2, 3, 2])
             row[0].markdown(f"**{bp.leg_label(p['n'], family, k)}**")
             row[1].markdown(f"<span class='odds'>{ui.american(price)}</span>", unsafe_allow_html=True)
-            row[2].caption(f"Model {ui.pct(prob)}" if prob is not None else "No model estimate")
+            rec = (mk.get("rec") or {}).get(str(k))
+            if rec:                      # four numbers kept apart: recent record, model, the estimate a ticket would use, and what the price implies
+                price_p = 1.0 / (1.0 + (price / 100.0 if price > 0 else 100.0 / abs(price)))
+                row[2].caption(f"Recent {rec[0]}/{rec[1]} ({ui.pct(rec[0] / max(rec[1], 1))}) · Model {ui.pct(prob)}  \n" + (f"Estimate {ui.pct(rec[2])} · " if rec[2] is not None else "") + f"Price implies {ui.pct(price_p)}")
+            else:
+                row[2].caption(f"Model {ui.pct(prob)}" if prob is not None else "No model estimate")
             row[3].caption(("✅ " if stt["usable"] else "⚠️ ") + stt["word"])
             already = any(l["participant_id"] == pid and l["market_family"] == family and l["game_id"] == gid for l in slip)
             if row[4].button("Replace" if already else "Add", key=f"pb_add_{gid}_{pid}_{code}_{k}", disabled=not stt["usable"]):

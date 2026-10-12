@@ -26,7 +26,8 @@ sys.path.insert(0, str(REPO))
 from operational import postmortem_math as pm  # noqa: E402
 
 BANDS = [(0.0, 0.15), (0.15, 0.30), (0.30, 0.50), (0.50, 0.70), (0.70, 1.01)]
-FAMILIES = {"PLAYER_SOG_ALTERNATE": "shots on goal", "PLAYER_SOG": "shots on goal", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals"}
+FAMILIES = {"PLAYER_SOG_ALTERNATE": "shots on goal", "PLAYER_SOG": "shots on goal", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals", "MONEYLINE": "moneyline"}
+SCORER_REVISION = 2          # 2 (2026-10-12): a moneyline is graded as a TEAM outcome. Revision 1 looked every row up as a player, so moneyline rows came back "did not play" (docs/validation/CORRECTIONS_2026-10-12.md)
 FINAL = ("FINAL", "OFF")
 
 
@@ -39,15 +40,30 @@ def db_resolver(path: Path):
     conn.row_factory = sqlite3.Row
 
     def resolve(game_id: str, player_id: str, family: str, threshold) -> dict:
-        g = conn.execute("SELECT game_state FROM games WHERE game_id = ?", (str(game_id),)).fetchone()
+        g = conn.execute("SELECT game_state, home_team, away_team, home_score, away_score FROM games WHERE game_id = ?", (str(game_id),)).fetchone()
         if not g or g["game_state"] not in FINAL:
             return {"status": "PENDING"}
+        if family == "MONEYLINE":                       # a team outcome: the official final score, shootouts and overtime included; never a player lookup
+            if g["home_score"] is None or g["away_score"] is None or g["home_score"] == g["away_score"]:
+                return {"status": "UNRESOLVED"}
+            winner = g["home_team"] if g["home_score"] > g["away_score"] else g["away_team"]
+            if str(player_id) not in (g["home_team"], g["away_team"]):
+                return {"status": "UNRESOLVED"}
+            return {"status": "FINAL", "hit": str(player_id) == winner}
         s = conn.execute("SELECT shots, goals, assists, played FROM player_game_stats WHERE game_id = ? AND player_id = ? ORDER BY revision_number DESC LIMIT 1", (str(game_id), str(player_id))).fetchone()
         if not s or not s["played"]:
             return {"status": "NO_PARTICIPATION"}
         value = s["shots"] if "SOG" in family else (s["goals"] if "GOALS" in family else s["goals"] + s["assists"])
         return {"status": "FINAL", "hit": value >= int(threshold or 1)}
     return resolve
+
+
+def _gaps() -> list:
+    try:
+        from operational import shadow_selection
+        return shadow_selection.gaps()
+    except Exception:  # noqa: BLE001 - scoring a log supplied by file must not need the live gap notes
+        return []
 
 
 def _unit(l: dict) -> tuple:
@@ -72,15 +88,22 @@ def score(records: list[dict], resolve) -> dict:
             key = (r["et_date"], gid, pid, fam, k)
             if key not in first:
                 first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"], "extra": extra}
-    legs, pending, no_part = [], 0, 0
+    legs, pending, no_part, unresolved = [], 0, 0, 0
+    dnp_players: set = set()
     for key, l in first.items():
         res = resolve(l["game"], l["player"], l["family"], l["threshold"])
         if res["status"] == "PENDING":
             pending += 1
+        elif res["status"] == "UNRESOLVED":
+            unresolved += 1
         elif res["status"] == "NO_PARTICIPATION":
             no_part += 1
+            dnp_players.add((l["date"], l["game"], l["player"]))
         else:
             legs.append({**l, "hit": res["hit"], "implied": implied(l["price"])})
+
+    ml_legs = [l for l in legs if l["family"] == "MONEYLINE"]
+    legs = [l for l in legs if l["family"] != "MONEYLINE"]          # the prop tables keep their meaning; moneylines are reported on their own (team outcomes)
 
     def table(sel: list[dict]) -> dict:
         out = {"all": _row(sel), "by_market": {}, "by_band": {}}
@@ -124,9 +147,9 @@ def score(records: list[dict], resolve) -> dict:
     needed = pm.legs_needed(0.05)
     needed_clustered = (pm.legs_needed(0.05, deff=1.12), pm.legs_needed(0.05, deff=1.98))
     edge_units = len({_unit(l) for l in edge_legs})
-    return {"records": len(records), "days": sorted({r["et_date"] for r in records}), "distinct_legs_logged": len(first), "resolved": len(legs), "awaiting_games": pending, "player_did_not_play": no_part,
+    return {"records": len(records), "days": sorted({r["et_date"] for r in records}), "distinct_legs_logged": len(first), "resolved": len(legs), "awaiting_games": pending, "player_did_not_play": no_part, "players_who_did_not_play": len(dnp_players), "unresolved": unresolved, "scorer_revision": SCORER_REVISION, "logging_gaps": _gaps(),
             "all_priced_legs": table(legs), "legs_that_passed_the_edge_filter": table(edge_legs), "policy_variants": variants,
-            "top_quarter_by_edge_size": table(top), "model_versus_price_information": blend_report(legs), "anchor_estimates": anchor,
+            "top_quarter_by_edge_size": table(top), "model_versus_price_information": blend_report(legs), "anchor_estimates": anchor, "moneyline_legs": moneyline_report(ml_legs), "moneyline_resolved": len(ml_legs),
             "enough_to_judge": {"resolved_edge_legs": len(edge_legs), "independent_units_player_market_nights": edge_units, "needed_to_see_a_5_point_overstatement": needed,
                                 "needed_allowing_for_clustering": {"light": needed_clustered[0], "heavy": needed_clustered[1]},
                                 "verdict": "NOT ENOUGH YET" if edge_units < needed_clustered[0] else "enough to read, with the usual care",
@@ -146,6 +169,22 @@ def _anchor_row(legs: list[dict]) -> dict:
             "recent_hit_rate": round(mean(lambda l: l["extra"]["recent_hits"] / l["extra"]["recent_games"]), 3), "model_calibrated": round(mean(lambda l: l["extra"]["model_probability"]), 3),
             "final_estimate": round(mean(lambda l: l["extra"]["final_estimate"]), 3), "price_implied_before_margin": round(mean(lambda l: l["implied"]), 3),
             "happened": round(mean(lambda l: 1.0 if l["hit"] else 0.0), 3), "final_minus_happened": round(mean(lambda l: l["extra"]["final_estimate"]) - mean(lambda l: 1.0 if l["hit"] else 0.0), 3)}
+
+
+def moneyline_report(legs: list[dict]) -> dict:
+    """Moneyline legs graded as team outcomes: the market's no-vig chance, Elo's point estimate and what happened (counted as legs; a game's two sides are two rows, both logged only if both were priced)."""
+    ml = [l for l in legs if l["family"] == "MONEYLINE"]
+    if not ml:
+        return {"legs": 0}
+    n = len(ml)
+    row = {"legs": n, "games": len({(l["date"], l["game"]) for l in ml}), "price_implied_before_margin": round(sum(l["implied"] for l in ml) / n, 3), "happened": round(sum(1.0 if l["hit"] else 0.0 for l in ml) / n, 3)}
+    mk = [l for l in ml if (l.get("extra") or {}).get("market_probability") is not None]
+    if mk:
+        row["market_no_vig"] = round(sum(l["extra"]["market_probability"] for l in mk) / len(mk), 3)
+    el = [l for l in ml if (l.get("extra") or {}).get("model_probability") is not None]
+    if el:
+        row["elo_point_estimate"] = round(sum(l["extra"]["model_probability"] for l in el) / len(el), 3)
+    return row
 
 
 def anchor_report(legs: list[dict]) -> dict:
