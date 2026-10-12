@@ -78,6 +78,27 @@ class TestPostmortemIsPublic(unittest.TestCase):
         self.assertEqual(at.title[0].value, "Morning Review")
 
 
+class TestReviewShowsGapsAndMoneylines(unittest.TestCase):
+    def test_a_logging_gap_and_graded_moneylines_are_shown_on_the_review(self):
+        import copy
+        snap = copy.deepcopy(snapshot())
+        acct = {"available_cash": 435.76, "open_stakes": 0.0, "equity": 435.76, "settled_pnl": -64.24}
+        origin = {"tickets": 12, "wins": 2, "losses": 10, "voids": 0, "pending": 0, "unresolved": 0, "settled_pnl": -64.24}
+        rv = {"review_date_et": "2026-10-11", "generated_at_utc": "2026-10-12T16:02:00Z", "account": acct, "origins": {"AUTOMATIC": origin}, "tickets": [], "open_tickets": [], "loss_postmortems": [],
+              "defects": [], "notes": [], "variance": [], "calibration": {}, "proposals": [], "policy": {"min_legs_for_a_conclusion": 30, "z_bar": 2.0},
+              "predictions": {"review_date_et": "2026-10-11", "snapshots_logged": 2, "supported_legs_logged": 0, "resolved": 51, "awaiting_games": 0, "did_not_play": 1, "anchor_estimates": {},
+                              "moneyline_legs": {"legs": 24, "games": 12, "price_implied_before_margin": 0.522, "happened": 0.5}, "scorer_revision": 2, "selected_tickets": [],
+                              "exposure": {"tickets_recorded_that_day": 0, "players_on_several_tickets": [], "games_on_several_tickets": []}, "participation_and_data": [], "corrective_actions": ["None."],
+                              "logging_gaps": [{"from_utc": "2026-10-11T15:29:23Z", "to_utc": "2026-10-12T00:42:15Z", "kind": "LOGGER_NOT_WRITTEN_WHILE_RECORDING_ON", "reason": "the log was written only while paused"}]}}
+        snap["morning_review"] = {"generated_at_utc": "2026-10-12T16:02:00Z", "daily_review": rv}
+        at = run_page("36_Morning_Review.py", snap)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        t = text(at)
+        self.assertIn("Logging gap", t)
+        self.assertIn("Moneylines graded as team outcomes: 24 leg(s) in 12 game(s)", t)
+        self.assertIn("51 prop leg(s) resolved", t)
+
+
 class TestTheAccountIsShownSplit(unittest.TestCase):
     def test_today_and_paper_performance_show_the_parlay_experiment_the_single_bets_and_the_whole_account(self):
         for page in ("21_Today.py", "33_Paper_Performance.py"):
