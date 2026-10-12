@@ -1,4 +1,4 @@
-# Anchor tickets — how the engine builds parlays (revision 2, 2026-10-11)
+# Anchor tickets — how the engine builds parlays (revision 3, 2026-10-12)
 
 Implemented in `research/real_market_parlay/anchor.py` and switched on through the policy object (`research/real_market_parlay/policy.py`, `PROPOSED`, `mode="anchor"`). It is a **proposal awaiting the
 owner's approval**: automatic recording stays paused, and the board shows what it would record as *proposed, not recorded*.
@@ -64,3 +64,32 @@ No pull was added: moneylines still cost one credit for the whole league, and th
 Tickets use shots and moneylines, but the credit plan still buys **points** as an add-on to the pregame shots capture: the lead games first (funded before morning breadth), other priced games with whatever
 shots coverage leaves over; a game without a points credit is recorded as "not fetched — credit budget" rather than silently missing. Goals, saves and puck lines are unchanged. The personal Paper Parlay Builder
 and Players pages read every priced line from the archive regardless of the ticket policy. An owner can buy points with every game's shots (two credits a game) with `NHL_ENGINE_PROP_MARKETS`.
+
+## Captures that can be compared (2026-10-12)
+
+A ticket needs prices from several games that are all fresh at one evaluation time, before the first of its games starts. Two defects made that rare and are fixed:
+
+* **Games are bought a whole wave at a time.** `credit_planner.connected_order` buys pregame captures for the biggest wave of games first (a wave = puck drops within 90 minutes of its first). The old
+  order took one game from each wave in turn, so on 2026-10-11 the two priced games (5:00 PM and 7:00 PM ET) were never fresh together and no ticket could form. An isolated tail (one game of a wave left
+  alone by the budget) is not bought; its credit stays in the day.
+* **A wave is captured together.** Every priced game of a wave is captured when the wave's FIRST game reaches its pregame window (105 minutes before its puck drop), in one pass, instead of at each game's own
+  window an hour apart (`best_bets.capture_prices`, `capture_plan` shows the same windows). Later waves get their own look.
+
+## Same-game slips (Paper Parlay Builder)
+
+DraftKings prices legs from one game together, and this system has no source for a combined quote. A slip with two legs from one game is an **unpriced draft**: the builder shows no price or return and
+disables Submit, and the engine refuses such an order (`SAME_GAME_NOT_PRICED`) whatever it says; nothing is recorded or debited. Cross-game slips are recorded as an *Estimated* product of the leg prices; a
+single leg is a DraftKings quote.
+
+## Best option for each person
+
+`player_options.build_options` now uses the same estimates and tests as the tickets: for each player the fewest-leg combination (his supported legs plus companions from other games) that reaches +100 with
+defensible value, ranked by estimated hit chance. A player with only points, goals or saves prices, and every goalie, gets no option, with the reason; nothing is made up.
+
+## Frozen predictions
+
+`operational/shadow_selection.py` runs on every trader cycle, recording or paused. For every fresh priced leg it freezes the quote times and price, the recent hit record, the model's probability, the market's
+probability, the final estimate, the selector's decision and the reason (`SUPPORTED`, `THIN_SAMPLE`, `BELOW_STRONG_LEG_FLOOR`, `GIVES_UP_MORE_THAN_THE_MARGIN`, …), whether the leg is on a selected ticket,
+the code and policy versions, and the tickets chosen with the nearest rejected ones. The watchdog warns if the log has not been looked at for an hour. `deploy/score_selection_shadow.py` scores it against
+official results (`anchor_estimates`: recent rate, model, final estimate, price-implied and what happened, counted as player-games and games, not independent bets) and the daily review shows the day's score,
+shared exposure, participation problems and corrective actions.
