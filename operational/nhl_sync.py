@@ -44,7 +44,7 @@ def default_sync_window(today: dt.date | None = None) -> tuple[dt.date, dt.date]
     needed to catch yesterday's newly-final results. `today` is
     injectable for deterministic tests; defaults to the real current
     UTC date."""
-    today = today or dt.datetime.utcnow().date()
+    today = today or dt.datetime.now(dt.timezone.utc).date()
     return today - dt.timedelta(days=1), today + dt.timedelta(days=SCHEDULE_FORWARD_DAYS)
 
 
@@ -267,7 +267,7 @@ def run_midday_refresh(conn=None, today: dt.date | None = None, session=None) ->
     run_targeted_pregame_refresh()'s job instead, closer to game time."""
     owns_conn = conn is None
     conn = conn or db.get_conn()
-    today = today or dt.datetime.utcnow().date()
+    today = today or dt.datetime.now(dt.timezone.utc).date()
     summary = {
         "component": "nhl_midday_schedule_refresh", "date": today.isoformat(),
         "status": "SUCCESS", "error": None, "games_seen": 0, "games_finalized": 0,

@@ -207,7 +207,8 @@ def predictions_block(review_date: str, bets: list[dict], nhl_conn, records: lis
         try:
             sss = _score_module()
             rep = sss.score(day, sss.db_resolver(Path(nhl_conn.execute("PRAGMA database_list").fetchone()[2])))
-            out.update(resolved=rep["resolved"], awaiting_games=rep["awaiting_games"], did_not_play=rep["player_did_not_play"], anchor_estimates=rep["anchor_estimates"])
+            out.update(resolved=rep["resolved"], awaiting_games=rep["awaiting_games"], did_not_play=rep["players_who_did_not_play"], anchor_estimates=rep["anchor_estimates"],
+                       moneyline_legs=rep["moneyline_legs"], scorer_revision=rep["scorer_revision"], logging_gaps=shadow_selection.gaps_on(review_date))
             out["supported_legs_logged"] = (rep["anchor_estimates"]["supported_pool"] or {}).get("legs", 0)
             seen = {}
             resolve = sss.db_resolver(Path(nhl_conn.execute("PRAGMA database_list").fetchone()[2]))
@@ -234,7 +235,7 @@ def predictions_block(review_date: str, bets: list[dict], nhl_conn, records: lis
     out["exposure"] = {"tickets_recorded_that_day": len(todays), "players_on_several_tickets": [{"player": k, "tickets": sorted(v)} for k, v in players.items() if len(v) > 1],
                        "games_on_several_tickets": [{"game_id": k, "tickets": sorted(v)} for k, v in games.items() if len(v) > 1]}
     if out["did_not_play"]:
-        out["participation_and_data"].append(f"{out['did_not_play']} logged leg(s) belong to players who did not play; the selector's dress check uses the team's last game, so a late scratch is a known gap (no lineup source is permitted).")
+        out["participation_and_data"].append(f"{out['did_not_play']} logged player(s) did not play; the selector's dress check uses the team's last game, so a late scratch is a known gap (no lineup source is permitted).")
     if any(t["result"] == "DID_NOT_PLAY" for t in out["selected_tickets"]):
         out["corrective_actions"].append("A selected ticket had a player who did not play: confirm the participation check ran at recording time and that the leg was left open, not guessed.")
     if not day:

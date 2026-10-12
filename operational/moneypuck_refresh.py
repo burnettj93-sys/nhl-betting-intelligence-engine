@@ -17,7 +17,7 @@ DATASETS = ("skater", "goalie", "team")
 
 
 def season_start_year(today: dt.date | None = None) -> int:
-    today = today or dt.datetime.utcnow().date()
+    today = today or dt.datetime.now(dt.timezone.utc).date()
     return today.year if today.month >= 7 else today.year - 1
 
 

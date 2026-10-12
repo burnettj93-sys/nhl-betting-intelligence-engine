@@ -248,6 +248,120 @@ class TestPausedBoard(unittest.TestCase):
         self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 500.0)
 
 
+# 2026-10-12 14:23Z: the real candidate pool that exposed the selector defect (docs/validation/selector_cap_2026-10-12.md). (game, player id, name, line, price, model probability, hits in last 30)
+OCT12 = [("88", "8481559", "Jack Hughes", 2, -550, 0.812, 27, 0.8049), ("88", "8481559", "Jack Hughes", 3, -195, 0.5966, 22, 0.6288), ("88", "8478414", "Timo Meier", 2, -450, 0.7729, 26, 0.7786),
+         ("88", "8478414", "Timo Meier", 3, -155, 0.5399, 21, 0.6025), ("88", "8481528", "Dylan Cozens", 2, -240, 0.6547, 23, 0.6996), ("88", "8480002", "Nico Hischier", 2, -210, 0.6234, 22, 0.6733),
+         ("88", "8479407", "Jesper Bratt", 2, -190, 0.5727, 21, 0.647), ("88", "8476462", "Dougie Hamilton", 2, -185, 0.6189, 22, 0.6733), ("88", "8481596", "Shane Pinto", 2, -165, 0.5617, 21, 0.647),
+         ("88", "8480208", "Drake Batherson", 2, -145, 0.5599, 22, 0.6733), ("88", "8481721", "Arseny Gritsyuk", 2, -120, 0.5457, 20, 0.6207),
+         ("87", "8480801", "Brady Tkachuk", 3, -155, 0.5432, 21, 0.6025), ("87", "8479314", "Matthew Tkachuk", 2, -390, 0.7192, 26, 0.7786), ("87", "8482097", "Jack Quinn", 2, -300, 0.6659, 25, 0.7522),
+         ("87", "8477933", "Sam Reinhart", 2, -255, 0.6654, 23, 0.6996), ("89", "8478403", "Jack Eichel", 2, -475, 0.7789, 28, 0.8312), ("89", "8476881", "Tomas Hertl", 2, -175, 0.6108, 21, 0.647)]
+
+
+def oct12_legs():
+    """The 17 shots legs (last-30 record shrunk as recorded: the 8th column) and the NJD moneyline, exactly as the live pool held them."""
+    legs = [dataclasses.replace(shots(g, pid, hits, price, model, k=k, name=name), empirical_probability=emp) for g, pid, name, k, price, model, hits, emp in OCT12]
+    return legs + [moneyline("88", "NJD", -135, 0.5514, elo=0.5494)]
+
+
+def brute_force(pool, policy):
+    """Independent enumeration: every one-leg-per-game ticket of 2..MAX_LEGS legs, judged by the policy's own acceptance test, minus tickets with a passing shorter ticket."""
+    import itertools
+    by = {}
+    for l in pool:
+        by.setdefault(l.game_id, []).append(l)
+    out = {}
+    for size in range(2, anchor.MAX_LEGS + 1):
+        for gs in itertools.combinations(sorted(by), size):
+            for grp in itertools.product(*(by[g] for g in gs)):
+                c = rmp._evaluate_combo(list(grp))
+                if c is not None and anchor.ticket_passes(c, policy, rmp._policy_veto):
+                    keys = frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in grp)
+                    if size > 2 and any(frozenset(sub) in out for n in range(2, size) for sub in itertools.combinations(keys, n)):
+                        continue
+                    out[keys] = c
+    return out
+
+
+def key_of(combo):
+    return frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in combo.legs)
+
+
+class TestTheSearchHidesNothing(unittest.TestCase):
+    """Regression for 2026-10-12: a per-game cap of 4 legs dropped Batherson and Gritsyuk, so five tickets that passed every policy test were never offered."""
+    def setUp(self):
+        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_the_real_oct_12_pool_returns_every_ticket_that_passes_including_batherson_and_eichel(self):
+        pool = anchor.prepare_pool(oct12_legs())
+        self.assertEqual(len(pool), 18)                                                            # 17 shots legs and the NJD moneyline
+        found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
+        names = {frozenset(l.participant_name for l in c.legs) for c in found}
+        self.assertIn(frozenset({"Drake Batherson", "Jack Eichel"}), names)
+        self.assertEqual(len(found), 5)
+        self.assertFalse(diag["truncated"])
+        self.assertEqual({key_of(c) for c in found}, set(brute_force(pool, POL)))                 # identical to an independent enumeration
+
+    def test_the_selector_offers_them_and_the_exposure_limits_still_bind(self):
+        out = rmp.select_tickets(oct12_legs(), max_tickets=5, policy=POL)
+        self.assertEqual(out["qualifying"], 5)
+        tickets = [{l.participant_name for l in t.legs} for t in out["tickets"]]
+        self.assertEqual(tickets[0], {"Drake Batherson", "Jack Eichel"})                           # best hit chance first (54.9%, +105)
+        players = [n for t in tickets for n in t]
+        self.assertEqual(len(players), len(set(players)))                                          # one ticket per player
+        self.assertEqual(len(out["tickets"]), 2)                                                   # Eichel/Hertl/Batherson/Gritsyuk can each be used once
+        t0 = out["tickets"][0]
+        self.assertGreaterEqual(t0.combined_decimal, 2.0)
+        self.assertGreaterEqual(t0.ev_conservative, 0.03 - 1e-9)
+
+    def test_random_pools_match_an_independent_enumeration(self):
+        import random
+        for seed in range(6):
+            rnd = random.Random(seed)
+            legs = []
+            for g in range(1, 6):
+                for i in range(rnd.randint(2, 6)):
+                    hits = rnd.randint(19, 29)
+                    model = rnd.uniform(0.52, 0.80)
+                    legs.append(shots(g, f"{g}{i}", hits, -rnd.choice([110, 130, 150, 185, 240, 320, 450]), model, name=f"P{g}{i}"))
+            pool = anchor.prepare_pool(legs)
+            found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
+            self.assertEqual({key_of(c) for c in found}, set(brute_force(pool, POL)), f"seed {seed}")
+
+    def test_a_sixteen_game_night_is_searched_in_full_and_quickly(self):
+        import random
+        import time
+        rnd = random.Random(20261013)
+        legs = [shots(g, f"{g}-{i}", rnd.randint(22, 29), -rnd.choice([150, 190, 240, 320, 450, 600]), rnd.uniform(0.60, 0.80), name=f"P{g}-{i}") for g in range(1, 17) for i in range(8)]
+        pool = anchor.prepare_pool(legs)
+        t = time.time()
+        found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
+        self.assertLess(time.time() - t, 60.0)
+        self.assertFalse(diag["truncated"])
+        self.assertEqual(diag["games_with_supported_legs"], 16)                                     # no game was dropped before the search
+
+    def test_today_best_options_the_provisional_board_and_recording_agree(self):
+        from operational import daily_tickets as dtk
+        from operational import player_options as po
+        legs = oct12_legs()
+        out = rmp.select_tickets(legs, max_tickets=5, policy=POL)
+        qual, _ = anchor.qualifying(anchor.prepare_pool(legs), POL, rmp._evaluate_combo, rmp._policy_veto)
+        qual_keys = {key_of(c) for c in qual}
+        opts = po.build_options(legs, "2026-10-12")
+        self.assertEqual(opts["diagnostics"]["qualifying_tickets_in_pool"], len(qual))
+        for o in opts["options"]:
+            ids = frozenset((l["game_id"], l["participant_id"], l["market_family"], l["threshold"], l["side"]) for l in o["legs"])
+            self.assertIn(ids, qual_keys)                                                         # Best Options only offers tickets the selector also qualifies
+        for t in out["tickets"]:
+            self.assertIn(key_of(t), qual_keys)
+            for leg in t.legs:                                                                    # every person on a selected ticket has an option
+                self.assertIsNotNone(opts["persons"][leg.participant_id]["option_id"])
+        prov = [dataclasses.replace(l, provisional=True, price_fresh=False) for l in legs]
+        sec = dtk._provisional_section(prov, [], NOW, "2026-10-12")
+        self.assertEqual({t["ticket_id"] for t in sec["tickets"]}, {dtk.pb.compute_ticket_id("2026-10-12", t.legs) for t in out["tickets"]})    # the provisional board is the same selection
+
+
 class TestPersonOptions(unittest.TestCase):
     """For each player the best supported +100 option involving him, built from the same estimates and tests as the automatic tickets; none is made up."""
     def setUp(self):
