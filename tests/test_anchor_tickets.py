@@ -362,6 +362,55 @@ class TestTheSearchHidesNothing(unittest.TestCase):
         self.assertEqual({t["ticket_id"] for t in sec["tickets"]}, {dtk.pb.compute_ticket_id("2026-10-12", t.legs) for t in out["tickets"]})    # the provisional board is the same selection
 
 
+class TestTheRealPoolIsRecordedThroughTheNormalCycle(unittest.TestCase):
+    """Rehearsal of the live path with the real 2026-10-12 pool: an unpaused cycle on fresh prices records exactly the tickets the selector qualifies, once, at $10, and nothing else."""
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from operational import state_paths
+        from tests.test_daily_tickets import fresh_ledger
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        d = Path(self.tmp.name)
+        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        _p, self.conn = fresh_ledger()
+        self.addCleanup(self.conn.close)
+
+    def cycle(self, minutes=20):
+        from operational import daily_tickets as dtk
+        return dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=minutes), collected={"legs": oct12_legs(), "sources": {}, "second_opinion": {}})
+
+    def test_the_cycle_records_the_two_tickets_once_and_the_bankroll_follows(self):
+        from operational import paper_bankroll as pb
+        import json as _json
+        res = self.cycle()
+        self.assertEqual(res["newly_recorded"], 2)
+        rows = [dict(r) for r in self.conn.execute("SELECT * FROM paper_bets WHERE origin = 'AUTOMATIC' ORDER BY created_at_utc, paper_bet_id")]
+        sets = {frozenset(l["participant_name"] for l in _json.loads(r["legs_json"])) for r in rows}
+        self.assertEqual(sets, {frozenset({"Drake Batherson", "Jack Eichel"}), frozenset({"Jack Quinn", "Arseny Gritsyuk"})})
+        self.assertTrue(all(r["stake"] == 10.0 for r in rows))
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 480.0)
+        again = self.cycle(minutes=35)                                                          # the next 15-minute cycle: nothing new, nothing doubled
+        self.assertEqual(again["newly_recorded"], 0)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 2)
+
+    def test_the_frozen_leg_keeps_the_four_numbers_and_the_log_marks_the_tickets_recorded(self):
+        import json as _json
+        from operational import shadow_selection as sh
+        self.cycle()
+        row = dict(self.conn.execute("SELECT * FROM paper_bets ORDER BY paper_bet_id LIMIT 1").fetchone())
+        leg = _json.loads(row["legs_json"])[0]
+        for k in ("model_probability", "empirical_probability", "empirical_hits", "empirical_games"):
+            self.assertIn(k, leg)
+        self.assertIsNotNone(leg["empirical_hits"])
+        recs = sh.read_all()
+        self.assertEqual(len(recs), 1)
+        self.assertTrue(all(t["recorded"] for t in recs[0]["proposed_tickets"]))
+        self.assertEqual(len(recs[0]["proposed_tickets"]), 2)
+
+
 class TestPersonOptions(unittest.TestCase):
     """For each player the best supported +100 option involving him, built from the same estimates and tests as the automatic tickets; none is made up."""
     def setUp(self):
