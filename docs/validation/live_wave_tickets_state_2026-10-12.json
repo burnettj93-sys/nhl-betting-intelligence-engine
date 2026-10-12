@@ -1,0 +1,238 @@
+{
+ "generated_at_utc": "2026-10-12T21:36:07.134153+00:00",
+ "slots": {
+  "total": 5,
+  "used": 2,
+  "empty": 3
+ },
+ "account": {
+  "track": "REAL_MARKET_PAPER",
+  "starting_bankroll": 500.0,
+  "available_cash": 415.76,
+  "open_stakes": 20.0,
+  "open_tickets": 2,
+  "equity": 435.76,
+  "settled_pnl": -64.24,
+  "tickets": 14
+ },
+ "tickets": [
+  {
+   "ticket_id": "T6B227B0036C56E",
+   "status": "RECORDED",
+   "recorded": true,
+   "legs": [
+    {
+     "label": "Arseny Gritsyuk 2+ shots on goal",
+     "market_family": "PLAYER_SOG_ALTERNATE",
+     "game_id": "2026020088",
+     "participant_id": "8481721",
+     "participant_name": "Arseny Gritsyuk",
+     "provider_start_utc": "2026-10-12T23:10:00Z",
+     "retrieved_at_utc": "2026-10-12T21:18:55Z",
+     "quote_updated_utc": "2026-10-12T21:18:25Z",
+     "quote_age_min_at_entry": 0.5,
+     "freshness_status": "FRESH",
+     "team": "NJD",
+     "opponent": "OTT",
+     "game_start_utc": "2026-10-12T23:00:00Z",
+     "american_price": -105.0,
+     "decimal_price": 1.9524,
+     "price_captured_at_utc": "2026-10-12T21:18:55+00:00",
+     "probability": 0.6207,
+     "model_version": "player-rate-toi-v2+platt-2026-10+anchor-last30",
+     "code_version": "6b77fd6e99",
+     "outcome": null
+    },
+    {
+     "label": "Jack Eichel 2+ shots on goal",
+     "market_family": "PLAYER_SOG_ALTERNATE",
+     "game_id": "2026020089",
+     "participant_id": "8478403",
+     "participant_name": "Jack Eichel",
+     "provider_start_utc": "2026-10-13T00:10:00Z",
+     "retrieved_at_utc": "2026-10-12T21:18:55Z",
+     "quote_updated_utc": "2026-10-12T21:18:27Z",
+     "quote_age_min_at_entry": 0.4,
+     "freshness_status": "FRESH",
+     "team": "VGK",
+     "opponent": "MIN",
+     "game_start_utc": "2026-10-13T00:00:00Z",
+     "american_price": -450.0,
+     "decimal_price": 1.2222,
+     "price_captured_at_utc": "2026-10-12T21:18:55+00:00",
+     "probability": 0.8312,
+     "model_version": "player-rate-toi-v2+platt-2026-10+anchor-last30",
+     "code_version": "6b77fd6e99",
+     "outcome": null
+    }
+   ],
+   "combined_decimal": 2.3862,
+   "combined_american": 138.6243386243387,
+   "price_label": "Estimated combined price (product of leg prices)",
+   "stake": 10.0,
+   "potential_return": 23.86,
+   "potential_profit": 13.86,
+   "hit_probability": 0.5159258400000001,
+   "ev_estimated": 0.23112462349206386,
+   "ev_after_haircut": 0.1293251237065951,
+   "haircut_margin": 0.03,
+   "price_basis": null,
+   "builder": false,
+   "rationale": "2 legs from different games. Experimental model estimate 52% against 42% implied by the prices (estimated combined price). EV after lowering each leg's probability by 3% points: +12.9%; the haircut is a policy margin, not a calibration or proof of an edge.",
+   "recorded_at_utc": "2026-10-12T21:18:55+00:00",
+   "event_start_utc": "2026-10-12T23:00:00Z",
+   "result": null,
+   "alerts": [],
+   "origin": "AUTOMATIC",
+   "provenance": null
+  },
+  {
+   "ticket_id": "TBF0D9DBCC38D72",
+   "status": "RECORDED",
+   "recorded": true,
+   "legs": [
+    {
+     "label": "Drake Batherson 2+ shots on goal",
+     "market_family": "PLAYER_SOG_ALTERNATE",
+     "game_id": "2026020088",
+     "participant_id": "8480208",
+     "participant_name": "Drake Batherson",
+     "provider_start_utc": "2026-10-12T23:10:00Z",
+     "retrieved_at_utc": "2026-10-12T21:18:55Z",
+     "quote_updated_utc": "2026-10-12T21:18:25Z",
+     "quote_age_min_at_entry": 0.5,
+     "freshness_status": "FRESH",
+     "team": "OTT",
+     "opponent": "NJD",
+     "game_start_utc": "2026-10-12T23:00:00Z",
+     "american_price": -165.0,
+     "decimal_price": 1.6061,
+     "price_captured_at_utc": "2026-10-12T21:18:55+00:00",
+     "probability": 0.6599,
+     "model_version": "player-rate-toi-v2+platt-2026-10+anchor-last30",
+     "code_version": "6b77fd6e99",
+     "outcome": null
+    },
+    {
+     "label": "Blake Coleman 2+ shots on goal",
+     "market_family": "PLAYER_SOG_ALTERNATE",
+     "game_id": "2026020089",
+     "participant_id": "8476399",
+     "participant_name": "Blake Coleman",
+     "provider_start_utc": "2026-10-13T00:10:00Z",
+     "retrieved_at_utc": "2026-10-12T21:18:55Z",
+     "quote_updated_utc": "2026-10-12T21:18:27Z",
+     "quote_age_min_at_entry": 0.4,
+     "freshness_status": "FRESH",
+     "team": "MIN",
+     "opponent": "VGK",
+     "game_start_utc": "2026-10-13T00:00:00Z",
+     "american_price": -170.0,
+     "decimal_price": 1.5882,
+     "price_captured_at_utc": "2026-10-12T21:18:55+00:00",
+     "probability": 0.6733,
+     "model_version": "player-rate-toi-v2+platt-2026-10+anchor-last30",
+     "code_version": "6b77fd6e99",
+     "outcome": null
+    }
+   ],
+   "combined_decimal": 2.5508,
+   "combined_american": 155.0802139037433,
+   "price_label": "Estimated combined price (product of leg prices)",
+   "stake": 10.0,
+   "potential_return": 25.51,
+   "potential_profit": 15.51,
+   "hit_probability": 0.44431067,
+   "ev_estimated": 0.13334860743315513,
+   "ev_after_haircut": 0.0336248300576536,
+   "haircut_margin": 0.03,
+   "price_basis": null,
+   "builder": false,
+   "rationale": "2 legs from different games. Experimental model estimate 44% against 39% implied by the prices (estimated combined price). EV after lowering each leg's probability by 3% points: +3.4%; the haircut is a policy margin, not a calibration or proof of an edge.",
+   "recorded_at_utc": "2026-10-12T21:18:55+00:00",
+   "event_start_utc": "2026-10-12T23:00:00Z",
+   "result": null,
+   "alerts": [],
+   "origin": "AUTOMATIC",
+   "provenance": null
+  }
+ ],
+ "revalidation": {
+  "recorded_after_revalidation": 0,
+  "held_back": []
+ },
+ "latest_cycle": {
+  "date_et": "2026-10-12",
+  "at_utc": "2026-10-12T21:36:07Z",
+  "slots_open": 3,
+  "pool_legs": 13,
+  "qualifying": 4,
+  "considered": [
+   {
+    "legs": [
+     "Arseny Gritsyuk 2+ shots on goal",
+     "Jack Eichel 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -105.0,
+     -450.0
+    ],
+    "hit_probability": 0.5159,
+    "estimated_price": 139,
+    "ev_estimated": 0.2311,
+    "ev_after_haircut": 0.1293,
+    "status": "ALREADY_RECORDED",
+    "reason": "this exact ticket is already on the book today"
+   },
+   {
+    "legs": [
+     "Drake Batherson 2+ shots on goal",
+     "Blake Coleman 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -165.0,
+     -170.0
+    ],
+    "hit_probability": 0.4443,
+    "estimated_price": 155,
+    "ev_estimated": 0.1333,
+    "ev_after_haircut": 0.0336,
+    "status": "ALREADY_RECORDED",
+    "reason": "this exact ticket is already on the book today"
+   },
+   {
+    "legs": [
+     "Arseny Gritsyuk 2+ shots on goal",
+     "Blake Coleman 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -105.0,
+     -170.0
+    ],
+    "hit_probability": 0.4179,
+    "estimated_price": 210,
+    "ev_estimated": 0.2959,
+    "ev_after_haircut": 0.1783,
+    "status": "BLOCKED_LEG_LIMIT",
+    "reason": "Arseny Gritsyuk 2+ shots on goal is already on 1 ticket"
+   },
+   {
+    "legs": [
+     "Arseny Gritsyuk 2+ shots on goal",
+     "Tomas Hertl 2+ shots on goal"
+    ],
+    "leg_prices": [
+     -105.0,
+     -170.0
+    ],
+    "hit_probability": 0.4016,
+    "estimated_price": 210,
+    "ev_estimated": 0.2453,
+    "ev_after_haircut": 0.1301,
+    "status": "BLOCKED_LEG_LIMIT",
+    "reason": "Arseny Gritsyuk 2+ shots on goal is already on 1 ticket"
+   }
+  ],
+  "selected": 0
+ }
+}
