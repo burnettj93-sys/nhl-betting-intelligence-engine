@@ -216,5 +216,6 @@ with right:
         else:
             st.session_state["_builder_order"] = {"order_id": order["order_id"], "log": log["hash"]}
             st.rerun()
-    st.caption("A slip is your own choice: it does not need the model's edge or +100. It does need a real, fresh DraftKings price on every leg, a game that has not started, and enough cash. "
+    st.caption("The model's automatic tickets use only shots and moneylines; this builder also offers points, anytime goals and (for a goalie whose start is confirmed) saves, because the bet is your own choice. "
+           "A slip is your own choice: it does not need the model's edge or +100. It does need a real, fresh DraftKings price on every leg, a game that has not started, and enough cash. "
                "A leg whose player does not play is left open (UNRESOLVED) rather than guessed, until the sportsbook's rule is verified.")

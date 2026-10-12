@@ -106,9 +106,13 @@ else:
     st.caption("Not enough recent games to estimate usage (needs at least 2 this season).")
 
 st.markdown("#### Recent games (history)")
-st.dataframe([{"Date": r["date"], "Season": r.get("season", ""), "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": r["toi_pp"], "SOG": int(r["shots"]),
-               "G": int(r["goals"]), "A": int(r["assists"]), "Hits": int(r["hits"]), "Blk": int(r["blocks"])} for r in p["recent_games"]],
+_n = lambda v: "—" if v is None else str(int(v))  # noqa: E731 - a box score without a field (power-play time, sometimes hits) shows a dash, never a guess
+st.dataframe([{"Date": r["date"], "Season": r.get("season", ""), "Opp": ("vs " if r["home"] else "@ ") + r["opp"], "TOI": r["toi"], "PP": "—" if r["toi_pp"] is None else f"{r['toi_pp']:.1f}", "SOG": _n(r["shots"]),
+               "G": _n(r["goals"]), "A": _n(r["assists"]), "Hits": _n(r["hits"]), "Blk": _n(r["blocks"])} for r in p["recent_games"]],
              hide_index=True, width="stretch")
+if any(r.get("source") == "NHL API box score" for r in p["recent_games"]):
+    st.caption("Rows marked with a dash for power-play time are box scores from the NHL API for games MoneyPuck has not published yet (it follows with its next download, usually the next afternoon). "
+               "Averages and the projection below still use MoneyPuck.")
 
 st.markdown("#### Next game (projection)")
 ng, pr = p.get("next_game"), p.get("projection")

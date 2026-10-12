@@ -63,7 +63,14 @@ if pr:
         st.dataframe(rows, hide_index=True, width="stretch")
         st.caption(ae.get("reading", ""))
     else:
-        st.caption(f"{pr['snapshots_logged']} snapshot(s) logged; {pr['awaiting_games']} leg(s) awaiting games, {pr['did_not_play']} did not play. Nothing to compare yet.")
+        st.caption(f"{pr['snapshots_logged']} snapshot(s) logged; {pr.get('resolved', 0)} prop leg(s) resolved, {pr['awaiting_games']} awaiting games, {pr['did_not_play']} player(s) did not play. "
+                   "Nothing to compare for the anchor estimates yet (they are frozen from 2026-10-12 12:04 UTC on; earlier snapshots carry the model's number only).")
+    ml = pr.get("moneyline_legs") or {}
+    if ml.get("legs"):
+        st.caption(f"Moneylines graded as team outcomes: {ml['legs']} leg(s) in {ml.get('games', '?')} game(s); the price implied {ui.pct(ml.get('price_implied_before_margin'))} before margin, "
+                   f"{ui.pct(ml.get('happened'))} won.")
+    for g in pr.get("logging_gaps") or []:
+        st.warning(f"Logging gap {ui.et_time(g['from_utc'], True)} → {ui.et_time(g['to_utc'], True)}: {g['reason']}")
     if pr.get("selected_tickets"):
         st.dataframe([{"Ticket": " + ".join(t["legs"]), "Estimated hit chance": ui.pct(t["estimated_hit_probability"]), "Recorded": "yes" if t["recorded"] else "proposed only", "Result": t["result"].replace("_", " ").title()}
                       for t in pr["selected_tickets"]], hide_index=True, width="stretch")

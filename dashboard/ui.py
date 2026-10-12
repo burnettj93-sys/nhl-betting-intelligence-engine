@@ -225,7 +225,8 @@ def header(title: str, subtitle: str | None = None, *, meta: dict | None = None)
     gen_t = parse_utc(gen)
     stale = gen_t is not None and (dt.datetime.now(dt.timezone.utc) - gen_t).total_seconds() > 45 * 60
     bits = [f"Engine update {et_time(gen)} ({age_text(gen)})", f"Eastern date {meta.get('et_today')}",
-            f"Player logs through {through.get('skaters') or 'n/a'}", f"Results through {et_time(through.get('schedule_results'), True)}"]
+            f"Player logs through {through.get('skaters') or 'n/a'}" + (f" (box scores through {through['skaters_box_scores']})" if through.get("skaters_box_scores") else ""),
+            f"Results through {et_time(through.get('schedule_results'), True)}"]
     if runtime_mode.is_community_cloud():
         try:
             from dashboard import cloud_snapshot
