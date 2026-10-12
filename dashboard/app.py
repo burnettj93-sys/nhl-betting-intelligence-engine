@@ -91,6 +91,13 @@ with st.sidebar:
     theme.brand("NHL Intelligence", "Games, players, goalies and paper tickets")
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
         st.caption("☁️ Hosted view — data is published by the engine every ~15 minutes")
+        try:                                       # which code and which data this is (dashboard/version.py); public, never fatal
+            from dashboard import snapshot_source as _ss, version as _version
+            _txt = _version.footer_text(_version.code_commit(), _version.data_commit(getattr(_ss.current(), "data", None)))
+            if _txt:
+                st.caption(_txt)
+        except Exception:  # noqa: BLE001
+            pass
     st.divider()
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
         st.caption("🌐 Public, read-only. Paper accounts are separate from the model's book.")

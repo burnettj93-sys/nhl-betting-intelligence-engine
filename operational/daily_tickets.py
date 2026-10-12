@@ -48,9 +48,9 @@ SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY
 RECENT_SETTLED_LIMIT = 10
 
 FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
-              "DraftKings Ontario. Player probabilities come from a projection model validated on held-out seasons "
-              "(docs/MODEL_VALIDATION.md); they are estimates, not proof of an edge, and there are no historical "
-              "DraftKings prices to test profitability against.")
+              "DraftKings Ontario. Player probabilities come from a projection model validated on one held-out season (2025-26; "
+              "earlier seasons fitted it) and, for shots legs on tickets, each player's recent record (docs/MODEL_VALIDATION.md, docs/ANCHOR_TICKETS.md); they are "
+              "estimates, not proof of an edge, and there are no historical DraftKings prices to test profitability against.")
 
 STATUS_RECOMMENDED = "RECOMMENDED"
 STATUS_RECORDED = "RECORDED"

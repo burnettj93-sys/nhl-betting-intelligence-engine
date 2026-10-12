@@ -1,3 +1,5 @@
+> **Erratum (2026-10-12):** wherever this report says the model was validated or calibrated "on held-out seasons", read "on one held-out season (2025-26)": 2022–2023 train the dispersion and 2024 chooses the configuration and fits the calibration, so those seasons are model-fitting seasons, not held out. See `docs/ANCHOR_TICKETS.md` and `docs/validation/anchor_calibration.json`.
+
 # Postmortem: the model book's nine consecutive losses (2026-10-10, revised the same day)
 
 Everything below is reproducible: `python3 deploy/postmortem_losing_streak.py --use-extract --out docs/validation/postmortem_2026-10-10.json` (read-only; it uses the frozen ledger extract, the official
