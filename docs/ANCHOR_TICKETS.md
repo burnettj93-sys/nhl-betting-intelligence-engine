@@ -54,8 +54,7 @@ chance ≥ 30%; no leg gives up more than about a bookmaker's margin (−5%) on 
 
 ## Moneylines in morning and daytime combinations
 
-A moneyline quote is a ticket leg for as long as it is **fresh by the same limit as a shots price** (150 minutes more than two hours before puck drop, 100 minutes inside two hours; the quote's own retrieval time
-is the age), whatever pull produced it: the 8:00 AM league-wide pull, a display refresh or the T-35 pull. An older quote from today is shown **provisional** (never recordable); a quote from another day is excluded.
+A moneyline quote is a ticket leg for as long as it is **fresh by the same limit as a shots price** (150 minutes more than two hours before puck drop, 100 minutes inside two hours; the provider's own quote time, which the odds bridge stores with the snapshot, is the age), whatever pull produced it: the 8:00 AM league-wide pull, a display refresh or the T-35 pull. An older quote from today is shown **provisional** (never recordable); a quote from another day is excluded.
 Morning quotes are *early* (more than three hours before puck drop) and count toward the existing cap of two early tickets a day; every ticket is re-judged against the clock at the moment of recording.
 No pull was added: moneylines still cost one credit for the whole league, and the plan's allowance (display refreshes and the T-35 decision pulls) is unchanged.
 

@@ -273,6 +273,9 @@ class TestCapturePlan(unittest.TestCase):
         self.assertIn("pregame look for this game's wave opens", text)
 
 
+AS_OF = "2026-10-16T00:00:00"
+
+
 class TestShotRecordIsToppedUpFromTheNhlApi(unittest.TestCase):
     """MoneyPuck publishes a game's log the next afternoon; the NHL API has the final box score at once. The last-30-game shot record uses both (the model keeps MoneyPuck)."""
     def setUp(self):
@@ -291,17 +294,18 @@ class TestShotRecordIsToppedUpFromTheNhlApi(unittest.TestCase):
         self.conn.commit()
 
     def test_only_final_games_after_the_newest_moneypuck_date_are_added(self):
-        rows = bb.nhl_shot_rows_after(self.conn, "2026-10-10")
+        rows = bb.nhl_shot_rows_after(self.conn, "2026-10-10", AS_OF)
         self.assertEqual(sorted((r["player_id"], r["date"], r["shots"]) for r in rows), [("p1", "2026-10-11", 4.0), ("p2", "2026-10-11", 0.0)])
-        self.assertEqual(bb.nhl_shot_rows_after(self.conn, "2026-10-11"), [])
+        self.assertEqual(bb.nhl_shot_rows_after(self.conn, "2026-10-11", AS_OF), [])
+        self.assertEqual(bb.nhl_shot_rows_after(self.conn, "2026-10-10", "2026-10-11T00:00:00"), [])                  # a revision observed after the as-of time is not yet known
         self.assertEqual(bb.nhl_shot_rows_after(None, "2026-10-10"), [])
-        self.assertEqual(bb.nhl_data_through(self.conn), "2026-10-11")
+        self.assertEqual(bb.nhl_data_through(self.conn, AS_OF), "2026-10-11")
 
     def test_the_extra_game_enters_the_last_thirty_record(self):
         from research.product_models import live
         base = [{"player_id": "p1", "date": f"2026-09-{d:02d}", "shots": 3.0} for d in range(1, 11)] + [{"player_id": "p2", "date": f"2026-09-{d:02d}", "shots": 1.0} for d in range(1, 11)]
         before = live.shot_frequencies(base)["p1"][2]
-        after = live.shot_frequencies(base + bb.nhl_shot_rows_after(self.conn, "2026-10-10"))["p1"][2]
+        after = live.shot_frequencies(base + bb.nhl_shot_rows_after(self.conn, "2026-10-10", AS_OF))["p1"][2]
         self.assertEqual((before["hits"], before["n"]), (10, 10))
         self.assertEqual((after["hits"], after["n"]), (11, 11))                     # last night's 4-shot game counts
 

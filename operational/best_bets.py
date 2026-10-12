@@ -261,23 +261,26 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
     return model
 
 
-def nhl_shot_rows_after(conn, newest_date: str | None) -> list[dict]:
+def _now_naive_utc() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()
+
+
+def nhl_shot_rows_after(conn, newest_date: str | None, as_of: str | None = None) -> list[dict]:
     """The NHL API's player-game shot counts for FINAL games dated after the newest MoneyPuck game (MoneyPuck publishes a game's log the following afternoon, so its history is a day or two behind
     the schedule). Used only to bring the last-30-game SHOT RECORD up to date; the projection model keeps its MoneyPuck inputs. Where both sources cover a game the shot counts agree for 98% of
-    player-games (693 of 704 on 2026-10-09..10); the latest revision of a row wins; a game not final or a row without a shot count is skipped."""
+    player-games (693 of 704 on 2026-10-09..10). Read through features/point_in_time (latest revision observed by `as_of`); a game not final or a row without a shot count is skipped."""
     if conn is None or not newest_date:
         return []
-    q = conn.execute(
-        "SELECT s.player_id AS player_id, g.game_date AS date, s.shots AS shots FROM player_game_stats s JOIN games g ON g.game_id = s.game_id "
-        "WHERE g.game_date > ? AND g.game_state IN ('FINAL','OFF') AND s.played = 1 AND s.shots IS NOT NULL "
-        "AND s.revision_number = (SELECT MAX(s2.revision_number) FROM player_game_stats s2 WHERE s2.game_id = s.game_id AND s2.player_id = s.player_id)", (newest_date,)).fetchall()
-    return [{"player_id": str(r["player_id"]), "date": r["date"], "shots": float(r["shots"])} for r in q]
+    from features import point_in_time as pit
+    return [{"player_id": str(r["player_id"]), "date": r["date"], "shots": float(r["shots"])} for r in pit.player_shots_since(conn, newest_date, as_of or _now_naive_utc())]
 
 
-def nhl_data_through(conn) -> str | None:
+def nhl_data_through(conn, as_of: str | None = None) -> str | None:
+    if conn is None:
+        return None
     try:
-        r = conn.execute("SELECT MAX(g.game_date) AS d FROM player_game_stats s JOIN games g ON g.game_id = s.game_id WHERE g.game_state IN ('FINAL','OFF')").fetchone()
-        return r["d"] if r else None
+        from features import point_in_time as pit
+        return pit.final_stats_through(conn, as_of or _now_naive_utc())
     except Exception:  # noqa: BLE001
         return None
 
