@@ -106,6 +106,13 @@ class TestWakeCoverage(unittest.TestCase):
         self.assertEqual(missing["state"], "OWNER_ACTION_REQUIRED")
         self.assertIn("sudo pmset schedule wake", missing["command"])
 
+    def test_a_wake_the_os_scheduled_for_itself_does_not_count_as_ours(self):
+        nxt = snw.next_wake(D(12), starts_fn=lambda n: [D(21)], listing_fn=LISTED)
+        os_event = SCHED.replace("nhl-engine", "com.apple.alarm.user-visible-com.apple.donotdisturb.server.ScheduleLifetimeMonitor.timer")
+        got = snw.verify(D(12), nxt=nxt, runner=lambda cmd: os_event)
+        self.assertEqual(got["state"], "OWNER_ACTION_REQUIRED")                                # the Mac's own timer is not a commitment to wake for the engine
+        self.assertIsNotNone(ka.wake_covers(self.w, [{"type": "wake", "when_utc": D(19, 45), "owner": "other"}]))     # the generic check still sees any event
+
     def test_no_cluster_ahead_is_waiting_for_event(self):
         with mock.patch.object(snw, "next_wake", return_value=None):
             self.assertEqual(snw.verify(D(12))["state"], "WAITING_FOR_EVENT")

@@ -60,11 +60,6 @@ def run(now: dt.datetime | None = None) -> dict:
     today_et = et.eastern_today(now)
     nhl_conn = db.get_conn()
     bankroll_conn = pb.init_db()
-    try:                                     # keep the Mac awake through the morning look and each wave's pregame window (operational/keep_awake.py); never stops a cycle
-        from operational import keep_awake
-        keep_awake.hold(now, nhl_conn)
-    except Exception:  # noqa: BLE001
-        pass
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     lock_file = open(LOCK_PATH, "w")
     try:
