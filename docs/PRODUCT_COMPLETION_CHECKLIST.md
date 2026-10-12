@@ -1,4 +1,4 @@
-# Product completion checklist — one complete list (revision 13, 2026-10-11)
+# Product completion checklist — one complete list (revision 14, 2026-10-12)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
