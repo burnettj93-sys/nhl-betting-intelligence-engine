@@ -306,6 +306,23 @@ class TestFrozenPredictionScoring(unittest.TestCase):
         self.assertEqual(a["supported_pool"]["games"], 2)
 
 
+class TestReviewOfALostTicket(unittest.TestCase):
+    def test_a_leg_with_no_result_on_a_ticket_already_lost_is_a_note_not_a_defect(self):
+        from operational import daily_review as dr
+        legs = [{"game_id": "g1", "participant_id": "a", "participant_name": "A", "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2, "american_price": -150,
+                 "quote_updated_utc": "2026-10-08T19:00:00Z", "game_start_utc": "2026-10-08T23:00:00Z"},
+                {"game_id": "g2", "participant_id": "b", "participant_name": "B", "market_family": "PLAYER_POINTS", "threshold": 1, "american_price": 120,
+                 "quote_updated_utc": "2026-10-08T19:00:00Z", "game_start_utc": "2026-10-08T23:00:00Z"}]
+        settlement = {"leg_results": [{"leg": {"game_id": "g1", "participant_id": "a", "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2}, "outcome_hit": False, "status": "RESOLVED"},
+                                      {"leg": {"game_id": "g2", "participant_id": "b", "market_family": "PLAYER_POINTS", "threshold": 1}, "status": "PENDING"}]}
+        bet = {"paper_bet_id": "T1", "legs_json": json.dumps(legs), "settlement_json": json.dumps(settlement), "created_at_utc": "2026-10-08T20:00:00+00:00", "result_status": "LOSS",
+               "stake": 10.0, "entry_odds": 200.0, "conservative_probability": 0.3}
+        with mock.patch.object(dr, "closing_price", return_value={"american": None, "reason": "n/a"}):
+            t = dr.ticket_review(bet, None, None)
+        self.assertEqual([d["severity"] for d in t["defects"]], ["NOTE"])
+        self.assertEqual(t["reading"], "VARIANCE")
+
+
 class TestDailyPredictionsBlock(unittest.TestCase):
     def test_the_review_scores_the_frozen_day_and_reports_exposure_participation_and_actions(self):
         from operational import daily_review as dr

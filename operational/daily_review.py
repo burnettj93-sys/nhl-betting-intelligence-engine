@@ -112,6 +112,11 @@ def ticket_review(bet: dict, nhl_conn, account_after: dict | None) -> dict:
         defects.append({"kind": "SETTLEMENT_MISMATCH", "detail": "ticket marked won but a leg is recorded as lost"})
     if status == "LOSS" and outcomes and all(o in ("WIN", "VOID") for o in outcomes):
         defects.append({"kind": "SETTLEMENT_MISMATCH", "detail": "ticket marked lost but no leg is recorded as lost"})
+    if status == "LOSS" and any(o == "LOSS" for o in outcomes):      # a ticket already lost on one leg needs no result for the others: that is not a settlement defect
+        for d in defects:
+            if d["kind"] == "UNRESOLVED_LEG":
+                d["severity"] = "NOTE"
+                d["detail"] += " The ticket was already lost on another leg, so this leg was not needed to settle it."
     p = bet.get("conservative_probability") or bet.get("model_probability")
     for d in defects:
         d.setdefault("severity", "DEFECT")

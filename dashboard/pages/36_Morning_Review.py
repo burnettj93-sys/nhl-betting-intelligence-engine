@@ -12,15 +12,12 @@ if str(REPO_ROOT) not in sys.path:
 
 import streamlit as st
 
-from dashboard import auth
 from dashboard import cloud_snapshot
 from dashboard import ui
 from operational import paper_bankroll as pb
 from operational import runtime_mode
 
-if runtime_mode.is_community_cloud():
-    auth.require_admin()
-
+# Read-only, built from the snapshot the engine already publishes to the public data branch: a visitor may read it. (It was admin-gated on the hosted app by mistake; the original design says USER-accessible.)
 ui.header("Morning Review", "What was predicted and priced, what happened, what it did to the account, and what the evidence supports.")
 
 if runtime_mode.is_community_cloud():

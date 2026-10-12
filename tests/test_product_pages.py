@@ -70,6 +70,14 @@ CORE = ["38_My_Bets.py", "21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "
         "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py", "39_Tomorrow.py"]
 
 
+class TestPostmortemIsPublic(unittest.TestCase):
+    def test_the_daily_review_is_readable_on_the_hosted_app_without_an_admin_login(self):
+        at = run_page("36_Morning_Review.py", snapshot())
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        self.assertNotIn("restricted to the administrator", " ".join([e.value for e in at.error] + [m.value for m in at.markdown]))
+        self.assertEqual(at.title[0].value, "Morning Review")
+
+
 class TestTheAccountIsShownSplit(unittest.TestCase):
     def test_today_and_paper_performance_show_the_parlay_experiment_the_single_bets_and_the_whole_account(self):
         for page in ("21_Today.py", "33_Paper_Performance.py"):
