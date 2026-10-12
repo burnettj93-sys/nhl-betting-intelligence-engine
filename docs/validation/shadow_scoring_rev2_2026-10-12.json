@@ -9,8 +9,10 @@
  "resolved": 340,
  "awaiting_games": 160,
  "player_did_not_play": 9,
+ "players_who_did_not_play": 2,
  "unresolved": 0,
  "scorer_revision": 2,
+ "logging_gaps": [],
  "all_priced_legs": {
   "all": {
    "legs": 340,
