@@ -560,6 +560,23 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
         lines += [f"- {t['ticket_id']} ({t['origin']}): {t['status']} {t['profit_loss']} -- reading {t['reading']}" for t in rv["tickets"]]
         lines += [f"- DEFECT {d['ticket_id']} {d['kind']}: {d['detail']}" for d in rv["defects"]]
         lines += [f"- PROPOSAL {p['origin']} {p['market']}: {p['action']} -- {p['evidence']}" for p in rv["proposals"]]
+        pr = rv.get("predictions")
+        if pr:
+            ae = pr.get("anchor_estimates") or {}
+            lines += ["", f"## Frozen predictions of {pr['review_date_et']} against official results (entry numbers never rewritten; scorer revision {pr.get('scorer_revision', '?')})",
+                      f"- {pr['snapshots_logged']} snapshot(s) logged; {pr['resolved']} prop leg(s) resolved, {pr['awaiting_games']} awaiting games; {pr['did_not_play']} player(s) did not play",
+                      f"- moneylines graded as team outcomes: {(pr.get('moneyline_legs') or {}).get('legs', 0)} leg(s), happened {(pr.get('moneyline_legs') or {}).get('happened', 'n/a')}"]
+            for label, key in (("supported legs", "supported_pool"), ("legs on selected tickets", "on_selected_tickets")):
+                r = ae.get(key) or {}
+                if r.get("legs"):
+                    lines.append(f"- {label}: {r['legs']} player-games ({r['games']} games): recent hit rate {r['recent_hit_rate']:.1%}, model {r['model_calibrated']:.1%}, final estimate {r['final_estimate']:.1%}, "
+                                 f"price implies {r['price_implied_before_margin']:.1%}, happened {r['happened']:.1%}")
+            lines += [f"- selected ticket {' + '.join(t['legs'])}: estimated {t['estimated_hit_probability']:.0%}, {'recorded' if t['recorded'] else 'proposed only'}, {t['result']}" for t in pr.get("selected_tickets", [])]
+            ex = pr.get("exposure") or {}
+            lines.append(f"- shared exposure: {len(ex.get('players_on_several_tickets') or [])} player(s) and {len(ex.get('games_on_several_tickets') or [])} game(s) on more than one of {ex.get('tickets_recorded_that_day', 0)} ticket(s) recorded that day")
+            lines += [f"- logging gap: {g['from_utc']} to {g['to_utc']} ({g['kind']}): {g['reason']}" for g in pr.get("logging_gaps") or []]
+            lines += [f"- {x}" for x in pr.get("participation_and_data", [])]
+            lines += [f"- corrective action: {x}" for x in pr.get("corrective_actions", [])]
     path.write_text("\n".join(lines))
     return path
 

@@ -18,7 +18,7 @@ The prop tables, the model-versus-price fit and the edge-filter results are unch
 
 ## 2. Daily review participation line
 The daily review (`operational/daily_review.py`) inherited the inflated count ("4 logged leg(s) belong to players who did not play" on the review of 2026-10-11, where the real figure was 1 player). It now uses `players_who_did_not_play`,
-carries the scorer revision and lists logging gaps. The published review was regenerated from the frozen log; the earlier report file is kept as `reports/daily/postmortem_2026-10-12.rev1-superseded.md`.
+carries the scorer revision and lists logging gaps. The published review (the JSON snapshot section) was regenerated from the frozen log at 16:02 UTC on 2026-10-12; the markdown report now carries the frozen-prediction section (it had none, so the earlier file had nothing to supersede). The pre-correction figures are kept in `shadow_scoring_rev1_2026-10-12.json`.
 
 ## 3. The nine-hour logging gap
 The frozen-prediction log was written only inside the paused branch of the cycle. After recording resumed (2026-10-11 15:29 UTC) no snapshot was written until the fix was deployed (2026-10-12 00:42 UTC), so predictions priced in that window
