@@ -145,18 +145,19 @@ class TestSlip(Case):
         r = self.run_().add("P1", "SOG", 2).press("pb_clear")
         self.assertEqual(r.at.session_state["_slip"], [])
 
-    def test_legs_from_the_same_game_are_labelled_multiplied_and_need_an_acknowledgement(self):
+    def test_legs_from_the_same_game_are_an_unpriced_draft_that_cannot_be_submitted(self):
         r = self.run_().add("P1", "SOG", 2)
         r.at.selectbox(key="pb_player").set_value(("P2", GAME))
         r.at.run()
         r.add("P2", "SOG", 2)
         t = r.text()
-        self.assertIn("Multiplied price", t)
-        self.assertIn("NOT a DraftKings quote", t)
+        self.assertIn("Unpriced draft", " ".join(m.value for m in r.at.markdown))
+        self.assertIn("cannot be submitted", t)
+        self.assertNotIn("Multiplied price", " ".join(m.value for m in r.at.markdown))
         self.assertTrue(r.at.button(key="pb_submit").disabled)
-        r.at.checkbox(key="_slip_ack").check()
-        r.at.run()
-        self.assertFalse(r.at.button(key="pb_submit").disabled)
+        self.assertEqual([c.key for c in r.at.checkbox], [])                                     # no acknowledgement box: a disclaimer is not a price
+        r.press("pb_rm_1_P2_PLAYER_SOG_ALTERNATE")
+        self.assertIn("Quoted price", " ".join(m.value for m in r.at.markdown))                   # back to one leg: a quote again
 
     def test_the_possible_return_is_computed_from_the_leg_price_and_stake(self):
         r = self.run_().add("P1", "SOG", 2)

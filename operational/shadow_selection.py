@@ -22,11 +22,20 @@ NAME = "selection_shadow.jsonl"
 STATE = "selection_shadow_state.json"
 
 
-def _compact(l) -> list:
+POOL_FIELDS = ["game_id", "player_id", "market_family", "threshold", "american_price", "probability", "name", "team", "game_start_utc", "quote_time_utc", "passed_edge_filter",
+               "recent_hits", "recent_games", "model_probability", "market_probability", "record_shrunk", "final_estimate", "decision", "in_selected_ticket", "retrieved_at_utc"]
+
+
+def _compact(l, in_ticket: set) -> list:
+    """One priced leg as frozen at the time: the ORIGINAL probability (the model's, or the lower of two sources), the recent hit record, the model's calibrated probability, the market's probability,
+    the final estimate a ticket would use and the selector's decision about the leg. Nothing here is ever rewritten after the games."""
+    from research.real_market_parlay import anchor
     from research.real_market_parlay import engine as rmp
+    final, decision = anchor.leg_decision(l)
+    ident = rmp.leg_identity(l)
     return [str(l.game_id), str(l.participant_id), l.market_family, l.threshold, l.american_price, round(l.conservative_probability, 5), l.participant_name, l.team, l.game_start_utc,
-            l.quote_updated_utc or l.captured_at_utc, bool(rmp.leg_has_edge(l)),
-            l.empirical_probability, l.empirical_hits, l.empirical_games, l.model_probability, l.market_probability]
+            l.quote_updated_utc or l.captured_at_utc, bool(rmp.leg_has_edge(l)), l.empirical_hits, l.empirical_games, l.model_probability, l.market_probability, l.empirical_probability,
+            None if final is None else round(final, 5), decision, ident in in_ticket, l.retrieved_at_utc]
 
 
 def _ticket(c: dict) -> dict:
@@ -34,35 +43,56 @@ def _ticket(c: dict) -> dict:
             "ev": round(c["ev"], 5), "ev_after_haircut": round(c["ev_haircut"], 5)}
 
 
-def record(legs: list, now: dt.datetime, code_version: str | None = None, proposed: list | None = None) -> dict:
-    """Append the pool and the variants' picks unless the pool is unchanged. Returns {"status": "WRITTEN"|"UNCHANGED"|"EMPTY", ...}."""
+def _touch(state_path, now: dt.datetime, **extra) -> None:
+    """Stamp the state file with the time of THIS look (even when nothing changed), so the watchdog can tell a quiet pool from a logger that has stopped."""
+    try:
+        cur = json.loads(state_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        cur = {}
+    cur.update(extra)
+    cur["checked_at_utc"] = now.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(cur))
+    except OSError:
+        pass
+
+
+def record(legs: list, now: dt.datetime, code_version: str | None = None, proposed: list | None = None, *, recorded: bool = False, rejected: list | None = None,
+           selector: dict | None = None) -> dict:
+    """Append the pool and the selector's decisions unless nothing changed. `proposed` are the tickets the selector chose this cycle (`recorded` says whether they were staked);
+    `rejected` the nearest tickets it refused, with the reason. Returns {"status": "WRITTEN"|"UNCHANGED"|"EMPTY", ...}."""
     from operational import selection_variants as sv
     from research.real_market_parlay import engine as rmp
     eligible = [l for l in legs if rmp.leg_is_eligible(l)]
-    if not eligible:
-        return {"status": "EMPTY"}
-    pool = sorted((_compact(l) for l in eligible), key=lambda r: (r[0], r[1], r[2], r[3] or 0))
-    key = hashlib.sha256(json.dumps([[r[0], r[1], r[2], r[3], r[4], r[5]] for r in pool], separators=(",", ":")).encode()).hexdigest()[:20]
     state_path = state_paths.path(STATE)
+    if not eligible:
+        _touch(state_path, now)
+        return {"status": "EMPTY"}
+    in_ticket = {rmp.leg_identity(l) for c in (proposed or []) for l in c.legs}
+    pool = sorted((_compact(l, in_ticket) for l in eligible), key=lambda r: (r[0], r[1], r[2], r[3] or 0))
+    tickets_sig = sorted("+".join(sorted(f"{rmp.leg_identity(l)}" for l in c.legs)) for c in (proposed or []))
+    key = hashlib.sha256(json.dumps([[r[0], r[1], r[2], r[3], r[4], r[5]] for r in pool] + [tickets_sig, bool(recorded)], separators=(",", ":")).encode()).hexdigest()[:20]
     try:
         last = json.loads(state_path.read_text()).get("pool_key")
     except (OSError, json.JSONDecodeError):
         last = None
     if last == key:
+        _touch(state_path, now)
         return {"status": "UNCHANGED", "pool_key": key}
     cands = sv.candidates_from_legs(legs)
     variants = {name: {"label": rule["label"], "tickets": [_ticket(c) for c in sv.select(cands, rule)]} for name, rule in sv.VARIANTS.items()}
     rec = {"at_utc": now.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "et_date": et.eastern_today(now), "code_version": code_version, "pool_key": key,
-           "pool_fields": ["game_id", "player_id", "market_family", "threshold", "american_price", "probability", "name", "team", "game_start_utc", "quote_time_utc", "passed_edge_filter",
-                          "empirical_probability", "empirical_hits", "empirical_games", "model_probability", "market_probability"],
-           "pool": pool, "qualifying_tickets": len(cands), "variants": variants,
+           "selector": selector or {}, "model_versions": sorted({l.model_version for l in eligible if l.model_version}),
+           "pool_fields": POOL_FIELDS, "pool": pool, "qualifying_tickets": len(cands), "variants": variants,
+           "decisions": {"selected_tickets_recorded": bool(recorded), "rejected_tickets": rejected or []},
            "proposed_tickets": [{"legs": [[str(l.game_id), str(l.participant_id), l.market_family, l.threshold, l.american_price, l.conservative_probability, l.participant_name] for l in c.legs],
-                                 "hit_probability": round(c.joint_probability, 5), "price": round(c.estimated_combo_price, 1), "ev": round(c.ev_estimated, 5)} for c in (proposed or [])]}
+                                 "hit_probability": round(c.joint_probability, 5), "price": round(c.estimated_combo_price, 1), "ev": round(c.ev_estimated, 5), "recorded": bool(recorded)} for c in (proposed or [])]}
     path = state_paths.path(NAME)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
         f.write(json.dumps(rec, separators=(",", ":")) + "\n")
-    state_path.write_text(json.dumps({"pool_key": key, "written_at_utc": rec["at_utc"]}))
+    _touch(state_path, now, pool_key=key, written_at_utc=rec["at_utc"])
     return {"status": "WRITTEN", "pool_key": key, "pool_legs": len(pool), "qualifying_tickets": len(cands)}
 
 

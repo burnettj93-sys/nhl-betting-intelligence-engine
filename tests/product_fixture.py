@@ -92,6 +92,15 @@ def builder_pool_doc() -> dict:
                 "P2": {"n": "Test Skater Two", "t": "BBB", "m": {"SOG": {"q": q, "r": r, "l": [[2, 120.0, None], [3, 300.0, None]]}}}}}}}
 
 
+def builder_pool_two_games_doc() -> dict:
+    """builder_pool_doc() plus a second game (P4, 23:30Z), for slips whose legs are from different games."""
+    p = builder_pool_doc()
+    q, r = "2026-10-08T21:58:00Z", "2026-10-08T21:59:00Z"
+    p["games"]["2026020901"] = {"away": "DDD", "home": "CCC", "start_utc": "2026-10-08T23:30:00Z", "event_id": "f" * 32, "players": {
+        "P4": {"n": "Test Skater Four", "t": "CCC", "m": {"SOG": {"q": q, "r": r, "l": [[2, -150.0, None], [3, 140.0, None]]}}}}}
+    return p
+
+
 def snapshot(with_options=True) -> dict:
     games = [
         {"game_id": "2026020900", "season": "20262027", "season_label": "2026-27", "type": "REGULAR", "date_et": "2026-10-08", "date_in_db": "2026-10-08", "start_utc": "2026-10-08T23:00:00Z",

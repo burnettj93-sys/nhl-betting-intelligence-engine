@@ -489,7 +489,7 @@ def leg_why(legs: list[dict]) -> None:
 
 def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: str | None, show_people: bool = True) -> None:
     with st.container(border=True):
-        kind = "Single" if opt["kind"] == "SINGLE" else "2-leg cross-game parlay"
+        kind = "Single" if opt["kind"] == "SINGLE" else f"{len(opt['legs'])}-leg cross-game parlay"
         _card_head(" + ".join(l["label"] for l in opt["legs"]), chip(kind, "info"))
         quoted = opt["price_basis"] == "SPORTSBOOK_QUOTE"
         decimal = opt.get("combined_decimal") or 1.0
@@ -497,7 +497,9 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
         stale_any = _slip(opt["legs"], [("Quoted price" if quoted else "Estimated price", american(opt["combined_american"]), "DraftKings quote" if quoted else "product of leg prices", "accent"),
                             ("Stake", money(opt["stake"]), None, ""),
                             ("To return", money(opt["potential_return"]), f"profit {money(opt['potential_profit'])}", ""),
-                            ("Model chance", pct(opt["hit_probability"]), (f"{chance_range_text(opt['legs']) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·"), ""),
+                            ("Estimated chance" if opt.get("anchor") else "Model chance", pct(opt["hit_probability"]),
+                             (f"range {opt['anchor']['hit_low'] * 100:.0f}–{opt['anchor']['hit_high'] * 100:.0f}% · price implies {pct(1.0 / decimal)}" if opt.get("anchor") else
+                              (f"{chance_range_text(opt['legs']) or ''} · price implies {pct(1.0 / decimal)}").strip(" ·")), ""),
                             ("Value after haircut", f"{ev:+.0f}%", "3-pt policy margin", "good" if ev > 0 else "bad")], outcomes=False)
         prov_any = (not stale_any) and any(l.get("provisional") for l in opt["legs"])
         if stale_any:
@@ -609,6 +611,28 @@ def select_account(surname: str, number: int = 1, *, creation: dict | None = Non
     from operational import personal_logs as pl
     slug = pl.surname_slug(surname, number)
     st.session_state["_personal_log"] = {"hash": pl.account_key(slug), "name": pl.display_for(surname, number), "creation": creation, "write_key": write_key or None, "slug": slug}
+    try:                                                      # the NAME (public anyway) rides in the address so a refresh or another device can reopen the account; never the passcode
+        st.query_params["account"] = pl.display_for(surname, number)
+    except Exception:  # noqa: BLE001 - a bare-mode test run has no query string
+        pass
+
+
+def reopen_from_address() -> None:
+    """If this session has no account but the address carries ?account=Name, open that published account VIEW-ONLY (the passcode is never in the address)."""
+    if st.session_state.get("_personal_log"):
+        return
+    try:
+        name = st.query_params.get("account")
+    except Exception:  # noqa: BLE001
+        return
+    if not name:
+        return
+    from operational import personal_logs as pl
+    surname, number, err = pl.parse_account_name(str(name))
+    if err or not surname:
+        return
+    if pl.account_key(pl.surname_slug(surname, number)) in (personal_logs_doc().get("logs") or {}):
+        select_account(surname, number)
 
 
 def account_bankroll(log: dict | None) -> dict | None:
@@ -642,6 +666,10 @@ def book_split(origins: dict | None, *, expanded: bool = False, as_table_only: b
 
 def forget_log() -> None:
     st.session_state.pop("_personal_log", None)
+    try:
+        st.query_params.pop("account", None)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _log_order(order_id: str, log_hash: str) -> dict | None:

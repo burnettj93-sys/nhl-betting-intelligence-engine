@@ -71,6 +71,25 @@ def leg_estimate(leg) -> Estimate | None:
     return None
 
 
+def leg_decision(leg) -> tuple[float | None, str]:
+    """(final estimate or None, decision code) for one leg, for the frozen prediction record: why a priced leg was or was not a candidate for a ticket."""
+    if leg.market_family not in SHOT_FAMILIES and leg.market_family != "MONEYLINE":
+        return None, "NOT_USED_IN_TICKETS_MARKET"
+    if leg.market_family in SHOT_FAMILIES:
+        if leg.empirical_probability is None or leg.model_probability is None:
+            return None, "NO_PLAYER_RECORD"
+        if (leg.empirical_games or 0) < MIN_SAMPLE_GAMES:
+            return None, "THIN_SAMPLE"
+    est = leg_estimate(leg)
+    if est is None:
+        if leg.market_family == "MONEYLINE":
+            return None, "MONEYLINE_NOT_A_CLEAR_FAVOURITE"
+        return None, "BELOW_STRONG_LEG_FLOOR"
+    if est.p * _decimal(leg) - 1.0 < LEG_MIN_EV:
+        return est.p, "GIVES_UP_MORE_THAN_THE_MARGIN"
+    return est.p, "SUPPORTED"
+
+
 def _decimal(leg) -> float:
     a = leg.american_price
     return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))

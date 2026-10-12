@@ -403,6 +403,24 @@ def check_recording_pause(now: dt.datetime) -> dict:
     return {"name": "recording_pause", "status": WARN if days >= PAUSE_REMINDER_DAYS else OK, "detail": detail[:300]}
 
 
+PREDICTION_LOG_MAX_AGE_MIN = 60.0
+
+
+def check_prediction_log(now: dt.datetime) -> dict:
+    """The frozen-prediction log (operational/shadow_selection.py) must be looked at on every trader cycle, recording or paused: it is where the entry estimates are kept before the games. It stamps
+    every look, so a quiet pool is told apart from a logger that stopped (as it did when recording resumed on 2026-10-11)."""
+    from operational import shadow_selection, state_paths
+    try:
+        st = json.loads(state_paths.path(shadow_selection.STATE).read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"name": "prediction_log", "status": WARN, "detail": "the frozen-prediction log has not been written yet"}
+    checked = st.get("checked_at_utc") or st.get("written_at_utc")
+    age = _age_min(checked, now) if checked else None
+    if age is None or age > PREDICTION_LOG_MAX_AGE_MIN:
+        return {"name": "prediction_log", "status": WARN, "detail": f"the frozen-prediction log was last looked at {checked or 'never'} (limit {PREDICTION_LOG_MAX_AGE_MIN:.0f} min): predictions would not be frozen before games"}
+    return {"name": "prediction_log", "status": OK, "detail": f"the frozen-prediction log was checked {age:.0f} min ago (last change {st.get('written_at_utc') or 'n/a'})"}
+
+
 def check_publishing_enabled() -> dict:
     """Publication to the hosted app must be ON. A demonstration that turned it off and was never restored is a FAIL, not a quiet gap."""
     try:
@@ -459,6 +477,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_database())
     checks.append(check_publishing_enabled())
     checks.append(check_recording_pause(now))
+    checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
     ready = None
     if deep:

@@ -300,6 +300,22 @@ class TestPagesRender(unittest.TestCase):
 
 
 class TestMyBetsPage(unittest.TestCase):
+    def test_the_address_reopens_an_account_view_only_and_the_passcode_unlocks_adding_without_being_kept_in_the_address(self):
+        from tests.product_fixture import ACCT_PASS
+        at = run_page("38_My_Bets.py", snapshot(), setup=lambda t: (with_token(t), t.query_params.__setitem__("account", "burnett  ")))     # case and stray spaces are normalised
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        self.assertIn("view-only", text(at))
+        self.assertIn("Burnett", text(at))
+        at.text_input(key="mb_unlock_key").set_value("WRONG-CODE")
+        at.button(key="mb_unlock").click()
+        rerun(at, snapshot())
+        self.assertIn("does not belong", text(at))
+        at.text_input(key="mb_unlock_key").set_value(ACCT_PASS)
+        at.button(key="mb_unlock").click()
+        rerun(at, snapshot())
+        self.assertNotIn("view-only", text(at))
+        self.assertNotIn(ACCT_PASS, str(dict(at.query_params)))                                   # the passcode is never in the address
+
     def test_renders_with_the_passcode_explanation_and_no_simulated_wording(self):
         at = run_page("38_My_Bets.py", snapshot())
         self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])

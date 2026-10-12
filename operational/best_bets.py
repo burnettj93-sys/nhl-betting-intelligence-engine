@@ -535,6 +535,20 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         return effective_start(e["commence_time"], matched[1]["start_utc"] if matched else None)
 
     upcoming = sorted((e for e in events.data if start_of(e) > now), key=start_of)
+    # Wave-synchronised pregame captures: every game of a wave (puck drops within credit_planner.WAVE_MINUTES of the first) is captured when the FIRST game of the wave reaches its pregame
+    # window, so the selector can compare fresh prices from several games at one evaluation time, before the first of them starts. Bought one at a time at each game's own window, two games an
+    # hour apart are never fresh together (the earlier one has started before the later one is priced).
+    wave_anchor: dict = {}
+    if plan is not None:
+        from operational import credit_planner as _cpw
+        starts_by_gid = {}
+        for _e in upcoming:
+            _m = match_game(_e, games)
+            if _m:
+                starts_by_gid[str(_m[0])] = start_of(_e)
+        for _w in _cpw.waves(starts_by_gid):
+            for _g in _w:
+                wave_anchor[_g] = starts_by_gid[_w[0]]
     for e in upcoming:
         hours = (start_of(e) - now).total_seconds() / 3600.0
         from operational import credit_planner as _cp
@@ -552,10 +566,12 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
             base_list = list(cp.prop_markets())
             age_min = decision_age_min(e["id"], now, tuple(base_list))
             gstart = start_of(e)
-            slot, why = sched.decide(now, gstart, _captured_times(e["id"], base_list), base_list, _availability_context(day, gid))
+            dstart = wave_anchor.get(str(gid)) or gstart                       # the wave's first start (the game's own start when it is the first or alone)
+            dhours = (dstart - now).total_seconds() / 3600.0
+            slot, why = sched.decide(now, dstart, _captured_times(e["id"], base_list), base_list, _availability_context(day, gid))
             decision, klass, est_cost = None, None, 0
             if slot == sched.PREGAME:
-                decision, why = planned_decision(plan, gid, hours, age_min, now)
+                decision, why = planned_decision(plan, gid, dhours, age_min, now)
                 klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
                 with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
                 with_points = (decision == "FIRST" and cp.points_addon_enabled() and str(gid) in set(plan.get("points_games") or []))
@@ -847,7 +863,17 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
     availability: DraftKings has had these markets posted for days (docs/MARKET_COVERAGE_AUDIT.md)."""
     games = games or {}
     plan = []
-    for e in _latest_events_listing():
+    listing = _latest_events_listing()
+    starts_by_gid = {}
+    for e in listing:                                       # wave-synchronised pregame captures: a game's pregame look opens with its wave's first game (see capture_prices)
+        m = match_game(e, games)
+        if m:
+            t = effective_start(e["commence_time"], m[1]["start_utc"])
+            if t > now:
+                starts_by_gid[str(m[0])] = t
+    from operational import credit_planner as _cpw
+    wave_anchor = {g: starts_by_gid[w[0]] for w in _cpw.waves(starts_by_gid) for g in w}
+    for e in listing:
         matched = match_game(e, games)
         official = matched[1]["start_utc"] if matched else None
         start = effective_start(e["commence_time"], official)
@@ -855,6 +881,8 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
         if hours <= 0 or hours > hours_ahead:
             continue
         opens = start - dt.timedelta(hours=CAPTURE_HORIZON_H)
+        dstart = wave_anchor.get(str(matched[0])) if matched else None
+        dstart = dstart or start
         shots, pts = latest_capture(e["id"], market=SOG_MARKET_KEY), latest_capture(e["id"], market=POINTS_MARKET_KEY)
         age = decision_age_min(e["id"], now, _bought_markets())
         decision = capture_decision(hours, age)
@@ -862,12 +890,12 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
         slots = None
         if _cp_enforced():
             from operational import capture_schedule as _sched
-            w = _sched.windows(now, start)
+            w = _sched.windows(now, dstart)
             opens = min(v[0] for k, v in w.items() if k != _sched.PREGAME) if len(w) > 1 else w[_sched.PREGAME][0]
             slots = {k: {"opens_utc": v[0].isoformat().replace("+00:00", "Z"), "closes_utc": v[1].isoformat().replace("+00:00", "Z")} for k, v in w.items()}
             from operational import credit_planner as _cpl
             bought = list(_cpl.prop_markets())
-            slot, why = _sched.decide(now, start, _captured_times(e["id"], bought), bought)
+            slot, why = _sched.decide(now, dstart, _captured_times(e["id"], bought), bought)
             nxt = (f"{slot.lower()} look on the next 15-minute trader cycle ({why})" if slot else
                    f"{why.replace('_', ' ').lower()}; next window opens {fmt(min((v[0] for v in w.values() if v[0] > now), default=start))}")
         elif age is None and now < opens:

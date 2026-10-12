@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+import json
 import os
 import unittest
 from unittest import mock
@@ -245,6 +246,100 @@ class TestPausedBoard(unittest.TestCase):
         self.assertEqual(len(st["provisional"]["tickets"]), 1)                       # shown, never back-filled
         self.assertIn("No fresh prices right now", st["empty_slot_reason"])
         self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 500.0)
+
+
+class TestPersonOptions(unittest.TestCase):
+    """For each player the best supported +100 option involving him, built from the same estimates and tests as the automatic tickets; none is made up."""
+    def setUp(self):
+        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def build(self, legs):
+        from operational import player_options as po
+        return po.build_options(legs, "2026-10-11")
+
+    def test_a_person_gets_the_fewest_legs_option_that_passes_the_anchor_tests(self):
+        out = self.build([shots(1, 1, 24, -185, 0.63, name="Ehlers"), shots(2, 2, 26, -260, 0.695, name="McMann"), shots(3, 3, 25, -300, 0.70, name="Third")])
+        self.assertEqual(out["policy"]["mode"], "anchor")
+        e = out["persons"]["1"]
+        self.assertIsNotNone(e["option_id"])
+        opt = next(o for o in out["options"] if o["option_id"] == e["option_id"])
+        self.assertEqual(opt["kind"], "PARLAY")
+        self.assertTrue(any(l["participant_name"] == "Ehlers" for l in opt["legs"]))
+        self.assertGreaterEqual(opt["combined_decimal"], 2.0)
+        self.assertIn("recent hit rate 24 of 30", opt["rationale"])
+        self.assertEqual(opt["legs"][0]["evidence"]["hits"] in (24, 26, 25), True)
+
+    def test_a_person_with_no_supported_leg_gets_no_option(self):
+        pts = dataclasses.replace(shots(4, 4, 28, -150, 0.8, name="PointsOnly"), market_family="PLAYER_POINTS", threshold=1)
+        out = self.build([shots(1, 1, 24, -185, 0.63), shots(2, 2, 26, -260, 0.695), pts])
+        self.assertIsNone(out["persons"]["4"]["option_id"])
+        self.assertEqual(out["persons"]["4"]["reason_no_option"], "NO_LEG_SUPPORTED_FOR_AUTOMATIC_TICKETS")
+
+    def test_nothing_is_fabricated_when_no_combination_has_value(self):
+        out = self.build([shots(1, 1, 22, -200, 0.6), shots(2, 2, 22, -200, 0.6)])
+        self.assertEqual(out["options"], [])
+        self.assertEqual({p["reason_no_option"] for p in out["persons"].values()}, {"NO_COMBINATION_QUALIFIES_AT_TODAYS_PRICES"})
+
+
+class TestFrozenPredictionScoring(unittest.TestCase):
+    def test_anchor_estimates_are_scored_against_results_without_rewriting_the_entry_numbers(self):
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
+        import score_selection_shadow as sss
+        from operational import shadow_selection as sh
+        fields = sh.POOL_FIELDS
+
+        def row(game, pid, hit_hits, final, in_ticket):
+            base = [game, pid, "PLAYER_SOG_ALTERNATE", 2, -185, 0.63, f"P{pid}", "T", "2026-10-11T23:00:00Z", "2026-10-11T19:00:00Z", True]
+            return base + [hit_hits, 30, 0.63, 0.65, final, final, "SUPPORTED", in_ticket, "2026-10-11T19:00:00Z"]
+        rec = {"et_date": "2026-10-11", "pool_fields": fields, "variants": {}, "pool": [row("g1", "a", 24, 0.726, True), row("g2", "b", 26, 0.779, True), row("g1", "c", 20, 0.62, False)]}
+        outcomes = {("g1", "a"): True, ("g2", "b"): False, ("g1", "c"): True}
+        rep = sss.score([rec], lambda g, p, fam, k: {"status": "FINAL", "hit": outcomes[(g, p)]})
+        a = rep["anchor_estimates"]
+        self.assertEqual((a["supported_pool"]["legs"], a["on_selected_tickets"]["legs"]), (3, 2))
+        self.assertAlmostEqual(a["on_selected_tickets"]["final_estimate"], (0.726 + 0.779) / 2, places=3)
+        self.assertAlmostEqual(a["on_selected_tickets"]["happened"], 0.5)
+        self.assertAlmostEqual(a["on_selected_tickets"]["recent_hit_rate"], (24 / 30 + 26 / 30) / 2, places=3)       # unshrunk, apart from the final estimate
+        self.assertEqual(a["supported_pool"]["games"], 2)
+
+
+class TestDailyPredictionsBlock(unittest.TestCase):
+    def test_the_review_scores_the_frozen_day_and_reports_exposure_participation_and_actions(self):
+        from operational import daily_review as dr
+        from operational import shadow_selection as sh
+        base = ["2026-10-11T23:00:00Z", "2026-10-11T19:00:00Z", True]
+
+        def row(game, pid, hits, final, in_ticket):
+            return [game, pid, "PLAYER_SOG_ALTERNATE", 2, -185, 0.63, f"P{pid}", "T"] + base + [hits, 30, 0.63, 0.65, final, final, "SUPPORTED", in_ticket, "2026-10-11T19:00:00Z"]
+        rec = {"et_date": "2026-10-11", "pool_fields": sh.POOL_FIELDS, "variants": {}, "pool": [row("g1", "a", 24, 0.726, True), row("g2", "b", 26, 0.779, True), row("g2", "c", 20, 0.62, False)],
+               "proposed_tickets": [{"legs": [["g1", "a", "PLAYER_SOG_ALTERNATE", 2, -185, 0.726, "Pa"], ["g2", "b", "PLAYER_SOG_ALTERNATE", 2, -260, 0.779, "Pb"]], "hit_probability": 0.565, "price": 113, "ev": 0.2, "recorded": True}]}
+        outcomes = {("g1", "a"): {"status": "FINAL", "hit": True}, ("g2", "b"): {"status": "NO_PARTICIPATION"}, ("g2", "c"): {"status": "FINAL", "hit": True}}
+
+        class FakeScore:
+            @staticmethod
+            def db_resolver(path):
+                return lambda g, p, fam, k: outcomes[(g, p)]
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
+        import score_selection_shadow as real
+        FakeScore.score = staticmethod(real.score)
+        conn = mock.Mock()
+        conn.execute.return_value.fetchone.return_value = ["x", "main", "/tmp/nhl.db"]
+        bets = [{"paper_bet_id": f"T{i}", "created_at_utc": "2026-10-11T20:00:00+00:00", "origin": "AUTOMATIC",
+                 "legs_json": json.dumps([{"market_family": "PLAYER_SOG_ALTERNATE", "participant_name": "Shared Player", "game_id": f"G{i}"}, {"market_family": "MONEYLINE", "participant_name": "TOR", "game_id": "G9"}])}
+                for i in (1, 2)]
+        with mock.patch.object(dr, "_score_module", return_value=FakeScore):
+            out = dr.predictions_block("2026-10-11", bets, conn, records=[rec])
+        self.assertEqual((out["resolved"], out["did_not_play"]), (2, 1))
+        self.assertEqual(out["selected_tickets"][0]["result"], "DID_NOT_PLAY")
+        self.assertEqual(out["exposure"]["players_on_several_tickets"][0]["player"], "Shared Player")          # shared exposure is named
+        self.assertEqual([g["game_id"] for g in out["exposure"]["games_on_several_tickets"]], ["G9"])
+        self.assertTrue(any("did not play" in a for a in out["corrective_actions"]))
+        self.assertTrue(any("did not play" in x for x in out["participation_and_data"]))
 
 
 if __name__ == "__main__":

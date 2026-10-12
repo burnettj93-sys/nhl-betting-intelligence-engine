@@ -489,7 +489,7 @@ def _check_builder_shape(accepted) -> str | None:
 def _process_builder(conn, order, oid, log_hash, accepted, stake, builder_pool, now, source, received_at, reject) -> dict:
     """A bet the person built themselves on the Paper Parlay Builder. It does NOT need the model's edge or +100: it needs a real, fresh DraftKings price for every leg, a game that has
     not started, a player who can be identified, sufficient funds, and no duplicate. The combined price is the product of the leg prices: an ESTIMATE, and for legs from one game it is
-    not even that (DraftKings prices same-game combinations with its own correlation adjustment), so such a slip must be acknowledged and is labelled as multiplied, not quoted."""
+    not even that (DraftKings prices same-game combinations with its own correlation adjustment), so a same-game slip is refused: it is an unpriced draft, never recorded at multiplied odds."""
     from operational import builder_pool as bp
     from operational import daily_tickets
     done = _stamp(now)
@@ -499,8 +499,11 @@ def _process_builder(conn, order, oid, log_hash, accepted, stake, builder_pool, 
     if rv["status"] == "UNAVAILABLE":
         return reject(rv["reason"], {"legs": rv["legs"]})
     same_game = len({l["game_id"] for l in rv["legs"]}) < len(rv["legs"])
-    if same_game and accepted.get("same_game_ack") is not True:
-        return reject("SAME_GAME: legs from one game are priced by DraftKings together, not by multiplying; tick the box to confirm you understand this slip's number is not a DraftKings quote.")
+    if same_game:
+        # DraftKings prices same-game legs together with its own correlation adjustment, and this system has no source for a combined quote. Multiplying the leg prices is not a price, and an
+        # acknowledgement does not make it one: such a slip is an unpriced draft and is refused, whatever the order says. Nothing is debited or recorded.
+        return reject("SAME_GAME_NOT_PRICED: DraftKings prices legs from one game together, and there is no combined price available for this slip, so it cannot be submitted. "
+                      "Keep the legs from different games, or place a single leg. Nothing was recorded.")
     if rv["status"] == "CHANGED":
         return reject("A price moved since you built the slip. Nothing was recorded; review the new prices and submit again.", {"legs": rv["legs"], "changes": rv["changes"], "combined_american": rv["combined_american"]}, NEEDS_ACCEPTANCE)
     identities = sorted(f"{l['game_id']}:{l['participant_id']}:{l['market_family']}:{l['threshold']}:{l['side']}" for l in rv["legs"])
