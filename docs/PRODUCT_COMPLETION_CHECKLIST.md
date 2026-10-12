@@ -1,4 +1,4 @@
-# Product completion checklist — one complete list (revision 14, 2026-10-12)
+# Product completion checklist — one complete list (revision 15, 2026-10-12)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
@@ -19,7 +19,7 @@ hosted app where it is a hosted feature. Nothing here claims a betting edge; the
 **Verified now:** the public hosted app opens signed out in a phone-sized view with no sign-in (real-phone Safari Private not tested); Today shows the paper book split into parlay tickets and single bets, the pause, the
 ticket policy and the 8:00 AM run; the Paper Parlay Builder lists real DraftKings lines with quote ages and adds a fresh leg to a slip; the engine's account arithmetic, builder checks and model-book isolation for
 two separate accounts (real pages plus the real engine, transport simulated); the model book ($435.76) agrees three ways and with the official box scores; collection, settlement, publishing and shadow logging run
-while automatic recording is paused.
+whether automatic recording is on, paused or finds no ticket.
 
 **Partial:** several price refreshes a day for every game (credit-limited: 3 of 14 games priced today); the daytime board (moneyline prices go stale between pulls); player and goalie data (one day behind until the new
 13:30 / 17:30 source re-checks have run for a day); Eggy interface (polished, a first-deep-link quirk is now handled cosmetically).
@@ -27,7 +27,13 @@ while automatic recording is paused.
 **External blockers (owner or third party):** `LOG_WRITE_TOKEN` (hosted account creation and submit, so the hosted two-account test); Odds API key rotation; Ontario price/void-rule verification; a permitted source for
 lineups, power-play units, injuries and starting goalies; the odds budget decision (a plan that prices every game); one paid credit to certify the puck-line contract; the real-phone Safari Private check.
 
-**Awaiting your approval:** the anchor-ticket policy shown on Today as proposed tickets (`docs/ANCHOR_TICKETS.md`). Automatic recording stays paused until then; a technical gate refuses to resume without it.
+**Repaired 2026-10-12 (this revision):**
+- *Selector.* The per-game pruning that hid qualifying tickets (the Batherson + Eichel case) is gone; one exact search (`anchor.qualifying`) now feeds Today's provisional tickets, Best Options, and automatic recording, and tests prove the three agree (`tests/test_anchor_tickets.py`, `TestTheSearchHidesNothing`, `TestTheRealPoolIsRecordedThroughTheNormalCycle`). The morning tickets were not back-filled (their quotes had expired); only fresh quotes are recorded.
+- *Prediction scoring (rev 2).* Moneylines are graded as team outcomes, not player participation; affected shadow reports and daily reviews were regenerated from the frozen evidence (`docs/validation/CORRECTIONS_2026-10-12.md`; originals kept).
+- *Logging gap.* A nine-hour gap in the prediction log is identified as a gap on the Morning Review page and in the scorer; no history was invented to fill it.
+- *Hosted.* Footer states the app's code version and the data's build version; Players tops up from the NHL API when MoneyPuck lags; the builder shows four separate numbers (recent record, model, final estimate, price-implied).
+
+**Approved and running:** the anchor-ticket policy `c236c526e00b9f04` (docs/ANCHOR_TICKETS.md); automatic recording is on.
 
 ## Versions (one commit everywhere)
 
@@ -42,7 +48,7 @@ lineups, power-play units, injuries and starting goalies; the odds budget decisi
 |---|---|---|
 | Up to five worthwhile parlays a day, +100 or better, a strong estimated hit chance, defensible value, empty slots allowed | **VERIFIED RUNNING** (policy `c236c526e00b9f04` approved by the owner 2026-10-11 15:29 UTC; recording resumed) | Anchor tickets (`docs/ANCHOR_TICKETS.md`). Cycle 2026-10-11 15:44 UTC recorded nothing on stale prices (not back-filled); 21:49 UTC: no qualifying ticket (best near-miss −1.3% value, refused). Balance verified from the ledger: $435.76, 12 tickets, nothing open. Tests: `tests/test_anchor_tickets.py`. |
 | Show the ticket the policy kept, and whether the engine can find such tickets regularly | **DONE (honest answer: not reliably)** | `docs/POSTMORTEM_2026-10-10.md` section 12b: Coleman 2+ shots (−135) + Lee 2+ shots (−140), +198, estimated 38.7%, 1-SD range 31.6–45.8% against a break-even of 33.5%, +$1.55 expected on $10 (+$0.47 after the haircut). About one such ticket in three days from 3 to 6 games priced a day; coverage is the binding limit; three days cannot say how often a full slate would. |
-| Automatic recording paused; collection, settlement, publishing, personal accounts, shadow log running | **VERIFIED** (paused since 2026-10-10 08:23 ET) | `operational/recording_pause.py` covers the ticket selector and every other automatic writer; fails safe; hosted Today shows the pause; the watchdog warns after 3 days. **Resume is refused until the owner approves the active policy by digest** (checked live). |
+| Prediction logging, collection, settlement, publishing, personal accounts continue whether recording is on, paused or finds no ticket | **VERIFIED IN TESTS + LIVE** | `operational/recording_pause.py` (paused 2026-10-10 to 2026-10-11, resumed on the owner's approval of the policy digest). The shadow log is written every cycle before the pause is consulted; tests cover paused, resumed, no-ticket and no-legs cycles (`TestTheRealPoolIsRecordedThroughTheNormalCycle`, `tests/test_shadow_scoring.py`); the watchdog's `prediction_log` check alerts if it stops. |
 | Automatic moneyline and prop singles out of the parlay experiment; results separate; reconciled; nothing reset | **VERIFIED** | `record_paper_bet` refuses automatic singles (`EXCLUDED_SINGLE`; observations still logged). Today and Paper Performance show parlay tickets (11, 2W–9L, −$54.24), the earlier single (1, 0W–1L, −$10.00) and the whole ($435.76, −$64.24); the watchdog re-checks that they add up. `tests/test_book_breakdown.py`. |
 | Reduced shared-player exposure | **VERIFIED IN TESTS** (and in the replay) | One ticket per player in the proposal; the per-player limit of 2 in force from 2026-10-09; the replay reproduces the recorded Oct 8 tickets only without a limit. |
 | Postmortem of the nine consecutive losses | **DONE** | `docs/POSTMORTEM_2026-10-10.md` + frozen evidence under `docs/validation/` (ledger extract, official box scores, audited candidate pools, dependence estimates): 8 parlay tickets + 1 moneyline single; 12 of 12 settlements agree with the official box scores; the streak is compatible with variance under the model's assumptions (17.1–18.4% that all eight tickets lose, conditional on the recorded probabilities); shared exposure and weak acceptance demonstrated; overstated probabilities a hypothesis. The 25% floor explanation was corrected (a two-leg ticket needs the legs' probabilities to multiply to 0.25, not each to exceed 50%) and the +3% margin is stated not to verify Ontario prices or settlement rules. |
