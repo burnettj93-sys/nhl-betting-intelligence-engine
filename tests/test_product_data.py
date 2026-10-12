@@ -307,5 +307,41 @@ class TestIsolatePaperBets(unittest.TestCase):
         self.assertEqual(isolate_demo_history.apply_paper_bets(d / "l.db", d / "bk")["status"], "NOTHING_TO_ISOLATE")
 
 
+
+
+class TestRecentGamesAreToppedUpFromBoxScores(unittest.TestCase):
+    """MoneyPuck publishes a game's log the next afternoon; the NHL API box score is there at once. The player page shows both, labelled, and never invents power-play time."""
+    def setUp(self):
+        from tests.test_paper_bet_settlement_driver import _fresh_nhl_conn, _insert_game, _insert_player_stat
+        self.conn = _fresh_nhl_conn()
+        _insert_game(self.conn, 1, home="TOR", away="MTL", state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=1")
+        _insert_game(self.conn, 2, home="CAR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
+        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=2")
+        _insert_player_stat(self.conn, 1, "p1", "TOR", shots=4)
+        _insert_player_stat(self.conn, 2, "p1", "CAR", shots=9)                      # an unfinished game never appears
+        self.conn.commit()
+        self.mp = {"game_id": 0, "date": "2026-10-10", "season": "2026-27", "opp": "BOS", "home": True, "toi": 18.0, "toi_pp": 3.0, "shots": 2.0, "goals": 0.0, "assists": 0.0, "hits": 1.0, "blocks": 0.0}
+        self.now = dt.datetime(2026, 10, 16, 12, 0, tzinfo=dt.timezone.utc)           # after the fixture's observation time
+
+    def test_a_final_game_after_the_moneypuck_date_is_added_flagged_and_without_power_play_time(self):
+        sk = {"newest_game_date": "2026-10-10", "players": {"p1": {"recent_games": [dict(self.mp)]}, "p2": {"recent_games": []}}}
+        through = product_data._topup_recent_games(sk, self.conn, self.now)
+        self.assertEqual(through, "2026-10-11")
+        rows = sk["players"]["p1"]["recent_games"]
+        self.assertEqual([r["date"] for r in rows], ["2026-10-11", "2026-10-10"])
+        new = rows[0]
+        self.assertEqual((new["opp"], new["home"], new["shots"], new["toi_pp"], new["source"], new["season"]), ("MTL", True, 4, None, "NHL API box score", "2026-27"))
+        self.assertEqual(sk["players"]["p2"]["recent_games"], [])                     # a player with no box score is untouched
+
+    def test_nothing_newer_means_nothing_added_and_a_failure_leaves_the_moneypuck_rows_alone(self):
+        sk = {"newest_game_date": "2026-10-11", "players": {"p1": {"recent_games": [dict(self.mp)]}}}
+        self.assertIsNone(product_data._topup_recent_games(sk, self.conn, self.now))
+        self.assertEqual(len(sk["players"]["p1"]["recent_games"]), 1)
+        sk2 = {"newest_game_date": "2026-10-10", "players": {"p1": {"recent_games": [dict(self.mp)]}}}
+        self.assertIsNone(product_data._topup_recent_games(sk2, object(), self.now))
+        self.assertEqual(len(sk2["players"]["p1"]["recent_games"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -200,6 +200,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         srows = skater_rows if skater_rows is not None else history.skater_games()
         live_tg = tg.build_live(grows)
         sk = skater_live.build(srows)
+        box_scores_through = _topup_recent_games(sk, nhl, now)
         tg_state = live_tg["state"]
         validation_goalie = live_tg["validation"]
         saves_verdicts = tg.saves_verdicts(validation_goalie)
@@ -322,7 +323,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
 
         default_date = _default_date(games_out, today)
         dates = sorted({g["date_et"] for g in games_out})
-        data_through = {"skaters": sk["newest_game_date"], "goalies": date_of_last_obs,
+        data_through = {"skaters": sk["newest_game_date"], "skaters_box_scores": box_scores_through, "goalies": date_of_last_obs,
                         "schedule_results": max((g["start_utc"] for g in games_out if g["state"] == "FINAL"), default=None)}
         model_health = _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through, goalies_out, players_out, games_out)
         model_health["pipelines"].extend(_lineup_pipelines(lineup_state))
@@ -554,6 +555,38 @@ def _default_date(games_out: list[dict], today: str) -> str:
 
 
 # ------------------------------------------------------------------ model health ----
+
+def _topup_recent_games(sk: dict, nhl, now: dt.datetime) -> str | None:
+    """Add to each player's recent games the NHL API box scores of FINAL games after the newest MoneyPuck game (MoneyPuck publishes a game's log the next afternoon). The added rows are
+    flagged `source: "NHL API box score"` and carry NO power-play time (that field comes from MoneyPuck and arrives with it). Averages, usage estimates and the projection stay on
+    MoneyPuck. Returns the newest box-score date added (None when nothing is newer). Never raises: a failure leaves the MoneyPuck rows as they were."""
+    try:
+        from features import point_in_time as pit
+        newest = sk.get("newest_game_date")
+        if not newest:
+            return None
+        rows = pit.box_scores_since(nhl, newest, now.astimezone(dt.timezone.utc).replace(tzinfo=None).isoformat())
+        added, through = 0, None
+        season = season_label(CURRENT_SEASON_ID)
+        by_player: dict[str, list] = defaultdict(list)
+        for r in rows:
+            by_player[str(r["player_id"])].append(r)
+        for pid, rs in by_player.items():
+            p = sk["players"].get(pid) or sk["players"].get(int(pid)) if str(pid).isdigit() else sk["players"].get(pid)
+            if p is None:
+                continue
+            fresh = []
+            for r in rs:
+                home = r["team_id"] == r["home_team"]
+                fresh.append({"date": r["date"], "season": season, "opp": r["away_team"] if home else r["home_team"], "home": home, "toi": round(float(r["toi_minutes"] or 0.0), 1), "toi_pp": None,
+                              "shots": r["shots"], "goals": r["goals"], "assists": r["assists"], "hits": r["hits"], "blocks": r["blocked_shots"], "source": "NHL API box score"})
+                through = max(through or r["date"], r["date"])
+            p["recent_games"] = (sorted(fresh, key=lambda x: x["date"], reverse=True) + list(p["recent_games"]))[:5]
+            added += len(fresh)
+        return through if added else None
+    except Exception:  # noqa: BLE001 - the pages stay valid on the MoneyPuck rows
+        return None
+
 
 def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through, goalies_out, players_out, games_out) -> dict:
     from research.product_models import live as skater_live

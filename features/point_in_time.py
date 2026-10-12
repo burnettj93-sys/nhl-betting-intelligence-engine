@@ -551,6 +551,23 @@ def player_shots_since(conn: sqlite3.Connection, after_date: str, learn_time_utc
     ).fetchall()
 
 
+def box_scores_since(conn: sqlite3.Connection, after_date: str, learn_time_utc: str) -> list[sqlite3.Row]:
+    """One row per player per FINAL game dated after `after_date` (latest stat revision observed by `learn_time_utc`, played=1): the box-score line the player pages show for games a slower
+    source (MoneyPuck) has not published yet. Postgame-only data about games that are over; power-play time is not in this source and is returned as absent, never estimated."""
+    return conn.execute(
+        """SELECT player_id, game_date AS date, home_team, away_team, team_id, toi_minutes, goals, assists, shots, hits, blocked_shots FROM (
+               SELECT p.player_id, g.game_date, g.home_team, g.away_team, p.team_id, p.toi_minutes, p.goals, p.assists, p.shots, p.hits, p.blocked_shots, p.played,
+                      ROW_NUMBER() OVER (
+                          PARTITION BY p.game_id, p.player_id
+                          ORDER BY p.observed_at_utc DESC, p.revision_number DESC
+                      ) AS rn
+               FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
+               WHERE g.game_date > ? AND g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?
+           ) WHERE rn = 1 AND played = 1 ORDER BY game_date DESC""",
+        (after_date, learn_time_utc),
+    ).fetchall()
+
+
 def final_stats_through(conn: sqlite3.Connection, learn_time_utc: str) -> str | None:
     """The date of the newest FINAL game with player stats observed by `learn_time_utc`."""
     row = conn.execute(

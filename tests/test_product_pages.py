@@ -215,6 +215,20 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("Expected shots", " ".join(m.label for m in at.metric))
         self.assertIn("Best qualifying +100 option", t)
 
+    def test_a_box_score_row_without_power_play_time_shows_a_dash_and_says_why(self):
+        import copy
+        snap = copy.deepcopy(snapshot())
+        p1 = snap["product_players"]["players"]["P1"] if "product_players" in snap and "players" in snap["product_players"] else None
+        players = snap["product_players"] if p1 is None else snap["product_players"]["players"]
+        row = {"date": "2026-10-11", "season": "2026-27", "opp": "MTL", "home": True, "toi": 17.0, "toi_pp": None, "shots": 3, "goals": 1, "assists": 0, "hits": None, "blocks": 0, "source": "NHL API box score"}
+        players["P1"]["recent_games"] = [row] + list(players["P1"]["recent_games"])
+        at = run_page("30_Players.py", snap, setup=lambda a: a.query_params.__setitem__("player", "P1"))
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        self.assertIn("box scores from the NHL API for games MoneyPuck has not published yet", text(at))
+        frames = [d.value.to_dict("records") for d in at.dataframe]
+        flat = [r for f in frames for r in f]
+        self.assertTrue(any(r.get("Date") == "2026-10-11" and r.get("PP") == "—" and r.get("Hits") == "—" for r in flat), flat[:3])
+
     def test_diagnostics_order_path_panel_shows_booleans_and_a_check_button(self):
         at = run_page("37_Diagnostics.py", snapshot(), setup=lambda a: a.session_state.__setitem__("_owner_unlocked", True))      # administrative: needs the owner unlock
         t = text(at) + " " + " ".join(str(d.value.to_dict()) for d in at.dataframe)
