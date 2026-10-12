@@ -60,7 +60,7 @@ EST_COST_PER_EVENT = 2
 
 SOG_K = (1, 2, 3, 4, 5)
 MODEL_VERSION = "player-rate-toi-v2+platt-2026-10"          # live probability source (validated; see docs/MODEL_VALIDATION.md)
-MODEL_CACHE_SCHEMA = 2                                              # 2: entries carry "emp" (last-30-game shot frequencies)
+MODEL_CACHE_SCHEMA = 3                                              # 2: entries carry "emp" (last-30-game shot frequencies); 3: the record is topped up from NHL API final games after MoneyPuck's newest
 PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
 MIN_EXPECTED_TOI = 12.0
 from operational.pricing_policy import PROVISIONAL_MAX_AGE_MIN  # noqa: E402  (shared with the hosted pages; see that module)
@@ -261,12 +261,40 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
     return model
 
 
-def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, rows: list | None = None) -> dict:
+def _now_naive_utc() -> str:
+    return dt.datetime.now(dt.timezone.utc).replace(tzinfo=None).isoformat()
+
+
+def nhl_shot_rows_after(conn, newest_date: str | None, as_of: str | None = None) -> list[dict]:
+    """The NHL API's player-game shot counts for FINAL games dated after the newest MoneyPuck game (MoneyPuck publishes a game's log the following afternoon, so its history is a day or two behind
+    the schedule). Used only to bring the last-30-game SHOT RECORD up to date; the projection model keeps its MoneyPuck inputs. Where both sources cover a game the shot counts agree for 98% of
+    player-games (693 of 704 on 2026-10-09..10). Read through features/point_in_time (latest revision observed by `as_of`); a game not final or a row without a shot count is skipped."""
+    if conn is None or not newest_date:
+        return []
+    from features import point_in_time as pit
+    return [{"player_id": str(r["player_id"]), "date": r["date"], "shots": float(r["shots"])} for r in pit.player_shots_since(conn, newest_date, as_of or _now_naive_utc())]
+
+
+def nhl_data_through(conn, as_of: str | None = None) -> str | None:
+    if conn is None:
+        return None
+    try:
+        from features import point_in_time as pit
+        return pit.final_stats_through(conn, as_of or _now_naive_utc())
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, rows: list | None = None, conn=None) -> dict:
     """Same output shape as compute_model(), from the chronologically validated skater model
     (research/product_models) with its calibration. Only players who dressed in their team's last real game, have at
     least live.MIN_GAMES_FOR_PRICING games of history and an expected 12+ minutes qualify, as before."""
     from research.product_models import live
     state = live.build(rows)
+    extra = nhl_shot_rows_after(conn, state.get("newest_game_date"))
+    if extra:                                              # bring the shot record up to the latest final games the NHL API has (the model itself stays on MoneyPuck)
+        from research.product_models import history
+        state["shot_freq"] = live.shot_frequencies(list(rows if rows is not None else history.skater_games()) + extra)
     model: dict = {}
     for pid, p in state["players"].items():
         team = curteam.get(pid, p["team"])
@@ -298,14 +326,14 @@ def _load_or_build_model(conn, today: dict, date: str, now: dt.datetime | None =
         cached = json.loads(cache_path.read_text())
         _, checksum = _current_season_rows()
         if (cached.get("date") == date and cached.get("mp_checksum") == checksum and cached.get("dressed") == signature
-                    and cached.get("version") == MODEL_VERSION and cached.get("schema") == MODEL_CACHE_SCHEMA
+                    and cached.get("version") == MODEL_VERSION and cached.get("schema") == MODEL_CACHE_SCHEMA and cached.get("nhl_through") == nhl_data_through(conn)
                     and cached.get("min_games") == live.MIN_GAMES_FOR_PRICING):
             return cached["model"]
     _rows, checksum = _current_season_rows()
-    model = compute_model_v2(today, dressed, curteam, date)
+    model = compute_model_v2(today, dressed, curteam, date, conn=conn)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps({"date": date, "mp_checksum": checksum, "dressed": signature,
-                                      "version": MODEL_VERSION, "schema": MODEL_CACHE_SCHEMA, "model": model,
+                                      "version": MODEL_VERSION, "schema": MODEL_CACHE_SCHEMA, "nhl_through": nhl_data_through(conn), "model": model,
                                       "min_games": live.MIN_GAMES_FOR_PRICING}))
     return model
 
@@ -898,6 +926,16 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
             slot, why = _sched.decide(now, dstart, _captured_times(e["id"], bought), bought)
             nxt = (f"{slot.lower()} look on the next 15-minute trader cycle ({why})" if slot else
                    f"{why.replace('_', ' ').lower()}; next window opens {fmt(min((v[0] for v in w.values() if v[0] > now), default=start))}")
+            from operational import eastern_time as _et
+            day_plan = _cpl.load_plan(_et.eastern_today(now))
+            gid_s = str(matched[0]) if matched else None
+            if day_plan and gid_s:
+                if slot == _sched.PREGAME and gid_s not in set(day_plan.get("games_priced") or []):
+                    nxt = "no pregame look: today's credit plan covers this game's morning look only (it is not one of the games the day's credits price before puck drop)"
+                elif not slot and (day_plan.get("allowance") or {}).get("REFRESH", 0.0) < 1.0 and _sched.MIDDAY in w and w[_sched.MIDDAY][0] > now:
+                    later = (f"the pregame look for this game's wave opens {fmt(w[_sched.PREGAME][0])}" if gid_s in set(day_plan.get("games_priced") or [])
+                             else "no pregame look is planned for this game")
+                    nxt = f"{why.replace('_', ' ').lower()}; the midday look is not funded today (it uses leftover credits and none are left); {later}"
         elif age is None and now < opens:
             nxt = f"first capture on the first 15-minute trader cycle at or after {fmt(opens)}"
         elif decision:

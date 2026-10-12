@@ -178,9 +178,10 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                                   "reason": "CONTRACT_NOT_VERIFIED"})
                 continue
 
-            snap_row = conn.execute("SELECT captured_at_utc FROM odds_snapshots WHERE id = ?",
+            snap_row = conn.execute("SELECT captured_at_utc, received_at_utc FROM odds_snapshots WHERE id = ?",
                                      (report.odds_snapshot_id_selection,)).fetchone()
-            captured_at_utc = snap_row["captured_at_utc"] if snap_row else None
+            captured_at_utc = snap_row["captured_at_utc"] if snap_row else None          # the PROVIDER's quote time (real_odds_bridge stores last_update here)
+            received_at_utc = snap_row["received_at_utc"] if snap_row else None          # when this system wrote the row (retrieval side)
 
             # Which model prices this leg is operational/moneyline_model_path.py (default: this Elo path, unchanged). Every priced
             # candidate also lands in the shadow log with both models' probabilities and the market's no-vig probability.
@@ -219,7 +220,7 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 market_probability=report.market_no_vig_probability,
                 sportsbook="draftkings", captured_at_utc=captured_at_utc,
                 quote_updated_utc=captured_at_utc, freshness_status=status,
-                quote_age_min=age, retrieved_at_utc=captured_at_utc, provisional=provisional, early=early,
+                quote_age_min=age, retrieved_at_utc=received_at_utc or captured_at_utc, provisional=provisional, early=early,
                 provider_contract_verified=True, model_threshold_eligible=True,
                 identity_resolved=True, price_fresh=fresh, event_not_started=True,
             ))

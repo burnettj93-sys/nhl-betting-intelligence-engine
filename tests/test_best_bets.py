@@ -250,6 +250,65 @@ class TestCapturePlan(unittest.TestCase):
         row = self._plan(now, {bb.SOG_MARKET_KEY: (t0, {}), bb.POINTS_MARKET_KEY: (t0, {})})[0]
         self.assertTrue(row["next_planned_capture"].startswith("REFRESH"))
 
+    def test_a_game_the_credit_plan_does_not_price_is_not_promised_a_pregame_look(self):
+        """2026-10-12: the page said a pregame look would happen on the next cycle for a game the day's credits did not cover."""
+        from operational import credit_planner as cp
+        now = dt.datetime(2026, 10, 7, 22, 0, tzinfo=dt.timezone.utc)                                 # inside the game's pregame window (opens 21:45Z)
+        covered = {"day": "2026-10-07", "games_priced": ["2026020053"], "allowance": {"REFRESH": 0.0}}
+        uncovered = {"day": "2026-10-07", "games_priced": ["2026020099"], "allowance": {"REFRESH": 0.0}}
+        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=covered):
+            self.assertIn("pregame look on the next 15-minute trader cycle", self._plan(now, {})[0]["next_planned_capture"])
+        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=uncovered):
+            self.assertIn("no pregame look", self._plan(now, {})[0]["next_planned_capture"])
+
+    def test_an_unfunded_midday_look_is_not_listed_as_the_next_window(self):
+        from operational import credit_planner as cp
+        now = dt.datetime(2026, 10, 7, 14, 0, tzinfo=dt.timezone.utc)                                 # after the morning look, before the 12:30 ET midday window opens at 16:30Z
+        plan = {"day": "2026-10-07", "games_priced": ["2026020053"], "allowance": {"REFRESH": 0.0}}
+        captured = {bb.SOG_MARKET_KEY: (dt.datetime(2026, 10, 7, 12, 5, tzinfo=dt.timezone.utc), {})}
+        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=plan), \
+                mock.patch.object(bb, "_captured_times", return_value={m: dt.datetime(2026, 10, 7, 12, 5, tzinfo=dt.timezone.utc) for m in (bb.SOG_MARKET_KEY, bb.POINTS_MARKET_KEY)}):
+            text = self._plan(now, captured)[0]["next_planned_capture"]
+        self.assertIn("midday look is not funded", text)
+        self.assertIn("pregame look for this game's wave opens", text)
+
+
+AS_OF = "2026-10-16T00:00:00"
+
+
+class TestShotRecordIsToppedUpFromTheNhlApi(unittest.TestCase):
+    """MoneyPuck publishes a game's log the next afternoon; the NHL API has the final box score at once. The last-30-game shot record uses both (the model keeps MoneyPuck)."""
+    def setUp(self):
+        from tests.test_paper_bet_settlement_driver import _fresh_nhl_conn, _insert_game, _insert_player_stat
+        self.conn = _fresh_nhl_conn()
+        _insert_game(self.conn, 1, state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-10' WHERE game_id=1")
+        _insert_game(self.conn, 2, home="CAR", away="FLA", state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=2")
+        _insert_game(self.conn, 3, home="TOR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
+        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=3")
+        _insert_player_stat(self.conn, 1, "p1", "TOR", shots=2)       # before the cut-off: MoneyPuck already has it
+        _insert_player_stat(self.conn, 2, "p1", "CAR", shots=4)
+        _insert_player_stat(self.conn, 2, "p2", "FLA", shots=0)
+        _insert_player_stat(self.conn, 3, "p1", "TOR", shots=9)       # not final: never used
+        self.conn.commit()
+
+    def test_only_final_games_after_the_newest_moneypuck_date_are_added(self):
+        rows = bb.nhl_shot_rows_after(self.conn, "2026-10-10", AS_OF)
+        self.assertEqual(sorted((r["player_id"], r["date"], r["shots"]) for r in rows), [("p1", "2026-10-11", 4.0), ("p2", "2026-10-11", 0.0)])
+        self.assertEqual(bb.nhl_shot_rows_after(self.conn, "2026-10-11", AS_OF), [])
+        self.assertEqual(bb.nhl_shot_rows_after(self.conn, "2026-10-10", "2026-10-11T00:00:00"), [])                  # a revision observed after the as-of time is not yet known
+        self.assertEqual(bb.nhl_shot_rows_after(None, "2026-10-10"), [])
+        self.assertEqual(bb.nhl_data_through(self.conn, AS_OF), "2026-10-11")
+
+    def test_the_extra_game_enters_the_last_thirty_record(self):
+        from research.product_models import live
+        base = [{"player_id": "p1", "date": f"2026-09-{d:02d}", "shots": 3.0} for d in range(1, 11)] + [{"player_id": "p2", "date": f"2026-09-{d:02d}", "shots": 1.0} for d in range(1, 11)]
+        before = live.shot_frequencies(base)["p1"][2]
+        after = live.shot_frequencies(base + bb.nhl_shot_rows_after(self.conn, "2026-10-10", AS_OF))["p1"][2]
+        self.assertEqual((before["hits"], before["n"]), (10, 10))
+        self.assertEqual((after["hits"], after["n"]), (11, 11))                     # last night's 4-shot game counts
+
 
 class TestArchiveHelpers(unittest.TestCase):
     def _write(self, d, name, market_filter, retrieved, event="e" * 32, cost="3"):

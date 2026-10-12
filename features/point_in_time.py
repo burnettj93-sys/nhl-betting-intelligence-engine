@@ -533,6 +533,32 @@ def player_game_stats_as_of(conn: sqlite3.Connection, game_id: int,
     ).fetchall()
 
 
+def player_shots_since(conn: sqlite3.Connection, after_date: str, learn_time_utc: str) -> list[sqlite3.Row]:
+    """(player_id, date, shots) for each player who played in a FINAL game dated after `after_date`, using the latest stat revision observed by `learn_time_utc`.
+    Postgame-only data about games that are already over: used to bring a player's last-30-game SHOT RECORD up to date with games a slower source (MoneyPuck) has not
+    published yet (operational/best_bets.nhl_shot_rows_after). Never a pregame feature of the game being priced."""
+    return conn.execute(
+        """SELECT player_id, game_date AS date, shots FROM (
+               SELECT p.player_id, g.game_date, p.shots, p.played,
+                      ROW_NUMBER() OVER (
+                          PARTITION BY p.game_id, p.player_id
+                          ORDER BY p.observed_at_utc DESC, p.revision_number DESC
+                      ) AS rn
+               FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
+               WHERE g.game_date > ? AND g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?
+           ) WHERE rn = 1 AND played = 1 AND shots IS NOT NULL""",
+        (after_date, learn_time_utc),
+    ).fetchall()
+
+
+def final_stats_through(conn: sqlite3.Connection, learn_time_utc: str) -> str | None:
+    """The date of the newest FINAL game with player stats observed by `learn_time_utc`."""
+    row = conn.execute(
+        """SELECT MAX(g.game_date) AS d FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
+           WHERE g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?""", (learn_time_utc,)).fetchone()
+    return row["d"] if row else None
+
+
 def goalie_game_stats_as_of(conn: sqlite3.Connection, game_id: int,
                              learn_time_utc: str) -> list[sqlite3.Row]:
     """Latest-revision-observed-by-learn_time_utc goalie stat row per
