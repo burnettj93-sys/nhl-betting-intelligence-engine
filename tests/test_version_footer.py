@@ -40,3 +40,25 @@ class TestCodeCommit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDollarSignsInHtmlBlocks(unittest.TestCase):
+    """2026-10-13, My Bets on a phone: "its own \\$500" showed its backslash because the text sits inside an HTML block, where markdown escapes are not processed."""
+    def _rendered(self, fn, *a):
+        from unittest import mock
+        with mock.patch("streamlit.markdown") as md:
+            fn(*a)
+        return md.call_args.args[0]
+
+    def test_banner_shows_a_plain_dollar_amount(self):
+        from dashboard import ui
+        html = self._rendered(ui.banner, "Each account starts with its own \\$500 of paper money, and $10 a ticket.", "info")
+        self.assertNotIn("\\", html)
+        self.assertIn("&#36;500", html)
+        self.assertIn("&#36;10", html)
+
+    def test_empty_state_shows_a_plain_dollar_amount(self):
+        from dashboard import theme
+        html = self._rendered(theme.empty_state, "Stake \\$10 only", "or $5")
+        self.assertNotIn("\\", html)
+        self.assertIn("&#36;10", html)

@@ -173,5 +173,7 @@ def brand(title: str, subtitle: str) -> None:
 
 def empty_state(message: str, hint: str | None = None) -> None:
     """A friendly empty state: Eggy plus what is missing and why."""
+    message = str(message).replace("\\$", "$").replace("$", "&#36;")      # HTML block: a markdown "\\$" would show its backslash
+    hint = str(hint).replace("\\$", "$").replace("$", "&#36;") if hint else hint
     h = f"<div class='h'>{hint}</div>" if hint else ""
     st.markdown(f"<div class='eggy-empty'><img alt='Eggy' src='{_icon_uri()}'/><div><div class='m'>{message}</div>{h}</div></div>", unsafe_allow_html=True)
