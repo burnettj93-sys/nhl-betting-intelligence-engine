@@ -366,7 +366,7 @@ class TestMyBetsPage(unittest.TestCase):
         flat = t.replace("<b>", "").replace("</b>", "")
         self.assertIn("Open your account with your last name", flat)
         self.assertIn("8-character passcode", flat)
-        self.assertIn("its own $500", flat.replace("\\$", "$"))
+        self.assertIn("its own $500", flat.replace("\\$", "$").replace("&#36;", "$"))
         self.assertTrue(any("how it works" in e.label.lower() for e in at.expander))
         details = " ".join(m.value for m in at.markdown)
         self.assertIn("Reading is not private.", details)

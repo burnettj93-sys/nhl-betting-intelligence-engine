@@ -176,6 +176,7 @@ def status_chip(status: str) -> str:
 
 def banner(text: str, tone: str = "info") -> None:
     bg, border, fg = TONES[tone]
+    text = str(text).replace("\\$", "$").replace("$", "&#36;")      # inside this HTML block a markdown "\\$" shows its backslash (seen on My Bets: "\\$500"), and a bare "$" can start math; the entity is both safe and plain
     st.markdown(f"<div style='border:1px solid {border};border-radius:12px;padding:10px 16px;background:{bg};color:{fg};"
                 f"font-size:0.88rem;line-height:1.45;margin:4px 0 12px 0'>{text}</div>", unsafe_allow_html=True)
 
