@@ -88,6 +88,9 @@ def score(records: list[dict], resolve) -> dict:
             key = (r["et_date"], gid, pid, fam, k)
             if key not in first:
                 first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"], "extra": extra}
+            if extra.get("in_selected_ticket") and "selected" not in first[key]:
+                # The leg went onto a proposed or recorded ticket in THIS snapshot: keep the numbers frozen at that moment (they can differ from its first look), so "legs on selected tickets" is not lost when the first look was earlier.
+                first[key]["selected"] = {"price": price, "p": p, "extra": extra}
     legs, pending, no_part, unresolved = [], 0, 0, 0
     dnp_players: set = set()
     for key, l in first.items():
@@ -193,7 +196,15 @@ def anchor_report(legs: list[dict]) -> dict:
     Legs logged before the anchor fields existed (no decision field) are not counted."""
     ok = [l for l in legs if l.get("extra", {}).get("decision") == "SUPPORTED" and l["extra"].get("final_estimate") is not None and l["extra"].get("recent_games")
           and l["extra"].get("model_probability") is not None]
-    out = {"supported_pool": _anchor_row(ok), "on_selected_tickets": _anchor_row([l for l in ok if l["extra"].get("in_selected_ticket")]), "by_line": {}}
+    chosen = []
+    for l in legs:
+        sel = l.get("selected")
+        if not sel:
+            continue
+        c = {**l, "price": sel["price"], "p": sel["p"], "extra": sel["extra"], "implied": implied(sel["price"])}
+        if c["extra"].get("decision") == "SUPPORTED" and c["extra"].get("final_estimate") is not None and c["extra"].get("recent_games") and c["extra"].get("model_probability") is not None:
+            chosen.append(c)
+    out = {"supported_pool": _anchor_row(ok), "on_selected_tickets": _anchor_row(chosen), "by_line": {}}
     for k in sorted({l["threshold"] for l in ok}):
         out["by_line"][f"{k}+"] = _anchor_row([l for l in ok if l["threshold"] == k])
     out["reading"] = ("Counts are player-games, not independent bets: nested lines of one player resolve together and a game's players share luck. A handful of nights says almost nothing; "
