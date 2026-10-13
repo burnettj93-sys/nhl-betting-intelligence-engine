@@ -124,10 +124,13 @@ def shot_frequencies(rows: list[dict]) -> dict[str, dict[int, dict]]:
     for 0.60-1.00 estimates in each of the 2023, 2024 and 2025 held-out seasons (docs/validation/anchor_calibration.json)."""
     ks = EVENTS["shots"]
     hist: dict[str, list[int]] = defaultdict(list)
+    cur: dict[str, list[int]] = defaultdict(list)        # 1 where that game belongs to the current season (the 30-game window usually reaches back into last season early in a year)
     base = {k: [0, 0] for k in ks}
+    season_start = f"{history.CURRENT_SEASON}-09-01"
     for _date, day in _by_date(rows):
         for r in day:
             hist[r["player_id"]].append(r["shots"])
+            cur[r["player_id"]].append(1 if r["date"] >= season_start else 0)
             for k in ks:
                 base[k][0] += 1 if r["shots"] >= k else 0
                 base[k][1] += 1
@@ -140,7 +143,7 @@ def shot_frequencies(rows: list[dict]) -> dict[str, dict[int, dict]]:
         for k in ks:
             hits = sum(1 for v in recent if v >= k)
             prior = base[k][0] / base[k][1] if base[k][1] else 0.2
-            cell[k] = {"p": round((hits + FREQ_PRIOR_GAMES * prior) / (len(recent) + FREQ_PRIOR_GAMES), 4), "hits": hits, "n": len(recent)}
+            cell[k] = {"p": round((hits + FREQ_PRIOR_GAMES * prior) / (len(recent) + FREQ_PRIOR_GAMES), 4), "hits": hits, "n": len(recent), "n_current": sum(cur[pid][-FREQ_WINDOW:])}
         out[pid] = cell
     return out
 

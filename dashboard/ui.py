@@ -286,7 +286,8 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
         else:
             note = f"quote {age_text(quote).replace(' ago', '')} old" if (not outcomes and quote and l.get("quote_age_min") is not None) else None
         ev = l.get("evidence") or {}
-        record = (f"recent {ev['hits']} of last {ev['games']} games ({pct(ev.get('recent_hit_rate') if ev.get('recent_hit_rate') is not None else ev['hits'] / max(ev['games'], 1))}) · model {pct(ev.get('model'))}"
+        record = (f"recent {ev['hits']} of last {ev['games']} games ({pct(ev.get('recent_hit_rate') if ev.get('recent_hit_rate') is not None else ev['hits'] / max(ev['games'], 1))}"
+                  + (f", {ev['games_current']} this season" if ev.get("games_current") is not None else "") + f") · model {pct(ev.get('model'))}"
                   if ev.get("kind") == "player_record" and ev.get("hits") is not None
                   else "estimate = market no-vig chance" if ev.get("kind") == "market" else None)
         meta = " · ".join(x for x in (game, when if when != "—" else None, record, note) if x)

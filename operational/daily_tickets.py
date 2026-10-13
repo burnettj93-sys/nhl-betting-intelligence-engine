@@ -139,7 +139,7 @@ def _merge_and_add_context(nhl_conn, adapter_legs: list[rmp.ParlayLeg], bb_legs:
             leg = dataclasses.replace(
                 leg, conservative_probability=low, team=partner.team, opponent=partner.opponent,
                 model_probability=partner.model_probability, empirical_probability=partner.empirical_probability,
-                empirical_hits=partner.empirical_hits, empirical_games=partner.empirical_games,
+                empirical_hits=partner.empirical_hits, empirical_games=partner.empirical_games, empirical_games_current=partner.empirical_games_current,
                 game_start_utc=partner.game_start_utc, model_version=f"{leg.model_version}+{partner.model_version}(min)")
             out.append(leg)
             continue

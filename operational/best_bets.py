@@ -309,7 +309,7 @@ def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, ro
         probs["PTS1"], probs["PTS2"] = pr["points>=1"]["calibrated"], pr["points>=2"]["calibrated"]
         probs["GOAL1"] = pr["goals>=1"]["calibrated"]
         freq = state.get("shot_freq", {}).get(pid) or {}
-        emp = {f"SOG{k}": {"p": c["p"], "hits": c["hits"], "n": c["n"]} for k, c in freq.items() if k in SOG_K}
+        emp = {f"SOG{k}": {"p": c["p"], "hits": c["hits"], "n": c["n"], "n_current": c.get("n_current")} for k, c in freq.items() if k in SOG_K}
         model[f"{norm_name(p['name'])}|{team}"] = {"player_id": str(pid), "name": p["name"], "team": team, "opp": opp,
                                                     "home": is_home, "probs": probs, "emp": emp}
     return model
@@ -745,7 +745,7 @@ def _evidence(entry: dict, family: str, prob_prefix: str, k: int) -> dict:
     out = {"model_probability": entry["probs"].get(f"{prob_prefix}{k}")}
     emp = (entry.get("emp") or {}).get(f"{prob_prefix}{k}") if family == "PLAYER_SOG_ALTERNATE" else None
     if emp:
-        out.update(empirical_probability=emp["p"], empirical_hits=emp["hits"], empirical_games=emp["n"])
+        out.update(empirical_probability=emp["p"], empirical_hits=emp["hits"], empirical_games=emp["n"], empirical_games_current=emp.get("n_current"))
     return out
 
 
