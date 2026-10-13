@@ -468,6 +468,28 @@ class TestFrozenPredictionScoring(unittest.TestCase):
         self.assertAlmostEqual(a["on_selected_tickets"]["recent_hit_rate"], (24 / 30 + 26 / 30) / 2, places=3)       # unshrunk, apart from the final estimate
         self.assertEqual(a["supported_pool"]["games"], 2)
 
+    def test_a_leg_selected_in_a_later_snapshot_is_still_a_leg_on_a_selected_ticket(self):
+        """2026-10-12: three of the four recorded legs were first logged (12:04Z) before any ticket used them; the evening snapshot selected them. They must count as selected, with the numbers frozen when they were selected."""
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy"))
+        import score_selection_shadow as sss
+        from operational import shadow_selection as sh
+
+        def row(game, pid, price, final, in_ticket):
+            base = [game, pid, "PLAYER_SOG_ALTERNATE", 2, price, 0.63, f"P{pid}", "T", "2026-10-12T23:00:00Z", "2026-10-12T12:00:00Z", True]
+            return base + [20, 30, 0.63, 0.65, final, final, "SUPPORTED", in_ticket, "2026-10-12T12:00:00Z"]
+        morning = {"et_date": "2026-10-12", "pool_fields": sh.POOL_FIELDS, "variants": {}, "pool": [row("g1", "a", -150, 0.70, False), row("g2", "b", -150, 0.70, False)]}
+        evening = {"et_date": "2026-10-12", "pool_fields": sh.POOL_FIELDS, "variants": {}, "pool": [row("g1", "a", -105, 0.62, True), row("g2", "b", -450, 0.83, True)]}
+        outcomes = {("g1", "a"): True, ("g2", "b"): False}
+        rep = sss.score([morning, evening], lambda g, p, fam, k: {"status": "FINAL", "hit": outcomes[(g, p)]})["anchor_estimates"]
+        self.assertEqual(rep["supported_pool"]["legs"], 2)
+        self.assertEqual(rep["supported_pool"]["final_estimate"], 0.70)             # the first look still defines the candidate pool
+        sel = rep["on_selected_tickets"]
+        self.assertEqual(sel["legs"], 2)
+        self.assertAlmostEqual(sel["final_estimate"], (0.62 + 0.83) / 2, places=3)   # frozen when selected
+        self.assertAlmostEqual(sel["happened"], 0.5)
+
 
 class TestReviewOfALostTicket(unittest.TestCase):
     def test_a_leg_with_no_result_on_a_ticket_already_lost_is_a_note_not_a_defect(self):
