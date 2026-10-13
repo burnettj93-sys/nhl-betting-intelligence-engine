@@ -101,6 +101,15 @@ class TestSelection(unittest.TestCase):
         if not out["tickets"]:
             self.assertIn("reach +100", out["reason"])
 
+    def test_the_empty_board_separates_games_with_prop_prices_from_moneyline_only_games(self):
+        """2026-10-13: "12 legs in 6 games" while prop prices existed for 3: games are counted once if any supported leg exists, so say where the legs come from."""
+        legs = [shots(1, 1, 22, -200, 0.6), shots(2, 2, 22, -200, 0.6), moneyline(3, "BOS", -150, 0.58, elo=0.58), moneyline(4, "NYR", -140, 0.57, elo=0.57)]
+        out = self.pick(legs)
+        self.assertEqual(out["tickets"], [])
+        self.assertIn("2 player-prop leg(s) in 2 game(s) with prop prices", out["reason"])
+        self.assertIn("2 moneyline leg(s) in 2 game(s)", out["reason"])
+        self.assertIn("in 4 game(s)", out["reason"])
+
     def test_the_midpoint_test_sits_between_the_record_and_the_price(self):
         leg = anchor.prepare_pool([shots(1, 1, 30, +100, 0.70)])[0]                                 # estimate 0.80 (held to model +10 points), price implies 0.50
         self.assertAlmostEqual(anchor.midpoint_probability(leg), (0.80 + 0.50) / 2, places=2)

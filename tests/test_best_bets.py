@@ -281,16 +281,19 @@ class TestShotRecordIsToppedUpFromTheNhlApi(unittest.TestCase):
     def setUp(self):
         from tests.test_paper_bet_settlement_driver import _fresh_nhl_conn, _insert_game, _insert_player_stat
         self.conn = _fresh_nhl_conn()
-        _insert_game(self.conn, 1, state="FINAL")
-        self.conn.execute("UPDATE games SET game_date='2026-10-10' WHERE game_id=1")
-        _insert_game(self.conn, 2, home="CAR", away="FLA", state="FINAL")
-        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=2")
-        _insert_game(self.conn, 3, home="TOR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
-        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=3")
-        _insert_player_stat(self.conn, 1, "p1", "TOR", shots=2)       # before the cut-off: MoneyPuck already has it
-        _insert_player_stat(self.conn, 2, "p1", "CAR", shots=4)
-        _insert_player_stat(self.conn, 2, "p2", "FLA", shots=0)
-        _insert_player_stat(self.conn, 3, "p1", "TOR", shots=9)       # not final: never used
+        _insert_game(self.conn, 2026020001, state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-10' WHERE game_id=2026020001")
+        _insert_game(self.conn, 2026020002, home="CAR", away="FLA", state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=2026020002")
+        _insert_game(self.conn, 2026020003, home="TOR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
+        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=2026020003")
+        _insert_player_stat(self.conn, 2026020001, "p1", "TOR", shots=2)       # before the cut-off: MoneyPuck already has it
+        _insert_player_stat(self.conn, 2026020002, "p1", "CAR", shots=4)
+        _insert_player_stat(self.conn, 2026020002, "p2", "FLA", shots=0)
+        _insert_player_stat(self.conn, 2026020003, "p1", "TOR", shots=9)       # not final: never used
+        _insert_game(self.conn, 2026010099, home="CAR", away="FLA", state="FINAL")                   # a preseason game after the cut-off: not part of the season record
+        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=2026010099")
+        _insert_player_stat(self.conn, 2026010099, "p1", "CAR", shots=11)
         self.conn.commit()
 
     def test_only_final_games_after_the_newest_moneypuck_date_are_added(self):

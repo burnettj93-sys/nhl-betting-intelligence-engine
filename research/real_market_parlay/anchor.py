@@ -184,6 +184,9 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
         by_game[g].sort(key=lambda t: -t[1])                     # most likely leg first, so the floor test can stop a game's loop at the first leg that fails it (exact: the rest are lower)
     top_p = [by_game[g][0][1] for g in games]
     diag = {"games_with_supported_legs": len(by_game), "supported_legs": len(pool), "combinations_checked": 0, "reaching_plus_100": 0, "best_reaching_plus_100": None, "truncated": False}
+    ml = [l for l in pool if l.market_family == "MONEYLINE"]
+    shots = [l for l in pool if l.market_family != "MONEYLINE"]
+    diag.update({"moneyline_legs": len(ml), "moneyline_games": len({l.game_id for l in ml}), "prop_legs": len(shots), "prop_games": len({l.game_id for l in shots})})
     if len(games) < 2:
         return [], diag
     found: dict[frozenset, object] = {}

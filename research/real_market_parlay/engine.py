@@ -452,7 +452,12 @@ def _policy_veto(combo: ParlayResult, policy) -> tuple[str, str] | None:
 
 def anchor_reason(diag: dict, policy) -> str:
     best = diag.get("best_reaching_plus_100")
-    head = (f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s); "
+    split = ""
+    if "prop_legs" in diag:
+        # A game counts once if it has any supported leg; the player-prop legs only come from games whose prop prices were fetched, the moneyline legs from the league-wide moneyline pull.
+        split = (f" ({diag['prop_legs']} player-prop leg(s) in {diag['prop_games']} game(s) with prop prices, "
+                 f"{diag['moneyline_legs']} moneyline leg(s) in {diag['moneyline_games']} game(s))")
+    head = (f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s){split}; "
             f"{diag['reaching_plus_100']} of {diag['combinations_checked']} cross-game combinations reach +100")
     if best is None:
         return f"No ticket today: {head}. No combination of the supported legs gets to +100 at today's prices."
