@@ -92,6 +92,8 @@ def run(cache_path: Path = READINESS_CACHE_PATH) -> int:
               f"({nhl_result.get('roster_status')}) — "
               f"{len(nhl_result.get('roster_failed_teams', []))} team(s) failed: "
               f"{[t['team'] for t in nhl_result.get('roster_failed_teams', [])]}")
+        for t in nhl_result.get("roster_failed_teams", []):
+            print(f"  roster {t['team']}: {t.get('error')}")
     return 0
 
 

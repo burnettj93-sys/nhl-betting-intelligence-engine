@@ -191,7 +191,8 @@ class TestRosterBatchPartialSuccess(unittest.TestCase):
         session = _PartlyBrokenSession()
         with mock.patch("ingest.nhl_api.time.sleep"), \
              mock.patch("ingest.nhl_api._log_retry_event"), \
-             mock.patch.object(nhl_api, "MAX_RETRIES", 0):
+             mock.patch.object(nhl_api, "MAX_RETRIES", 0), \
+             mock.patch.object(nhl_api, "ROSTER_RETRY_PASSES", 0):
             result = ingest_current_roster_identities(self.conn, session, ["EDM", "TOR", "BOS"])
 
         self.assertEqual(result["status"], "PARTIAL_SUCCESS")
@@ -239,6 +240,40 @@ class TestRosterBatchPartialSuccess(unittest.TestCase):
             result = ingest_current_roster_identities(self.conn, _AlwaysBroken(), ["EDM", "TOR"])
         self.assertEqual(result["status"], "FAILED")
         self.assertEqual(result["teams_processed"], 0)
+
+    def test_a_team_lost_to_a_transient_failure_is_recovered_by_the_second_pass(self):
+        """2026-10-12/13: the daily run lost two different teams on most days (DET/PIT, VAN/VGK) to a failure that was gone a minute later."""
+        good_roster = self._roster([(1, "Connor", "McDavid", "forwards")])
+
+        class _FailsOnceThenWorks:
+            def __init__(self):
+                self.tor_calls = 0
+
+            def get(self, url, timeout=15):
+                if "/roster/TOR/" in url:
+                    self.tor_calls += 1
+                    if self.tor_calls == 1:
+                        return _FakeResponse(status_code=429)
+                return _FakeResponse(json_data=good_roster, status_code=200)
+
+        session = _FailsOnceThenWorks()
+        with mock.patch("ingest.nhl_api.time.sleep") as sleeps, \
+             mock.patch("ingest.nhl_api._log_retry_event"), \
+             mock.patch.object(nhl_api, "MAX_RETRIES", 0):
+            result = ingest_current_roster_identities(self.conn, session, ["EDM", "TOR", "BOS"])
+        self.assertEqual((result["status"], result["teams_processed"], result["teams_failed"]), ("SUCCESS", 3, 0))
+        self.assertIn(nhl_api.ROSTER_RETRY_PASS_DELAY_SECONDS, [c.args[0] for c in sleeps.call_args_list])   # it waited before trying again
+
+    def test_a_team_that_keeps_failing_is_still_reported_with_its_error(self):
+        class _TorAlwaysDown:
+            def get(self, url, timeout=15):
+                if "/roster/TOR/" in url:
+                    return _FakeResponse(status_code=503)
+                return _FakeResponse(json_data={"forwards": [], "defensemen": [], "goalies": []}, status_code=200)
+        with mock.patch("ingest.nhl_api.time.sleep"), mock.patch("ingest.nhl_api._log_retry_event"), mock.patch.object(nhl_api, "MAX_RETRIES", 0):
+            result = ingest_current_roster_identities(self.conn, _TorAlwaysDown(), ["EDM", "TOR"])
+        self.assertEqual((result["status"], [t["team"] for t in result["failed_teams"]]), ("PARTIAL_SUCCESS", ["TOR"]))
+        self.assertIn("503", result["failed_teams"][0]["error"])
 
 
 if __name__ == "__main__":

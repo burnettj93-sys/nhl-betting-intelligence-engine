@@ -65,6 +65,9 @@ BASE_URL = "https://api-web.nhle.com/v1"
 # tests/test_nhl_api_retry.py for the reproduction and
 # docs/RELIABILITY_429_FIX.md for the full writeup.
 MAX_RETRIES = 4
+ROSTER_PACING_SECONDS = 0.5
+ROSTER_RETRY_PASSES = 2
+ROSTER_RETRY_PASS_DELAY_SECONDS = 30.0
 BASE_RETRY_DELAY_SECONDS = 1.0
 MAX_RETRY_DELAY_SECONDS = 30.0
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
@@ -704,20 +707,42 @@ def ingest_current_roster_identities(conn, session, teams: list[str],
     players_removed_total = 0
     teams_processed = 0
     failed_teams: list[dict] = []
+    def _one(team: str) -> dict:
+        roster = fetch_current_team_roster(session, team)
+        this_call_observed_at = (
+            explicit_override if explicit_override is not None
+            else normalize_utc_timestamp(dt.datetime.utcnow().isoformat()))
+        result = sync_current_team_roster(conn, team, roster, this_call_observed_at)
+        conn.commit()  # durable per-team -- a later team's failure can't roll this back
+        return result
+
     for team in teams:
         try:
-            roster = fetch_current_team_roster(session, team)
-            this_call_observed_at = (
-                explicit_override if explicit_override is not None
-                else normalize_utc_timestamp(dt.datetime.utcnow().isoformat()))
-            result = sync_current_team_roster(conn, team, roster, this_call_observed_at)
-            conn.commit()  # durable per-team -- a later team's failure can't roll this back
+            result = _one(team)
         except Exception as exc:  # noqa: BLE001 — a single team's failure must not abort the batch
             failed_teams.append({"team": team, "error": f"{exc.__class__.__name__}: {exc}"})
             continue
         players_removed_total += result["players_removed"]
         teams_processed += 1
-        time.sleep(0.2)
+        time.sleep(ROSTER_PACING_SECONDS)
+
+    # Second pass: the daily run lost two different teams on most days (DET/PIT, VAN/VGK, ...) to a transient rate limit or dropped connection that was
+    # fine a minute later. A failed team is tried again after a pause, up to ROSTER_RETRY_PASSES times, before it is reported as failed.
+    for _ in range(ROSTER_RETRY_PASSES):
+        if not failed_teams:
+            break
+        time.sleep(ROSTER_RETRY_PASS_DELAY_SECONDS)
+        still_failed: list[dict] = []
+        for entry in failed_teams:
+            try:
+                result = _one(entry["team"])
+            except Exception as exc:  # noqa: BLE001
+                still_failed.append({"team": entry["team"], "error": f"{exc.__class__.__name__}: {exc}"})
+                continue
+            players_removed_total += result["players_removed"]
+            teams_processed += 1
+            time.sleep(ROSTER_PACING_SECONDS)
+        failed_teams = still_failed
 
     if not failed_teams:
         status = "SUCCESS"
