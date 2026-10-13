@@ -38,9 +38,13 @@ class TicketPolicy:
     max_per_game: int = 3
     max_per_player: int | None = 2       # None = no per-player limit
     mode: str = "legacy"                 # "anchor": legs are scored by the player's own record / the market, ticket-level value, up to five legs (research/real_market_parlay/anchor.py)
+    anchor_cap: float | None = None      # anchor mode: a shots leg's final estimate is held to the model's calibrated probability plus this. None = the original +0.10 (anchor.ANCHOR_CAP_V1); left out of as_dict() when None so the digest of a policy written before this field existed is unchanged
 
     def as_dict(self) -> dict:
-        return dataclasses.asdict(self)
+        d = dataclasses.asdict(self)
+        if d.get("anchor_cap") is None:
+            d.pop("anchor_cap", None)
+        return d
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.as_dict(), sort_keys=True).encode()).hexdigest()[:16]
@@ -72,5 +76,11 @@ LEGACY = TicketPolicy(policy_id="legacy-2026-10-09", status="IN_FORCE_UNTIL_2026
 # The 2026-10-10 restart proposal, kept (never active) so the floor/value/exposure mechanism it exercises stays tested and the shadow evidence logged under it stays interpretable.
 EARLIER_PROPOSAL = TicketPolicy(policy_id="restart-proposal-2026-10-10b", status="SUPERSEDED_BY_ANCHOR_POLICY",
                                 floor=0.25, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=2, max_per_player=1)
-PROPOSED = TicketPolicy(policy_id="anchor-tickets-2026-10-11", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",
-                        floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1)
+# The policy the owner approved on 2026-10-11 (digest c236c526e00b9f04) and under which the tickets of 2026-10-12 were recorded. Its shots estimates held a leg to the model +0.10; the chronological
+# validation shows that over-stated the capped 2+ legs by about 8 points (docs/PROPOSAL_ANCHOR_CAP.md). Superseded 2026-10-13; kept unchanged so its digest, its tickets and its logged predictions stay interpretable.
+SUPERSEDED_BY = {"c236c526e00b9f04": "anchor-tickets-2026-10-13"}     # the digest of the 2026-10-11 policy -> the policy that replaced it (2026-10-13); the old digest is part of the record of every ticket recorded under it
+ANCHOR_V1 = TicketPolicy(policy_id="anchor-tickets-2026-10-11", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",   # (status text unchanged: it is part of the digest; SUPERSEDED_BY lists the successor)
+                         floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1)
+# The same policy with ONE change: the shots cap is +0.02 (chosen on the 2024 calibration season only, evaluated on 2025; deploy/anchor_cap_study.py). Every other number is unchanged.
+PROPOSED = TicketPolicy(policy_id="anchor-tickets-2026-10-13", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",
+                        floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1, anchor_cap=0.02)

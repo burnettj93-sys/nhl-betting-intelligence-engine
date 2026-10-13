@@ -486,7 +486,7 @@ def select_tickets(candidate_legs: list[ParlayLeg], *, existing: list[list[LegId
     anchor_mode = policy is not None and getattr(policy, "mode", "legacy") == "anchor"
     if anchor_mode:
         from research.real_market_parlay import anchor
-        pool = anchor.prepare_pool(dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)]))
+        pool = anchor.prepare_pool(dedupe_legs_by_economic_identity([l for l in candidate_legs if leg_is_eligible(l)]), anchor.cap_for(policy))
     else:
         pool = _prepare_pool(candidate_legs)
     result = {"tickets": [], "pool_size": len(pool), "qualifying": 0, "reason": None, "considered": []}

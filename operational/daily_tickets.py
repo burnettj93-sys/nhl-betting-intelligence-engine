@@ -407,6 +407,7 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
         "alerts": [{"kind": a["kind"], "detail": a["detail"], "at": a["created_at_utc"], "retracted": a.get("retracted_reason")} for a in (alerts or [])],
         "origin": row.get("origin") or "AUTOMATIC",
         "provenance": json.loads(row["provenance_json"]) if row.get("provenance_json") else None,
+        "estimate_note": anchor.estimate_rule_note(row.get("model_version")),     # marks entries made under the superseded +10-point shots cap; the stored numbers are untouched
     }
 
 
@@ -424,7 +425,7 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str, *, proposed: bool =
     anchor_mode = getattr(policy, "mode", "legacy") == "anchor"
     legs = []
     for l in combo.legs:
-        legs.append({"evidence": anchor.leg_evidence(l) if anchor_mode else None,
+        legs.append({"evidence": anchor.leg_evidence(l, anchor.cap_for(policy)) if anchor_mode else None,
             "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
             "participant_id": l.participant_id, "participant_name": l.participant_name,
             "provider_start_utc": l.provider_start_utc,

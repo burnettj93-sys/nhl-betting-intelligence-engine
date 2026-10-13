@@ -101,7 +101,7 @@ def _anchor_options(legs: list[rmp.ParlayLeg], et_date: str, policy) -> dict:
     from research.real_market_parlay import anchor
     priced = [l for l in legs if rmp.leg_is_eligible(l)]
     deduped = rmp.dedupe_legs_by_economic_identity(priced)
-    supported = anchor.prepare_pool(deduped)
+    supported = anchor.prepare_pool(deduped, anchor.cap_for(policy))
     by_person_all: dict[str, list] = defaultdict(list)
     for l in deduped:
         if l.market_family != "MONEYLINE":
@@ -137,7 +137,7 @@ def _anchor_options(legs: list[rmp.ParlayLeg], et_date: str, policy) -> dict:
                 kind = SINGLE if len(chosen.legs) == 1 else PARLAY
                 info = anchor.describe(chosen, policy)
                 opt = distinct[oid] = {**_option_from_combo(kind, chosen, et_date), "best_for": [], "rationale": info.pop("rationale"), "anchor": info}
-                opt["legs"] = [{**card, "evidence": anchor.leg_evidence(l)} for card, l in zip(opt["legs"], chosen.legs)]
+                opt["legs"] = [{**card, "evidence": anchor.leg_evidence(l, anchor.cap_for(policy))} for card, l in zip(opt["legs"], chosen.legs)]
             opt["best_for"].append({"person_id": pid, "name": name})
         persons[pid] = entry
     options = sorted(distinct.values(), key=lambda o: (-o["hit_probability"], -o["ev_estimated"]))

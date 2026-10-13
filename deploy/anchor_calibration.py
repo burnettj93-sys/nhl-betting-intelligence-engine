@@ -4,7 +4,7 @@ It runs the project's own walk-forward evaluation (research/product_models/valid
 SAME configuration, dispersion and Platt parameters the live model uses (research/product_models/validation JSON), and applies the exact rule of research/real_market_parlay/anchor.py to every
 player-game it would have priced:
 
-    final estimate = min( last-30-game record shrunk toward the league rate,  Platt-calibrated model + ANCHOR_CAP,  HIGH_LINE_CAP when the line is 3+ shots )
+    final estimate = min( last-30-game record shrunk toward the league rate,  Platt-calibrated model + ANCHOR_CAP_V1 (+0.10, the cap of policy c236c526e00b9f04; the corrected +0.02 is evaluated in deploy/anchor_cap_study.py),  HIGH_LINE_CAP when the line is 3+ shots )
     a leg is "supported" when the estimate is at least SHOTS_LEG_FLOOR, the player has at least MIN_GAMES_FOR_PRICING games of history and the model expects at least 12 minutes.
 
 Three numbers are kept apart in every row: the RECENT HIT RATE (hits in the last 30 games divided by games, unshrunk), the MODEL (Platt-calibrated probability) and the FINAL ESTIMATE (what the ticket uses).
@@ -57,7 +57,7 @@ def main(out_path: str) -> dict:
     cfg = P.ModelConfig(**{k: (tuple(v) if k == "opp_cap" else v) for k, v in val["chosen_config"].items()})
     alphas, platt = val["dispersion"], val["platt_params"]
     raw = raw_recent_rates(rows, tuple(SEASON_ROLES))
-    out: dict = {"method": __doc__.strip().splitlines()[0], "rule": {"anchor_cap": anchor.ANCHOR_CAP, "high_line_cap": anchor.HIGH_LINE_CAP, "shots_leg_floor": anchor.SHOTS_LEG_FLOOR,
+    out: dict = {"method": __doc__.strip().splitlines()[0], "rule": {"anchor_cap": anchor.ANCHOR_CAP_V1, "high_line_cap": anchor.HIGH_LINE_CAP, "shots_leg_floor": anchor.SHOTS_LEG_FLOOR,
                                                                     "min_games_for_pricing": MIN_GAMES_FOR_PRICING, "min_expected_toi": MIN_EXPECTED_TOI},
                  "model": {"version": val["model_version"], "config": val["chosen_config"], "platt": {k: platt[f"shots>={k}"] for k in (2, 3)}}, "seasons": {}}
     for season, role in SEASON_ROLES.items():
@@ -72,7 +72,7 @@ def main(out_path: str) -> dict:
                 if emp is None or r["n_prior"] < MIN_GAMES_FOR_PRICING or r["toi"] < MIN_EXPECTED_TOI:
                     continue
                 model = V.apply_platt(r["p"][key], a, b)
-                final = min(emp, model + anchor.ANCHOR_CAP, anchor.HIGH_LINE_CAP if k >= 3 else 1.0)
+                final = min(emp, model + anchor.ANCHOR_CAP_V1, anchor.HIGH_LINE_CAP if k >= 3 else 1.0)
                 if final < anchor.SHOTS_LEG_FLOOR:
                     continue
                 hits, games = raw.get((r["pid"], r["date"], k), (0, 0))

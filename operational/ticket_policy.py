@@ -31,8 +31,12 @@ def active() -> P.TicketPolicy:
     """The policy the selector uses: PROPOSED. Only inside a unit-test run may NHL_ENGINE_TICKET_POLICY=legacy select the earlier rules, so the existing machinery tests (which exercise
     recording, settlement and exposure with synthetic boards) keep running on the rules they were written for. It has no effect anywhere else."""
     import os
-    if os.environ.get(ENV_TEST_POLICY, "").strip().lower() == "legacy" and state_paths.under_test():
-        return P.LEGACY
+    if state_paths.under_test():
+        choice = os.environ.get(ENV_TEST_POLICY, "").strip().lower()
+        if choice == "legacy":
+            return P.LEGACY
+        if choice == "anchor_v1":            # the 2026-10-11 policy (shots cap +0.10): its mechanics fixtures and the replay of the tickets recorded under it
+            return P.ANCHOR_V1
     return P.PROPOSED
 
 

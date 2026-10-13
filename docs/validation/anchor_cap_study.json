@@ -59,6 +59,17 @@
      "capped_n": 5492,
      "capped_final": 0.661,
      "capped_happened": 0.678
+    },
+    "subset_capped_at_live_cap": {
+     "n": 555,
+     "record_shrunk": 0.694,
+     "model": 0.572,
+     "final_cap_0.10": 0.672,
+     "final_cap_0.02": 0.592,
+     "happened": 0.591,
+     "live_minus_happened": 0.081,
+     "new_minus_happened": 0.001,
+     "se_independent": 0.02
     }
    },
    "shots>=3": {
@@ -109,6 +120,17 @@
      "capped_n": 1133,
      "capped_final": 0.612,
      "capped_happened": 0.685
+    },
+    "subset_capped_at_live_cap": {
+     "n": 123,
+     "record_shrunk": 0.665,
+     "model": 0.546,
+     "final_cap_0.10": 0.644,
+     "final_cap_0.02": 0.566,
+     "happened": 0.577,
+     "live_minus_happened": 0.067,
+     "new_minus_happened": -0.011,
+     "se_independent": 0.043
     }
    }
   },
@@ -162,6 +184,17 @@
      "capped_n": 5172,
      "capped_final": 0.646,
      "capped_happened": 0.672
+    },
+    "subset_capped_at_live_cap": {
+     "n": 693,
+     "record_shrunk": 0.704,
+     "model": 0.578,
+     "final_cap_0.10": 0.678,
+     "final_cap_0.02": 0.598,
+     "happened": 0.599,
+     "live_minus_happened": 0.079,
+     "new_minus_happened": -0.001,
+     "se_independent": 0.018
     }
    },
    "shots>=3": {
@@ -212,6 +245,17 @@
      "capped_n": 522,
      "capped_final": 0.586,
      "capped_happened": 0.596
+    },
+    "subset_capped_at_live_cap": {
+     "n": 71,
+     "record_shrunk": 0.659,
+     "model": 0.539,
+     "final_cap_0.10": 0.636,
+     "final_cap_0.02": 0.559,
+     "happened": 0.549,
+     "live_minus_happened": 0.087,
+     "new_minus_happened": 0.009,
+     "se_independent": 0.057
     }
    }
   },
@@ -265,6 +309,17 @@
      "capped_n": 5121,
      "capped_final": 0.641,
      "capped_happened": 0.665
+    },
+    "subset_capped_at_live_cap": {
+     "n": 665,
+     "record_shrunk": 0.696,
+     "model": 0.572,
+     "final_cap_0.10": 0.672,
+     "final_cap_0.02": 0.592,
+     "happened": 0.592,
+     "live_minus_happened": 0.08,
+     "new_minus_happened": -0.0,
+     "se_independent": 0.018
     }
    },
    "shots>=3": {
@@ -315,8 +370,32 @@
      "capped_n": 499,
      "capped_final": 0.572,
      "capped_happened": 0.617
+    },
+    "subset_capped_at_live_cap": {
+     "n": 69,
+     "record_shrunk": 0.652,
+     "model": 0.528,
+     "final_cap_0.10": 0.628,
+     "final_cap_0.02": 0.548,
+     "happened": 0.522,
+     "live_minus_happened": 0.107,
+     "new_minus_happened": 0.027,
+     "se_independent": 0.058
     }
    }
   }
+ },
+ "selection": {
+  "rule": "lowest 2024 log loss, pooled over 2+ and 3+ lines weighted by player-games",
+  "pooled_2024_log_loss": {
+   "cap_0.10": 0.60094,
+   "cap_0.08": 0.60028,
+   "cap_0.06": 0.59935,
+   "cap_0.04": 0.59829,
+   "cap_0.02": 0.59773,
+   "cap_0.00": 0.59832
+  },
+  "selected": "cap_0.02",
+  "expected": "cap_0.02"
  }
 }
