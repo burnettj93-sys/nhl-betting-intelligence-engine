@@ -60,7 +60,7 @@ EST_COST_PER_EVENT = 2
 
 SOG_K = (1, 2, 3, 4, 5)
 MODEL_VERSION = "player-rate-toi-v2+platt-2026-10"          # live probability source (validated; see docs/MODEL_VALIDATION.md)
-MODEL_CACHE_SCHEMA = 3                                              # 2: entries carry "emp" (last-30-game shot frequencies); 3: the record is topped up from NHL API final games after MoneyPuck's newest
+MODEL_CACHE_SCHEMA = 4                                              # 4: the record also says how many of its games are this season's (n_current); 2: entries carry "emp" (last-30-game shot frequencies); 3: the record is topped up from NHL API final games after MoneyPuck's newest
 PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
 MIN_EXPECTED_TOI = 12.0
 from operational.pricing_policy import PROVISIONAL_MAX_AGE_MIN  # noqa: E402  (shared with the hosted pages; see that module)
