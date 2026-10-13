@@ -29,7 +29,10 @@ import math
 from collections import defaultdict
 from itertools import combinations
 
-ANCHOR_CAP = 0.10            # an estimate never exceeds the model's calibrated probability by more than this (the average gap at 0.70+ was 2-4 points; this bounds an individual player)
+ANCHOR_CAP_V1 = 0.10         # the cap of policy anchor-tickets-2026-10-11 (digest c236c526e00b9f04): on legs where it bound, the estimate over-stated the result by about 8 points in every validation season. Superseded; kept so history can be reproduced
+ANCHOR_CAP = 0.02            # an estimate never exceeds the model's calibrated probability by more than this (policy anchor-tickets-2026-10-13; chosen on 2024, evaluated on 2025: docs/PROPOSAL_ANCHOR_CAP.md)
+V1_VERSION_TAG = "+anchor-last30"            # on the model_version of every leg and ticket estimated under the +0.10 cap
+V2_VERSION_TAG = "+anchor-last30-cap02"      # under the +0.02 cap
 MIN_SAMPLE_GAMES = 20        # games behind a shots estimate (the window is 30; an early-season player carries last season's games)
 HIGH_LINE_CAP = 0.70         # 3+ shots and above: the final estimate was calibrated at 0.60-0.70 only (above that there are few player-games and 2024 over-stated it), so nothing higher is claimed
 SHOTS_LEG_FLOOR = 0.60       # "well supported" starts here; below it the record is not a strong case
@@ -48,24 +51,45 @@ class Estimate:
     basis: str
 
 
-def shots_final_estimate(model_p: float | None, record_p: float | None, threshold: int | None) -> float | None:
-    """The final estimate for a shots line from the model's probability and the shrunk last-30 record: the record, held to the model + ANCHOR_CAP and to HIGH_LINE_CAP for 3+ shots. One definition,
-    used by the ticket legs and by the Paper Parlay Builder's line display, so a card never shows a different estimate from the one a ticket would use. None without both inputs."""
+def cap_for(policy) -> float:
+    """The shots cap a policy states (None = the original +0.10, for policies written before the field existed)."""
+    cap = getattr(policy, "anchor_cap", None)
+    return ANCHOR_CAP_V1 if cap is None else cap
+
+
+def version_tag(cap: float) -> str:
+    return V1_VERSION_TAG if abs(cap - ANCHOR_CAP_V1) < 1e-9 else f"{V1_VERSION_TAG}-cap{round(cap * 100):02d}"
+
+
+def estimate_rule_note(model_version: str | None) -> str | None:
+    """For a recorded ticket or leg: a plain sentence when its estimate came from the superseded +0.10 cap, else None. Read from the model_version stored with the entry; no stored number is changed."""
+    mv = model_version or ""
+    if V1_VERSION_TAG in mv and V2_VERSION_TAG not in mv:
+        return ("Estimated under the earlier shots rule (record held to the model + 10 points), superseded on 2026-10-13 because it over-stated such legs by about 8 points in the chronological "
+                "validation. The entry numbers shown are the ones recorded and are unchanged.")
+    return None
+
+
+def shots_final_estimate(model_p: float | None, record_p: float | None, threshold: int | None, cap: float | None = None) -> float | None:
+    """The final estimate for a shots line from the model's probability and the shrunk last-30 record: the record, held to the model + the cap (ANCHOR_CAP unless a policy's cap is passed) and to
+    HIGH_LINE_CAP for 3+ shots. One definition, used by the ticket legs and by the Paper Parlay Builder's line display, so a card never shows a different estimate from the one a ticket would use.
+    None without both inputs."""
     if model_p is None or record_p is None:
         return None
-    return min(record_p, model_p + ANCHOR_CAP, HIGH_LINE_CAP if (threshold or 0) >= 3 else 1.0)
+    return min(record_p, model_p + (ANCHOR_CAP if cap is None else cap), HIGH_LINE_CAP if (threshold or 0) >= 3 else 1.0)
 
 
-def leg_estimate(leg) -> Estimate | None:
-    """The hit-chance estimate for one leg, or None if the leg is not well supported."""
+def leg_estimate(leg, cap: float | None = None) -> Estimate | None:
+    """The hit-chance estimate for one leg, or None if the leg is not well supported. `cap` is the policy's shots cap (ANCHOR_CAP when omitted)."""
+    cap = ANCHOR_CAP if cap is None else cap
     if leg.market_family in SHOT_FAMILIES:
         if (leg.empirical_probability is None or leg.model_probability is None or (leg.empirical_games or 0) < MIN_SAMPLE_GAMES):
             return None
-        p = shots_final_estimate(leg.model_probability, leg.empirical_probability, leg.threshold)
+        p = shots_final_estimate(leg.model_probability, leg.empirical_probability, leg.threshold, cap)
         if p < SHOTS_LEG_FLOOR:
             return None
         se = math.sqrt(p * (1.0 - p) / ((leg.empirical_games or 0) + 8))
-        capped = (" (held to the model +10 points)" if leg.empirical_probability > leg.model_probability + ANCHOR_CAP
+        capped = (f" (held to the model +{cap * 100:.0f} points)" if leg.empirical_probability > leg.model_probability + cap
                   else " (held to 70%: higher estimates for 3+ shots are not supported)" if p < leg.empirical_probability else "")
         return Estimate(p, se, f"{leg.empirical_hits} of his last {leg.empirical_games} games with {leg.threshold}+ shots{capped}")
     if leg.market_family == "MONEYLINE":
@@ -101,17 +125,19 @@ def _decimal(leg) -> float:
     return 1.0 + (a / 100.0 if a > 0 else 100.0 / abs(a))
 
 
-def prepare_pool(eligible_legs: list) -> list:
-    """Eligible legs that are well supported, each carrying its hit-chance estimate as conservative_probability (so recording, settlement and display use the number stated)."""
+def prepare_pool(eligible_legs: list, cap: float | None = None) -> list:
+    """Eligible legs that are well supported, each carrying its hit-chance estimate as conservative_probability (so recording, settlement and display use the number stated).
+    Shots legs are stamped with the rule that produced the estimate (version_tag), so an entry can always be traced to the cap it was made under."""
+    cap = ANCHOR_CAP if cap is None else cap
     pool = []
     for leg in eligible_legs:
-        est = leg_estimate(leg)
+        est = leg_estimate(leg, cap)
         if est is None:
             continue
         if est.p * _decimal(leg) - 1.0 < LEG_MIN_EV:
             continue
         pool.append(dataclasses.replace(leg, conservative_probability=round(est.p, 4),
-                                        model_version=f"{leg.model_version}+anchor-last30" if leg.market_family in SHOT_FAMILIES else leg.model_version))
+                                        model_version=f"{leg.model_version}{version_tag(cap)}" if leg.market_family in SHOT_FAMILIES else leg.model_version))
     return pool
 
 
@@ -132,11 +158,11 @@ def midpoint_ev(legs: list) -> float:
     return p * dec - 1.0
 
 
-def uncertainty(legs: list) -> dict:
+def uncertainty(legs: list, cap: float | None = None) -> dict:
     """A plausible range for the ticket's hit chance: every leg moved one standard error together (the widest honest reading; the legs are in different games)."""
     low = high = 1.0
     for l in legs:
-        est = leg_estimate(l) if l.empirical_probability is not None or l.market_probability is not None else None
+        est = leg_estimate(l, cap) if l.empirical_probability is not None or l.market_probability is not None else None
         se = est.se if est else 0.05
         low *= max(l.conservative_probability - se, 0.0)
         high *= min(l.conservative_probability + se, 1.0)
@@ -242,9 +268,9 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     return list(passing.values()), diag
 
 
-def leg_evidence(leg) -> dict:
+def leg_evidence(leg, cap: float | None = None) -> dict:
     """What stands behind one leg's number, for display, with the four numbers kept apart: the recent hit rate (k of n, unshrunk), the model's probability, the final estimate and the price-implied probability."""
-    est = leg_estimate(leg)
+    est = leg_estimate(leg, cap)
     d = _decimal(leg)
     out = {"estimate": leg.conservative_probability, "price_implied": round(1.0 / d, 4), "model": leg.model_probability,
            "basis": est.basis if est else None, "standard_error": round(est.se, 4) if est else None}
@@ -260,7 +286,8 @@ def leg_evidence(leg) -> dict:
 def describe(combo, policy) -> dict:
     """Ticket-level numbers an owner needs: the plausible range, the value at three stated assumptions, and a short plain-language rationale."""
     legs = combo.legs
-    rng = uncertainty(legs)
+    cap = cap_for(policy)
+    rng = uncertainty(legs, cap)
     mid = midpoint_ev(legs)
     shaded = 1.0
     for l in legs:
@@ -268,7 +295,7 @@ def describe(combo, policy) -> dict:
     shaded_ev = shaded * combo.combined_decimal - 1.0
     parts = []
     for l in legs:
-        ev = leg_evidence(l)
+        ev = leg_evidence(l, cap)
         if ev["kind"] == "player_record":
             parts.append(f"{l.participant_name} {l.threshold}+ shots: recent hit rate {ev['hits']} of {ev['games']} games ({ev['recent_hit_rate']:.0%}); model {ev['model']:.0%}; final estimate "
                          f"{ev['estimate']:.0%}; price implies {ev['price_implied']:.0%}")
@@ -276,6 +303,6 @@ def describe(combo, policy) -> dict:
             parts.append(f"{l.participant_name} to win: final estimate {ev['estimate']:.0%} is the market's own no-vig chance (price implies {ev['price_implied']:.0%}); it adds price, not value")
     text = (f"{'; '.join(parts)}. Together about {combo.joint_probability:.0%} (plausible range {rng['low']:.0%}-{rng['high']:.0%}) against {1.0 / combo.combined_decimal:.0%} implied by the prices. "
             f"Estimated value {combo.ev_estimated:+.0%}; {shaded_ev:+.0%} with every leg lowered {policy.value_shade * 100:.0f} points; {mid:+.0%} if the true chance is halfway between the final estimate and the price. "
-            "The final estimate is the recent record shrunk toward the league rate and held to the model plus 10 points (70% for 3+ shots); that rule was within 2 points of what happened on the 2025 evaluation "
-            "(docs/validation/anchor_calibration.json), but DraftKings prices these legs lower, so the value depends on the record being the better guide. Prices are US-feed quotes, not verified for Ontario.")
+            f"The final estimate is the recent record shrunk toward the league rate and held to the model plus {cap * 100:.0f} points (70% for 3+ shots). The cap was chosen on the 2024 season and checked on 2025 "
+            "(docs/PROPOSAL_ANCHOR_CAP.md); DraftKings prices these legs lower than the record implies, so the value depends on the record being the better guide. Prices are US-feed quotes, not verified for Ontario.")
     return {"hit_low": rng["low"], "hit_high": rng["high"], "midpoint_ev": round(mid, 4), "ev_after_shade": round(shaded_ev, 4), "rationale": text}

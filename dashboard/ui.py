@@ -424,6 +424,8 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
             banner("<b>Provisional — not recorded.</b> Built from an earlier look at DraftKings' prices that is now older than the freshness limit. It uses no slot and no money. "
                    "It is recorded only if, once its prices are refreshed, it still qualifies.", "warn")
         st.caption(esc(t["rationale"]))
+        if t.get("estimate_note"):
+            banner(f"<b>Earlier estimate rule.</b> {esc(t['estimate_note'])}", "warn")
         leg_why(legs)
         if t.get("recorded_at_utc"):
             st.caption(f"Recorded {et_time(t['recorded_at_utc'], True)} · ticket {t['ticket_id']} · prices and probabilities are frozen at that moment.")

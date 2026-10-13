@@ -15,7 +15,17 @@ from research.real_market_parlay import engine as rmp
 from research.real_market_parlay import policy as P
 
 NOW = dt.datetime(2026, 10, 11, 16, 0, tzinfo=dt.timezone.utc)
-POL = P.PROPOSED
+POL = P.ANCHOR_V1            # these fixtures and the replay of the 2026-10-12 tickets are written for the 2026-10-11 policy (shots cap +0.10); the corrected cap is tested in tests/test_shots_cap_correction.py
+
+
+def setUpModule():
+    global _saved_cap
+    _saved_cap = anchor.ANCHOR_CAP
+    anchor.ANCHOR_CAP = anchor.ANCHOR_CAP_V1
+
+
+def tearDownModule():
+    anchor.ANCHOR_CAP = _saved_cap
 
 
 def shots(game, pid, hits, price, model, *, games=30, k=2, name=None):
@@ -219,7 +229,7 @@ class TestPausedBoard(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         d = Path(self.tmp.name)
-        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})):
+        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "anchor_v1"})):
             patcher.start()
             self.addCleanup(patcher.stop)
         _path, self.conn = fresh_ledger()
@@ -309,7 +319,7 @@ def key_of(combo):
 class TestTheSearchHidesNothing(unittest.TestCase):
     """Regression for 2026-10-12: a per-game cap of 4 legs dropped Batherson and Gritsyuk, so five tickets that passed every policy test were never offered."""
     def setUp(self):
-        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})
+        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "anchor_v1"})
         p.start()
         self.addCleanup(p.stop)
 
@@ -392,7 +402,7 @@ class TestTheRealPoolIsRecordedThroughTheNormalCycle(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         d = Path(self.tmp.name)
-        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})):
+        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "anchor_v1"})):
             patcher.start()
             self.addCleanup(patcher.stop)
         _p, self.conn = fresh_ledger()
@@ -434,7 +444,7 @@ class TestTheRealPoolIsRecordedThroughTheNormalCycle(unittest.TestCase):
 class TestPersonOptions(unittest.TestCase):
     """For each player the best supported +100 option involving him, built from the same estimates and tests as the automatic tickets; none is made up."""
     def setUp(self):
-        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})
+        p = mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "anchor_v1"})
         p.start()
         self.addCleanup(p.stop)
 

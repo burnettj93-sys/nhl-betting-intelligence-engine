@@ -87,10 +87,11 @@ def score(records: list[dict], resolve) -> dict:
             extra = dict(zip(r.get("pool_fields", [])[11:], row[11:]))
             key = (r["et_date"], gid, pid, fam, k)
             if key not in first:
-                first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"], "extra": extra}
+                first[key] = {"game": gid, "player": pid, "family": fam, "threshold": k, "price": price, "p": p, "edge": bool(edge), "date": r["et_date"], "extra": extra,
+                              "policy": (r.get("selector") or {}).get("digest")}              # the selection rule in force when the leg was first logged (the estimate rule: c236c526e00b9f04 = shots cap +0.10, overstated)
             if extra.get("in_selected_ticket") and "selected" not in first[key]:
                 # The leg went onto a proposed or recorded ticket in THIS snapshot: keep the numbers frozen at that moment (they can differ from its first look), so "legs on selected tickets" is not lost when the first look was earlier.
-                first[key]["selected"] = {"price": price, "p": p, "extra": extra}
+                first[key]["selected"] = {"price": price, "p": p, "extra": extra, "policy": (r.get("selector") or {}).get("digest")}
     legs, pending, no_part, unresolved = [], 0, 0, 0
     dnp_players: set = set()
     for key, l in first.items():
@@ -201,10 +202,14 @@ def anchor_report(legs: list[dict]) -> dict:
         sel = l.get("selected")
         if not sel:
             continue
-        c = {**l, "price": sel["price"], "p": sel["p"], "extra": sel["extra"], "implied": implied(sel["price"])}
+        c = {**l, "price": sel["price"], "p": sel["p"], "extra": sel["extra"], "implied": implied(sel["price"]), "selected_policy": sel.get("policy")}
         if c["extra"].get("decision") == "SUPPORTED" and c["extra"].get("final_estimate") is not None and c["extra"].get("recent_games") and c["extra"].get("model_probability") is not None:
             chosen.append(c)
     out = {"supported_pool": _anchor_row(ok), "on_selected_tickets": _anchor_row(chosen), "by_line": {}}
+    # The same two rows per selection rule (policy digest), so legs estimated under the superseded +0.10 shots cap are never averaged with legs estimated under the corrected cap.
+    digests = sorted({l.get("policy") or "unknown" for l in ok} | {l.get("selected_policy") or "unknown" for l in chosen})
+    out["by_policy"] = {d: {"supported_pool": _anchor_row([l for l in ok if (l.get("policy") or "unknown") == d]),
+                            "on_selected_tickets": _anchor_row([l for l in chosen if (l.get("selected_policy") or "unknown") == d])} for d in digests}
     for k in sorted({l["threshold"] for l in ok}):
         out["by_line"][f"{k}+"] = _anchor_row([l for l in ok if l["threshold"] == k])
     out["reading"] = ("Counts are player-games, not independent bets: nested lines of one player resolve together and a game's players share luck. A handful of nights says almost nothing; "
