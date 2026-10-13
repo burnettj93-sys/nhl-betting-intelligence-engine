@@ -76,7 +76,7 @@ def notice(st: dict | None = None) -> str | None:
     if not st["paused"]:
         return None
     since = f" since {st['since_utc']}" if st.get("since_utc") else ""
-    return (f"Automatic paper tickets are PAUSED{since}: no new automatic ticket is being recorded while the losing-streak postmortem is reviewed. "
+    return (f"Automatic paper tickets are PAUSED{since}: no new automatic ticket is being recorded while the pause is in force. "
             f"Existing tickets still settle, prices still refresh, and personal accounts are unaffected. {st.get('reason') or ''}").strip()
 
 
