@@ -314,12 +314,15 @@ class TestRecentGamesAreToppedUpFromBoxScores(unittest.TestCase):
     def setUp(self):
         from tests.test_paper_bet_settlement_driver import _fresh_nhl_conn, _insert_game, _insert_player_stat
         self.conn = _fresh_nhl_conn()
-        _insert_game(self.conn, 1, home="TOR", away="MTL", state="FINAL")
-        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=1")
-        _insert_game(self.conn, 2, home="CAR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
-        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=2")
-        _insert_player_stat(self.conn, 1, "p1", "TOR", shots=4)
-        _insert_player_stat(self.conn, 2, "p1", "CAR", shots=9)                      # an unfinished game never appears
+        _insert_game(self.conn, 2026020001, home="TOR", away="MTL", state="FINAL")
+        self.conn.execute("UPDATE games SET game_date='2026-10-11' WHERE game_id=2026020001")
+        _insert_game(self.conn, 2026020002, home="CAR", away="FLA", state="SCHEDULED", home_score=None, away_score=None)
+        self.conn.execute("UPDATE games SET game_date='2026-10-12' WHERE game_id=2026020002")
+        _insert_player_stat(self.conn, 2026020001, "p1", "TOR", shots=4)
+        _insert_player_stat(self.conn, 2026020002, "p1", "CAR", shots=9)                      # an unfinished game never appears
+        _insert_game(self.conn, 2026010050, home="TOR", away="MTL", state="FINAL")             # a later preseason game: never shown as a season game
+        self.conn.execute("UPDATE games SET game_date='2026-10-13' WHERE game_id=2026010050")
+        _insert_player_stat(self.conn, 2026010050, "p1", "TOR", shots=12)
         self.conn.commit()
         self.mp = {"game_id": 0, "date": "2026-10-10", "season": "2026-27", "opp": "BOS", "home": True, "toi": 18.0, "toi_pp": 3.0, "shots": 2.0, "goals": 0.0, "assists": 0.0, "hits": 1.0, "blocks": 0.0}
         self.now = dt.datetime(2026, 10, 16, 12, 0, tzinfo=dt.timezone.utc)           # after the fixture's observation time

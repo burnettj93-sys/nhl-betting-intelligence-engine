@@ -546,6 +546,7 @@ def player_shots_since(conn: sqlite3.Connection, after_date: str, learn_time_utc
                       ) AS rn
                FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
                WHERE g.game_date > ? AND g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?
+                 AND substr(CAST(g.game_id AS TEXT), 5, 2) = '02'     -- regular season only: a preseason game is not part of a player's season record
            ) WHERE rn = 1 AND played = 1 AND shots IS NOT NULL""",
         (after_date, learn_time_utc),
     ).fetchall()
@@ -563,6 +564,7 @@ def box_scores_since(conn: sqlite3.Connection, after_date: str, learn_time_utc: 
                       ) AS rn
                FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
                WHERE g.game_date > ? AND g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?
+                 AND substr(CAST(g.game_id AS TEXT), 5, 2) = '02'     -- regular season only
            ) WHERE rn = 1 AND played = 1 ORDER BY game_date DESC""",
         (after_date, learn_time_utc),
     ).fetchall()
@@ -572,7 +574,8 @@ def final_stats_through(conn: sqlite3.Connection, learn_time_utc: str) -> str | 
     """The date of the newest FINAL game with player stats observed by `learn_time_utc`."""
     row = conn.execute(
         """SELECT MAX(g.game_date) AS d FROM player_game_stats p JOIN games g ON g.game_id = p.game_id
-           WHERE g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?""", (learn_time_utc,)).fetchone()
+           WHERE g.game_state IN ('FINAL', 'OFF') AND p.observed_at_utc <= ?
+             AND substr(CAST(g.game_id AS TEXT), 5, 2) = '02'""", (learn_time_utc,)).fetchone()
     return row["d"] if row else None
 
 
