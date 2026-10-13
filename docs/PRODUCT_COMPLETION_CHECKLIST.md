@@ -1,4 +1,4 @@
-# Product completion checklist — one complete list (revision 15, 2026-10-12)
+# Product completion checklist — one complete list (revision 16, 2026-10-13)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
@@ -32,6 +32,8 @@ lineups, power-play units, injuries and starting goalies; the odds budget decisi
 - *Prediction scoring (rev 2).* Moneylines are graded as team outcomes, not player participation; affected shadow reports and daily reviews were regenerated from the frozen evidence (`docs/validation/CORRECTIONS_2026-10-12.md`; originals kept).
 - *Logging gap.* A nine-hour gap in the prediction log is identified as a gap on the Morning Review page and in the scorer; no history was invented to fill it.
 - *Hosted.* Footer states the app's code version and the data's build version; Players tops up from the NHL API when MoneyPuck lags; the builder shows four separate numbers (recent record, model, final estimate, price-implied).
+
+**First live wave, settled (2026-10-12/13):** two $10 tickets recorded once at 21:18:55Z after revalidation (not re-recorded the next cycle); both settled automatically at 03:11Z; the independent audit (`docs/validation/settlement_audit_2026-10-13.json`) agrees on all 16 bets and the recomputed payouts (win +$13.86, loss −$10.00); cash $439.62, open $0, settled P&L −$60.38; the hosted Today page shows the same numbers; frozen-prediction scoring resolves 550 legs with moneylines graded as team outcomes (`docs/validation/live_wave_2026-10-12.md`). Two tickets prove the machinery, not an edge.
 
 **Approved and running:** the anchor-ticket policy `c236c526e00b9f04` (docs/ANCHOR_TICKETS.md); automatic recording is on.
 
