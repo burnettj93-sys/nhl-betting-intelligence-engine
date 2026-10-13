@@ -251,7 +251,7 @@ def leg_evidence(leg) -> dict:
     if leg.market_family in SHOT_FAMILIES:
         games = leg.empirical_games or 0
         out.update(kind="player_record", hits=leg.empirical_hits, games=games, recent_hit_rate=(round(leg.empirical_hits / games, 4) if games and leg.empirical_hits is not None else None),
-                   record_shrunk=leg.empirical_probability)
+                   record_shrunk=leg.empirical_probability, games_current=getattr(leg, "empirical_games_current", None))
     else:
         out.update(kind="market", elo=leg.model_probability)
     return out

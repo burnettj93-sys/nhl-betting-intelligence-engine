@@ -92,7 +92,7 @@ with left:
             rec = (mk.get("rec") or {}).get(str(k))
             if rec:                      # four numbers kept apart: recent record, model, the estimate a ticket would use, and what the price implies
                 price_p = 1.0 / (1.0 + (price / 100.0 if price > 0 else 100.0 / abs(price)))
-                row[2].caption(f"Recent {rec[0]}/{rec[1]} ({ui.pct(rec[0] / max(rec[1], 1))}) · Model {ui.pct(prob)}  \n" + (f"Estimate {ui.pct(rec[2])} · " if rec[2] is not None else "") + f"Price implies {ui.pct(price_p)}")
+                row[2].caption(f"Recent {rec[0]}/{rec[1]} ({ui.pct(rec[0] / max(rec[1], 1))}{f', {rec[3]} this season' if len(rec) > 3 and rec[3] is not None else ''}) · Model {ui.pct(prob)}  \n" + (f"Estimate {ui.pct(rec[2])} · " if rec[2] is not None else "") + f"Price implies {ui.pct(price_p)}")
             else:
                 row[2].caption(f"Model {ui.pct(prob)}" if prob is not None else "No model estimate")
             row[3].caption(("✅ " if stt["usable"] else "⚠️ ") + stt["word"])

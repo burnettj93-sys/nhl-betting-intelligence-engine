@@ -149,7 +149,7 @@ def build(nhl_conn, now: dt.datetime) -> dict:
                     if emp:                                                   # the other numbers behind a shots line: recent record, and the estimate a ticket would use (anchor.shots_final_estimate)
                         from research.real_market_parlay import anchor
                         final = anchor.shots_final_estimate(prob, emp["p"], k)
-                        mk.setdefault("rec", {})[str(k)] = [emp["hits"], emp["n"], None if final is None else round(final, 4)]
+                        mk.setdefault("rec", {})[str(k)] = [emp["hits"], emp["n"], None if final is None else round(final, 4), emp.get("n_current")]
         for p in players.values():
             for mk in p["m"].values():
                 mk["l"].sort()

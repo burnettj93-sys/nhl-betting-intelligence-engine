@@ -188,6 +188,17 @@ class TestShotFrequencies(unittest.TestCase):
         self.assertAlmostEqual(freq[2]["p"], round((30 + 8 * base) / 38, 4), places=3)
         self.assertLess(freq[2]["p"], 1.0)
 
+    def test_the_record_says_how_many_of_its_games_are_from_this_season(self):
+        """Early in a year the 30-game window reaches back into last season; the display must not present those as this season's games."""
+        rows = [{"player_id": "p1", "date": f"2026-03-{i + 1:02d}", "shots": 3} for i in range(25)] + [{"player_id": "p1", "date": f"2026-10-{i + 1:02d}", "shots": 3} for i in range(5)]
+        cell = live.shot_frequencies(rows)["p1"][2]
+        self.assertEqual((cell["n"], cell["n_current"]), (30, 5))
+        entry = {"probs": {"SOG2": 0.7}, "emp": {"SOG2": {"p": 0.78, "hits": 26, "n": 30, "n_current": 5}}}
+        ev = best_bets._evidence(entry, "PLAYER_SOG_ALTERNATE", "SOG", 2)
+        self.assertEqual(ev["empirical_games_current"], 5)
+        leg = anchor.prepare_pool([dataclasses.replace(shots(1, 1, 26, -185, 0.7), empirical_games_current=5)])[0]
+        self.assertEqual(anchor.leg_evidence(leg)["games_current"], 5)
+
     def test_players_with_fewer_than_five_games_have_no_frequency(self):
         self.assertNotIn("p1", live.shot_frequencies(self.rows(4, [3])))
 

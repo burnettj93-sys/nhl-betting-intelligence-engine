@@ -666,7 +666,7 @@ def _freeze_leg(l) -> dict:
             "model_version": getattr(l, "model_version", ""),
             # the evidence behind the stated probability (anchor tickets): the validated model's number, the player's record, the market's no-vig chance
             "model_probability": getattr(l, "model_probability", None), "empirical_probability": getattr(l, "empirical_probability", None),
-            "empirical_hits": getattr(l, "empirical_hits", None), "empirical_games": getattr(l, "empirical_games", None),
+            "empirical_hits": getattr(l, "empirical_hits", None), "empirical_games": getattr(l, "empirical_games", None), "empirical_games_current": getattr(l, "empirical_games_current", None),
             "market_probability": getattr(l, "market_probability", None)}
 
 
