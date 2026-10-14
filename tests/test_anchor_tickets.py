@@ -453,6 +453,60 @@ class TestTheRealPoolIsRecordedThroughTheNormalCycle(unittest.TestCase):
         self.assertEqual(len(recs[0]["proposed_tickets"]), 2)
 
 
+class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
+    """The 2026-10-14 workflow end to end on isolated data: ONE slip a day, priced +100 to +500, recorded once at $10 on fresh prices, shown as the primary slip, and nothing else recorded."""
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from operational import state_paths
+        from tests.test_daily_tickets import fresh_ledger
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        d = Path(self.tmp.name)
+        for patcher in (mock.patch.object(state_paths, "path", lambda name, **kw: d / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"})):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        _p, self.conn = fresh_ledger()
+        self.addCleanup(self.conn.close)
+
+    def cycle(self, legs, minutes=20):
+        from operational import daily_tickets as dtk
+        return dtk.run_cycle(None, self.conn, NOW + dt.timedelta(minutes=minutes), collected={"legs": legs, "sources": {}, "second_opinion": {}})
+
+    def test_one_slip_is_recorded_even_when_several_combinations_qualify(self):
+        from operational import daily_tickets as dtk, paper_bankroll as pb
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70), shots(3, 3, 28, +115, 0.72)]
+        res = self.cycle(legs)
+        self.assertEqual(res["newly_recorded"], 1)
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets WHERE origin = 'AUTOMATIC'").fetchone()[0], 1)
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 490.0)
+        again = self.cycle(legs, minutes=35)
+        self.assertEqual(again["newly_recorded"], 0)                                                   # one a day: nothing doubled, nothing added
+        st = dtk.read_state()
+        self.assertEqual(st["slots"], {"total": 1, "used": 1, "empty": 0})
+        self.assertEqual(st["primary"]["status"], "RECORDED")
+        self.assertTrue(100 <= st["primary"]["ticket"]["combined_american"] <= 500)
+
+    def test_a_combination_longer_than_plus_500_is_not_recorded_and_the_board_says_why(self):
+        legs = [shots(1, 1, 28, +400, 0.72), shots(2, 2, 28, +400, 0.72)]                              # 5.0 x 5.0 = 25.0, i.e. +2400
+        res = self.cycle(legs)
+        self.assertEqual(res["newly_recorded"], 0)
+        from operational import daily_tickets as dtk
+        st = dtk.read_state()
+        self.assertEqual(st["primary"]["status"], "NONE")
+        self.assertIsNone(st["primary"]["ticket"])
+        self.assertTrue(st["primary"]["strongest_singles"])                                             # the strongest individual selections are shown instead
+        self.assertEqual(st["slots"]["empty"], 1)
+
+    def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):
+        res = self.cycle([shots(1, 1, 27, +120, 0.70)])
+        self.assertEqual(res["newly_recorded"], 0)
+        from operational import daily_tickets as dtk
+        st = dtk.read_state()
+        self.assertEqual(st["primary"]["status"], "NONE")
+        self.assertIn("at least 2 legs", st["primary"]["reason"])
+
+
 class TestPersonOptions(unittest.TestCase):
     """For each player the best supported +100 option involving him, built from the same estimates and tests as the automatic tickets; none is made up."""
     def setUp(self):
