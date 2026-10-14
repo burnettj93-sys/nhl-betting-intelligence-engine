@@ -9,7 +9,7 @@ import unittest
 from dashboard import ui
 from operational import price_availability as pa
 from tests.product_fixture import GEN, snapshot
-from tests.test_product_pages import FIXTURE_NOW, choose_log, run_page, text, with_token
+from tests.test_product_pages import FIXTURE_NOW, run_page, text
 
 U = dt.timezone.utc
 
@@ -77,32 +77,31 @@ class TestMorningPages(unittest.TestCase):
         self.assertIn("PROVISIONAL — quoted", t)
         self.assertNotIn("STALE — quoted 5.0 h ago", t)            # a provisional price is not mislabelled stale inside its provisional limit
 
-    def test_best_options_marks_aged_provisional_cards_and_offers_no_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot(), setup=lambda a: (choose_log(a), with_token(a)))
+    def test_best_options_marks_aged_provisional_cards(self):
+        at = run_page("26_Player_Props.py", morning_snapshot())
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("Provisional.", t)
         self.assertIn("older than the freshness limit", t)
-        self.assertFalse([b for b in at.button if (b.label or "").startswith("Add to ")], "no add control on an aged provisional option")
+        self.assertFalse([b for b in at.button if (b.label or "").startswith("Add to ")], "no add control exists on the page")
 
-    def test_a_fresh_morning_option_can_be_added_to_a_personal_log(self):
+    def test_a_fresh_morning_option_shows_its_morning_price_and_nothing_to_submit(self):
         snap = morning_snapshot(provisional=False)
         for o in snap["tickets"]["options"]["options"]:
             o["early"] = True
             for l in o["legs"]:
                 l["early"] = True
-        at = run_page("26_Player_Props.py", snap, setup=lambda a: (choose_log(a), with_token(a)))        # the add control needs the write credential
+        at = run_page("26_Player_Props.py", snap)
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
         self.assertIn("Morning price.", t)
         self.assertNotIn("Provisional.", t)
-        self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"], "a fresh morning option is addable")
+        self.assertFalse([b for b in at.button if (b.label or "").startswith("Add to ")], "individual bets were removed: no add control")
 
-    def test_a_non_provisional_option_still_offers_its_add_control(self):
-        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False), setup=lambda a: (choose_log(a), with_token(a)))
+    def test_a_non_provisional_option_is_not_marked_provisional(self):
+        at = run_page("26_Player_Props.py", morning_snapshot(provisional=False))
         self.assertEqual(len(at.exception), 0)
         self.assertNotIn("Provisional.", text(at))
-        self.assertTrue([b for b in at.button if b.label == "Add to Casey — $10.00"])
 
     def test_a_provisional_price_past_its_provisional_limit_is_stale(self):
         old = ui.provisional_staleness("2026-10-14T20:00:00Z", FIXTURE_NOW)             # 21 hours old

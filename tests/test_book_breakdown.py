@@ -103,14 +103,11 @@ class TestTheAccountAddsUp(Base):
 
     def test_the_watchdog_flags_a_split_that_does_not_add_up(self):
         import sqlite3
-        import tempfile
-        from operational import personal_logs as pl
-        pconn = pl.connect(tempfile.NamedTemporaryFile(suffix=".db", delete=False).name)
-        ok = wd.check_reconciliation(self.conn, pconn)
+        ok = wd.check_reconciliation(self.conn)
         self.assertEqual(ok["status"], wd.OK, ok["detail"])
         self.assertIn("single bets", ok["detail"])
         with mock.patch.object(pb, "book_breakdown", return_value={"reconciliation": {"all_agree": False, "checks": {"pnl": False}, "parlay_pnl": 0, "single_bets_pnl": 0}}):
-            bad = wd.check_reconciliation(self.conn, pconn)
+            bad = wd.check_reconciliation(self.conn)
         self.assertEqual(bad["status"], wd.FAIL)
         self.assertIn("does not add up", bad["detail"])
 

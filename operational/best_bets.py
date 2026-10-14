@@ -797,7 +797,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
             quote = quote_freshness.assess(m.get("last_update") or bm.get("last_update"), captured_at.isoformat(),
                                            now, limit)
             fresh = hours > 0 and quote["fresh"]
-            # An EARLY price: fresh by age, but retrieved from the morning/midday look, long before puck drop. It is as usable as any fresh price (options, personal-log adds,
+            # An EARLY price: fresh by age, but retrieved from the morning/midday look, long before puck drop. It is as usable as any fresh price (options,
             # automatic tickets); automatic tickets built on early prices are capped per day, and every ticket is re-judged at the moment of recording
             # (operational/daily_tickets.py), so a price that has aged out by then is not used.
             early = False

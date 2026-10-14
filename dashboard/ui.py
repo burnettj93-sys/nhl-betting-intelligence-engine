@@ -176,7 +176,7 @@ def status_chip(status: str) -> str:
 
 def banner(text: str, tone: str = "info") -> None:
     bg, border, fg = TONES[tone]
-    text = str(text).replace("\\$", "$").replace("$", "&#36;")      # inside this HTML block a markdown "\\$" shows its backslash (seen on My Bets: "\\$500"), and a bare "$" can start math; the entity is both safe and plain
+    text = str(text).replace("\\$", "$").replace("$", "&#36;")      # inside this HTML block a markdown "\\$" shows its backslash (seen on a phone: "\\$500"), and a bare "$" can start math; the entity is both safe and plain
     st.markdown(f"<div style='border:1px solid {border};border-radius:12px;padding:10px 16px;background:{bg};color:{fg};"
                 f"font-size:0.88rem;line-height:1.45;margin:4px 0 12px 0'>{text}</div>", unsafe_allow_html=True)
 
@@ -440,6 +440,52 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                 st.warning(esc(a["detail"]))
 
 
+EGGY_PICK_TITLE = "Eggy's Parlay Pick of the Day"
+EGGY_NO_PICK = "No Eggy pick today"
+
+
+def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> None:
+    """Eggy's Parlay Pick of the Day: the engine's ONE primary ticket shown as a branded card. It is the same ticket the selector would record (or has recorded), not an additional bet,
+    and it carries the prices, the estimated hit chance, the $10 paper stake and the return. Nothing here is guaranteed: the chance is an estimate with a range.
+    With no qualifying ticket the card says so and gives the exact reason; it never invents a pick."""
+    from dashboard import theme
+    primary = primary or {}
+    ticket = primary.get("ticket")
+    img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
+    with st.container(border=True):
+        if not ticket:
+            reason = primary.get("reason") or "No combination of supported selections reaches +100 to +500 with value at the prices available."
+            title = "Eggy's pick is unavailable right now" if primary.get("status") == "ERROR" else EGGY_NO_PICK
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div>"
+                        f"<div class='sub'>{_h(reason)}</div></div></div>", unsafe_allow_html=True)
+            st.caption("A day without a pick is a correct answer: Eggy does not loosen the rules to produce one, and no weaker slip is offered in its place.")
+            return
+        if ticket.get("recorded"):
+            state_line = "Recorded as today's single primary ticket ($10 paper stake). Prices and probabilities are frozen."
+        elif recording_paused or ticket.get("proposed"):
+            state_line = "Proposed, not recorded: automatic recording is paused until the owner approves it, so nothing is staked."
+        elif ticket.get("provisional"):
+            state_line = "Provisional: built on an earlier look that has aged out; it is recorded only if it still qualifies on refreshed prices."
+        else:
+            state_line = "Selected for today; it is recorded only if every price is still fresh at that moment."
+        st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>Today's single primary ticket</div><div class='ttl'>{_h(EGGY_PICK_TITLE)}</div>"
+                    f"<div class='sub'>{_h(state_line)}</div></div></div>", unsafe_allow_html=True)
+        legs = ticket["legs"]
+        decimal = ticket.get("combined_decimal") or 1.0
+        anchor = ticket.get("anchor") or {}
+        rng = (f"range {anchor['hit_low'] * 100:.0f}–{anchor['hit_high'] * 100:.0f}% · price implies {pct(1.0 / decimal)}"
+               if anchor.get("hit_low") is not None and anchor.get("hit_high") is not None else f"price implies {pct(1.0 / decimal)}")
+        _slip(legs, [("Combined price", american(ticket["combined_american"]), "calculated: product of the legs' DraftKings prices" if len(legs) > 1 else "DraftKings quote", "accent"),
+                     ("Estimated hit chance", pct(ticket.get("hit_probability")), rng, ""),
+                     ("Paper stake", money(ticket["stake"]), "model book, fixed", ""),
+                     ("To return", money(ticket["potential_return"]), f"profit {money(ticket['potential_profit'])}" if ticket.get("potential_profit") is not None else None, "")],
+              outcomes=bool(ticket.get("recorded")))
+        why = primary.get("explanation") or primary.get("reason") or ticket.get("rationale") or ""
+        if why:
+            st.markdown(f"**Why this one.** {esc(why)}")
+        st.caption("This is the same ticket as the primary parlay on the board, not an extra bet. Hit chances are estimates with a range, not promises; any parlay can lose.")
+
+
 STATUS_WORDS = {"SELECTED": "Taken", "BLOCKED_LEG_LIMIT": "Skipped — leg limit", "BLOCKED_PLAYER_LIMIT": "Skipped — player limit", "BLOCKED_GAME_LIMIT": "Skipped — game limit",
                 "BLOCKED_RECORDING_WINDOW": "Held — recording window", "BLOCKED_OPPOSITE_SIDE": "Skipped — opposite side held", "ALREADY_RECORDED": "Already on the book",
                 "NOT_REACHED": "Not needed — slots full"}
@@ -492,7 +538,8 @@ def leg_why(legs: list[dict]) -> None:
 
 # ------------------------------------------------------------------ best options ----
 
-def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: str | None, show_people: bool = True) -> None:
+def option_card(opt: dict, *, key: str, show_people: bool = True) -> None:
+    """One option, read-only: legs, prices, quote ages, the estimate and its evidence. There is no add/submit control anywhere in the product: nothing a visitor does is recorded."""
     with st.container(border=True):
         kind = "Single" if opt["kind"] == "SINGLE" else f"{len(opt['legs'])}-leg cross-game parlay"
         _card_head(" + ".join(l["label"] for l in opt["legs"]), chip(kind, "info"))
@@ -508,12 +555,12 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
                             ("Value after haircut", f"{ev:+.0f}%", "3-pt policy margin", "good" if ev > 0 else "bad")], outcomes=False)
         prov_any = (not stale_any) and any(l.get("provisional") for l in opt["legs"])
         if stale_any:
-            banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation, and it cannot be added.", "bad")
+            banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation.", "bad")
         elif prov_any:
-            banner("<b>Provisional.</b> An earlier look at DraftKings' price today, now older than the freshness limit. It can be browsed, but it cannot be added or recorded until its "
-                   "price is refreshed (the engine looks again every 15 minutes and re-checks it against the current price when you add it).", "warn")
+            banner("<b>Provisional.</b> An earlier look at DraftKings' price today, now older than the freshness limit. It can be browsed, but it is not a current recommendation until its "
+                   "price is refreshed (the engine looks again every 15 minutes).", "warn")
         elif opt.get("early"):
-            banner("<b>Morning price.</b> From an earlier look today and still inside the freshness limit, so it can be added. It is re-checked against the current price when you add it.", "info")
+            banner("<b>Morning price.</b> From an earlier look today and still inside the freshness limit; the engine re-checks it at the pregame look.", "info")
         st.caption(esc(opt["rationale"]))
         leg_why(opt["legs"])
         if show_people and opt.get("best_for"):
@@ -521,8 +568,6 @@ def option_card(opt: dict, *, key: str, cash: float | None, page_generated_at: s
             st.caption(f"Best option for: {names}")
         st.caption(f"{opt['price_label']}. Prices are DraftKings US-feed quotes; they have not been verified against DraftKings Ontario.")
         ontario_check(opt, key=key)
-        if not stale_any and not prov_any:
-            add_control(opt, key=key, cash=cash, page_generated_at=page_generated_at)
 
 
 def ontario_check(opt: dict, *, key: str) -> None:
@@ -567,83 +612,6 @@ def ontario_check(opt: dict, *, key: str) -> None:
                 st.link_button("Open GitHub to file this check", sess[f"{key}_{i}"])
 
 
-# ---- personal logs: the only writer in the product UI ----
-# A personal log belongs to whoever knows its code. It is kept apart from the $500 model book (different database file), so nothing here can change the
-# model's cash, exposure, slots or results. A code is a name for a log, not a password: see operational/personal_logs.py.
-
-def personal_logs_doc() -> dict:
-    try:
-        return product_source.personal_logs() or {}
-    except Exception:  # noqa: BLE001 - a missing section just means no log can be opened right now
-        return {}
-
-
-@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
-def _code_hash(code: str) -> str:
-    from operational import personal_logs
-    return personal_logs.code_hash(code)
-
-
-def selected_log() -> dict | None:
-    """The log this browser session is working in, resolved against what is published: {"hash", "name", "exists", "creation"} or None."""
-    sel = st.session_state.get("_personal_log")
-    if not sel:
-        return None
-    doc = (personal_logs_doc().get("logs") or {}).get(sel["hash"])
-    if doc:
-        sel["creation"] = None                                  # the log exists now; later bets do not need the creation details
-        sel["name"] = doc["display_name"]
-    key = sel.get("write_key")
-    # Writing is allowed only with the log's write key; it must derive the public key the log was created with (published, so a wrong key is caught here).
-    pub = (doc or {}).get("write_pub") or (sel.get("creation") or {}).get("write_pub")
-    can_write = bool(key and pub and _write_pub(key, sel["hash"]) == pub)
-    return {"hash": sel["hash"], "name": sel["name"], "exists": bool(doc), "creation": sel.get("creation"), "doc": doc, "write_key": key if can_write else None,
-            "can_write": can_write, "key_given": bool(key)}
-
-
-@st.cache_data(show_spinner=False, ttl=3600, max_entries=200)
-def _write_pub(write_key: str, log_hash: str) -> str:
-    from operational import log_signing
-    return log_signing.public_key_hex(write_key, log_hash)
-
-
-def select_log(code: str, name: str | None = None, *, creation: dict | None = None, write_key: str | None = None) -> None:
-    st.session_state["_personal_log"] = {"hash": _code_hash(code), "name": name or "Your log", "creation": creation, "write_key": write_key or None}
-
-
-def select_account(surname: str, number: int = 1, *, creation: dict | None = None, write_key: str | None = None) -> None:
-    """Works in the personal ACCOUNT filed under this last name (and number for a duplicate surname). The passcode, if given, is held only in this browser session."""
-    from operational import personal_logs as pl
-    slug = pl.surname_slug(surname, number)
-    st.session_state["_personal_log"] = {"hash": pl.account_key(slug), "name": pl.display_for(surname, number), "creation": creation, "write_key": write_key or None, "slug": slug}
-    try:                                                      # the NAME (public anyway) rides in the address so a refresh or another device can reopen the account; never the passcode
-        st.query_params["account"] = pl.display_for(surname, number)
-    except Exception:  # noqa: BLE001 - a bare-mode test run has no query string
-        pass
-
-
-def reopen_from_address() -> None:
-    """If this session has no account but the address carries ?account=Name, open that published account VIEW-ONLY (the passcode is never in the address)."""
-    if st.session_state.get("_personal_log"):
-        return
-    try:
-        name = st.query_params.get("account")
-    except Exception:  # noqa: BLE001
-        return
-    if not name:
-        return
-    from operational import personal_logs as pl
-    surname, number, err = pl.parse_account_name(str(name))
-    if err or not surname:
-        return
-    if pl.account_key(pl.surname_slug(surname, number)) in (personal_logs_doc().get("logs") or {}):
-        select_account(surname, number)
-
-
-def account_bankroll(log: dict | None) -> dict | None:
-    return ((log or {}).get("doc") or {}).get("bankroll")
-
-
 def book_split(origins: dict | None, *, expanded: bool = False, as_table_only: bool = False) -> None:
     """The model account read apart: the parlay experiment's own result, the earlier single bets (moneyline and props, no longer recorded), and the whole account they add up to.
     Nothing is reset; the account is the combined one."""
@@ -667,118 +635,6 @@ def book_split(origins: dict | None, *, expanded: bool = False, as_table_only: b
     else:
         with st.expander("How the account splits: parlay tickets and single bets", expanded=expanded):
             render()
-
-
-def forget_log() -> None:
-    st.session_state.pop("_personal_log", None)
-    try:
-        st.query_params.pop("account", None)
-    except Exception:  # noqa: BLE001
-        pass
-
-
-def _log_order(order_id: str, log_hash: str) -> dict | None:
-    for o in ((personal_logs_doc().get("logs") or {}).get(log_hash) or {}).get("orders") or []:
-        if o["order_id"] == order_id:
-            return o
-    return None
-
-
-SESSION_ORDER_LIMIT, SESSION_ORDER_WINDOW_S = 20, 3600
-
-
-def file_order(order: dict) -> dict:
-    """Creates the order in the queue. {"ok", "via", "issue"|"url"|"error"}; the credential never leaves this function. A public app must not let one browser session flood the queue, so a
-    session may file at most SESSION_ORDER_LIMIT orders an hour (the engine applies its own per-account and per-day limits on top)."""
-    import time
-    now = time.time()
-    sent = [t for t in st.session_state.get("_orders_sent", []) if now - t < SESSION_ORDER_WINDOW_S]
-    if len(sent) >= SESSION_ORDER_LIMIT:
-        return {"ok": False, "via": "direct", "error": "That is a lot of orders in the last hour. Please wait a little before sending more."}
-    st.session_state["_orders_sent"] = sent + [now]
-    token = order_client.personal_write_token(getattr(st, "secrets", {}))
-    if not token:
-        return {"ok": False, "via": "none", "error": "Adding is not switched on yet: the app has no write credential."}
-    res = order_client.submit_direct(order, token)
-    return {"ok": res["ok"], "via": "direct", "issue": res.get("issue"), "error": res.get("error")}
-
-
-def add_control(opt: dict, *, key: str, cash: float | None = None, page_generated_at: str | None = None) -> None:
-    """Adds this option to the personal log chosen on My Bets. Called on every render, but it files an order only inside the button handlers."""
-    from operational import personal_logs as pl
-    log = selected_log()
-    if not log:
-        st.caption("To track this bet, open or create your own log on **My Bets** (sidebar) first. Personal logs never touch the model's $500 book.")
-        return
-    on_book = opt.get("on_book")
-    if on_book:
-        st.caption(f"The model book holds this exact bet as {on_book['ticket_id']} ({on_book['status'].title()}). Adding it to your own log does not change that.")
-    if not log["can_write"]:
-        banner(f"<b>{esc(log['name'])}</b> is open <b>view-only</b> in this session"
-               + (": the write key you entered does not match this log." if log["key_given"] else ": adding a bet needs the log's write key.")
-               + " Enter it on <b>My Bets</b> (sidebar). Knowing a log's code lets you read it, not write to it.", "warn")
-        return
-    banner(f"Adding to your personal log <b>{esc(log['name'])}</b> — separate from the model book.", "info")
-    sess = st.session_state.setdefault("_personal_orders", {})
-    mine = sess.get(opt["option_id"])
-    if mine and mine.get("log") != log["hash"]:
-        mine = None
-    answer = _log_order(mine["order_id"], log["hash"]) if mine else None
-    if answer is not None:
-        status = answer["status"]
-        if status == "RECORDED":
-            banner(f"Added to <b>{esc(log['name'])}</b> as <b>{answer['bet_id']}</b> (manually added).", "good")
-            return
-        if status == "ALREADY_RECORDED":
-            banner(f"Not added again: {esc(answer['reason'])}", "info")
-            return
-        if status == "NEEDS_ACCEPTANCE":
-            banner("<b>Nothing was added.</b> The price or hit chance moved since you looked. Reload to see the current numbers, then add again.", "warn")
-        else:
-            banner(f"The engine did not add this: {esc(answer['reason'])}", "bad")
-        if st.button("Dismiss", key=f"{key}_dismiss"):
-            sess.pop(opt["option_id"], None)
-            st.rerun()
-        return
-    if mine:
-        banner("Order sent — waiting for the engine to revalidate and record it (usually a few minutes).", "info")
-        if st.button("Check status", key=f"{key}_check"):
-            from dashboard import snapshot_source
-            snapshot_source.current(force_refresh=True)
-            st.rerun()
-        return
-    rules = personal_logs_doc().get("rules") or {}
-    lo, hi, default = rules.get("stake_min", pl.MIN_STAKE), rules.get("stake_max", pl.MAX_STAKE), rules.get("stake_default", pl.DEFAULT_STAKE)
-    bank = account_bankroll(log)
-    cash = bank["available_cash"] if bank else None
-    if cash is not None:
-        hi = max(min(float(hi), float(cash)), float(lo))
-        st.caption(f"Available cash in {esc(log['name'])}: {money(cash)} (a stake cannot exceed it).")
-    stake = st.number_input("Stake (paper $)", min_value=float(lo), max_value=float(hi), value=min(float(default), float(hi)), step=5.0, key=f"{key}_stake")
-    broke = cash is not None and cash < float(lo)
-    if broke:
-        st.warning("This account has less than the minimum stake available. Open bets settle and return cash; nothing can be added until then.")
-    if not order_client.personal_write_token(getattr(st, "secrets", {})):
-        st.caption("Adding bets from this page is not switched on yet (the app has no write credential), so nothing can be added for now.")
-    elif st.button(f"Add to {log['name']} — {money(stake)}", key=f"{key}_add", type="primary", disabled=broke,
-                   help="Files one order. The engine rechecks the price and your cash first, and tells you if either changed. Nothing is added by browsing or refreshing."):
-        _submit_personal(opt, key, sess, log, float(stake), page_generated_at)
-
-
-def _submit_personal(opt: dict, key: str, sess: dict, log: dict, stake: float, page_generated_at: str | None) -> None:
-    if opt["option_id"] in sess:
-        return                                                  # a repeated click while an order is outstanding
-    order = order_client.build_personal_order(opt, order_id=order_client.new_order_id(), log_hash=log["hash"], page_generated_at=page_generated_at,
-                                              stake=stake, create=None if log["exists"] else log["creation"])
-    from operational import log_signing
-    order["via"] = "direct"                                      # signed with the order; lets the engine tell a one-click order from a hand-filed one
-    order = log_signing.sign(order, log["write_key"], log["hash"])
-    res = file_order(order)
-    if not res["ok"]:
-        banner(esc(res["error"]), "bad")
-        return
-    sess[opt["option_id"]] = {"order_id": order["order_id"], "log": log["hash"], "via": res["via"], "issue": res.get("issue"), "url": res.get("url")}
-    st.rerun()
 
 
 # ---- player roles: estimated usage versus reported assignments (never shown under one "Line 1 / PP1" heading) ----
@@ -878,18 +734,17 @@ def order_path_panel() -> None:
                   {"Check": "You are signed in", "Result": f"yes ({stat['signed_in_masked']})" if stat["signed_in"] else "no"},
                   {"Check": "Allowed emails configured", "Result": str(stat["allowed_email_count"])},
                   {"Check": "You are on the allow-list", "Result": "yes" if stat["viewer_allowed"] else "no"},
-                  {"Check": "One-click (direct) path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
+                  {"Check": "Direct (one-click) filing path ready", "Result": "yes" if stat["direct_ready"] else "no — the click would open a pre-filled GitHub issue instead"}],
                  hide_index=True, width="stretch")
     if stat["login_configured"] and not stat["signed_in"]:
-        if st.button("Sign in to enable one-click adding", key="order_signin"):
+        if st.button("Sign in to enable direct filing", key="order_signin"):
             st.login()
     elif stat["signed_in"]:
         if st.button("Sign out", key="order_signout"):
             st.logout()
     elif not stat["login_configured"]:
         st.info("This panel is about the owner-only evidence records (goalie confirmations, Ontario price checks): they change what everyone sees, so they need a supported sign-in "
-                "(`st.login()`, OIDC; steps in docs/MANUAL_ORDERS.md) because Streamlit says the platform's own viewer header is not a supported identity. "
-                "**Personal-log adding is different:** it needs no sign-in, only the app's write credential (`LOG_WRITE_TOKEN`, docs/PERSONAL_LOGS.md) plus the log's own write key.")
+                "(`st.login()`, OIDC; steps in docs/MANUAL_ORDERS.md) because Streamlit says the platform's own viewer header is not a supported identity.")
     st.caption("Booleans only: the token and the allow-list are never displayed. This check creates no order, ticket or stake.")
     probe = identity_probe()
     st.caption(f"What the platform exposes (names only, no values; none of it is used for authorisation): Streamlit {probe['streamlit']}; `st.user.is_logged_in` = {probe['is_logged_in']}; "

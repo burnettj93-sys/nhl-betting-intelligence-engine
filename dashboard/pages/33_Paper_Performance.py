@@ -1,4 +1,4 @@
-"""Paper Performance — the model's $500 paper book (the engine's automatic tickets). Personal logs are on My Bets and are never included here."""
+"""Paper Performance — the model's $500 paper book (the engine's automatic tickets). Nothing a visitor does is ever recorded in it."""
 from __future__ import annotations
 
 import sys
@@ -13,7 +13,7 @@ import streamlit as st
 from dashboard import product_source as ps
 from dashboard import ui
 
-ui.header("Paper Performance", "What the model's paper book has done: cash, results, and every settled ticket. Your own bets are on My Bets.")
+ui.header("Paper Performance", "What the model's paper book has done: cash, results, and every settled ticket. ")
 perf = ui.load(ps.performance, "Paper performance")
 acct, summ, origins = perf["account"], perf["summary"], perf["origins"]
 
@@ -36,7 +36,7 @@ for key, label in (("ALL", "Model book (automatic tickets)"),):
                  "Settled P&L": ui.signed_money(o["settled_pnl"]), "ROI": ui.pct(o["roi"], 1) if o["roi"] is not None else "—",
                  "Hit rate": ui.pct(o["hit_rate"]) if o["hit_rate"] is not None else "—"})
 st.dataframe(rows, hide_index=True, width="stretch")
-st.caption("Only the engine's automatic tickets are counted here; bets people add to personal logs are never part of this record. Unresolved tickets stay open until their settlement rules can be applied.")
+st.caption("Only the engine's automatic tickets are counted here; no bet submitted by a person is part of this record (individual bets were removed from the app). Unresolved tickets stay open until their settlement rules can be applied.")
 
 hist = summ.get("bankroll_history") or []
 if hist:

@@ -1,6 +1,6 @@
 """
 Settlement audit: re-derive every recorded ticket's result from the NHL's own box scores, WITHOUT the engine's resolver or its nhl.db, and compare with
-what the ledgers say. Covers the model book (operational/paper_bankroll.db) and every personal log (operational/runtime/personal_logs.db) separately.
+what the ledgers say. Covers the model book (operational/paper_bankroll.db) only; the retired personal records are an inactive archive and are not audited here.
 
 For each bet and leg it reports: official game state, the leg's actual value, whether it hit, the ticket outcome and profit/loss recomputed from the
 stated odds and stake, and whether each of those equals the stored value. The same fetch also catches a CORRECTION (the official number now differs from
@@ -122,15 +122,12 @@ def _rows(path: Path, sql: str) -> list[dict]:
 
 def run() -> dict:
     ledger = REPO / "operational" / "paper_bankroll.db"
-    personal = REPO / "operational" / "runtime" / "personal_logs.db"
     model_rows = _rows(ledger, "SELECT paper_bet_id AS bet_id, origin, market_family, team, event_id, player_id, threshold, entry_odds, stake, legs_json, "
                                "result_status, profit_loss, settlement_json FROM paper_bets ORDER BY created_at_utc")
     results = []
     for r in model_rows:
         book = "model" if r["origin"] == "AUTOMATIC" else "earlier manual ticket (kept in the ledger for audit)"
         results.append(audit_row(book, r))
-    for r in _rows(personal, "SELECT bet_id, log_hash, legs_json, entry_odds, stake, result_status, profit_loss, settlement_json FROM bets"):
-        results.append(audit_row("personal log " + (r["log_hash"][:8] if r["log_hash"] else "?"), r))
     games = {}
     for res in results:
         for l in res["legs"]:

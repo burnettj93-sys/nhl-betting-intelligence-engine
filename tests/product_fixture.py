@@ -60,27 +60,6 @@ def origin_block(**kw):
     return base
 
 
-LOG_CODE = "otter-maple-puck-4821"
-LOG_KEY = "ABCDEFGHJKLMNPQRSTUV"          # normalised write key of the fixture log
-
-
-ACCT_SURNAME = "Burnett"
-ACCT_PASS = "AB2D-EF3G"                  # a fixture account passcode (8 characters)
-
-
-def personal_logs_doc() -> dict:
-    """Two empty personal accounts: an earlier code-based log (display name Casey, published under the hash of LOG_CODE) and a last-name account (Burnett), each with its own $500."""
-    from operational import log_signing, personal_logs as pl
-    h = pl.code_hash(LOG_CODE)
-    empty = pl.summarize([])
-    ha = pl.account_key("burnett")
-    bank = {"starting_balance": 500.0, "available_cash": 500.0, "open_stakes": 0.0, "settled_pnl": 0.0, "payouts_received": 0.0, "equity": 500.0, "total_staked": 0.0, "over_drawn": False}
-    return {"schema": 1, "generated_at_utc": GEN, "unclaimed_legacy": {"tickets": 1, "settled_pnl": -10.0, "results": ["LOSS"]},
-            "rules": {"stake_min": 1.0, "stake_max": 1000.0, "stake_default": 10.0, "code_min_length": 8, "starting_balance": 500.0, "max_builder_legs": 6, "passcode_length": 8},
-            "logs": {h: {"display_name": "Casey", "slug": None, "created_at_utc": GEN, "write_pub": log_signing.public_key_hex(LOG_KEY, h), "summary": empty, "bankroll": bank, "bets": [], "orders": []},
-                     ha: {"display_name": ACCT_SURNAME, "slug": "burnett", "created_at_utc": GEN, "write_pub": log_signing.public_key_hex(ACCT_PASS, ha), "summary": empty, "bankroll": dict(bank), "bets": [], "orders": []}}}
-
-
 def builder_pool_doc() -> dict:
     """Two priced players in the fixture game (2026-10-08 23:00Z), with quote times a minute before GEN-day noon so tests judge freshness against their own clock."""
     q, r = "2026-10-08T21:58:00Z", "2026-10-08T21:59:00Z"
@@ -155,7 +134,7 @@ def snapshot(with_options=True) -> dict:
             "tickets": tickets, "product_meta": {"schema_version": 1, "generated_at_utc": GEN, "et_today": "2026-10-08", "default_date": "2026-10-08",
                                                  "data_through": {"skaters": "2026-10-06", "goalies": "2026-10-06", "schedule_results": "2026-10-08T02:00:00Z"}, "current_season": "20262027"},
             "product_games": {"dates": sorted({x["date_et"] for x in games}), "games": games, "default_date": "2026-10-08", "et_today": "2026-10-08", "records": {}},
-            "product_game_details": details, "product_players": p, "product_goalies": g, "product_teams": teams, "product_model_health": mh, "manual_orders": {"orders": [], "ontario_verifications": []}, "personal_logs": personal_logs_doc(), "builder_pool": builder_pool_doc(),
+            "product_game_details": details, "product_players": p, "product_goalies": g, "product_teams": teams, "product_model_health": mh, "manual_orders": {"orders": [], "ontario_verifications": []}, "builder_pool": builder_pool_doc(),
             "performance": perf}
 
 

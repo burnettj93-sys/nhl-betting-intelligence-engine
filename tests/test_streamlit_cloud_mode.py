@@ -153,7 +153,7 @@ class TestPageRegistry(unittest.TestCase):
 
     def test_a_plain_user_sees_the_product_pages_and_no_research_or_admin_page(self):
         user_titles = {p.title for specs in page_registry.pages_for("USER", rm.LOCAL_MODE).values() for p in specs}
-        self.assertEqual(user_titles, PRODUCT_PAGES | LIGHTWEIGHT | {"My Bets", "Parlay Builder"})
+        self.assertEqual(user_titles, PRODUCT_PAGES | LIGHTWEIGHT | {"Parlay Builder"})
 
     def test_no_simulated_page_exists_in_the_registry_or_on_disk(self):
         titles = {p.title for p in page_registry.PAGES}
@@ -343,6 +343,7 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     def setUpClass(cls):
         env = {k: v for k, v in os.environ.items() if k != rm.ENV_VAR}
         env["NHL_ENGINE_SNAPSHOT_SOURCE"] = "OFF"        # this probe asserts NO network at all; the snapshot is injected in-process
+        env["NHL_ENGINE_UNDER_TEST"] = "1"               # the child is a test process even when this class runs alone (the env policy override is honoured only under test)
         proc = subprocess.run(
             [sys.executable, "-c", _RENDER_PROBE, str(REPO), json.dumps(list(FORBIDDEN_MODULES))],
             capture_output=True, text=True, timeout=600, env=env, cwd=str(REPO))

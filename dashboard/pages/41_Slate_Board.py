@@ -43,24 +43,20 @@ st.caption(f"Board built {ui.et_time(board.get('generated_at_utc'), True)} for E
 
 # ---------------------------------------------------------------- the primary parlay
 primary = board.get("primary") or {}
-st.subheader("Primary parlay")
+st.subheader("Eggy's Parlay Pick of the Day")
 pol = board.get("policy") or {}
 if board.get("recording_paused"):
     st.caption("Automatic recording is paused: this is the slip the selector would record, shown for review. Nothing is staked.")
+ui.eggy_pick_card(primary, recording_paused=bool(board.get("recording_paused")))
 ticket = primary.get("ticket")
 if ticket:
-    ui.ticket_card(ticket)
-    anchor = ticket.get("anchor") or {}
-    kind = ("Calculated price: the product of the legs' DraftKings prices (the legs are from different games, so no combined quote exists or is needed)."
-            if primary.get("price_kind") == "CALCULATED" else "")
-    st.caption(f"{kind} Preferred because it has the highest estimated hit chance among the qualifying combinations priced from +100 to +500, using the fewest legs. "
-               f"{ui.esc(primary.get('reason') or '')}")
+    st.caption(f"{ui.esc(primary.get('price_note') or '')}")
     with st.expander("Calculations and why not the others"):
+        anchor = ticket.get("anchor") or {}
         st.markdown(ui.esc(anchor.get("rationale") or ticket.get("rationale") or ""))
         if anchor:
             st.write({k: v for k, v in anchor.items() if k in ("hit_low", "hit_high", "ev_estimated", "ev_after_haircut", "ev_midpoint", "ev_after_shade") and v is not None})
 else:
-    ui.banner("<b>No primary parlay qualifies right now.</b> " + ui.esc(primary.get("reason") or "No combination of supported selections reaches +100 to +500 with value at the prices available."), "warn")
     closest = primary.get("closest")
     if closest:
         legs_txt = " + ".join(f"{ui.esc(str(l['participant']))}{(' ' + str(l['threshold']) + '+') if l.get('threshold') else ' to win'} ({ui.american(l['american_price'])})" for l in closest["legs"])

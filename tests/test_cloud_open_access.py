@@ -90,7 +90,7 @@ class TestPublicVisitorsAreNotAdministrators(unittest.TestCase):
             visitor = auth.current_user()
             titles = {p.title for section in page_registry.pages_for(visitor["role"], rm.COMMUNITY_CLOUD_MODE).values() for p in section}
         self.assertNotIn("Diagnostics", titles)
-        for wanted in ("Today", "Tomorrow", "Best Options", "My Bets", "Games", "Players", "Goalies", "Model Health", "Data Status"):
+        for wanted in ("Today", "Tomorrow", "Best Options", "Parlay Builder", "Games", "Players", "Goalies", "Model Health", "Data Status"):
             self.assertIn(wanted, titles)
 
     def test_the_diagnostics_page_itself_refuses_a_visitor(self):
@@ -148,10 +148,6 @@ class TestCloudSurfaceHasNoRiskyControls(unittest.TestCase):
         for spec in self.cloud_pages():
             src = (REPO / "dashboard" / "pages" / spec.file).read_text()
             hits = sorted({m.group(0) for m in self.RISKY.finditer(src)})
-            if spec.file == "38_My_Bets.py":
-                # Justified exception: the masked box for a personal log's WRITE KEY (a per-log signing secret, not an account password; the app has no
-                # accounts). It is held only in the browser session, never stored, and used to sign orders (operational/log_signing.py).
-                hits = [h for h in hits if h != 'type="password"']
             self.assertEqual(hits, [], f"{spec.file}: {hits}")
 
     def test_the_useful_product_pages_are_all_available_in_cloud_without_a_role(self):

@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
 
 class TestDollarSignsInHtmlBlocks(unittest.TestCase):
-    """2026-10-13, My Bets on a phone: "its own \\$500" showed its backslash because the text sits inside an HTML block, where markdown escapes are not processed."""
+    """2026-10-13, a page on a phone: "its own \\$500" showed its backslash because the text sits inside an HTML block, where markdown escapes are not processed."""
     def _rendered(self, fn, *a):
         from unittest import mock
         with mock.patch("streamlit.markdown") as md:

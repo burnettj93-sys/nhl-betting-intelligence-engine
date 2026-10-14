@@ -313,12 +313,32 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
 
 
 def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.datetime) -> list[dict]:
-    """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS."""
+    """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS. This is the only path that stakes the model book, so it enforces the day's limit (the policy's slots; one under the
+    primary-slip policy), a fresh re-check of every leg's price and the game start at this moment, the fixed $10 stake and, in the ledger, funds and duplicates."""
     if combos and recording_pause.is_paused():          # second guard: whoever calls this, a paused model records nothing new
         return [{"status": "PAUSED", "ticket_id": None, "reason": recording_pause.notice()}]
     results = []
     version = code_version()
+    et_date = et.eastern_today(now)
+    try:
+        limit = slot_count()                 # the policy's tickets a day (ONE under the primary-slip policy); an unreadable policy records nothing
+    except PolicyUnavailable as exc:
+        return [{"status": "BLOCKED_POLICY", "ticket_id": None, "reason": f"The ticket policy could not be loaded ({exc}); nothing is recorded."}]
+    today_rows = recorded_today(bankroll_conn, et_date)
+    taken, held = len(today_rows), {r["paper_bet_id"] for r in today_rows}
     for combo in combos:
+        tid = pb.compute_ticket_id(et_date, combo.legs)
+        # The recording path itself enforces the day's limit and re-judges the ticket on the clock, whoever calls it: the page, the selector and a test all reach this same gate.
+        if taken >= limit and tid not in held:           # a repeat of a ticket already on the book is answered DUPLICATE by the ledger, as before
+            results.append({"status": "DAILY_LIMIT", "ticket_id": tid, "reason": f"{taken} of {limit} ticket(s) already recorded for Eastern day {et_date}; the book allows {limit} a day."})
+            continue
+        why = revalidate_before_recording(combo, now)
+        if why:
+            results.append({"status": "REVALIDATION_FAILED", "ticket_id": tid, "reason": "; ".join(why)})
+            continue
+        if abs(pb.PAPER_BET_STAKE - 10.0) > 1e-9:          # the primary ticket stakes exactly $10; a changed constant must not silently change what the book risks
+            results.append({"status": "STAKE_NOT_PERMITTED", "ticket_id": tid, "reason": f"The primary ticket stakes exactly $10.00, not ${pb.PAPER_BET_STAKE:.2f}."})
+            continue
         # A ticket is recorded after the prices it freezes were retrieved: never stamp it earlier than its newest
         # price (the run's start time can precede a capture made during the same run).
         from operational import quote_freshness
@@ -327,7 +347,9 @@ def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.dateti
         bet = pb.create_real_market_combo_paper_bet(
             bankroll_conn, {"status": "QUALIFIED", "combo": combo},
             event_start_utc=_earliest_start(combo), created_at_utc=created.isoformat(), code_version=version)
-        results.append({"ticket_id": pb.compute_ticket_id(et.eastern_today(now), combo.legs), **bet})
+        results.append({"ticket_id": tid, **bet})
+        if bet["status"] == "INSERTED":
+            taken += 1
         if bet["status"] == "INSUFFICIENT_FUNDS":
             break
     return results
@@ -513,8 +535,7 @@ def single_card(leg: rmp.ParlayLeg) -> dict:
 
 
 def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | None:
-    """Annotates each option with the AUTOMATIC model-book ticket that already holds the same bet, so the page can say so. It is information only: a
-    person may still add the same bet to their own personal log (that never touches the model book)."""
+    """Annotates each option with the AUTOMATIC model-book ticket that already holds the same bet, so the page can say so. It is information only: it records nothing."""
     if not options:
         return options
     for opt in options.get("options", []):
@@ -787,6 +808,29 @@ def _strongest_singles(legs: list, limit: int = 5) -> list[dict]:
     return out
 
 
+_FAMILY_WORDS = {"MONEYLINE": "moneyline", "PLAYER_SOG_ALTERNATE": "shots on goal", "PLAYER_SOG": "shots on goal", "PLAYER_GOALS": "anytime goal", "GOALIE_SAVES": "goalie saves",
+                 "PLAYER_POINTS": "points"}
+
+
+def _primary_explanation(card: dict, qualifying: int | None) -> str:
+    """Two plain sentences for the Eggy card: what the ticket is and why it, rather than another, is the one. Estimates are stated as estimates."""
+    legs = card.get("legs") or []
+    kinds = sorted({_FAMILY_WORDS.get(l.get("market_family"), "player prop") for l in legs})
+    games = len({l.get("game_id") for l in legs})
+    n = len(legs)
+    decimal = card.get("combined_decimal") or 1.0
+    first = (f"{n} leg{'s' if n != 1 else ''} ({', '.join(kinds)}) from {games} different game{'s' if games != 1 else ''}, priced at {card['combined_american']:+.0f} by multiplying the legs' "
+             f"DraftKings prices; the estimated hit chance is {card['hit_probability'] * 100:.0f}% against {100.0 / decimal:.0f}% implied by that price." if card.get("hit_probability") is not None
+             else f"{n} leg{'s' if n != 1 else ''} from {games} different game{'s' if games != 1 else ''}, priced at {card['combined_american']:+.0f}.")
+    if qualifying is None:
+        return first + " It was recorded under the one-ticket-a-day rule."
+    others = max(qualifying - 1, 0)
+    second = ("It is the only combination that qualified." if others == 0 else
+              f"It was preferred over {others} other qualifying combination{'s' if others != 1 else ''} because it needs the fewest legs and has the highest estimated hit chance; legs that would only "
+              "lengthen the odds were left out.")
+    return f"{first} {second}"
+
+
 def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_date: str, alerts=None) -> dict:
     """THE recommendation: one parlay, +100 to +500, the fewest legs that qualify, ranked by estimated hit chance, under the active policy's own leg and value rules (nothing is loosened to
     produce it). A ticket already recorded today is the primary slip. Otherwise the best qualifying combination on FRESH prices; failing that, the best on today's earlier (provisional) prices,
@@ -796,7 +840,8 @@ def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_da
            "price_kind": "CALCULATED", "price_note": CALCULATED_PRICE_LABEL, "strongest_singles": [], "as_of_utc": now.isoformat()}
     if existing_rows:
         card = ticket_from_row(existing_rows[0], now, alerts or [])
-        doc.update(status="RECORDED", ticket=card, reason="Today's primary slip is already recorded; the book allows one a day.")
+        doc.update(status="RECORDED", ticket=card, reason="Today's primary slip is already recorded; the book allows one a day.",
+                   explanation=_primary_explanation(card, None))
         return doc
     reason = None
     for status, pool_legs in (("FRESH", legs), ("PROVISIONAL", _with_provisional_eligible(legs))):
@@ -811,7 +856,7 @@ def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_da
             if status == "PROVISIONAL":
                 card["status"] = STATUS_PROVISIONAL
                 card["provisional"] = True
-            doc.update(status=status, ticket=card)
+            doc.update(status=status, ticket=card, explanation=_primary_explanation(card, picked.get("qualifying")))
             doc["reason"] = ("Built on fresh prices." if status == "FRESH" else
                              "Built on an earlier look at today's prices that is past its freshness limit: shown for review, not recordable until the prices are refreshed and it still qualifies.")
             return doc

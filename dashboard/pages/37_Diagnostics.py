@@ -177,7 +177,7 @@ if _dsec.get("sources"):
                    "used to show 07:01 ET badges all evening, and its odds entry once read a retired research file). It is kept for comparison only.")
         st.json({"readiness_cache": _dsec.get("readiness_cache"), "ingestion_health": _dsec.get("ingestion_health")}, expanded=False)
 
-st.markdown("### Order path (one-click add) check")
+st.markdown("### Evidence-queue path check (owner records)")
 from dashboard import ui as _ui
 _ui.order_path_panel()
 

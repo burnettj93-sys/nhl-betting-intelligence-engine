@@ -11,7 +11,7 @@ credits it takes, the minimum budget, and what the existing allowance can do ins
 | Morning update at about 8 AM ET (games, statistics, prices, provisional picks) | **PARTLY OBSERVED** — the first scheduled run (2026-10-10 08:00 ET) happened on its own and the hosted strip showed it; a populated morning card has not yet been seen | The first scheduled run is 08:00 ET on the first morning after the release. The watchdog records each morning's outcome; `Diagnostics → Product readiness` says NOT VERIFIED until a day shows a first look within 45 minutes of 08:00. |
 | Several price refreshes a day, for every game | **UNMET under the free allowance** | The existing 500-credit allowance buys a morning look at part of the slate and a pregame price for fewer games; it cannot also refresh every game midday. Meeting it for every game needs about **60 credits a day** (below). |
 | Re-check before recording an automatic ticket | Met in code and tests | Every selected ticket is re-judged on the clock at the moment of recording: each leg's price must still be inside the freshness limit, the game not started. |
-| Morning options usable, not just displayed | Met in code and tests | A morning price that is still fresh can be added to a personal log (once the write credential exists) and recorded on an automatic ticket. An aged price is shown as provisional and cannot be used. |
+| Morning options usable, not just displayed | Met in code and tests | A morning price that is still fresh can be shown as an option and used on an automatic ticket. An aged price is shown as provisional and cannot be used. |
 | Morning picks must not use up the five slots | Met by a cap, not a blanket rule | At most 2 automatic tickets a day may rest on early (morning/midday) prices; see "Why a cap" below. |
 | Tomorrow view | Built; early moneylines shown with age and STALE marking; every availability check listed with its time | See "Tomorrow". One probe found nothing posted a day ahead; that is one observation, and the checks continue. |
 
@@ -60,15 +60,14 @@ A plan statement never overwrites a real answer from the provider. Today, Best O
 (capture, provisional picks, publication). The 15-minute trader keeps looking afterwards. The older 08:15 league-wide props pull is **retired** under the credit plan (it would buy the same prices twice).
 The watchdog warns from 08:45 and fails from 10:00 if no game was looked at.
 
-## Morning options, personal logs and automatic tickets
+## Morning options and automatic tickets
 
 Whether a price may be used depends on its **actual age**, not on which slot fetched it:
 
-* **Fresh** (the provider's own quote time within 150 minutes, 100 when the game is under two hours away): it can be shown, added to a personal log, and used on an automatic ticket, at any hour.
-  An option built on a fresh morning price shows "Morning price", is addable, and is re-checked against the current price when the order is processed (price moved → asks for acceptance; stale or
-  started → no bet and no side effect). Market-specific safeguards are unchanged: a saves leg still needs a confirmed starter, a player under the 40-game floor is not priced, and the roster/team checks
-  run on every add.
-* **Aged** (older than that but from today's look, quote time ≤ 14 hours, retrieved today): shown as **Provisional**; nothing can be added or recorded on it until it is refreshed.
+* **Fresh** (the provider's own quote time within 150 minutes, 100 when the game is under two hours away): it can be shown and used on an automatic ticket, at any hour.
+  An option built on a fresh morning price shows "Morning price" and is re-checked against the current price at the moment of recording (stale or started → nothing recorded). Market-specific safeguards are unchanged: a saves leg still needs a confirmed starter, a player under the 40-game floor is not priced, and the roster/team checks
+  run before any ticket is recorded.
+* **Aged** (older than that but from today's look, quote time ≤ 14 hours, retrieved today): shown as **Provisional**; nothing can be recorded on it until it is refreshed.
 * **Older, missing, malformed, future or from an earlier day**: not shown as an option.
 
 ### Why a cap on early automatic tickets, instead of a pregame-only rule
@@ -78,7 +77,7 @@ actionable only near the games, which is not the requirement. It is replaced by 
 
 * An automatic ticket may rest on a fresh early price (retrieved more than 3 hours before puck drop), but **at most 2 tickets a day may**. The other three slots are left for prices closer to the games.
 * Every ticket, early or not, is **re-judged on the clock at the moment of recording** (price inside its limit, game not started), and the existing wave reservation (two slots held for later puck drops),
-  per-leg / per-player / per-game exposure limits, frozen entries and the personal/model separation are unchanged.
+  per-leg / per-player / per-game exposure limits, frozen entries are unchanged.
 
 Justification, and its limits. A recorded ticket is frozen, so a ticket taken at 8:05 AM cannot be improved by later information, and the exposure limits (a leg on at most 2 tickets, a player on at most 2, a
 game on at most 3) are spent by whatever is recorded first. The 2026-10-08 selector audit (`docs/SELECTOR_AUDIT.md` §2, §5) showed that the day's best tickets by estimated hit chance used up those limits

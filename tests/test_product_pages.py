@@ -10,16 +10,13 @@ from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
-from dashboard import order_client
 from dashboard import ui
 from dashboard import page_registry
 from dashboard import snapshot_source as ss
 from operational import runtime_mode as rm
 import json
 
-from operational import log_signing
-from operational import personal_logs as pl
-from tests.product_fixture import ACCT_PASS, ACCT_SURNAME, GEN, LOG_CODE, LOG_KEY, snapshot
+from tests.product_fixture import GEN, snapshot
 
 PAGES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "dashboard", "pages")
 FIXTURE_NOW = __import__("datetime").datetime(2026, 10, 15, 17, 5, tzinfo=__import__("datetime").timezone.utc)      # five minutes after the fixture option prices (tests.test_daily_tickets.NOW is 17:00 UTC on 2026-10-15)
@@ -49,24 +46,12 @@ def rerun(at, snap):
     return at
 
 
-def with_token(at):
-    at.secrets["LOG_WRITE_TOKEN"] = "tk"
-
-
-def choose_log(at):
-    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None, "write_key": LOG_KEY}
-
-
-def choose_log_view_only(at, key=None):
-    at.session_state["_personal_log"] = {"hash": pl.code_hash(LOG_CODE), "name": "Casey", "creation": None, "write_key": key}
-
-
 def text(at):
     return " ".join([m.value for m in at.markdown] + [c.value for c in at.caption] + [t.value for t in at.title] + [h.value for h in at.subheader]
                     + [w.value for w in at.warning] + [i.value for i in at.info] + [e.value for e in at.error])
 
 
-CORE = ["38_My_Bets.py", "21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "26_Player_Props.py", "30_Players.py", "27_Goalies.py", "31_Team_Intelligence.py",
+CORE = ["21_Today.py", "1_Game_Slate.py", "2_Game_Detail.py", "26_Player_Props.py", "30_Players.py", "27_Goalies.py", "31_Team_Intelligence.py",
         "22_Model_Health.py", "33_Paper_Performance.py", "23_Ledger.py", "39_Tomorrow.py"]
 
 
@@ -141,6 +126,17 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         self.assertIn("recent 24 of last 30 games (80%)", blob)
         self.assertIn("Final estimate 73%", blob)
         self.assertIn("range 47–66%", blob)
+
+    def test_today_in_single_slot_mode_shows_eggys_card_and_no_eggy_pick_when_nothing_qualifies(self):
+        snap = snapshot()
+        snap["tickets"]["slots"] = {"total": 1, "used": 0, "empty": 1}
+        snap["tickets"]["primary"] = {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value.", "strongest_singles": []}
+        at = run_page("21_Today.py", snap)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("No Eggy pick today", body)
+        self.assertIn("Eggy's Parlay Pick of the Day", body + " " + " ".join(h.value for h in at.subheader))
+        self.assertNotIn("slot(s) empty", text(at))
 
     def test_a_split_that_does_not_reconcile_is_called_a_bookkeeping_fault(self):
         snap = snapshot()
@@ -253,8 +249,8 @@ class TestPagesRender(unittest.TestCase):
     def test_diagnostics_order_path_panel_shows_booleans_and_a_check_button(self):
         at = run_page("37_Diagnostics.py", snapshot(), setup=lambda a: a.session_state.__setitem__("_owner_unlocked", True))      # administrative: needs the owner unlock
         t = text(at) + " " + " ".join(str(d.value.to_dict()) for d in at.dataframe)
-        self.assertIn("Order path (one-click add) check", t)
-        self.assertIn("One-click (direct) path ready", t)
+        self.assertIn("Evidence-queue path check", t)
+        self.assertIn("Direct (one-click) filing path ready", t)
         self.assertIn("never displayed", t)
         self.assertIn("Run non-staking order-path check", [b.label for b in at.button])
 
@@ -266,217 +262,25 @@ class TestPagesRender(unittest.TestCase):
         self.assertIn("<span class='k'>Estimated price</span>", flat)
         self.assertIn("class='odds'", flat)
 
-    def test_without_a_chosen_log_no_add_button_is_offered_and_the_page_says_where_to_go(self):
-        at = run_page("26_Player_Props.py", snapshot())
-        self.assertFalse(any(b.label.startswith("Add to ") for b in at.button))
-        self.assertIn("open or create your own log on My Bets", text(at).replace("**", ""))
 
-    def test_with_a_log_chosen_the_destination_is_named_and_browsing_writes_nothing(self):
-        at = run_page("26_Player_Props.py", snapshot(), setup=lambda a: (choose_log(a), with_token(a)))
-        t = text(at)
-        self.assertIn("Adding to your personal log Casey", t.replace("<b>", "").replace("</b>", ""))
-        self.assertIn("Available cash in Casey: $500.00", t)
-        self.assertIn("separate from the model book", t)
-        self.assertTrue(any(b.label == "Add to Casey — $10.00" for b in at.button))        # offered, not pressed
-        self.assertEqual(at.session_state.filtered_state.get("_personal_orders") or {}, {})
 
-    def test_knowing_the_code_without_the_write_key_is_view_only_and_offers_no_add_button(self):
-        for key in (None, "ZZZZYYYYXXXXWWWWVVVV"):
-            at = run_page("26_Player_Props.py", snapshot(), setup=lambda a, k=key: choose_log_view_only(a, k))
-            self.assertFalse(any(b.label.startswith("Add to ") for b in at.button), key)
-            self.assertIn("view-only", text(at))
 
-    def test_add_click_files_exactly_one_outstanding_order_for_that_log_and_a_second_click_does_nothing(self):
-        filed = []
-        with mock.patch.object(order_client, "submit_direct", side_effect=lambda o, t, **kw: filed.append(o) or {"ok": True, "issue": 3}):
-            at = run_page("26_Player_Props.py", snapshot(), setup=lambda a: (choose_log(a), with_token(a)))
-            btn = next(b for b in at.button if b.label == "Add to Casey — $10.00")
-            btn.click()
-            rerun(at, snapshot())
-        self.assertEqual(len(filed), 1)
-        orders = at.session_state["_personal_orders"]
-        self.assertEqual(len(orders), 1)
-        only = next(iter(orders.values()))
-        self.assertEqual(only["log"], pl.code_hash(LOG_CODE))
-        self.assertNotIn("otter", json.dumps(filed[0]))                                  # the code is never in an order
-        outstanding = [b for b in at.button if b.label == "Add to Casey — $10.00"]
-        self.assertEqual(len(outstanding), len(snapshot()["tickets"]["options"]["options"]) - 1)
 
-    def test_without_a_write_credential_no_add_button_is_offered_to_anyone(self):
-        at = run_page("26_Player_Props.py", snapshot(), setup=choose_log)
-        self.assertFalse(any(b.label.startswith("Add to ") for b in at.button))
-        self.assertIn("not switched on yet", text(at))
 
-    def test_direct_write_uses_the_app_credential_once_and_never_shows_it(self):
-        calls = []
 
-        def fake_submit(order, token, **kw):
-            calls.append((order, token))
-            return {"ok": True, "issue": 77}
-        with mock.patch.object(order_client, "submit_direct", side_effect=fake_submit):
-            at = run_page("26_Player_Props.py", snapshot(), setup=lambda a: (choose_log(a), a.secrets.__setitem__("LOG_WRITE_TOKEN", "t0ken-value")))
-            next(b for b in at.button if b.label == "Add to Casey — $10.00").click()
-            with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
-                    mock.patch.object(ss, "current", return_value=ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snapshot(), source="REMOTE", fetch_status="OK", freshness="CURRENT")):
-                at.run()
-        self.assertEqual(len(calls), 1)
-        order, token = calls[0]
-        self.assertTrue(log_signing.verify(order, log_signing.public_key_hex(LOG_KEY, pl.code_hash(LOG_CODE))), "the filed order must carry a valid signature")
-        self.assertEqual((order["type"], order["log"]["hash"], token), ("PERSONAL_BET", pl.code_hash(LOG_CODE), "t0ken-value"))
-        self.assertNotIn("t0ken-value", text(at))
-        self.assertNotIn("otter-maple", json.dumps(order))
-        self.assertEqual(next(iter(at.session_state["_personal_orders"].values()))["issue"], 77)
-
-    def test_engine_answers_are_shown_on_the_card(self):
-        snap = snapshot()
-        h = pl.code_hash(LOG_CODE)
-        with mock.patch.object(order_client, "submit_direct", return_value={"ok": True, "issue": 4}):
-            at = run_page("26_Player_Props.py", snap, setup=lambda a: (choose_log(a), with_token(a)))
-            oid = next(iter(snap["tickets"]["options"]["options"]))["option_id"]
-            next(b for b in at.button if b.label == "Add to Casey — $10.00").click()
-            rerun(at, snap)
-        order_id = next(iter(at.session_state["_personal_orders"].values()))["order_id"]
-        snap2 = snapshot()
-        snap2["personal_logs"]["logs"][h]["orders"] = [{"order_id": order_id, "kind": "PERSONAL_BET", "status": "REJECTED", "reason": "stale quote", "bet_id": None, "processed_at_utc": GEN}]
-        at2 = run_page("26_Player_Props.py", snap2, setup=lambda a: (choose_log(a), with_token(a), a.session_state.__setitem__("_personal_orders", {oid: {"order_id": order_id, "log": h}})))
-        self.assertIn("stale quote", text(at2))
 
 
 class TestMyBetsPage(unittest.TestCase):
-    def test_the_address_reopens_an_account_view_only_and_the_passcode_unlocks_adding_without_being_kept_in_the_address(self):
-        from tests.product_fixture import ACCT_PASS
-        at = run_page("38_My_Bets.py", snapshot(), setup=lambda t: (with_token(t), t.query_params.__setitem__("account", "burnett  ")))     # case and stray spaces are normalised
-        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
-        self.assertIn("view-only", text(at))
-        self.assertIn("Burnett", text(at))
-        at.text_input(key="mb_unlock_key").set_value("WRONG-CODE")
-        at.button(key="mb_unlock").click()
-        rerun(at, snapshot())
-        self.assertIn("does not belong", text(at))
-        at.text_input(key="mb_unlock_key").set_value(ACCT_PASS)
-        at.button(key="mb_unlock").click()
-        rerun(at, snapshot())
-        self.assertNotIn("view-only", text(at))
-        self.assertNotIn(ACCT_PASS, str(dict(at.query_params)))                                   # the passcode is never in the address
 
-    def test_renders_with_the_passcode_explanation_and_no_simulated_wording(self):
-        at = run_page("38_My_Bets.py", snapshot())
-        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
-        t = text(at)
-        flat = t.replace("<b>", "").replace("</b>", "")
-        self.assertIn("Open your account with your last name", flat)
-        self.assertIn("8-character passcode", flat)
-        self.assertIn("its own $500", flat.replace("\\$", "$").replace("&#36;", "$"))
-        self.assertTrue(any("how it works" in e.label.lower() for e in at.expander))
-        details = " ".join(m.value for m in at.markdown)
-        self.assertIn("Reading is not private.", details)
-        self.assertIn("Writing is protected.", details)
-        self.assertIn("public GitHub repository", details)
-        self.assertIn("Ed25519", details)
-        self.assertIn("“Smith 2”", details)
-        self.assertFalse(BANNED.search(t))
-        self.assertFalse([w for w in at.text_input if w.label and "write key" in w.label.lower()])      # no 20-character key is asked for in everyday use
 
-    def test_opening_by_last_name_selects_the_account_with_or_without_the_passcode(self):
-        at = run_page("38_My_Bets.py", snapshot())
-        at.text_input(key="mb_open_name").set_value("burnett"); rerun(at, snapshot())
-        next(b for b in at.button if b.key == "mb_open").click(); rerun(at, snapshot())
-        self.assertEqual(at.session_state["_personal_log"]["hash"], pl.account_key("burnett"))
-        self.assertIsNone(at.session_state["_personal_log"]["write_key"])               # looked at, not writable
-        self.assertIn("view-only", text(at))
-        self.assertIn("Available cash", " ".join(m.label for m in at.metric))
-        at2 = run_page("38_My_Bets.py", snapshot())
-        at2.text_input(key="mb_open_name").set_value("Burnett"); at2.text_input(key="mb_open_key").set_value(ACCT_PASS.lower()); rerun(at2, snapshot())
-        next(b for b in at2.button if b.key == "mb_open").click(); rerun(at2, snapshot())
-        self.assertEqual(at2.session_state["_personal_log"]["write_key"], log_signing.normalize_key(ACCT_PASS))
 
-    def test_a_wrong_passcode_or_an_unknown_name_is_refused(self):
-        at = run_page("38_My_Bets.py", snapshot())
-        at.text_input(key="mb_open_name").set_value("Burnett"); at.text_input(key="mb_open_key").set_value("ZZZZ-YYYY"); rerun(at, snapshot())
-        next(b for b in at.button if b.key == "mb_open").click(); rerun(at, snapshot())
-        self.assertTrue(any("does not belong to this account" in e.value for e in at.error))
-        self.assertNotIn("_personal_log", at.session_state)
-        at2 = run_page("38_My_Bets.py", snapshot())
-        at2.text_input(key="mb_open_name").set_value("Burnett 2"); rerun(at2, snapshot())
-        next(b for b in at2.button if b.key == "mb_open").click(); rerun(at2, snapshot())
-        self.assertTrue(any("“Burnett 2”" in e.value for e in at2.error))
 
-    def test_creating_an_account_shows_the_passcode_once_and_files_a_signed_order_without_it(self):
-        filed = []
-        with mock.patch.object(order_client, "submit_direct", side_effect=lambda o, t, **kw: filed.append(o) or {"ok": True, "issue": 5}):
-            at = run_page("38_My_Bets.py", snapshot(), setup=with_token)
-            at.text_input(key="mb_new_name").set_value("O'Brien"); rerun(at, snapshot())
-            next(b for b in at.button if b.key == "mb_create").click(); rerun(at, snapshot())
-        self.assertEqual(len(filed), 1)
-        doc = filed[0]
-        h = pl.account_key("obrien")
-        self.assertEqual((doc["type"], doc["log"]["hash"], doc["log"]["create"]["slug"], doc["log"]["create"]["display_name"]), ("PERSONAL_LOG_CREATE", h, "obrien", "O'Brien"))
-        self.assertTrue(log_signing.verify(doc, doc["log"]["create"]["write_pub"]))
-        shown = " ".join(c.value for c in at.code)
-        code = shown.split("Passcode: ")[1].strip()
-        self.assertTrue(log_signing.valid_key_shape(code) and log_signing.is_passcode(code))
-        self.assertNotIn(log_signing.normalize_key(code), json.dumps(doc).replace("-", ""))
-        self.assertEqual(log_signing.public_key_hex(log_signing.normalize_key(code), h), doc["log"]["create"]["write_pub"])
-        self.assertIn("only time it is shown", " ".join(m.value for m in at.markdown))
-        next(b for b in at.button if b.key == "mb_saved").click(); rerun(at, snapshot())
-        self.assertEqual(len(at.code), 0)                                              # gone once acknowledged
 
-    def test_a_duplicate_last_name_is_explained_and_becomes_the_next_number(self):
-        filed = []
-        with mock.patch.object(order_client, "submit_direct", side_effect=lambda o, t, **kw: filed.append(o) or {"ok": True, "issue": 6}):
-            at = run_page("38_My_Bets.py", snapshot(), setup=with_token)
-            at.text_input(key="mb_new_name").set_value("Burnett"); rerun(at, snapshot())
-            warn = " ".join(w.value for w in at.warning)
-            self.assertIn("already an account for Burnett", warn)
-            self.assertIn("If that is you, open it", warn)
-            self.assertIn("Burnett 2", warn)
-            self.assertIn("Create account “Burnett 2”", [b.label for b in at.button])
-            next(b for b in at.button if b.key == "mb_create").click(); rerun(at, snapshot())
-        doc = filed[0]
-        self.assertEqual((doc["log"]["hash"], doc["log"]["create"]["slug"]), (pl.account_key("burnett-2"), "burnett-2"))
-        self.assertNotEqual(doc["log"]["hash"], pl.account_key("burnett"))              # never the existing person's account
 
-    def test_creating_is_not_offered_without_the_write_credential(self):
-        at = run_page("38_My_Bets.py", snapshot())
-        at.text_input(key="mb_new_name").set_value("Dana"); rerun(at, snapshot())
-        self.assertFalse(any(b.key == "mb_create" for b in at.button))
-        self.assertIn("not switched on yet", " ".join(c.value for c in at.caption))
 
-    def test_my_model_and_both_views_keep_the_two_books_apart(self):
-        at = run_page("38_My_Bets.py", snapshot(), setup=choose_log)
-        self.assertEqual(at.radio(key="mb_view").options, ["My bets", "Model bets", "Both"])
-        at.radio(key="mb_view").set_value("Both"); rerun(at, snapshot())
-        md = " ".join(m.value for m in at.markdown)
-        self.assertIn("My account", md)
-        self.assertIn("Model book", md)
-        self.assertIn("kept separate on purpose", " ".join(c.value for c in at.caption))
-        at.radio(key="mb_view").set_value("Model bets"); rerun(at, snapshot())
-        self.assertEqual(len(at.exception), 0)
 
-    def test_the_account_shows_its_own_bankroll_figures(self):
-        at = run_page("38_My_Bets.py", snapshot(), setup=choose_log)
-        labels = {m.label: m.value for m in at.metric}
-        for want in ("Available cash", "Open stakes", "Payouts received", "Settled P&L"):
-            self.assertIn(want, labels)
-        self.assertEqual(labels["Available cash"], "$500.00")
 
-    def test_the_earlier_manual_ticket_is_explained_and_claimable_only_with_a_passcode(self):
-        at = run_page("38_My_Bets.py", snapshot())
-        self.assertTrue(any("earlier manual ticket" in e.label for e in at.expander))
-        self.assertIn("moved out of the model", " ".join(m.value for m in at.markdown))
-        self.assertFalse(any(b.key == "mb_claim" for b in at.button))                  # no account open: no claim box
-        at2 = run_page("38_My_Bets.py", snapshot(), setup=choose_log)
-        self.assertTrue(any(b.key == "mb_claim" for b in at2.button))
-        at3 = run_page("38_My_Bets.py", snapshot(), setup=lambda a: choose_log_view_only(a, None))
-        self.assertFalse(any(b.key == "mb_claim" for b in at3.button))
-        self.assertIn("passcode first", " ".join(c.value for c in at3.caption))
 
-    def test_page_without_the_section_is_unavailable_not_an_error(self):
-        snap = snapshot()
-        del snap["personal_logs"]
-        at = run_page("38_My_Bets.py", snap)
-        self.assertEqual(len(at.exception), 0)
-        self.assertIn("not published yet", " ".join(w.value for w in at.warning) + text(at))
 
 
     def test_goalie_page_has_the_best_option_section_and_says_why_when_there_is_none(self):
@@ -529,19 +333,17 @@ class TestMyBetsPage(unittest.TestCase):
         self.assertNotIn("STALE", " ".join(str(d.value.to_dict()) for d in at.dataframe))
         self.assertNotIn("moneyline prices below are stale", " ".join(m.value for m in at.markdown).replace("<b>", "").replace("</b>", ""))
 
-    def test_an_option_card_whose_prices_have_aged_out_is_marked_and_cannot_be_added(self):
+    def test_an_option_card_whose_prices_have_aged_out_is_marked(self):
         late = FIXTURE_NOW.replace(hour=21, minute=0)                    # four hours later: still before the game, long past the 90/180-minute limits
         with mock.patch.object(ui, "_utcnow", return_value=late):
             state = ss.SnapshotState(**{f: None for f in ss.SnapshotState._fields})._replace(data=snapshot(), source="REMOTE", fetch_status="OK", freshness="CURRENT", schema_version=2)
             with mock.patch.object(rm, "current_mode", return_value=rm.COMMUNITY_CLOUD_MODE), mock.patch.object(ss, "remote_enabled", return_value=True), \
                     mock.patch.object(ss, "current", return_value=state):
                 at = AppTest.from_file(os.path.join(PAGES, "26_Player_Props.py"), default_timeout=120)
-                choose_log(at)
                 at.run()
         body = " ".join(m.value for m in at.markdown)
         self.assertIn("STALE", body)
         self.assertIn("Stale price.", body)
-        self.assertFalse(any(b.label.startswith("Add to ") for b in at.button))
 
     def test_model_health_states_validation_and_blocked_markets_without_relabelling(self):
         at = run_page("22_Model_Health.py", snapshot())

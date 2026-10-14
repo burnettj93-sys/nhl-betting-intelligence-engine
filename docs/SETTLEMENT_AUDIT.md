@@ -1,10 +1,10 @@
 # Settlement audit: results against official box scores and documented rules
 
 `python3 deploy/audit_settlement.py --out docs/validation/settlement_audit.json` re-derives every recorded ticket from the NHL's own box scores (`api-web.nhle.com`, fetched at audit time) **without** the engine's resolver or its `nhl.db`,
-recomputes the ticket result and profit/loss from the stored odds and stake, and compares with the ledger. The model book and every personal log are checked separately in the same report.
+recomputes the ticket result and profit/loss from the stored odds and stake, and compares with the ledger. Only the model book is checked; the retired personal records are an inactive archive and are not audited.
 
 ## Result on 2026-10-09
-**11 of 11 bets agree** (leg actual values, leg hits, ticket status and profit/loss): the 9 automatic model tickets (2 wins, 7 losses), the earlier manual ticket kept in the ledger for audit, and its copy in the personal database.
+**11 of 11 bets agree** (leg actual values, leg hits, ticket status and profit/loss): the 9 automatic model tickets (2 wins, 7 losses), and the earlier manual ticket kept in the ledger for audit (a historical snapshot; the report now audits the model ledger only).
 No bet is waiting on a final game; no saved value differs from today's official figure (no correction found). Model book arithmetic: $500 − $10 × 9 + returns = $465.76 on 2026-10-09 (since then three Oct 9 tickets settled: $435.76 on 2026-10-10, see docs/POSTMORTEM_2026-10-10.md) (reconciled by the watchdog every 30 minutes).
 
 ## What each case does (documented rules: `docs/PAPER_SETTLEMENT_RULES.md`)

@@ -146,7 +146,7 @@ class ParlayLeg:
     empirical_games_current: int | None = None    # how many of those games were played this season (the rest are last season's: early in a year the window reaches back)
     market_probability: float | None = None       # moneyline: the no-vig probability from the two DraftKings prices
     early: bool = False                      # a FRESH price retrieved more than SLOT_CLOSE_HOURS before puck drop (a morning/midday look): usable like any fresh price for
-                                             # options and personal-log adds; automatic tickets built on it are capped per day (operational/daily_tickets.EARLY_TICKET_CAP)
+                                             # options; automatic tickets built on it are capped per day (operational/daily_tickets.EARLY_TICKET_CAP)
 
 
 def leg_is_eligible(leg: ParlayLeg) -> bool:

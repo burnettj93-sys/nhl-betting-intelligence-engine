@@ -1,17 +1,13 @@
 """
-Hosted-app write queue, engine side.
+Hosted-app write queue, engine side (evidence only).
 
-The hosted dashboard is read-only (Streamlit Community Cloud has no durable disk), so a click there cannot write anything directly. It files a small
-JSON document -- an ORDER -- in a durable queue (a GitHub issue created with the app's own write credential, see dashboard/order_client.py) and the
-engine answers it here, on its own schedule:
+The hosted dashboard is read-only (Streamlit Community Cloud has no durable disk). An owner action there can file a small JSON document in a durable queue (a GitHub issue, see
+dashboard/order_client.py) and the engine answers it here, on its own schedule. What it answers now:
 
-  * PERSONAL_BET / PERSONAL_LOG_CREATE (label `personal-bet`) -> operational/personal_logs.py: friends' own paper-bet logs, kept in a separate
-    database file and never in the model ledger;
-  * ONTARIO_VERIFICATION, GOALIE_CONFIRMATION, ORDER_PATH_CHECK -> evidence records that stake nothing;
-  * PAPER_ORDER (the old "add to the paper book" order) is RETIRED: it is answered with a rejection that points to personal logs. The $500 model book
-    receives only the engine's own automatic tickets; a hand-added bet can no longer enter it. The old writer survives only as a legacy record.
+  * ONTARIO_VERIFICATION, GOALIE_CONFIRMATION, ORDER_PATH_CHECK -> evidence records that stake nothing.
 
-Every order, whatever happened, is one stored row keyed by order id: a repeated click or a retried transport reads the stored answer back.
+Bets submitted by individual people were REMOVED on 2026-10-14: there are no accounts, no personal logs and no "add to the paper book" orders. Issues carrying the old order labels are not read.
+The $500 model book receives only the engine's own automatic tickets. The old tables and the personal-log database are kept untouched as an inactive archive (deploy/archive_personal_logs.py).
 """
 from __future__ import annotations
 
@@ -39,137 +35,13 @@ RECORDED, ALREADY, NEEDS_ACCEPTANCE, REJECTED = "RECORDED", "ALREADY_RECORDED", 
 LEG_KEY = ("game_id", "participant_id", "market_family", "threshold", "side")
 
 
-def leg_key(d) -> tuple:
-    g = (lambda k: d.get(k)) if isinstance(d, dict) else (lambda k: getattr(d, k))
-    return (str(g("game_id")), str(g("participant_id")), g("market_family"), None if g("threshold") is None else int(g("threshold")), g("side"))
-
-
 # ------------------------------------------------------------------ validation ----
-
-def check_accepted(accepted) -> str | None:
-    """A reason the accepted legs are malformed, or None. Shape only: every leg needs its identity fields and an American price, and two legs
-    from one game are not supported (no same-game joint model or quoted combined price)."""
-    if not isinstance(accepted, dict) or not isinstance(accepted.get("legs"), list) or not (1 <= len(accepted["legs"]) <= MAX_LEGS):
-        return f"The order must name 1 to {MAX_LEGS} legs."
-    for l in accepted["legs"]:
-        if not isinstance(l, dict) or any(k not in l for k in LEG_KEY) or not isinstance(l.get("american_price"), (int, float)) \
-                or isinstance(l.get("american_price"), bool) or abs(l["american_price"]) < 100:
-            return "Every leg needs its identity fields and an American price."
-    if len({l["game_id"] for l in accepted["legs"]}) != len(accepted["legs"]):
-        return "Two legs from the same game are not supported (no same-game joint model or quoted combined price)."
-    return None
-
-
-def parse_order(raw) -> tuple[dict | None, str | None]:
-    """(order, error). The order document is checked for shape only; whether it is still a good bet is revalidation."""
-    try:
-        order = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
-    except json.JSONDecodeError:
-        return None, "The order is not valid JSON."
-    if not isinstance(order, dict) or order.get("type") != "PAPER_ORDER" or order.get("schema") != SCHEMA:
-        return None, "Not a PAPER_ORDER document of the supported schema."
-    oid = order.get("order_id")
-    if not isinstance(oid, str) or not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", oid):
-        return None, "order_id is missing or malformed."
-    err = check_accepted(order.get("accepted"))
-    if err:
-        return None, err
-    accepted = order["accepted"]
-    stake = accepted.get("stake", pb.PAPER_BET_STAKE)
-    if isinstance(stake, bool) or not isinstance(stake, (int, float)) or abs(stake - pb.PAPER_BET_STAKE) > 1e-9:
-        return None, f"The stake is fixed at ${pb.PAPER_BET_STAKE:.2f}."
-    return order, None
-
-
-def revalidate(accepted: dict, current_legs: list[rmp.ParlayLeg], now: dt.datetime) -> dict:
-    """Compares what the person accepted with the current fresh state.
-    status: OK (identical), CHANGED (still qualifies, details moved), UNAVAILABLE (a leg is gone/stale/started),
-            NO_LONGER_QUALIFIES (available but no longer passes the ticket policy)."""
-    by_key = {leg_key(l): l for l in current_legs if rmp.leg_is_eligible(l)}
-    legs, missing, changes = [], [], []
-    for a in accepted["legs"]:
-        cur = by_key.get(leg_key(a))
-        if cur is None:
-            missing.append(a)
-            continue
-        legs.append(cur)
-        if abs(float(a["american_price"]) - cur.american_price) > 1e-9:
-            changes.append({"leg": rmp.leg_label(cur), "was": a["american_price"], "now": cur.american_price})
-    if missing:
-        names = ", ".join(f"{m.get('participant_name') or m['participant_id']}" for m in missing)
-        return {"status": "UNAVAILABLE", "legs": legs, "changes": changes, "combo": None,
-                "reason": f"No current fresh price for: {names} (the quote is stale, withdrawn, or the game has started)."}
-    combo = rmp._evaluate_combo(legs)
-    if combo is None or not rmp.ticket_passes_policy(combo):
-        return {"status": "NO_LONGER_QUALIFIES", "legs": legs, "changes": changes, "combo": combo,
-                "reason": "At the current prices this no longer reaches +100 with positive value under the ticket policy."}
-    claimed_p = accepted.get("hit_probability")
-    if claimed_p is not None and round(float(claimed_p), 2) != round(combo.joint_probability, 2):
-        changes.append({"leg": "hit chance", "was": round(float(claimed_p), 4), "now": round(combo.joint_probability, 4)})
-    return {"status": "CHANGED" if changes else "OK", "legs": legs, "changes": changes, "combo": combo, "reason": None}
-
-
-def current_details(rv: dict) -> dict:
-    """The details to show a person who must accept a change."""
-    from operational import player_options
-    combo = rv["combo"]
-    if combo is None:
-        return {}
-    kind = player_options.SINGLE if len(combo.legs) == 1 else player_options.PARLAY
-    opt = player_options._option_from_combo(kind, combo, et.eastern_today())
-    opt["changes"] = rv["changes"]
-    return opt
 
 
 # ------------------------------------------------------------------- storage ----
 
 def _utcnow() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def stored_order(conn, order_id: str) -> dict | None:
-    row = conn.execute("SELECT * FROM manual_orders WHERE order_id = ?", (order_id,)).fetchone()
-    return dict(row) if row else None
-
-
-def _store(conn, order_id: str, source: str, option_id, status: str, reason, ticket_id, request, detail, received_at) -> dict:
-    conn.execute(
-        "INSERT OR IGNORE INTO manual_orders (order_id, source, option_id, status, reason, ticket_id, request_json, detail_json, "
-        "received_at_utc, processed_at_utc) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (order_id, source, option_id, status, reason, ticket_id, json.dumps(request, sort_keys=True, default=str),
-         json.dumps(detail, sort_keys=True, default=str) if detail is not None else None, received_at, _utcnow()))
-    conn.commit()
-    return stored_order(conn, order_id)
-
-
-def recent_orders(conn, limit: int = 40) -> list[dict]:
-    rows = conn.execute("SELECT * FROM manual_orders ORDER BY processed_at_utc DESC, order_id LIMIT ?", (limit,)).fetchall()
-    out = []
-    for r in rows:
-        d = dict(r)
-        d["detail"] = json.loads(d.pop("detail_json")) if d.get("detail_json") else None
-        d.pop("request_json", None)
-        out.append(d)
-    return out
-
-
-# ------------------------------------------------------------------ processing ----
-
-RETIRED_REASON = ("Hand-added bets no longer go into the model book (it holds only the engine's automatic tickets). "
-                  "Open My Bets, choose or create your personal log, and add the bet there.")
-
-
-def process_order(conn, raw_order, *, current_legs: list[rmp.ParlayLeg] | None = None, now: dt.datetime, source: str,
-                  received_at: str | None = None, page_generated_at: str | None = None) -> dict:
-    """RETIRED path: answers an old PAPER_ORDER with a stored rejection and writes nothing else. Safe to call any number of times."""
-    received_at = received_at or now.strftime("%Y-%m-%dT%H:%M:%SZ")
-    order, error = parse_order(raw_order)
-    if order is None:
-        oid = raw_order.get("order_id") if isinstance(raw_order, dict) else None
-        oid = oid if isinstance(oid, str) and re.fullmatch(r"[A-Za-z0-9_-]{8,64}", oid) else "INVALID-" + re.sub(r"\W", "", source)[:40]
-        return stored_order(conn, oid) or _store(conn, oid, source, None, REJECTED, error, None, {"raw": str(raw_order)[:2000]}, None, received_at)
-    oid = order["order_id"]
-    return stored_order(conn, oid) or _store(conn, oid, source, order.get("option_id"), REJECTED, RETIRED_REASON, None, order, None, received_at)
 
 
 # ------------------------------------------------------------------ GitHub queue ----
@@ -323,17 +195,7 @@ def _confirm(nhl_conn, body, now, source):
     return goalie_confirmations.validate_and_record(nhl_conn, doc, now=now, source_ref=source)
 
 
-def _answer_text(row: dict) -> str:
-    return f"order `{row['order_id']}` -> **{row['status']}**. {row.get('reason') or ''}".strip()
-
-
-def _personal_answer_text(row: dict) -> str:
-    detail = {"RECORDED": f"Recorded as {row.get('bet_id')} in the personal log.", "CREATED": "Log created."}.get(row["status"], row.get("reason") or "")
-    return f"personal-log order `{row['order_id']}` -> **{row['status']}**. {detail}".strip()
-
-
-def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp.ParlayLeg] | None = None,
-                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None, personal_conn=None, personal_fetch=None, builder_pool=None) -> dict:
+def poll_and_process(conn, nhl_conn, now: dt.datetime, *, repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None) -> dict:
     """One pass of the engine-side queue. Serialised by a lock file so overlapping runs cannot race."""
     lock_path = state_paths.path(LOCK_NAME)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -342,63 +204,6 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             return {"status": "SKIPPED", "reason": "ANOTHER_PASS_IN_PROGRESS", "processed": 0}
-        try:
-            orders, ignored = (fetch or fetch_github_orders)(repo, owner)
-        except Exception as exc:  # noqa: BLE001 -- the queue being unreachable must not crash the trader
-            return {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "processed": 0}
-        results = []
-        legs = current_legs
-        for o in orders:
-            source = f"github-issue:{o['issue']}"
-            if legs is None:
-                from operational import daily_tickets
-                legs = daily_tickets.collect_candidate_legs(nhl_conn, now)["legs"]
-            try:
-                parsed = json.loads(o["body"])
-            except (json.JSONDecodeError, TypeError):
-                parsed = o["body"]
-            row = process_order(conn, parsed, current_legs=legs, now=now, source=source, received_at=o.get("created_at"))
-            results.append({"issue": o["issue"], **{k: row[k] for k in ("order_id", "status", "reason", "ticket_id")}})
-            try:
-                _gh(["api", f"repos/{repo}/issues/{o['issue']}/comments", "-f", f"body={_answer_text(row)}"])
-                _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
-            except Exception as exc:  # noqa: BLE001 -- the answer is stored either way; a failed comment is reported
-                results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
-        personal_results = []
-        if fetch is None or personal_fetch is not None:
-            from operational import personal_logs
-            try:
-                p_orders, p_ignored = (personal_fetch or fetch_github_orders)(repo, owner, personal_logs.LABEL)
-            except Exception as exc:  # noqa: BLE001
-                p_orders, p_ignored = [], [{"error": f"{exc.__class__.__name__}: {exc}"}]
-            ignored = ignored + p_ignored
-            if p_orders:
-                own = personal_conn or personal_logs.connect()
-                if builder_pool is None:
-                    from operational import builder_pool as _bp
-                    builder_pool = _bp.load()
-                pool = builder_pool
-                try:
-                    for o in p_orders:
-                        try:
-                            parsed = json.loads(o["body"])
-                        except (json.JSONDecodeError, TypeError):
-                            parsed = o["body"]
-                        is_builder = isinstance(parsed, dict) and isinstance(parsed.get("accepted"), dict) and parsed["accepted"].get("kind") == "BUILDER"
-                        if legs is None and not is_builder:          # a builder slip is checked against the builder price list, not the model's candidate legs
-                            from operational import daily_tickets
-                            legs = daily_tickets.collect_candidate_legs(nhl_conn, now)["legs"]
-                        row = personal_logs.process_order(own, parsed, current_legs=legs, now=now, source=f"github-issue:{o['issue']}", received_at=o.get("created_at"), builder_pool=pool)
-                        personal_results.append({"issue": o["issue"], **{k: row[k] for k in ("order_id", "status", "reason", "bet_id")}})
-                        if personal_fetch is None:
-                            try:
-                                _gh(["api", f"repos/{repo}/issues/{o['issue']}/comments", "-f", f"body={_personal_answer_text(row)}"])
-                                _gh(["api", "-X", "PATCH", f"repos/{repo}/issues/{o['issue']}", "-f", "state=closed", "-f", "state_reason=completed"])
-                            except Exception as exc:  # noqa: BLE001 -- the answer is stored either way
-                                personal_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
-                finally:
-                    if personal_conn is None:
-                        own.close()
         v_results = []
         if fetch is None:
             from operational import goalie_confirmations
@@ -424,5 +229,4 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                         v_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
         else:
             v_ignored = []
-        return {"status": "OK", "processed": len(results) + len(v_results) + len(personal_results), "results": results, "verifications": v_results,
-                "personal": personal_results, "ignored": ignored + v_ignored}
+        return {"status": "OK", "processed": len(v_results), "verifications": v_results, "ignored": v_ignored}

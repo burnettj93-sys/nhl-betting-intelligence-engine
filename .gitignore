@@ -237,3 +237,6 @@ operational/runtime/
 
 # runtime MoneyPuck download state (shared by symlink into the release checkout) -- never commit
 data/raw/moneypuck/*/2026/
+
+# Retired personal-log archive (local only, read-only; deploy/archive_personal_logs.py)
+operational/archive/

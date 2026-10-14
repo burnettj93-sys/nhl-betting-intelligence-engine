@@ -143,6 +143,6 @@ else:
 st.markdown("#### Best qualifying +100 option")
 opt = opts.get(p.get("option_id"))
 if opt:
-    ui.option_card(opt, key=f"pl_{opt['option_id']}", cash=cash, page_generated_at=page_ts)
+    ui.option_card(opt, key=f"pl_{opt['option_id']}")
 else:
     st.caption("No qualifying option for this player right now: either no fresh DraftKings price is on file for them, or no single or cross-game pairing reaches +100 with positive value under the ticket policy.")

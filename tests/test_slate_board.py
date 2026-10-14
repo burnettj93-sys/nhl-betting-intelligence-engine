@@ -385,9 +385,9 @@ class TestThePage(unittest.TestCase):
         at = run_page("41_Slate_Board.py", self.snap())
         self.assertFalse(at.exception, at.exception)
         blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption) + " " + " ".join(x.label for x in at.expander) + " " + " ".join(h.value for h in at.subheader)
-        self.assertIn("Primary parlay", blob)
+        self.assertIn("Eggy's Parlay Pick of the Day", blob)
         self.assertIn("BBB @ AAA", blob)
-        self.assertIn("No primary parlay qualifies", blob)
+        self.assertIn("No Eggy pick today", blob)
         self.assertIn("Test Skater One", blob)
 
     def test_a_recommendation_that_has_aged_past_its_limit_is_withdrawn_when_the_page_is_opened(self):
@@ -409,6 +409,40 @@ class TestThePage(unittest.TestCase):
         s["slate_board"]["games"][0]["side"]["sides"]["away"]["quote_captured_at_utc"] = old      # only the OTHER side aged out: the estimate rests on both quotes
         at = run_page("41_Slate_Board.py", s)
         self.assertIn("Not a current recommendation", " ".join(x.value for x in at.markdown))
+
+    def _ticket(self, **kw):
+        legs = [{"label": "Test Skater One 2+ shots", "market_family": "PLAYER_SOG_ALTERNATE", "game_id": "2026020900", "participant_id": "P1", "participant_name": "Test Skater One",
+                 "american_price": -110.0, "decimal_price": 1.909, "probability": 0.64, "team": "AAA", "opponent": "BBB", "game_start_utc": "2026-10-08T23:00:00Z"},
+                {"label": "COL to win", "market_family": "MONEYLINE", "game_id": "2026020901", "participant_id": "COL", "participant_name": "COL", "american_price": -130.0,
+                 "decimal_price": 1.769, "probability": 0.58, "team": "COL", "opponent": "CGY", "game_start_utc": "2026-10-08T23:30:00Z"}]
+        t = {"ticket_id": "T1", "status": "RECOMMENDED", "recorded": False, "legs": legs, "combined_decimal": 3.377, "combined_american": 238.0, "stake": 10.0, "potential_return": 33.77,
+             "potential_profit": 23.77, "hit_probability": 0.37, "rationale": "r", "proposed": True, "anchor": {"hit_low": 0.31, "hit_high": 0.43, "rationale": "x"}}
+        t.update(kw)
+        return t
+
+    def test_the_eggy_card_shows_the_single_primary_ticket_with_prices_chance_stake_and_return(self):
+        s = snapshot()
+        s["slate_board"] = doc(tickets={"primary": {"status": "FRESH", "ticket": self._ticket(), "reason": "Built on fresh prices.", "price_kind": "CALCULATED",
+                                                    "explanation": "2 legs (moneyline, shots on goal) from 2 different games, priced at +238; the estimated hit chance is 37% against 30% implied by that price.",
+                                                    "strongest_singles": []}})
+        at = run_page("41_Slate_Board.py", s)
+        self.assertFalse(at.exception, at.exception)
+        blob = (" ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)).replace("&#36;", "$").replace("&#x27;", "'")
+        for want in ("Eggy's Parlay Pick of the Day", "+238", "$10.00", "$33.77", "37%", "Test Skater One 2+ shots", "COL to win", "same ticket as the primary parlay", "Proposed, not recorded"):
+            self.assertIn(want, blob)
+        self.assertNotIn("No Eggy pick today", blob)
+        for banned in ("guarantee", "slam dunk", " lock", "sure thing"):
+            self.assertNotIn(banned, blob.lower())
+        self.assertIn("data:image/webp;base64", blob)                                                  # Eggy's artwork is on the card
+
+    def test_with_no_ticket_the_card_says_no_eggy_pick_and_gives_the_reason_without_inventing_one(self):
+        s = snapshot()
+        s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value after the haircut.", "strongest_singles": []}})
+        at = run_page("41_Slate_Board.py", s)
+        blob = " ".join(x.value for x in at.markdown)
+        self.assertIn("No Eggy pick today", blob)
+        self.assertIn("after the haircut", blob)
+        self.assertNotIn("To return", blob)
 
     def test_the_closest_combination_is_displayed_with_its_label(self):
         s = snapshot()

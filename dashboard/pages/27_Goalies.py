@@ -148,7 +148,7 @@ except ps.Unavailable as _exc:
     _opts, _person, _page_ts = {}, None, None
     st.caption(f"The option board is unavailable: {ui.esc(str(_exc))}")
 if _person and _person.get("option_id") in _opts:
-    ui.option_card(_opts[_person["option_id"]], key=f"gl_{_person['option_id']}", cash=None, page_generated_at=_page_ts)
+    ui.option_card(_opts[_person["option_id"]], key=f"gl_{_person['option_id']}")
 elif _page_ts:
     _why = {"NO_FRESH_PRICED_LEG": "no fresh DraftKings saves price is on file for this goalie",
             "NO_LEG_BEATS_ITS_PRICE": "none of his priced saves lines beats its price under the ticket policy",
