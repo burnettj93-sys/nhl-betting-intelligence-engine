@@ -82,21 +82,6 @@ def options() -> dict:
     return opts
 
 
-def manual_orders() -> list[dict]:
-    if _cloud():
-        try:
-            return _wrap(cloud_snapshot.manual_orders).get("orders", [])
-        except Unavailable:
-            return []
-    from operational import manual_orders as mo
-    from operational import paper_bankroll as pb
-    conn = pb.init_db()
-    try:
-        return mo.recent_orders(conn)
-    finally:
-        conn.close()
-
-
 def builder_pool() -> dict:
     """The Paper Parlay Builder's price list. Local mode reads the engine's own file."""
     if _cloud():
@@ -111,19 +96,6 @@ def slate_board() -> dict:
         return _wrap(cloud_snapshot.slate_board)
     from operational import slate_board as sb
     return sb.load() or {"generated_at_utc": None, "games": [], "primary": None}
-
-
-def personal_logs() -> dict:
-    """The published personal-log section ({"logs": {hash: {...}}, "rules": {...}}). Local mode builds it from the personal database."""
-    if _cloud():
-        return _wrap(cloud_snapshot.personal_logs)
-    import datetime as dt
-    from operational import personal_logs as pl
-    conn = pl.connect()
-    try:
-        return pl.section(conn, dt.datetime.now(dt.timezone.utc))
-    finally:
-        conn.close()
 
 
 def performance() -> dict:

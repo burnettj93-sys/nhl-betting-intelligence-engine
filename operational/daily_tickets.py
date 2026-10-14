@@ -513,8 +513,7 @@ def single_card(leg: rmp.ParlayLeg) -> dict:
 
 
 def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | None:
-    """Annotates each option with the AUTOMATIC model-book ticket that already holds the same bet, so the page can say so. It is information only: a
-    person may still add the same bet to their own personal log (that never touches the model book)."""
+    """Annotates each option with the AUTOMATIC model-book ticket that already holds the same bet, so the page can say so. It is information only: it records nothing."""
     if not options:
         return options
     for opt in options.get("options", []):

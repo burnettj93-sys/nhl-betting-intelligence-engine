@@ -132,51 +132,15 @@ def reconciliation() -> str:
                        "tickets_in_ledger": len(rows), "settled_in_ledger": len(settled), "problems": problems, "reconciled": not problems}, indent=1, default=str)
 
 
-def personal_logs_export() -> str:
-    """Every personal log as stored (hash of the code, display name, bets, order answers, audit trail, migrations). No code is ever stored, so none can be exported."""
-    sys.path.insert(0, str(REPO))
-    from operational import personal_logs as pl
-    path = REPO / "operational" / "runtime" / "personal_logs.db"
-    if not path.exists():
-        return json.dumps({"present": False})
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    conn.row_factory = sqlite3.Row
-    out = {"present": True, "exported_at_utc": dt.datetime.now(dt.timezone.utc).isoformat()}
-    for table in ("logs", "orders", "bets", "audit", "migrations"):
-        out[table] = [dict(r) for r in conn.execute(f"SELECT * FROM {table}")]
-    conn.close()
-    return json.dumps(out, indent=1, default=str)
-
-
-def isolated_two_log_qa() -> str:
-    sys.path.insert(0, str(REPO / "deploy"))
-    try:
-        import qa_two_logs
-        return json.dumps(qa_two_logs.main(), indent=1, default=str)
-    except Exception as exc:  # noqa: BLE001
-        return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
-
-
-def personal_workflow_verification() -> str:
-    """The engine-side verdict on the hosted personal-log workflow (PENDING until it has been exercised through the app's own write path)."""
-    sys.path.insert(0, str(REPO / "deploy"))
-    try:
-        import verify_personal_workflow
-        return json.dumps(verify_personal_workflow.main(), indent=1, default=str)
-    except Exception as exc:  # noqa: BLE001
-        return json.dumps({"error": f"{type(exc).__name__}: {exc}"})
-
-
 def board_evidence() -> str:
     p = REPO / "operational" / "runtime" / "board_evidence.jsonl"
     return p.read_text() if p.exists() else ""
 
 
-def model_vs_personal_reconciliation() -> str:
-    """Independent re-derivation of both books from raw rows (not from the account helpers), and the separation checks."""
+def model_book_reconciliation() -> str:
+    """Independent re-derivation of the $500 model book from raw rows (not from the account helpers)."""
     sys.path.insert(0, str(REPO))
     from operational import paper_bankroll as pb
-    from operational import personal_logs as pl
     led = sqlite3.connect(f"file:{REPO / 'operational' / 'paper_bankroll.db'}?mode=ro", uri=True)
     led.row_factory = sqlite3.Row
     auto = [dict(r) for r in led.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC'")]
@@ -196,32 +160,13 @@ def model_vs_personal_reconciliation() -> str:
             problems.append(f"model {k}: helper {helper[k]} != independent {independent[ik]}")
     if independent["cash_by_flows"] != independent["cash"]:
         problems.append("model cash by stakes/returns flow differs from cash by P&L")
-    personal = {}
-    pdb = REPO / "operational" / "runtime" / "personal_logs.db"
-    if pdb.exists():
-        pc = sqlite3.connect(f"file:{pdb}?mode=ro", uri=True)
-        pc.row_factory = sqlite3.Row
-        for lg in pc.execute("SELECT * FROM logs"):
-            bets = [dict(b) for b in pc.execute("SELECT * FROM bets WHERE log_hash = ?", (lg["log_hash"],))]
-            summ = pl.summarize(bets)
-            ind_pnl = round(sum((b["profit_loss"] or 0) for b in bets if b["result_status"] in ("WIN", "LOSS", "VOID")), 2)
-            if ind_pnl != summ["settled_pnl"]:
-                problems.append(f"personal log {lg['log_hash'][:8]}: P&L {ind_pnl} != summary {summ['settled_pnl']}")
-            personal[lg["log_hash"][:12]] = {"display_name": lg["display_name"], "summary": summ, "independent_settled_pnl": ind_pnl}
-        moved = {r["source_ref"]: r["bet_id"] for r in pc.execute("SELECT * FROM migrations")}
-        for row in legacy:
-            ref = f"paper_bets:{row['paper_bet_id']}"
-            copy = pc.execute("SELECT * FROM bets WHERE bet_id = ?", (moved.get(ref, ""),)).fetchone()
-            if copy is None:
-                problems.append(f"legacy ticket {row['paper_bet_id']} was not migrated")
-            elif (copy["legs_json"], copy["stake"], copy["result_status"], copy["profit_loss"]) != (row["legs_json"], row["stake"], row["result_status"], row["profit_loss"]):
-                problems.append(f"legacy ticket {row['paper_bet_id']}: the copy differs from the original ledger row")
-        pc.close()
     led.close()
+    archive = REPO / "operational" / "archive" / "personal_logs_archive.db"
     return json.dumps({"model_book_independent": independent, "model_book_account_helper": helper,
                        "legacy_manual_rows_kept_in_ledger_outside_model_book": [{k: r[k] for k in ("paper_bet_id", "origin", "result_status", "profit_loss", "stake", "created_at_utc")} for r in legacy],
-                       "personal_logs": personal, "problems": problems, "reconciled": not problems,
-                       "note": "Model book = AUTOMATIC rows only. Personal logs live in a different database file and are reconciled per log; the two are never added together."}, indent=1, default=str)
+                       "inactive_personal_archive_present": archive.exists(),
+                       "problems": problems, "reconciled": not problems,
+                       "note": "Model book = AUTOMATIC rows only. The retired personal records are an inactive archive (deploy/archive_personal_logs.py), never added to the model book and not exported here."}, indent=1, default=str)
 
 
 def postmortems() -> dict[str, bytes]:
@@ -281,11 +226,8 @@ def main(argv=None) -> int:
     extras = {**{k: v.encode() for k, v in sanitized_plists().items()},
               "audit_evidence/ledger_export.json": ledger_export().encode(),
               "audit_evidence/job_health.json": job_health().encode(),
-              "audit_evidence/personal_logs_export.json": personal_logs_export().encode(),
-              "audit_evidence/isolated_two_log_qa.json": isolated_two_log_qa().encode(),
-              "audit_evidence/personal_workflow_verification.json": personal_workflow_verification().encode(),
               "audit_evidence/board_evidence.jsonl": board_evidence().encode(),
-              "audit_evidence/model_vs_personal_reconciliation.json": model_vs_personal_reconciliation().encode(),
+              "audit_evidence/model_book_reconciliation.json": model_book_reconciliation().encode(),
               "audit_evidence/ledger_board_reconciliation.json": reconciliation().encode(),
               **postmortems(),
               "audit_evidence/test_results.txt": args.tests.encode()}

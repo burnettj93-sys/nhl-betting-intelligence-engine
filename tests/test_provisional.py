@@ -156,21 +156,6 @@ class TestProvisionalNeverRecords(unittest.TestCase):
         self.assertTrue(any("provisional" in w for w in dtk.revalidate_before_recording(combo, self.now)))
 
 
-class TestPersonalAddsUseActualFreshness(unittest.TestCase):
-    """A fresh morning price is addable to a personal log; an aged one is not. The same revalidation the engine runs on every order."""
-
-    def test_fresh_early_leg_is_available_and_an_aged_provisional_leg_is_not(self):
-        from operational import manual_orders
-        start = "2026-10-15T23:30:00Z"
-        now = dt.datetime(2026, 10, 15, 12, 30, tzinfo=U)
-        fresh = [dataclasses.replace(l, early=True) for l in board(2, start=start, captured=iso(now - dt.timedelta(minutes=10)))]
-        accepted = {"legs": [{"game_id": l.game_id, "participant_id": l.participant_id, "market_family": l.market_family, "threshold": l.threshold, "side": l.side,
-                              "american_price": l.american_price, "participant_name": l.participant_name} for l in fresh], "hit_probability": None}
-        ok = manual_orders.revalidate(accepted, fresh, now)
-        self.assertIn(ok["status"], ("OK", "CHANGED"))
-        aged = [dataclasses.replace(l, price_fresh=False, provisional=True, early=False) for l in fresh]
-        gone = manual_orders.revalidate(accepted, aged, now)
-        self.assertEqual(gone["status"], "UNAVAILABLE")
 
 
 if __name__ == "__main__":

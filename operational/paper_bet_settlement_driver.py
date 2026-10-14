@@ -200,7 +200,7 @@ def resolve_combo_bet(nhl_conn, bet: dict) -> dict:
 
 def terminal_outcome(result: dict) -> dict | None:
     """Maps one resolver (single) or combo result to the state a ticket takes, or None when it must simply stay as it is (a game not final yet).
-    {"status": WIN|LOSS|VOID|UNRESOLVED, "settled_odds", "notes", "detail_json"}. Shared by the model book and the personal logs so both settle by the same rules."""
+    {"status": WIN|LOSS|VOID|UNRESOLVED, "settled_odds", "notes", "detail_json"}. Used by the model book's settlement."""
     status = result["status"]
     if status in (resolver.GAME_NOT_FINAL, PENDING_STILL_WAITING):
         return None

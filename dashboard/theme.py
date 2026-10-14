@@ -2,7 +2,7 @@
 Visual layer: layered slate surfaces (not black), one restrained blue accent, consistent cards, metrics, buttons, badges and a clear active
 navigation state; and Eggy, the product's mascot, placed in the sidebar, the page header and empty states.
 
-Everything is CSS over Streamlit's own components (no layout is replaced), so every page and the personal-log views inherit it. Colours are
+Everything is CSS over Streamlit's own components (no layout is replaced), so every page inherits it. Colours are
 tokens below; badge/banner tones live in dashboard/ui.py (TONES) and use the same family.
 """
 from __future__ import annotations
@@ -122,6 +122,14 @@ button:focus-visible, a:focus-visible, [role="tab"]:focus-visible, input:focus-v
 .eggy-empty img { width: 76px; height: 76px; border-radius: 16px; flex: none; box-shadow: 0 0 0 1px var(--border-strong); }
 .eggy-empty .m { color: var(--text); font-weight: 600; } .eggy-empty .h { color: var(--muted); font-size: .84rem; margin-top: 3px; }
 
+/* ---- Eggy's Parlay Pick of the Day: the single primary ticket, branded */
+.eggy-pick-head { display:flex; align-items:center; gap:16px; margin: 0 0 6px 0; }
+.eggy-pick-head img { width: 92px; height: 92px; border-radius: 22px; flex: none; box-shadow: 0 0 0 2px var(--warn), 0 8px 22px rgba(0,0,0,.35); }
+.eggy-pick-head .eyebrow { color: var(--warn); font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.eggy-pick-head .ttl { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.12; margin-top: 3px; text-wrap: balance; }
+.eggy-pick-head .sub { color: var(--text2); font-size: .86rem; margin-top: 5px; line-height: 1.4; }
+.eggy-pick-none .ttl { color: var(--text); }
+
 /* ---- phones: two-up metrics instead of a tall stack, roomier tap targets, tighter margins */
 @media (max-width: 760px) {
   [data-testid="stMarkdownContainer"] table { display: block; overflow-x: auto; }
@@ -134,6 +142,7 @@ button:focus-visible, a:focus-visible, [role="tab"]:focus-visible, input:focus-v
   .leg { flex-direction: column; align-items: flex-start; gap: 6px; } .leg-right { justify-content: flex-start; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat .v { font-size: 1.05rem; }
   .eggy-empty { flex-direction: column; text-align: center; } .eggy-empty img { width: 64px; height: 64px; }
+  .eggy-pick-head { flex-direction: column; align-items: flex-start; gap: 10px; } .eggy-pick-head img { width: 72px; height: 72px; border-radius: 18px; } .eggy-pick-head .ttl { font-size: 1.2rem; }
   .stButton > button, [data-testid="stLinkButton"] a { min-height: 44px; }
   [data-testid="stSidebarNav"] a, [data-testid="stSidebar"] a[data-testid="stSidebarNavLink"] { min-height: 46px; font-size: 1rem; }
 }
@@ -158,6 +167,12 @@ def _data_uri(path: Path) -> str:
 @st.cache_data(show_spinner=False, ttl=86400, max_entries=8)
 def _icon_uri() -> str:
     return _data_uri(EGGY_ICON)
+
+
+@st.cache_data(show_spinner=False, ttl=86400, max_entries=8)
+def eggy_pick_uri() -> str:
+    """The larger Eggy artwork used on Eggy's Parlay Pick of the Day."""
+    return _data_uri(EGGY_200)
 
 
 @st.cache_data(show_spinner=False, ttl=86400, max_entries=8)

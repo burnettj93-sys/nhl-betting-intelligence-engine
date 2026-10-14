@@ -1,6 +1,5 @@
 """Best Options — for each player or goalie with a fresh DraftKings price, the best qualifying +100 option: a single when one
-exists, otherwise a two-leg cross-game parlay. Each distinct option appears once with everyone it is best for. "Add to paper
-book — $10" is the only action here, and it acts only when pressed."""
+exists, otherwise a two-leg cross-game parlay. Each distinct option appears once with everyone it is best for. Read-only: nothing here is submitted or recorded."""
 from __future__ import annotations
 
 import sys
@@ -21,10 +20,9 @@ opts_doc = tk.get("options")
 if not opts_doc:
     ui.unavailable("No best-option document has been built for today yet; it is written with the ticket board by the paper-trader job.", "Best options")
     st.stop()
-ui.banner("<b>Options, not endorsements.</b> This page lists bets you can browse and add to your own personal log. The model's endorsed selections are only its automatic tickets on <b>Today</b>, "
+ui.banner("<b>Options, not endorsements.</b> This page lists options you can browse; nothing here is a bet or is recorded. The model's endorsed selection is only its single primary ticket on are only its automatic tickets on <b>Today</b>, "
           "chosen by estimated hit chance under exposure limits; an option here may be one the model would not take.", "info")
 options = opts_doc["options"]
-cash = tk["account"]["available_cash"]
 pol = opts_doc.get("policy") or {}
 st.caption(f"Options built {ui.et_time(opts_doc.get('generated_at_utc') or tk['generated_at_utc'], True)} for Eastern date {opts_doc.get('date_et')}. "
            f"Rule: +100 or better, estimated edge at least {pol.get('min_estimated_ev', 0.05):.0%}, still positive after lowering each leg's probability by "
@@ -33,8 +31,8 @@ st.caption(f"Options built {ui.et_time(opts_doc.get('generated_at_utc') or tk['g
 if not options:
     ui.banner(ui.esc(tk.get("empty_slot_reason") or "No person has a fresh price that qualifies right now."), "muted")
     st.caption("The engine looks at DraftKings' player prices from 8:00 AM ET (a morning look at every game its odds-credit plan covers), again around midday when credits allow, and "
-               "again about 105 minutes before each puck drop. A price that is still fresh (150 minutes, 100 when the game is under two hours away) can be added to a personal log at "
-               "any hour; an older one is shown as Provisional until refreshed. Below, why each game does or does not have prices yet. Nothing is recorded by looking at this page.")
+               "again about 105 minutes before each puck drop. A price that is still fresh (150 minutes, 100 when the game is under two hours away) is shown as current; "
+               "an older one is shown as Provisional until refreshed. Below, why each game does or does not have prices yet. Nothing is recorded by looking at this page.")
     ui.availability_table((ui.availability_block(tk).get("today")) or {})
     st.stop()
 
@@ -51,6 +49,6 @@ if n_prov:
     st.caption(f"{n_prov} of these option(s) are provisional: their prices come from an earlier look today and are now older than the freshness limit. They can be browsed but not added until refreshed.")
 st.caption(f"{len(show)} of {len(options)} distinct option(s) · {d.get('people_with_option', '?')} of {d.get('people_with_priced_props', '?')} people with a fresh price have an option.")
 for o in show[:60]:
-    ui.option_card(o, key=f"bo_{o['option_id']}", cash=cash, page_generated_at=tk["generated_at_utc"])
+    ui.option_card(o, key=f"bo_{o['option_id']}")
 if len(show) > 60:
     st.caption(f"Showing the best 60 of {len(show)}; use the search box to find others.")

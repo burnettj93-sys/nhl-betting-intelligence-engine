@@ -25,12 +25,8 @@ from tests.test_daily_tickets import FUTURE, NOW, board, collected, fresh_ledger
 DATE = "2026-10-15"
 
 
-def accepted_from(opt: dict) -> dict:
-    return order_client.build_order(opt, order_id="ord_" + "a" * 12, page_generated_at=NOW.isoformat())["accepted"]
 
 
-def order_for(opt: dict, oid: str, **kw) -> dict:
-    return order_client.build_order(opt, order_id=oid, page_generated_at=NOW.isoformat(), **kw)
 
 
 class TestOptions(unittest.TestCase):
@@ -67,58 +63,18 @@ class TestOptions(unittest.TestCase):
         self.assertEqual(po.build_options(legs, DATE)["options"], [])
 
 
-class TestRetiredModelBookOrders(unittest.TestCase):
-    """The old "add to the paper book" order is retired: it is answered with a stored rejection and the model ledger is never written.
-    (Personal logs are tested in tests/test_personal_logs.py; the model book's isolation is proven there.)"""
 
-    def setUp(self):
-        self.path, self.conn = fresh_ledger()
-        self.legs = board(4, price=-105, p=0.62)
-        self.doc = po.build_options(self.legs, DATE)
-        self.opt = self.doc["options"][0]
 
-    def process(self, order, legs=None, now=NOW):
-        return mo.process_order(self.conn, order, current_legs=legs or self.legs, now=now, source="test:1")
-
-    def test_a_valid_old_order_is_rejected_with_the_pointer_to_personal_logs_and_writes_no_ticket(self):
-        row = self.process(order_for(self.opt, "ord_" + "a" * 12))
-        self.assertEqual(row["status"], mo.REJECTED)
-        self.assertIn("My Bets", row["reason"])
-        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER", origin=None), [])
-        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["tickets"], 0)
-
-    def test_repeating_the_order_reads_the_stored_answer(self):
-        o = order_for(self.opt, "ord_" + "b" * 12)
-        self.assertEqual(self.process(o), self.process(o))
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM manual_orders").fetchone()[0], 1)
-
-    def test_invalid_orders_are_rejected_and_write_nothing(self):
-        for bad in ({"type": "PAPER_ORDER"}, "not json", {"schema": 1, "type": "PAPER_ORDER", "order_id": "x"},
-                    dict(order_for(self.opt, "ord_" + "c" * 12), accepted={"legs": [], "stake": 10})):
-            self.assertEqual(self.process(bad)["status"], mo.REJECTED)
-        o = order_for(self.opt, "ord_" + "d" * 12)
-        o["accepted"]["stake"] = 25.0
-        self.assertEqual(self.process(o)["status"], mo.REJECTED)
-        self.assertEqual(pb.query_paper_bets(self.conn, track="REAL_MARKET_PAPER", origin=None), [])
-
-    def test_browsing_writes_nothing(self):
-        before = self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0]
-        po.build_options(self.legs, DATE)
-        dtk.build_state(self.conn, NOW, recommended=[], singles=[], empty_reason=None, diagnostics={}, record_results=[], options=self.doc)
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], before)
-        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM manual_orders").fetchone()[0], 0)
-
-    def test_check_accepted_still_validates_shapes_for_personal_orders(self):
-        o = order_for(self.opt, "ord_" + "e" * 12)
-        self.assertIsNone(mo.check_accepted(o["accepted"]))
-        o["accepted"]["legs"][0]["american_price"] = 50
-        self.assertIsNotNone(mo.check_accepted(o["accepted"]))
-        same = order_for(self.opt, "ord_" + "f" * 12)
-        if len(same["accepted"]["legs"]) == 1:
-            same["accepted"]["legs"].append(dict(same["accepted"]["legs"][0], participant_id="Z"))
-        else:
-            same["accepted"]["legs"][1]["game_id"] = same["accepted"]["legs"][0]["game_id"]
-        self.assertIn("same game", mo.check_accepted(same["accepted"]))
+class TestBrowsingWritesNothing(unittest.TestCase):
+    def test_building_options_and_state_writes_no_ticket_and_no_order(self):
+        path, conn = fresh_ledger()
+        legs = board(4, price=-105, p=0.62)
+        doc = po.build_options(legs, DATE)
+        before = conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0]
+        po.build_options(legs, DATE)
+        dtk.build_state(conn, NOW, recommended=[], singles=[], empty_reason=None, diagnostics={}, record_results=[], options=doc)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], before)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM manual_orders").fetchone()[0], 0)
 
 
 class TestLegacyManualRowIsOutsideTheModelBook(unittest.TestCase):
@@ -173,15 +129,6 @@ class TestQueue(unittest.TestCase):
 
 
 class TestOrderClient(unittest.TestCase):
-    def test_prefilled_issue_roundtrips_the_order(self):
-        opt = po.build_options(board(2, price=-105, p=0.60), DATE)["options"][0]
-        order = order_for(opt, "ord_" + "z" * 12)
-        url = order_client.prefilled_issue_url(order)
-        self.assertTrue(url.startswith("https://github.com/burnettj93-sys/nhl-betting-intelligence-engine/issues/new?"))
-        body = order_client.issue_body(order)
-        parsed, err = mo.parse_order(json.loads(body.split("```json\n")[1].split("\n```")[0]))
-        self.assertIsNone(err)
-        self.assertEqual(parsed["order_id"], order["order_id"])
 
     def test_direct_write_needs_token_and_listed_email(self):
         class S(dict):

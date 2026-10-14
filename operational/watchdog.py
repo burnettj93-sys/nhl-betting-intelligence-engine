@@ -7,9 +7,8 @@ Persistent self-check (launchd, every 30 minutes; deploy/launchd/com.nhlengine.w
       trader_recent         the 15-minute trader recorded a success in the last 45 minutes;
       publish_recent        the hosted snapshot was published in the last 60 minutes;
       database_path         the resolved NHL database is the live one and the ledger exists;
-      reconciliation        the model book re-derived from raw rows (cash by P&L = cash by stake/return flows = the account helper); every personal log's
-                            summary = its raw rows; no personal bet is in the model ledger; a migrated legacy ticket equals its original row;
-      settlement_backlog    bets (model and personal) whose game started more than 6 hours ago and are still open: WARN, FAIL past 12 hours;
+      reconciliation        the model book re-derived from raw rows (cash by P&L = cash by stake/return flows = the account helper);
+      settlement_backlog    model bets whose game started more than 6 hours ago and are still open: WARN, FAIL past 12 hours;
       source_freshness      the sources the engine depends on (schedule, results, player logs) are inside their own freshness policies;
       quote_freshness       prop and moneyline prices are inside their rules (a price stale only because the credit budget forbids a refresh is readiness, not failure);
       publishing_enabled    publication to the hosted app is switched ON (a demonstration that left it OFF is a FAIL).
@@ -39,7 +38,7 @@ TRADER_MAX_AGE_MIN = 45.0
 PUBLISH_MAX_AGE_MIN = 60.0
 
 EXPECTED_JOBS = (
-    "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.manual-order-job", "com.nhlengine.moneyline-pregame", "com.nhlengine.moneyline-snapshot",
+    "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.moneyline-pregame", "com.nhlengine.moneyline-snapshot",
     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second", "com.nhlengine.daily-props-pull", "com.nhlengine.daily-nhl-sync",
     "com.nhlengine.midday-schedule-refresh", "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement", "com.nhlengine.daily-postmortem",
     "com.nhlengine.database-backup", "com.nhlengine.morning-update", "com.nhlengine.moneypuck-refresh",
@@ -133,10 +132,10 @@ def _independent_model_book(ledger) -> dict:
             "open_stakes": round(sum(r["stake"] for r in open_), 2), "tickets": len(rows)}
 
 
-def check_reconciliation(ledger, personal) -> dict:
-    """Both books re-derived from raw rows and compared; the separation itself is checked too. FAIL on any disagreement."""
+def check_reconciliation(ledger) -> dict:
+    """The model book re-derived from raw rows and compared with the account helper and its split. FAIL on any disagreement. (Personal accounts were removed on 2026-10-14; their
+    database is an inactive archive and is not part of any check.)"""
     from operational import paper_bankroll as pb
-    from operational import personal_logs as pl
     problems = []
     ind = _independent_model_book(ledger)
     helper = pb.account_state(ledger, "REAL_MARKET_PAPER")
@@ -148,34 +147,12 @@ def check_reconciliation(ledger, personal) -> dict:
     split = pb.book_breakdown(ledger, "REAL_MARKET_PAPER")["reconciliation"]            # the parlay experiment + the earlier single bets must add up to the whole account
     if not split["all_agree"]:
         problems.append("model account split does not add up: " + ", ".join(k for k, v in split["checks"].items() if not v))
-    personal_ids = {r["bet_id"] for r in personal.execute("SELECT bet_id FROM bets")}
-    clash = [r["paper_bet_id"] for r in ledger.execute("SELECT paper_bet_id FROM paper_bets") if r["paper_bet_id"] in personal_ids]
-    if clash:
-        problems.append(f"a bet id exists in both books: {clash[:3]}")
-    n_logs = 0
-    for lg in personal.execute("SELECT log_hash FROM logs"):
-        n_logs += 1
-        bets = [dict(b) for b in personal.execute("SELECT * FROM bets WHERE log_hash = ?", (lg["log_hash"],))]
-        summ = pl.summarize(bets)
-        pnl = round(sum(b["profit_loss"] or 0 for b in bets if b["result_status"] in ("WIN", "LOSS", "VOID")), 2)
-        if pnl != summ["settled_pnl"] or summ["bets"] != len(bets):
-            problems.append(f"personal log {lg['log_hash'][:8]}: summary does not match its rows")
-    for r in pl.reconcile(personal):                           # every account's own $500 bankroll, re-derived from its stakes and payouts a second way
-        if not r["agrees"]:
-            problems.append(f"personal account {r['log_hash'][:8]}: cash {r['available_cash']} != re-derived {r['cash_by_flows']}")
-        if pl.account_state(personal, r["log_hash"])["over_drawn"]:
-            problems.append(f"personal account {r['log_hash'][:8]}: stakes exceed its cash")
-    for m in personal.execute("SELECT * FROM migrations WHERE source_ref NOT LIKE 'bankroll-v1:%'"):       # (bankroll migration records are not ticket copies)
-        src = ledger.execute("SELECT * FROM paper_bets WHERE paper_bet_id = ?", (m["source_ref"].split(":", 1)[1],)).fetchone()
-        cp = personal.execute("SELECT * FROM bets WHERE bet_id = ?", (m["bet_id"],)).fetchone()
-        if src is None or cp is None or (src["legs_json"], src["stake"], src["profit_loss"], src["result_status"]) != (cp["legs_json"], cp["stake"], cp["profit_loss"], cp["result_status"]):
-            problems.append(f"migrated ticket {m['bet_id']} differs from its original ledger row")
     if problems:
         return {"name": "reconciliation", "status": FAIL, "detail": "; ".join(problems)[:300]}
-    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways and splits into parlay tickets ({split['parlay_pnl']:+.2f}) and single bets ({split['single_bets_pnl']:+.2f}); {n_logs} personal account(s) agree with their rows and each reconciles its own $500 bankroll; no bet in both books"}
+    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways and splits into parlay tickets ({split['parlay_pnl']:+.2f}) and single bets ({split['single_bets_pnl']:+.2f})"}
 
 
-def check_settlement_backlog(ledger, personal, now: dt.datetime) -> dict:
+def check_settlement_backlog(ledger, now: dt.datetime) -> dict:
     def stuck(rows):
         out = []
         for r in rows:
@@ -187,10 +164,9 @@ def check_settlement_backlog(ledger, personal, now: dt.datetime) -> dict:
             out.append((now - started).total_seconds() / 3600.0)
         return out
     model = stuck(ledger.execute("SELECT event_start_utc FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC' AND result_status IN ('PENDING','UNRESOLVED')").fetchall())
-    mine = stuck(personal.execute("SELECT event_start_utc FROM bets WHERE result_status IN ('PENDING','UNRESOLVED')").fetchall())
-    late = [h for h in model + mine if h > SETTLEMENT_WARN_H]
+    late = [h for h in model if h > SETTLEMENT_WARN_H]
     worst = max(late, default=0.0)
-    detail = f"{len([h for h in model if h > 0])} model and {len([h for h in mine if h > 0])} personal bet(s) started and still open; {len(late)} open more than {SETTLEMENT_WARN_H:.0f} h after puck drop"
+    detail = f"{len([h for h in model if h > 0])} model bet(s) started and still open; {len(late)} open more than {SETTLEMENT_WARN_H:.0f} h after puck drop"
     if worst > SETTLEMENT_FAIL_H:
         return {"name": "settlement_backlog", "status": FAIL, "detail": detail + f" (oldest {worst:.0f} h)"}
     if late:
@@ -252,28 +228,13 @@ def _first_board_evidence() -> str | None:
     return None
 
 
-def readiness(now: dt.datetime, personal=None, evaluated: dict | None = None) -> dict:
+def readiness(now: dt.datetime, evaluated: dict | None = None) -> dict:
     """Which user-facing features work end to end. Statuses: WORKING, LIMITED, NOT_VERIFIED, BLOCKED, OWNER_ACTION. Independent of operational health."""
     feats = []
 
     def add(feature, status, detail, action=None):
         feats.append({"feature": feature, "status": status, "detail": detail, "owner_action": action})
 
-    # personal-log writes from the hosted app: proven only by an order that arrived through the app's own write path
-    verified = None
-    if personal is not None:
-        for r in personal.execute("SELECT request_json, status, processed_at_utc FROM orders WHERE status IN ('RECORDED','CREATED') ORDER BY processed_at_utc DESC"):
-            try:
-                if json.loads(r["request_json"] or "{}").get("via") == "direct":
-                    verified = r["processed_at_utc"]
-                    break
-            except json.JSONDecodeError:
-                continue
-    if verified:
-        add("Personal logs: one-click add from the hosted app", "WORKING", f"an order sent by the app's own write path was processed (latest {verified})")
-    else:
-        add("Personal logs: one-click add from the hosted app", "NOT_VERIFIED", "no order has ever arrived through the app's own write credential; a link-filed or hand-filed order does not prove it",
-            "Add the LOG_WRITE_TOKEN Streamlit secret (docs/PERSONAL_LOGS.md), then run the create → add → settle check")
     df = json.loads(state_paths.path("dailyfaceoff_state.json").read_text()) if state_paths.path("dailyfaceoff_state.json").exists() else {}
     # Is tonight's board actually populated? Judged from the engine's own published ticket board and logged persistently, so the evidence does not depend on anyone watching.
     try:
@@ -499,19 +460,16 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
         try:
             import sqlite3
             from operational import paper_bankroll as pb
-            from operational import personal_logs as pl
             ledger = sqlite3.connect(f"file:{pb.DB_PATH}?mode=ro", uri=True)
             ledger.row_factory = sqlite3.Row
-            personal = pl.connect()
             try:
-                checks.append(check_reconciliation(ledger, personal))
-                checks.append(check_settlement_backlog(ledger, personal, now))
+                checks.append(check_reconciliation(ledger))
+                checks.append(check_settlement_backlog(ledger, now))
                 checks.append(check_sources(now))
                 checks.append(check_quotes(now))
-                ready = readiness(now, personal)
+                ready = readiness(now)
             finally:
                 ledger.close()
-                personal.close()
         except Exception as exc:  # noqa: BLE001
             checks.append({"name": "reconciliation", "status": FAIL, "detail": f"could not run the book checks: {type(exc).__name__}: {exc}"[:200]})
     worst = FAIL if any(c["status"] == FAIL for c in checks) else WARN if any(c["status"] == WARN for c in checks) else OK

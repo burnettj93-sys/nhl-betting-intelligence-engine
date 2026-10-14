@@ -202,22 +202,14 @@ def _product_meta() -> dict:
 
 
 def _manual_orders() -> dict:
+    """The evidence queue's records only (Ontario spot checks, order-path checks). `orders` stays an empty list for older readers: bets submitted by people were removed on 2026-10-14."""
     from operational import manual_orders
     conn = _bankroll_conn()
     try:
         have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
-        return {"orders": manual_orders.recent_orders(conn) if "manual_orders" in have else [],
+        return {"orders": [],
                 "ontario_verifications": manual_orders.recent_verifications(conn) if "ontario_verifications" in have else [],
                 "path_checks": manual_orders.load_path_checks()}
-    finally:
-        conn.close()
-
-
-def _personal_logs() -> dict:
-    from operational import personal_logs
-    conn = personal_logs.connect()
-    try:
-        return personal_logs.section(conn, dt.datetime.now(dt.timezone.utc))
     finally:
         conn.close()
 
@@ -244,7 +236,6 @@ _SECTION_BUILDERS = {
     "product_teams": _product("teams"),
     "product_model_health": _product("model_health"),
     "manual_orders": _manual_orders,
-    "personal_logs": _personal_logs,
     "builder_pool": _builder_pool,
     "slate_board": _slate_board,
     "performance": _performance,

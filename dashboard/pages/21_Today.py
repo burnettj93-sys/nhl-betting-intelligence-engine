@@ -1,5 +1,5 @@
 """Today — the automatic engine's view of the Eastern-time hockey day: today's games, the (up to five) distinct +100 cross-game
-tickets it recorded or recommends, and the model's $500 paper book. Personal logs are on My Bets and never appear here. Read-only."""
+tickets it recorded or recommends, and the model's $500 paper book. Read-only."""
 from __future__ import annotations
 
 import sys
@@ -124,7 +124,7 @@ if ex.get("tickets_counted"):
         if not shared and not shared_g:
             st.caption("No player or game appears on more than one ticket.")
 
-st.caption("Your own bets live on **My Bets** (your personal log) and never change the model book on this page.")
+st.caption("Only the engine's automatic workflow records model tickets; nothing a visitor does on this app is recorded or changes this book.")
 
 if tk.get("earlier_open_tickets"):
     st.subheader("Earlier tickets still open")

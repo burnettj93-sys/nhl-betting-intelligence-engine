@@ -14,8 +14,7 @@ A slot is satisfied by ANY capture of the planned markets taken at or after the 
 when we asked (NOT_POSTED, cost 0) is looked at again after RECHECK_MINUTES, so the first time it appears is caught without waiting for the next slot.
 Tomorrow's games get two cheap checks a day (TOMORROW_CHECKS_ET) and are otherwise covered by the morning slot once they become "today". Each check is recorded as an observation with its time.
 
-Using a price is judged by its actual age, not by the slot that fetched it: a price inside the freshness limit (150 minutes; 100 within two hours of puck drop) can be shown, added to a
-personal log, and (capped, see daily_tickets.EARLY_TICKET_CAP) recorded on an automatic ticket at any hour; one that has aged out can only be shown as provisional. The pregame slot exists
+Using a price is judged by its actual age, not by the slot that fetched it: a price inside the freshness limit (150 minutes; 100 within two hours of puck drop) can be shown and (capped, see daily_tickets.EARLY_TICKET_CAP) recorded on an automatic ticket at any hour; one that has aged out can only be shown as provisional. The pregame slot exists
 because it is the last look before the game, not because nothing earlier may be acted on.
 """
 from __future__ import annotations

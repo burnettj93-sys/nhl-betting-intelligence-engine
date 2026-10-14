@@ -1,8 +1,7 @@
 """
 Paper Performance data: the real $500 / $10-per-ticket paper account, read from the stored ledger rows only.
 
-This is the MODEL book: the engine's own AUTOMATIC tickets only. Hand-added bets are not in this ledger's accounting (they live in the
-separate personal-log database, see operational/personal_logs.py). Simulated tracks are not part of the product; this module reads
+This is the MODEL book: the engine's own AUTOMATIC tickets only. Hand-added bets are not in this ledger's accounting (the retired personal records are an inactive archive, deploy/archive_personal_logs.py). Simulated tracks are not part of the product; this module reads
 REAL_MARKET_PAPER only and creates nothing.
 """
 from __future__ import annotations

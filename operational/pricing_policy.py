@@ -6,5 +6,5 @@
 MIN_GAMES_FOR_PRICING = 40
 
 # A price that has aged out of the freshness limit may still be SHOWN as provisional this long after the provider last set it, if it was retrieved today (Eastern). Not fresh means not
-# usable: nothing can be recorded or added on it (operational/daily_tickets.revalidate_before_recording; operational/manual_orders.revalidate).
+# usable: nothing can be recorded or added on it (operational/daily_tickets.revalidate_before_recording).
 PROVISIONAL_MAX_AGE_MIN = 14 * 60.0
