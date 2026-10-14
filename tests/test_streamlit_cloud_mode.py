@@ -343,6 +343,7 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     def setUpClass(cls):
         env = {k: v for k, v in os.environ.items() if k != rm.ENV_VAR}
         env["NHL_ENGINE_SNAPSHOT_SOURCE"] = "OFF"        # this probe asserts NO network at all; the snapshot is injected in-process
+        env["NHL_ENGINE_UNDER_TEST"] = "1"               # the child is a test process even when this class runs alone (the env policy override is honoured only under test)
         proc = subprocess.run(
             [sys.executable, "-c", _RENDER_PROBE, str(REPO), json.dumps(list(FORBIDDEN_MODULES))],
             capture_output=True, text=True, timeout=600, env=env, cwd=str(REPO))

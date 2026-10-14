@@ -444,7 +444,7 @@ EGGY_PICK_TITLE = "Eggy's Parlay Pick of the Day"
 EGGY_NO_PICK = "No Eggy pick today"
 
 
-def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False, now: dt.datetime | None = None) -> None:
+def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> None:
     """Eggy's Parlay Pick of the Day: the engine's ONE primary ticket shown as a branded card. It is the same ticket the selector would record (or has recorded), not an additional bet,
     and it carries the prices, the estimated hit chance, the $10 paper stake and the return. Nothing here is guaranteed: the chance is an estimate with a range.
     With no qualifying ticket the card says so and gives the exact reason; it never invents a pick."""
@@ -460,7 +460,6 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False, now:
                         f"<div class='sub'>{_h(reason)}</div></div></div>", unsafe_allow_html=True)
             st.caption("A day without a pick is a correct answer: Eggy does not loosen the rules to produce one, and no weaker slip is offered in its place.")
             return
-        status = ticket.get("status")
         if ticket.get("recorded"):
             state_line = "Recorded as today's single primary ticket ($10 paper stake). Prices and probabilities are frozen."
         elif recording_paused or ticket.get("proposed"):

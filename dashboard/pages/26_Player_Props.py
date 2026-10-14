@@ -46,7 +46,7 @@ show.sort(key={"Best value": lambda o: -o["ev_after_haircut"], "Highest chance":
 d = opts_doc.get("diagnostics") or {}
 n_prov = sum(1 for o in options if o.get("provisional"))
 if n_prov:
-    st.caption(f"{n_prov} of these option(s) are provisional: their prices come from an earlier look today and are now older than the freshness limit. They can be browsed but not added until refreshed.")
+    st.caption(f"{n_prov} of these option(s) are provisional: their prices come from an earlier look today and are now older than the freshness limit. They are shown for reference and are not current recommendations until refreshed.")
 st.caption(f"{len(show)} of {len(options)} distinct option(s) · {d.get('people_with_option', '?')} of {d.get('people_with_priced_props', '?')} people with a fresh price have an option.")
 for o in show[:60]:
     ui.option_card(o, key=f"bo_{o['option_id']}")

@@ -17,7 +17,7 @@ from dashboard import product_source as ps
 from dashboard import theme, ui
 from operational import builder_pool as bp
 
-ui.header("Parlay Builder", "Build your own paper bet from DraftKings' current prices, and submit it to your own account.")
+ui.header("Parlay Builder", "Try combinations from DraftKings' current prices and see the price and return for a hypothetical stake. Nothing is placed or recorded.")
 pool = ui.load(ps.builder_pool, "The price list")
 games = (pool or {}).get("games") or {}
 if not games:
@@ -26,11 +26,11 @@ if not games:
     st.stop()
 
 now = ui._utcnow()
-SLIP, STAKE, ACK = "_slip", "_slip_stake", "_slip_ack"
+SLIP, STAKE = "_slip", "_slip_stake"
 MAX_BUILDER_LEGS = 6                              # a hypothetical slip holds at most this many legs
 slip: list[dict] = st.session_state.setdefault(SLIP, [])
 st.caption(f"Price list built {ui.et_time(pool.get('generated_at_utc'), True)} ({ui.age_text(pool.get('generated_at_utc'))}) · {len(games)} game(s) · prices are DraftKings US-feed quotes, not verified for Ontario. "
-           "Each market shows its own quote age; a price older than its limit can be seen but not added.")
+           "Each market shows its own quote age; a price older than its limit can be seen but not added to the slip.")
 FAMILY_NAME = pool.get("families") or {k: v[2] for k, v in bp.FAMILIES.items()}
 
 

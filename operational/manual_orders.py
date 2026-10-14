@@ -35,28 +35,13 @@ RECORDED, ALREADY, NEEDS_ACCEPTANCE, REJECTED = "RECORDED", "ALREADY_RECORDED", 
 LEG_KEY = ("game_id", "participant_id", "market_family", "threshold", "side")
 
 
-
-
 # ------------------------------------------------------------------ validation ----
-
-
-
-
-
-
-
 
 
 # ------------------------------------------------------------------- storage ----
 
 def _utcnow() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-
-
-
-
 
 
 # ------------------------------------------------------------------ GitHub queue ----
@@ -210,12 +195,7 @@ def _confirm(nhl_conn, body, now, source):
     return goalie_confirmations.validate_and_record(nhl_conn, doc, now=now, source_ref=source)
 
 
-
-
-
-
-def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp.ParlayLeg] | None = None,
-                     repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None, personal_conn=None, personal_fetch=None, builder_pool=None) -> dict:
+def poll_and_process(conn, nhl_conn, now: dt.datetime, *, repo: str = REPO, owner: str = OWNER_LOGIN, fetch=None) -> dict:
     """One pass of the engine-side queue. Serialised by a lock file so overlapping runs cannot race."""
     lock_path = state_paths.path(LOCK_NAME)
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,8 +204,6 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             return {"status": "SKIPPED", "reason": "ANOTHER_PASS_IN_PROGRESS", "processed": 0}
-        results, personal_results = [], []
-        ignored = []
         v_results = []
         if fetch is None:
             from operational import goalie_confirmations
@@ -251,5 +229,4 @@ def poll_and_process(conn, nhl_conn, now: dt.datetime, *, current_legs: list[rmp
                         v_results[-1]["comment_error"] = f"{exc.__class__.__name__}: {exc}"
         else:
             v_ignored = []
-        return {"status": "OK", "processed": len(results) + len(v_results) + len(personal_results), "results": results, "verifications": v_results,
-                "personal": personal_results, "ignored": ignored + v_ignored}
+        return {"status": "OK", "processed": len(v_results), "verifications": v_results, "ignored": v_ignored}

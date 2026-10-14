@@ -27,16 +27,6 @@ def new_order_id() -> str:
     return "ord_" + secrets.token_hex(8)
 
 
-
-
-
-
-
-
-
-
-
-
 def build_verification(leg: dict, *, verification_id: str, ontario_price: float, observed_at_utc: str, where_seen: str,
                        us_price_shown: float | None, notes: str = "") -> dict:
     return {"schema": SCHEMA, "type": "ONTARIO_VERIFICATION", "verification_id": verification_id,
