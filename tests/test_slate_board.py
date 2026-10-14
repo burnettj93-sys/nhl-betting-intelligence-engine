@@ -21,6 +21,10 @@ def product() -> dict:
     pl["P2"]["projection"]["probabilities"]["goals>=1"] = 0.12
     pl["P3"]["projection"] = copy.deepcopy(pl["P1"]["projection"])             # P3 has no projection in the fixture; give it a thin-sample one that must be excluded
     pl["P3"]["games_total"] = 12
+    for game in p["games"]["games"]:
+        if game.get("moneyline"):
+            for side in ("home", "away"):
+                game["moneyline"][side]["quote_captured_at_utc"] = Q              # five minutes before NOW: fresh
     return p
 
 
@@ -127,11 +131,61 @@ class TestTheBoard(unittest.TestCase):
         self.assertIsNone(again["recommendation"])                                      # the model disagrees with the market's favourite
         self.assertIn("does not", again["reason"])
 
+
+    def test_a_moneyline_quote_older_than_the_freshness_limit_is_never_recommended(self):
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["moneyline"]["home"].update(american=-200.0, quote_captured_at_utc="2026-10-08T17:00:00Z", status="ACTIVE")      # five hours old, still the latest row
+                game["moneyline"]["away"].update(american=170.0, quote_captured_at_utc="2026-10-08T17:00:00Z", status="ACTIVE")
+                game["win_probability"] = {"home": 0.66, "away": 0.34, "model": "m"}
+        side = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)["games"][0]["side"]
+        self.assertIsNone(side["recommendation"])
+        self.assertIn("freshness limit", side["reason"])
+        self.assertFalse(side["fresh"])
+
+    def test_a_goalie_projection_with_missing_numbers_does_not_break_the_board(self):
+        p = product()
+        p["goalies"]["G1"]["projection"].update(expected_shots_against=None, save_pct_used=None, expected_saves=None, expected_goals_against=None, saves_range_80=None)
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)
+        b = [x for x in d["games"][0]["goalies"] if x["team"] == "AAA"][0]
+        self.assertIn("—", b["projection"]["explanation"])
+
     def test_the_primary_slip_is_passed_through_untouched(self):
         t = {"primary": {"status": "FRESH", "ticket": {"ticket_id": "T1"}, "reason": "x"}, "ticket_policy": {"policy_id": "primary-slip-2026-10-14"}, "recording_paused": True}
         d = doc(tickets=t)
         self.assertEqual(d["primary"]["ticket"]["ticket_id"], "T1")
         self.assertTrue(d["recording_paused"])
+
+
+class TestTheLivePath(unittest.TestCase):
+    def test_saves_lines_are_read_from_the_archived_capture_for_any_goalie_and_matched_by_name(self):
+        from unittest import mock
+        payload = {"bookmakers": [{"key": "draftkings", "last_update": Q, "markets": [{"key": "player_total_saves", "last_update": Q, "outcomes": [
+            {"name": "Over", "description": "Test Goalie One", "point": 26.5, "price": -115},
+            {"name": "Under", "description": "Test Goalie One", "point": 26.5, "price": -105},
+            {"name": "Over", "description": "Someone Unknown", "point": 20.5, "price": 100}]}]}]}
+        with mock.patch("operational.best_bets.latest_capture", return_value=(NOW, payload)):
+            by_name = sb._saves_lines(pool(), NOW)
+        self.assertEqual(by_name["2026020900"]["test goalie one"]["line"], 26.5)
+        self.assertEqual((by_name["2026020900"]["test goalie one"]["over"], by_name["2026020900"]["test goalie one"]["under"]), (-115.0, -105.0))
+        by_id = sb._by_goalie_id(by_name, product()["goalies"])
+        self.assertEqual(set(by_id["2026020900"]), {"G1"})                                         # the unknown name is not matched to anyone
+
+    def test_the_previous_day_check_reads_only_that_days_records(self):
+        import json, tempfile
+        from pathlib import Path
+        from unittest import mock
+        from operational import state_paths
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "selection_shadow.jsonl").write_text(
+                json.dumps({"et_date": "2026-10-07", "pool": [["2026020899", "P1", "PLAYER_SOG_ALTERNATE"], ["2026020899", "TOR", "MONEYLINE"]]}, separators=(",", ":")) + "\n"
+                + json.dumps({"et_date": "2026-10-06", "pool": [["x", "P", "PLAYER_SOG_ALTERNATE"]]}, separators=(",", ":")) + "\n")
+            p = product()
+            p["games"]["games"].append({**p["games"]["games"][0], "game_id": "2026020899", "date_et": "2026-10-07", "state": "FINAL"})
+            with mock.patch.object(state_paths, "path", lambda name, **kw: Path(d) / name):
+                r = sb._previous_day_check(p, "2026-10-08")
+        self.assertEqual((r["scheduled"], r["shots_legs_evaluated_in_games"], r["moneyline_legs_evaluated_in_games"]), (1, 1, 1))
 
 
 class TestThePage(unittest.TestCase):

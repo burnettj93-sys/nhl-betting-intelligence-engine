@@ -46,3 +46,11 @@ Usage-limit recovery and hooks are not verified and no unattended or automatic w
 
 ## Boundaries
 Production ledger mutations and deployment are serialized (one trader process holds a lock). Tests use isolated data. Never run `ticket_policy approve` or `recording_pause resume` without the owner's explicit instruction.
+
+## Review of PR 139 (independent code review, 2026-10-14) — what was fixed
+Fixed: moneyline freshness judged by quote age (not the row status); empty-board reason names combinations above the +500 ceiling; the primary slip shows RECORDED in the cycle that records it;
+thin goalie projections no longer break the board; the haircut comes from the policy; `slot_count()` fails safe to one; the previous-day check parses only that day's log records; live saves-line path tested.
+**Not changed, owner trade-off:** with the free odds plan the credit that used to buy lead games' points prices now buys anytime-goal prices, so the personal builder usually has no Points market
+(`NHL_ENGINE_POINTS_ADDON=on` restores points; the 20K plan covers both).
+**Known flaky guard:** `test_a_sixteen_game_night_is_searched_in_full_and_quickly` has a 60 s bound and fails on a loaded machine (load average about 6: 57-73 s measured, 61-69 s on the commit before this change);
+the search itself did not slow down.

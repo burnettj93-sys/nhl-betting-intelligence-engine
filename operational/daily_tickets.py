@@ -51,8 +51,8 @@ def slot_count() -> int:
     """Tickets the active policy allows a day: five under the 2026-10-11/13 policies, ONE under the primary-slip policy (2026-10-14)."""
     try:
         return int(ticket_policy.active().slots)
-    except Exception:  # noqa: BLE001
-        return SLOT_COUNT
+    except Exception:  # noqa: BLE001 - fail safe: one slip, never the superseded five
+        return 1
 RECENT_SETTLED_LIMIT = 10
 
 FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
@@ -893,7 +893,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
                         proposed=bool(pause["paused"]))
     state["ticket_policy"] = ticket_policy.describe()
     try:
-        state["primary"] = _primary_slip(legs, existing_rows, now, et_date)
+        state["primary"] = _primary_slip(legs, recorded_today(bankroll_conn, et_date), now, et_date)      # after recording: a slip recorded this cycle is shown as recorded, not proposed
     except Exception as exc:  # noqa: BLE001 - the primary slip is a presentation of the same selection; a failure here must not stop the cycle
         state["primary"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "ticket": None, "strongest_singles": []}
     if pause["paused"]:

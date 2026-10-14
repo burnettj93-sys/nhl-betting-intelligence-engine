@@ -23,7 +23,16 @@ from operational import state_paths
 NAME = "slate_board.json"
 MIN_TOI = 12.0                    # expected minutes: below this a skater is a marginal role, not a pick
 MIN_NHL_GAMES = 40                # the same bar the engine uses for pricing (operational.pricing_policy.MIN_GAMES_FOR_PRICING): fewer games and the projection over-predicts in testing
-HAIRCUT = 0.03                    # the 3-point haircut every value figure in the engine is also shown under
+def _haircut() -> float:
+    """The policy's own per-leg haircut (value_shade), so the board's 'after the haircut' figures are the slip's."""
+    try:
+        from operational import ticket_policy
+        return float(ticket_policy.active().value_shade)
+    except Exception:  # noqa: BLE001
+        return 0.03
+
+
+HAIRCUT = 0.03                    # fallback only; every use below calls _haircut()
 SHOTS_PICK_FLOOR = 0.45           # a threshold must be at least this likely to be offered as a "balanced" pick; below it the ladder is a longshot, not a value pick
 SHOTS_PICK_MAX_IMPLIED = 0.80     # ...and not priced shorter than about -400: a 1+ at -4000 has almost no upside, so it is not the "balance of likelihood and price" the pick is for
 TOP_SCORERS = 5
@@ -44,6 +53,11 @@ def _implied(american: float) -> float:
 
 def _fmt_price(a) -> str:
     return "—" if a is None else f"{int(round(a)):+d}"
+
+
+def _n(v, digits: int = 1) -> str:
+    """A number for text, or a dash when the projection does not have it (a thin-sample goalie must not break the whole board)."""
+    return "—" if v is None else f"{v:.{digits}f}"
 
 
 def _pct(p) -> str:
@@ -100,7 +114,7 @@ def scorers(game: dict, side_players: list[dict], pool_game: dict | None, opp_go
         if goal and goal.get("l"):
             k, price, _ = goal["l"][0]
             price_info = {"american": price, "implied": round(_implied(price), 4), "quote_updated_utc": goal.get("q"), "retrieved_at_utc": goal.get("r"),
-                          "ev_estimated": round(_ev(pg, price), 4), "ev_after_haircut": round(_ev(pg - HAIRCUT, price), 4)}
+                          "ev_estimated": round(_ev(pg, price), 4), "ev_after_haircut": round(_ev(pg - _haircut(), price), 4)}
         why = [f"model {_pct(pg)} to score", f"{exp.get('shots', 0):.1f} expected shots", f"{exp.get('toi', 0):.0f} min expected" + (f" ({exp.get('toi_pp', 0):.1f} on the power play)" if exp.get("toi_pp") else ""),
                _season_line(p)]
         if opp_goalie and (opp_goalie.get("season") or {}).get("save_pct"):
@@ -134,7 +148,7 @@ def shots_picks(game: dict, side_players: list[dict], pool_game: dict | None) ->
             if final is None:
                 continue                                              # no record-based estimate for this line: not offered as a pick (the model alone is not the ticket estimate)
             ladder.append({"threshold": int(k), "american": price, "model": prob, "recent_hits": r[0], "recent_games": r[1], "games_this_season": n_cur, "estimate": round(final, 4),
-                           "implied": round(_implied(price), 4), "ev_estimated": round(_ev(final, price), 4), "ev_after_haircut": round(_ev(final - HAIRCUT, price), 4),
+                           "implied": round(_implied(price), 4), "ev_estimated": round(_ev(final, price), 4), "ev_after_haircut": round(_ev(final - _haircut(), price), 4),
                            "supported_for_slip": final >= anchor.SHOTS_LEG_FLOOR})
         usable = [x for x in ladder if x["estimate"] >= SHOTS_PICK_FLOOR and x["implied"] <= SHOTS_PICK_MAX_IMPLIED]
         if not usable:
@@ -197,14 +211,15 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
         out["projection"] = {"expected_saves": proj.get("expected_saves"), "saves_range_80": proj.get("saves_range_80"), "expected_shots_against": proj.get("expected_shots_against"),
                              "save_pct_used": proj.get("save_pct_used"), "expected_goals_against": proj.get("expected_goals_against"), "opponent": proj.get("opponent"),
                              "season_save_pct": season.get("save_pct"), "season_games": season.get("games"), "model_version": proj.get("model_version"),
-                             "explanation": (f"{proj.get('opponent')} are expected to put about {proj.get('expected_shots_against'):.0f} shots on him; at a {proj.get('save_pct_used', 0) * 100:.1f}% save rate that is "
-                                             f"about {proj.get('expected_saves'):.0f} saves (80% range {proj.get('saves_range_80', ['?', '?'])[0]}–{proj.get('saves_range_80', ['?', '?'])[1]}) and "
-                                             f"{proj.get('expected_goals_against'):.1f} goals against. Saves are not shots faced: the range covers shot volume and goals conceded.")}
+                             "explanation": (f"{proj.get('opponent')} are expected to put about {_n(proj.get('expected_shots_against'), 0)} shots on him; at a "
+                                             f"{_n(None if proj.get('save_pct_used') is None else proj['save_pct_used'] * 100, 1)}% save rate that is about {_n(proj.get('expected_saves'), 0)} saves "
+                                             f"(80% range {(proj.get('saves_range_80') or ['?', '?'])[0]}–{(proj.get('saves_range_80') or ['?', '?'])[1]}) and "
+                                             f"{_n(proj.get('expected_goals_against'), 1)} goals against. Saves are not shots faced: the range covers shot volume and goals conceded.")}
     if line:
         p_over = _saves_over_probability(proj, line["line"])
         out["line"] = {**line, "p_over": p_over, "p_under": (None if p_over is None else round(1 - p_over, 4)),
-                       "ev_over": (None if p_over is None or line.get("over") is None else round(_ev(p_over - HAIRCUT, line["over"]), 4)),
-                       "ev_under": (None if p_over is None or line.get("under") is None else round(_ev((1 - p_over) - HAIRCUT, line["under"]), 4))}
+                       "ev_over": (None if p_over is None or line.get("over") is None else round(_ev(p_over - _haircut(), line["over"]), 4)),
+                       "ev_under": (None if p_over is None or line.get("under") is None else round(_ev((1 - p_over) - _haircut(), line["under"]), 4))}
         if not confirmed:
             out["recommendation"] = {"side": None, "conditional": True, "text": "Conditional on the start: the starter is unconfirmed, so no saves selection is made and none goes in the slip."}
         elif not saves_verdict_ok or p_over is None:
@@ -221,7 +236,21 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
 
 # ------------------------------------------------------------------ section 4: moneyline / puck line
 
-def side_block(game: dict) -> dict:
+FRESH_LIMIT_MIN = 150.0           # the engine's freshness rule for a price (docs/MORNING_WORKFLOW.md): 150 minutes, 100 when puck drop is under two hours away
+FRESH_LIMIT_NEAR_MIN = 100.0
+
+
+def _quote_fresh(american_row: dict, now: dt.datetime, start_utc: str | None) -> bool:
+    """A moneyline quote is fresh by its own age against the engine's limit; the snapshot row's status says only that the quote is the latest one."""
+    from operational import quote_freshness as qf
+    start = qf.parse_utc(start_utc)
+    near = start is not None and (start - now).total_seconds() < 7200
+    r = qf.assess(american_row.get("quote_captured_at_utc"), None, now, FRESH_LIMIT_NEAR_MIN if near else FRESH_LIMIT_MIN, require_retrieval=False)
+    return bool(r["fresh"])
+
+
+def side_block(game: dict, now: dt.datetime | None = None) -> dict:
+    now = now or dt.datetime.now(dt.timezone.utc)
     ml = game.get("moneyline") or {}
     wp = game.get("win_probability") or {}
     home, away = ml.get("home"), ml.get("away")
@@ -231,7 +260,7 @@ def side_block(game: dict) -> dict:
     if not home or not away or home.get("american") is None or away.get("american") is None:
         out.update(recommendation=None, reason="No moneyline prices on file for this game.")
         return out
-    fresh = home.get("status") == "ACTIVE" and away.get("status") == "ACTIVE"
+    fresh = (home.get("status") == "ACTIVE" and away.get("status") == "ACTIVE" and _quote_fresh(home, now, game.get("start_utc")) and _quote_fresh(away, now, game.get("start_utc")))
     ih, ia = _implied(home["american"]), _implied(away["american"])
     nv_home = ih / (ih + ia)
     sides = {"home": {"team": game["home"], "american": home["american"], "no_vig": round(nv_home, 4), "model": wp.get("home"), "quote_captured_at_utc": home.get("quote_captured_at_utc")},
@@ -307,7 +336,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                 sc = top + [{**best, "rank": None, "outside_top": True, "best_value_at_price": best["price"]["ev_after_haircut"] > 0}]
         shots = shots_picks(g, all_players, pg) if analysis_ok else {"picks": [], "shortfall": "game is not scheduled or has no projected skaters"}
         gblocks = [goalie_block(s, g, goalies, (saves_by_game or {}).get(gid, {}), saves_ok) for s in ("home", "away")] if scheduled else []
-        side = side_block(g) if scheduled else {"market": "Moneyline", "recommendation": None, "reason": "Game not scheduled."}
+        side = side_block(g, now) if scheduled else {"market": "Moneyline", "recommendation": None, "reason": "Game not scheduled."}
         mk = {key: _market_status(avail_games.get(gid), key) for key, _ in MARKETS}
         ml_priced = bool((g.get("moneyline") or {}).get("home"))
         recommended, missing = [], []
@@ -429,10 +458,16 @@ def _previous_day_check(product: dict, today: str) -> dict | None:
         posted = {gid for gid, v in av.items() if ((v.get("markets") or {}).get("player_shots_on_goal_alternate") or {}).get("status") == "POSTED"}
         shots_eval: set = set()
         ml_eval: set = set()
-        for rec in shadow_selection.read_all():
-            if rec.get("et_date") == prev:
-                for row in rec.get("pool") or []:
-                    (ml_eval if row[2] == "MONEYLINE" else shots_eval).add(str(row[0]))
+        needle = f'"et_date":"{prev}"'
+        path = state_paths.path(shadow_selection.NAME)
+        with open(path) as fh:
+            for line in fh:                          # the log is append-only and large: parse only that day's records
+                if needle not in line:
+                    continue
+                rec = json.loads(line)
+                if rec.get("et_date") == prev:
+                    for row in rec.get("pool") or []:
+                        (ml_eval if row[2] == "MONEYLINE" else shots_eval).add(str(row[0]))
         sched = {g["game_id"] for g in games}
         return {"date_et": prev, "scheduled": len(sched), "shots_priced": len(sched & posted), "shots_legs_evaluated_in_games": len(sched & shots_eval),
                 "moneyline_legs_evaluated_in_games": len(sched & ml_eval), "not_priced": sorted(sched - posted),

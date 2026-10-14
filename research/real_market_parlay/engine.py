@@ -460,6 +460,10 @@ def anchor_reason(diag: dict, policy) -> str:
                  f"{diag['moneyline_legs']} moneyline leg(s) in {diag['moneyline_games']} game(s))")
     head = (f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s){split}; "
             f"{diag['reaching_plus_100']} of {diag['combinations_checked']} cross-game combinations reach +100")
+    if best is None and diag.get("above_ceiling"):
+        ceiling = round(((getattr(policy, "max_combined_decimal", None) or 0) - 1.0) * 100)
+        return (f"No ticket today: {head}. {diag['above_ceiling']} combination(s) of the supported legs are priced above the +{ceiling} ceiling, and none inside +100 to +{ceiling} qualifies. "
+                "A slot left empty is a correct answer.")
     if best is None:
         return f"No ticket today: {head}. No combination of the supported legs gets to +100 at today's prices."
     return (f"No ticket today: {head}, but none has enough value at the real prices. The best of them hits about {best['hit_probability']:.0%} of the time "

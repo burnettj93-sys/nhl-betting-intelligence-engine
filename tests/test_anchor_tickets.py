@@ -478,6 +478,7 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70), shots(3, 3, 28, +115, 0.72)]
         res = self.cycle(legs)
         self.assertEqual(res["newly_recorded"], 1)
+        self.assertEqual(dtk.read_state()["primary"]["status"], "RECORDED")                           # already in the cycle that recorded it, not 15 minutes later
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets WHERE origin = 'AUTOMATIC'").fetchone()[0], 1)
         self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 490.0)
         again = self.cycle(legs, minutes=35)
@@ -485,11 +486,13 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         st = dtk.read_state()
         self.assertEqual(st["slots"], {"total": 1, "used": 1, "empty": 0})
         self.assertEqual(st["primary"]["status"], "RECORDED")
+        self.assertFalse(st["primary"]["ticket"].get("proposed"))
         self.assertTrue(100 <= st["primary"]["ticket"]["combined_american"] <= 500)
 
     def test_a_combination_longer_than_plus_500_is_not_recorded_and_the_board_says_why(self):
         legs = [shots(1, 1, 28, +400, 0.72), shots(2, 2, 28, +400, 0.72)]                              # 5.0 x 5.0 = 25.0, i.e. +2400
         res = self.cycle(legs)
+        self.assertIn("above the +500 ceiling", res["reason"])
         self.assertEqual(res["newly_recorded"], 0)
         from operational import daily_tickets as dtk
         st = dtk.read_state()

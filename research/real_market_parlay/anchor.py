@@ -228,6 +228,8 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     value_bar = 1.0 + policy.min_value_after_shade
     ev_bar = 1.0 + policy.min_estimated_ev
     chosen: list = []
+    _ceiling = getattr(policy, "max_combined_decimal", None)
+    ceiling_D = float("inf") if _ceiling is None else 1.0 + (round((_ceiling - 1.0) * 100.0) + 0.5) / 100.0      # a product that rounds to the ceiling's American price is inside (same rule as within_ceiling)
 
     def key_of(legs):
         return frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in legs)
@@ -246,7 +248,9 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                     diag["truncated"] = True
                     return
                 D2, Pm2, Ps2 = D * d, Pm * pm, Ps * ps
-                if not within_ceiling(D2, policy):
+                if D2 > ceiling_D:                                  # (precomputed: this test runs once per node of a search that can visit millions)
+                    if chosen:
+                        diag["above_ceiling"] = diag.get("above_ceiling", 0) + 1          # a combination that reaches +100 but is longer than the policy's ceiling: counted, so the reason can say so
                     continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
                 if len(chosen) >= 2:
