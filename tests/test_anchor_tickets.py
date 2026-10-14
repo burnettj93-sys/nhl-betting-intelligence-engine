@@ -364,6 +364,29 @@ class TestTheSearchHidesNothing(unittest.TestCase):
         self.assertFalse(diag["truncated"])
         self.assertEqual({key_of(c) for c in found}, set(brute_force(pool, POL)))                 # identical to an independent enumeration
 
+    def test_skipping_slips_covered_by_a_passing_prefix_changes_nothing_in_the_result(self):
+        """Exactness of the prefix skip against an independent enumeration, on pools with many 3- and 4-leg tickets."""
+        import random
+        for seed in (11, 12, 13):
+            rnd = random.Random(seed)
+            legs = [shots(g, f"{g}{i}", rnd.randint(24, 29), -rnd.choice([120, 150, 185, 240]), rnd.uniform(0.62, 0.80), name=f"P{g}{i}") for g in range(1, 7) for i in range(rnd.randint(2, 4))]
+            pool = anchor.prepare_pool(legs)
+            found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
+            self.assertEqual({key_of(c) for c in found}, set(brute_force(pool, POL)), f"seed {seed}")
+        # one pool built to exercise the skip: four strong legs in four games, every pair passes, so every triple and quad has a passing prefix
+        strong = [shots(g, f"s{g}", 28, -150, 0.78, name=f"S{g}") for g in range(1, 5)]
+        found, diag = anchor.qualifying(anchor.prepare_pool(strong), POL, rmp._evaluate_combo, rmp._policy_veto)
+        self.assertGreater(diag.get("covered_by_shorter", 0), 0)                                    # the skip really was exercised...
+        self.assertTrue(found and all(len(c.legs) == 2 for c in found))                              # ...and only the shortest passing tickets are offered, exactly as before
+        self.assertEqual({key_of(c) for c in found}, set(brute_force(anchor.prepare_pool(strong), POL)))
+
+    def test_a_duplicate_leg_in_the_pool_does_not_make_a_ticket_twice(self):
+        a, b = shots(1, 1, 28, -150, 0.78, name="A"), shots(2, 2, 28, -150, 0.78, name="B")
+        once, _ = anchor.qualifying(anchor.prepare_pool([a, b]), POL, rmp._evaluate_combo, rmp._policy_veto)
+        twice, _ = anchor.qualifying(anchor.prepare_pool([a, dataclasses.replace(a), b]), POL, rmp._evaluate_combo, rmp._policy_veto)
+        self.assertEqual(len(once), 1)
+        self.assertEqual(len(twice), 1)
+
     def test_the_selector_offers_them_and_the_exposure_limits_still_bind(self):
         out = rmp.select_tickets(oct12_legs(), max_tickets=5, policy=POL)
         self.assertEqual(out["qualifying"], 5)
@@ -398,9 +421,11 @@ class TestTheSearchHidesNothing(unittest.TestCase):
         pool = anchor.prepare_pool(legs)
         t = time.time()
         found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
-        self.assertLess(time.time() - t, 60.0)
+        self.assertLess(time.time() - t, 30.0)                                                      # about 4 s on a quiet machine since the prefix skip (58-73 s before, flaky under load)
         self.assertFalse(diag["truncated"])
         self.assertEqual(diag["games_with_supported_legs"], 16)                                     # no game was dropped before the search
+        self.assertGreater(len(found), 1000)
+        self.assertGreater(diag.get("covered_by_shorter", 0), 0)                                    # longer slips whose own prefix already passed are not evaluated again
 
     def test_today_best_options_the_provisional_board_and_recording_agree(self):
         from operational import daily_tickets as dtk
