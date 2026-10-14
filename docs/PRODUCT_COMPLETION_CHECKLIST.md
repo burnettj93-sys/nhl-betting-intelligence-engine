@@ -1,4 +1,4 @@
-# Product completion checklist — one complete list (revision 18, 2026-10-13)
+# Product completion checklist — one complete list (revision 19, 2026-10-13)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
@@ -36,6 +36,15 @@ lineups, power-play units, injuries and starting goalies; the odds budget decisi
 **First live wave, settled (2026-10-12/13):** two $10 tickets recorded once at 21:18:55Z after revalidation (not re-recorded the next cycle); both settled automatically at 03:11Z; the independent audit (`docs/validation/settlement_audit_2026-10-13.json`) agrees on all 16 bets and the recomputed payouts (win +$13.86, loss −$10.00); cash $439.62, open $0, settled P&L −$60.38; the hosted Today page shows the same numbers; frozen-prediction scoring resolves 550 legs with moneylines graded as team outcomes (`docs/validation/live_wave_2026-10-12.md`). Two tickets prove the machinery, not an edge.
 
 **Shots-estimate correction (2026-10-13), awaiting your approval:** capped 2+ shots legs were over-stated by about 8 points in every validation season (n = 555 / 693 / 665; estimate 0.67 against 0.59 observed). The cap went from +0.10 to +0.02, chosen on 2024 only and evaluated on 2025 (log loss 0.59608 → 0.59327), no ticket outcome used; only that number changed. New policy `anchor-tickets-2026-10-13`, digest `9f5e3448e10ff62e`; the 2026-10-11 policy and its digest `c236c526e00b9f04` are preserved and the two tickets recorded under it are labelled "Earlier estimate rule" (entries untouched). **Automatic recording is paused at your request** (since 2026-10-13 15:35:57Z); it resumes only after you approve the new digest and lift the pause (`docs/PROPOSAL_ANCHOR_CAP.md`). Collection, settlement, publishing, prediction logging and personal accounts continue.
+
+**Slate Board and the single primary parlay, state at release 102f139 (2026-10-14), awaiting your review:** every scheduled game has four analyses (likely goal scorers with price, two shots values from the offered
+ladder, goalie saves with starter status, moneyline or "No recommended side"), a per-game coverage block (analysed / priced / supported / recommended / missing and why), and ONE primary parlay under policy
+`primary-slip-2026-10-14` (digest `1fad3ba03503cf94`, **not approved**): +100 to +500, fewest legs, ranked by estimated hit chance, every leg rule and value test of the cap-correction policy unchanged. Verified on the
+public app: Slate Board, Today's primary-slip section, builder gap explanations, mobile. In: fail-closed policy loading, quote-age freshness (provider time, both moneyline sides, re-judged when a page opens), per-game
+failure isolation, rejection reasons by cause, incremental previous-day scan, an exact and much faster qualifying search; three independent review rounds (20 findings, all fixed with tests); full suite 4,201 tests OK
+(2 skipped). **Open and honest:** no qualifying primary slip has been produced under the corrected estimates (0 of 18 frozen snapshots; the board shows the closest non-qualifying combination); anytime-goal prices are
+bought for the lead games from the 2026-10-14 pregame wave (first live check pending); a saves line needs a confirmed starter and no permitted automatic source confirms starters (archived real payloads parse and match
+10 of 10 goalies); `LOG_WRITE_TOKEN` is not set, so hosted personal-account creation and submission remain NOT verified. Recording stays paused. Handover: `docs/HANDOVER.md`.
 
 ## Versions (one commit everywhere)
 
