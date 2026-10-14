@@ -223,7 +223,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     diag.update({"moneyline_legs": len(ml), "moneyline_games": len({l.game_id for l in ml}), "prop_legs": len(shots), "prop_games": len({l.game_id for l in shots})})
     if len(games) < 2:
         return [], diag
-    found: dict[frozenset, object] = {}
+    found: dict[tuple, object] = {}                       # key: the ids of the chosen legs in search order (games ascend, so a prefix of a key is a sub-ticket of the same legs)
     nodes = 0
     floor = policy.floor
     value_bar = 1.0 + policy.min_value_after_shade
@@ -232,8 +232,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     _ceiling = getattr(policy, "max_combined_decimal", None)
     ceiling_D = float("inf") if _ceiling is None else 1.0 + (round((_ceiling - 1.0) * 100.0) + 0.5) / 100.0      # a product that rounds to the ceiling's American price is inside (same rule as within_ceiling)
 
-    def key_of(legs):
-        return frozenset((l.game_id, l.participant_id, l.market_family, l.threshold, l.side) for l in legs)
+    idstack: list[int] = []
 
     def visit(start: int, P: float, D: float, Pm: float, Ps: float):
         nonlocal nodes
@@ -254,6 +253,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                         diag["above_maximum"] += 1                  # a two-leg combination longer than the policy's ceiling (counted once per pair; longer extensions of an in-range ticket are not "alternatives that were too long")
                     continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
+                idstack.append(id(leg))
                 if len(chosen) >= 2:
                     diag["combinations_checked"] += 1
                     if D2 < policy.min_combined_decimal:
@@ -265,16 +265,22 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                             diag["best_reaching_plus_100"] = {"hit_probability": P2, "ev_estimated": P2 * D2 - 1.0, "ev_after_shade": Ps2 * D2 - 1.0,
                                                               "price": 100.0 * (D2 - 1.0), "legs": [(l.participant_name, l.threshold, l.market_family, l.american_price) for l in chosen]}
                         if P2 * D2 >= ev_bar and Ps2 * D2 >= value_bar and Pm2 * D2 >= 1.0:
-                            combo = evaluate(list(chosen))
-                            if combo is not None and ticket_passes(combo, policy, veto):
-                                found[key_of(chosen)] = combo
+                            # A longer ticket is dropped at the end whenever a shorter passing ticket sits inside its own legs. A passing PREFIX is such a ticket, so this one need not be
+                            # evaluated at all (exact: it would be removed below, and so would everything built on it).
+                            if len(chosen) >= 3 and any(tuple(idstack[:m]) in found for m in range(2, len(chosen))):
+                                diag["covered_by_shorter"] = diag.get("covered_by_shorter", 0) + 1
                             else:
-                                diag["other_rejected"] += 1                              # priced inside the range with value on the plain numbers, but a ticket-level test or exposure rule refused it
+                                combo = evaluate(list(chosen))
+                                if combo is not None and ticket_passes(combo, policy, veto):
+                                    found[tuple(idstack)] = combo
+                                else:
+                                    diag["other_rejected"] += 1                          # priced inside the range with value on the plain numbers, but a ticket-level test or exposure rule refused it
                         else:
                             diag["insufficient_value"] += 1
                 if len(chosen) < MAX_LEGS:
                     visit(gi + 1, P2, D2, Pm2, Ps2)
                 chosen.pop()
+                idstack.pop()
                 if diag["truncated"]:
                     return
 
@@ -282,7 +288,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     passing = {}
     for keys, combo in sorted(found.items(), key=lambda kv: len(kv[0])):          # shortest first: a longer ticket is kept only when no shorter ticket from its own legs passes
         n = len(keys)
-        if n > 2 and any(frozenset(sub) in passing for m in range(2, n) for sub in combinations(keys, m)):
+        if n > 2 and any(tuple(sub) in passing for m in range(2, n) for sub in combinations(keys, m)):      # (combinations keeps the search order, so a sub-ticket has the same key shape)
             continue
         passing[keys] = combo
     return list(passing.values()), diag
