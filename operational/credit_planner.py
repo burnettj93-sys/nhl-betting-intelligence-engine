@@ -203,6 +203,7 @@ def morning_enabled() -> bool:
 
 
 POINTS_ADDON_ENV = "NHL_ENGINE_POINTS_ADDON"
+ALLOC_VERSION = 2          # 2: anytime goals are funded for the lead games before the second display refresh and the tomorrow check; a saved plan of an earlier version is re-taken for those classes
 
 
 def points_addon_enabled() -> bool:
@@ -231,7 +232,7 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
 
     Order of purchase (after the two moneyline classes): 1. the pregame capture, the price a ticket is recorded on, for the first PREGAME_MIN_GAMES
     games; 2. the MORNING first look at every game (shots; points too only if every game can afford both); 3. the pregame capture for the rest;
-    4. confirmed-starter saves; 5. a second display refresh; 6. tomorrow's availability check; 7. anytime goals; 8. leftover refreshes.
+    4. confirmed-starter saves; 5. anytime goals for the lead games (the Slate Board's section 1); 6. tomorrow's availability check; 7. a second display refresh; 8. points; 9. leftover refreshes.
     A price the bookmaker has not posted costs nothing, so the morning allowance is a ceiling and the credits it does not use stay in the month."""
     spent_by_class = spent_by_class or {}
     confirmed_games = confirmed_games or set()
@@ -256,10 +257,10 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     saves_games = _take([g for g in order if g in confirmed_games], SAVES_MAX_PER_DAY)
     k_saves = min(len(saves_games), int(max(left, 0.0) // SAVES_COST))
     saves_games = _take(saves_games, k_saves); left -= k_saves * SAVES_COST
-    ui_extra = take(UI_SECOND) if k_pre == n else 0.0; left -= ui_extra
-    tomorrow = take(TOMORROW_COST); left -= tomorrow
     k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))                    # anytime goals first (the board's section 1), lead games first...
     goals_games = _take(props_games, k_goals); left -= k_goals * GOALS_COST
+    tomorrow = take(TOMORROW_COST); left -= tomorrow                                      # the Tomorrow page's availability check keeps its credit...
+    ui_extra = take(UI_SECOND) if k_pre == n else 0.0; left -= ui_extra                   # ...before the second display refresh of today's moneylines
     k_pts = min(len(props_games), int(max(left, 0.0) // POINTS_COST)) if addon else 0     # ...then the personal builder's points with what is left; the rest are recorded BUDGET_BLOCKED
     left -= k_pts * POINTS_COST
     points_games = _take(props_games, k_pts)
@@ -300,11 +301,30 @@ def day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *, rema
     saved = load_plan(day)
     fresh = allocate(budget["D"], starts, confirmed_games, spent)
     if saved is None:
-        plan = {"day": day, "made_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), **fresh, "budget": budget}
+        plan = {"day": day, "made_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), **fresh, "budget": budget, "alloc_version": ALLOC_VERSION}
         _persist(plan)
         return plan
     # keep the chosen priced set and goals subset; update everything that legitimately changes during the day
     plan = {**saved, "saves_games": fresh["saves_games"], "budget": budget, "allowance": {**saved["allowance"], SAVES: fresh["allowance"][SAVES]}}
+    if saved.get("alloc_version") != ALLOC_VERSION:
+        # A plan made before the goals-first order: re-take the classes whose priority moved (goals, points, the second display refresh, the tomorrow check, leftover). The priced and morning
+        # sets, the decision reserve and what was already spent are kept; nothing is added to the day's total.
+        a = plan["allowance"]
+        core = sum(a.get(k, 0.0) for k in (MONEYLINE_DECISION, PROPS, MORNING, SAVES)) + min(a.get(MONEYLINE_UI, 0.0), UI_FIRST)
+        room = max(D_of(plan) - core, 0.0)
+        priced = list(plan.get("games_priced") or [])
+        captured = {str(r.get("game_id")) for r in read_ledger(day) if r.get("class") == PROPS and r.get("game_id") is not None}   # a game's goals ride on its FIRST pregame capture: a game already captured cannot gain them
+        open_games = [g for g in priced if str(g) not in captured]
+        k_g = min(len(open_games), int(room // GOALS_COST))
+        plan["goals_games"] = _take(open_games, k_g); room -= k_g * GOALS_COST
+        tomorrow = min(room, TOMORROW_COST); room -= tomorrow
+        ui_extra = min(room, UI_SECOND) if (len(priced) and len(priced) == plan.get("games_today", len(priced))) else 0.0
+        room -= ui_extra
+        k_p = min(len(open_games), int(room // POINTS_COST)) if points_addon_enabled() else 0
+        plan["points_games"] = _take(open_games, k_p); room -= k_p * POINTS_COST
+        a[GOALS], a[MONEYLINE_UI], a[TOMORROW] = float(k_g * GOALS_COST), min(a.get(MONEYLINE_UI, 0.0), UI_FIRST) + ui_extra, tomorrow
+        a[POINTS_ADDON], a[REFRESH] = float(k_p * POINTS_COST), round(max(room, 0.0), 2)
+        plan["alloc_version"] = ALLOC_VERSION
     plan.setdefault("points_games", [])                 # a plan saved before the points add-on existed buys none today
     plan["allowance"].setdefault(POINTS_ADDON, 0.0)
     if "morning_games" not in plan:

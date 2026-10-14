@@ -137,8 +137,9 @@ class TestSelection(unittest.TestCase):
         # all pairs priced above +500: the old wording claimed nothing reaches +100
         above = rmp.select_tickets([shots(1, 1, 28, +450, 0.72), shots(2, 2, 28, +450, 0.72)], max_tickets=1, policy=capped)
         self.assertEqual(above["tickets"], [])
-        self.assertIn("two-leg combination(s) priced above the +500 ceiling", above["reason"])
-        self.assertIn("None is priced inside +100 to +500", above["reason"])
+        self.assertIn("two-leg pair(s) were already priced above the +500 ceiling", above["reason"])
+        self.assertIn("were not enumerated or counted", above["reason"])                          # the pair count is not passed off as a count of all slips
+        self.assertIn("none is priced inside +100 to +500", above["reason"])
         self.assertNotIn("gets to +100", above["reason"])
         # all pairs below +100 (two -300 legs: 1.33 x 1.33 = 1.78)
         below = rmp.select_tickets([shots(1, 1, 27, -300, 0.72), shots(2, 2, 27, -300, 0.72)], max_tickets=1, policy=capped)
@@ -549,6 +550,18 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         self.assertEqual(st["primary"]["status"], "RECORDED")
         self.assertEqual((st["account"]["open_stakes"], st["account"]["available_cash"], st["account"]["open_tickets"]), (10.0, 490.0, 1))
         self.assertEqual(st["slots"], {"total": 1, "used": 1, "empty": 0})
+
+    def test_when_nothing_qualifies_the_closest_combination_is_shown_and_labelled_not_qualifying(self):
+        from operational import daily_tickets as dtk
+        self.cycle([shots(1, 1, 22, -150, 0.6), shots(2, 2, 22, -140, 0.6)])                         # +9.8% before the haircut, -0.5% after: close, but under the policy's +3% bar
+        st = dtk.read_state()
+        self.assertEqual(st["primary"]["status"], "NONE")
+        closest = st["primary"]["closest"]
+        self.assertEqual(len(closest["legs"]), 2)
+        self.assertTrue(100 <= closest["combined_american"] <= 500)
+        self.assertLess(closest["ev_after_haircut"], 0.03)
+        self.assertIn("does NOT qualify", closest["note"])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
 
     def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):
         res = self.cycle([shots(1, 1, 27, +120, 0.70)])

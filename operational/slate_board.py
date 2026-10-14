@@ -85,13 +85,25 @@ def _eligible(p: dict) -> bool:
     return bool(proj.get("pricing_eligible")) and toi >= MIN_TOI and (p.get("games_total") or 0) >= MIN_NHL_GAMES and p.get("position") != "G"
 
 
-def _market_status(avail_game: dict, key: str) -> dict:
+def _market_status(avail_game: dict, key: str, now: dt.datetime | None = None) -> dict:
     m = ((avail_game or {}).get("markets") or {}).get(key)
     if not m:
         return {"status": "NOT_FETCHED", "word": "not fetched", "detail": "never requested for this game today (the day's credits did not reach it, or its window has not opened)"}
     st = m.get("status") or "NOT_FETCHED"
-    return {"status": st, "word": STATUS_WORDS.get(st, st.lower()), "detail": m.get("detail"), "checked_utc": m.get("checked_utc"), "quote_updated_utc": m.get("last_update"),
-            "outcomes": m.get("outcomes")}
+    word, detail = STATUS_WORDS.get(st, st.lower()), m.get("detail")
+    if st == "NOT_POSTED" and now is not None and m.get("checked_utc"):
+        # "not posted" is only what DraftKings had posted when it was asked; an answer from an earlier day is not today's answer
+        from operational import eastern_time as et, quote_freshness as qf
+        checked = qf.parse_utc(m["checked_utc"])
+        if checked is not None and et.eastern_today(checked) != et.eastern_today(now):
+            word = "not posted when last asked (an earlier day); not asked again yet today"
+    if st == "NOT_POSTED" and m.get("checked_utc") and "earlier day" not in word:
+        from zoneinfo import ZoneInfo
+        from operational import quote_freshness as qf
+        asked = qf.parse_utc(m["checked_utc"])
+        if asked is not None:
+            word += f" (asked at {asked.astimezone(ZoneInfo('America/New_York')).strftime('%-I:%M %p')} ET)"
+    return {"status": st, "word": word, "detail": detail, "checked_utc": m.get("checked_utc"), "quote_updated_utc": m.get("last_update"), "outcomes": m.get("outcomes")}
 
 
 def _season_line(p: dict) -> str:
@@ -347,7 +359,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
         shots = shots_picks(g, all_players, pg, haircut) if analysis_ok else {"picks": [], "shortfall": "game is not scheduled or has no projected skaters"}
         gblocks = [goalie_block(s, g, goalies, (saves_by_game or {}).get(gid, {}), saves_ok, haircut) for s in ("home", "away")] if scheduled else []
         side = side_block(g, now) if scheduled else {"market": "Moneyline", "recommendation": None, "reason": "Game not scheduled."}
-        mk = {key: _market_status(avail_games.get(gid), key) for key, _ in MARKETS}
+        mk = {key: _market_status(avail_games.get(gid), key, now) for key, _ in MARKETS}
         ml_priced = bool((g.get("moneyline") or {}).get("home"))
         recommended, missing = [], []
         if sc and any(r["price"] and r.get("best_value_at_price") for r in sc):

@@ -60,3 +60,12 @@ Round 1 (PR 142) and round 2 (PR 143) code-review findings are fixed with regres
 moneyline freshness from the provider quote time against `quote_freshness.price_limit_min` (both sides, again when the hosted page is opened), rejection reasons by cause (below +100 / above +500 / value / other),
 primary slip RECORDED in the recording cycle, per-game failure isolation, points planned after goals with explicit budget gaps in the builder, shared price helpers, observable saves-capture read errors and
 policy errors, incremental previous-day scan. Points support: bought after the morning look and anytime goals with what the day has left (free plan: usually none; the builder says why).
+
+## Live-workflow status (2026-10-14, after the second review round) — what was checked and why items are open
+| Item | Source / capture state found | Status |
+|---|---|---|
+| Two shots picks in one game | Both games of today's slate show two picks with the ladder, quote age and STALE/fresh flag, on the hosted Slate Board | **Verified live (hosted)** |
+| Posted anytime-goal prices | DraftKings does post them (35 real outcomes archived 2026-10-10 for a 1 PM game, posted the evening before). Today's plan (made 09:53Z) bought points, not goals; the credit order now funds goals for the lead games before the display refresh/tomorrow check and migrates saved plans (tests). The pregame wave (about 21:45Z) is the first capture that can include them | **Pending the live pregame wave**; parser and board verified on the real archived payload |
+| A real saves line | DraftKings posts them (44 archived payloads, 40 with outcomes, last 2026-10-08). The engine buys a saves line only for a confirmed starter, and no permitted automatic source confirms starters, so none is requested | **Blocked on starter confirmation**; archived real payloads parse and match 10 of 10 goalies by name; board shows the projection as conditional |
+| A qualifying primary slip | Replay of all 18 frozen snapshots with anchor fields through the primary-slip policy: 0 qualify (closest: -0.1% estimated value before the haircut on 2026-10-12 21:18Z; the old rule found 2 tickets there). The board now shows the closest non-qualifying combination | **Not observed**: the value bars have never been met under the corrected estimates in the logged period |
+| LOG_WRITE_TOKEN | Hosted My Bets "Create an account" still says creating accounts is not switched on (no write credential) | **Owner step** (docs/OWNER_STEPS.md step 1) |
