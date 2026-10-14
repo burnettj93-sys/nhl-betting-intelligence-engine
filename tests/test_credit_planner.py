@@ -193,7 +193,7 @@ class TestCaptureDecisions(unittest.TestCase):
                 return mock.Mock(ok=True, requests_last=requests_last)
         games = {"1": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-08T20:15:00Z"}}
         client = Client()
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY, cp.POINTS_ADDON_ENV: "on"}), mock.patch.object(cp, "record") as rec, mock.patch.object(cp, "spent_today", return_value={}), \
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}), mock.patch.object(cp, "record") as rec, mock.patch.object(cp, "spent_today", return_value={}), \
                 mock.patch.object(bb, "decision_age_min", return_value=None), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
             out = bb.capture_prices(NOW, client=client, archive_mod=mock.Mock(), games=games, plan=plan)
         return client, rec, out
@@ -300,24 +300,28 @@ class TestConnectedCaptures(unittest.TestCase):
 
 class TestPointsAddOn(unittest.TestCase):
     """Shots are bought first; points ride on the pregame capture as an add-on, lead games first, so shots never lose a game to points and points are not silently dropped."""
-    SHOTS_ONLY = {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: "on"}      # the add-on is opt-in since 2026-10-14
+    SHOTS_ONLY = {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate"}
 
-    def test_by_default_the_add_on_credit_buys_anytime_goal_prices_not_points(self):
+    def test_goals_come_before_points_and_points_get_what_is_left(self):
         with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: ""}):
+            self.assertTrue(cp.points_addon_enabled())                      # the add-on is on by default: the builder keeps its Points market whenever credits allow
+            tight = cp.allocate(11.5, SEVEN)
+            roomy = cp.allocate(30.0, SEVEN)
+        self.assertEqual(tight["points_games"], [])                           # a tight day: shots, the morning look and goals first; points are not funded and are reported as such
+        self.assertEqual(roomy["goals_games"], roomy["games_priced"][:len(roomy["goals_games"])])
+        self.assertGreaterEqual(len(roomy["goals_games"]), 1)
+        self.assertGreaterEqual(len(roomy["points_games"]), 1)
+        self.assertTrue(set(roomy["points_games"]) <= set(roomy["games_priced"]))
+        self.assertGreaterEqual(len(roomy["goals_games"]), len(roomy["points_games"]))   # goals are funded first
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: "off"}):
             self.assertFalse(cp.points_addon_enabled())
-            a = cp.allocate(30.0, SEVEN)
-        self.assertEqual(a["points_games"], [])
-        self.assertEqual(a["goals_games"], a["games_priced"][:len(a["goals_games"])])
-        self.assertGreaterEqual(len(a["goals_games"]), 1)
-        self.assertEqual(a["allowance"][cp.POINTS_ADDON], 0.0)
+            self.assertEqual(cp.allocate(30.0, SEVEN)["points_games"], [])
 
-    def test_the_lead_games_keep_their_points_before_morning_breadth_is_bought(self):
+    def test_the_morning_look_is_still_bought_before_goals_or_points(self):
         with mock.patch.dict("os.environ", self.SHOTS_ONLY):
             a = cp.allocate(11.5, SEVEN)
-        self.assertEqual(len(a["points_games"]), 2)
-        self.assertEqual(a["points_games"], a["games_priced"][:2])
-        self.assertEqual(a["allowance"][cp.POINTS_ADDON], 2.0)
-        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])          # the morning look stays shots-only
+        self.assertGreaterEqual(a["allowance"][cp.MORNING], 1.0)
+        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])
 
     def test_a_tight_day_buys_shots_not_points(self):
         with mock.patch.dict("os.environ", self.SHOTS_ONLY):

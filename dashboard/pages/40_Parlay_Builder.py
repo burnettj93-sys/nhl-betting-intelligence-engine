@@ -79,6 +79,19 @@ with left:
         codes = [c for c in bp.FAMILIES if c in p["m"]]
         st.subheader("2 · Choose a market")
         code = st.radio("Market", codes, format_func=lambda c: FAMILY_NAME.get(c, c), horizontal=True, key=f"pb_market_{pid}_{gid}", label_visibility="collapsed")
+        # A market this game has no prices for is named with the reason (posted / not posted by DraftKings / not fetched / budget blocked), never silently absent.
+        try:
+            _day = (ui.availability_block(ps.tickets()).get("today") or {}).get("games") or {}
+        except Exception:  # noqa: BLE001 - the explanation is a convenience; the builder works without it
+            _day = {}
+        _mk_keys = {"SOG": "player_shots_on_goal_alternate", "PTS": "player_points", "GOAL": "player_goal_scorer_anytime"}
+        for _c, _key in _mk_keys.items():
+            if _c in p["m"]:
+                continue
+            _m = ((_day.get(gid) or {}).get("markets") or {}).get(_key)
+            _word = ui._AVAIL_WORDS.get((_m or {}).get("status"), "not fetched for this game today")
+            st.caption(f"{FAMILY_NAME.get(_c, _c)}: no prices on file for this game — {_word}" + (f" (checked {ui.et_time(_m.get('checked_utc'), True)})" if _m and _m.get("checked_utc") else "")
+                       + (". The odds-credit allowance buys shots first, then anytime goals, then points." if (_m or {}).get("status") in ("BUDGET_BLOCKED", None) else "."))
         mk = p["m"][code]
         family = bp.FAMILIES[code][0]
         st.subheader("3 · Choose a line")

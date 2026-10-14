@@ -64,8 +64,7 @@ MODEL_CACHE_SCHEMA = 4                                              # 4: the rec
 PREVIOUS_MODEL_VERSION = "EXPERIMENTAL-rolling-l20-l60-shrunk-v1"   # compute_model() below; kept so earlier tickets stay interpretable
 MIN_EXPECTED_TOI = 12.0
 from operational.pricing_policy import PROVISIONAL_MAX_AGE_MIN  # noqa: E402  (shared with the hosted pages; see that module)
-MAX_PRICE_AGE_MIN_FAR = 150.0      # game >= 2h away
-MAX_PRICE_AGE_MIN_NEAR = 100.0     # game < 2h away
+from operational.quote_freshness import PRICE_LIMIT_FAR_MIN as MAX_PRICE_AGE_MIN_FAR, PRICE_LIMIT_NEAR_MIN as MAX_PRICE_AGE_MIN_NEAR     # game >= 2h away / < 2h away (one definition: operational/quote_freshness.py)
 HISTORY_CACHE_NAME = "best_bets_history_2022_2025.jsonl"
 STATE_NAME = "best_bets_state.json"
 MODEL_CACHE_NAME = "best_bets_model.json"

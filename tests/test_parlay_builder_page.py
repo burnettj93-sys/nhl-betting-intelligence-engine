@@ -93,6 +93,37 @@ class Case(unittest.TestCase):
         return r
 
 
+class TestAMissingMarketIsExplainedNotHidden(unittest.TestCase):
+    """Points are bought with whatever credits the day has left after shots and anytime goals; the builder names the gap and its reason instead of silently dropping the market."""
+    def snap(self, status):
+        s = snapshot()
+        s["builder_pool"] = builder_pool_doc()
+        s["builder_pool"]["games"][GAME]["players"]["P1"]["m"].pop("PTS", None)
+        s["tickets"]["diagnostics"] = {"price_availability": {"today": {"games": {GAME: {"matchup": "BBB at AAA", "start_utc": "2026-10-08T23:00:00Z", "markets": {
+            "player_points": {"status": status, "checked_utc": "2026-10-08T21:58:00Z", "outcomes": 0},
+            "player_goal_scorer_anytime": {"status": "NOT_POSTED", "checked_utc": "2026-10-08T21:58:00Z", "outcomes": 0}}}}}}}
+        return s
+
+    def test_a_budget_blocked_points_market_says_so_on_the_page(self):
+        r = Runner(self.snap("BUDGET_BLOCKED"))
+        try:
+            txt = r.text()
+        finally:
+            r.close()
+        self.assertIn("Points: no prices on file for this game", txt)
+        self.assertIn("credit budget", txt)
+        self.assertIn("Anytime goal: no prices on file for this game", txt)
+        self.assertIn("Not posted by DraftKings yet", txt)
+
+    def test_a_posted_but_absent_market_is_not_blamed_on_the_budget(self):
+        r = Runner(self.snap("NOT_POSTED"))
+        try:
+            txt = r.text()
+        finally:
+            r.close()
+        self.assertIn("Points: no prices on file for this game — Not posted by DraftKings yet", txt)
+
+
 class TestBrowsing(Case):
     def test_it_shows_players_markets_lines_with_real_prices_and_freshness_and_files_nothing(self):
         r = self.run_()

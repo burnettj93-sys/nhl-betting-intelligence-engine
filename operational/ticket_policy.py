@@ -40,6 +40,20 @@ def active() -> P.TicketPolicy:
     return P.PROPOSED
 
 
+class PolicyUnavailable(RuntimeError):
+    """The ticket policy could not be loaded or is unusable. Recording is blocked and the error reported; the superseded five-ticket behaviour is never substituted."""
+
+
+def checked_active() -> P.TicketPolicy:
+    try:
+        pol = active()
+        if int(pol.slots) < 0 or not pol.digest():
+            raise ValueError(f"unusable policy {getattr(pol, 'policy_id', '?')}")
+        return pol
+    except Exception as exc:  # noqa: BLE001 - one named failure that the cycle turns into a blocked, reported state
+        raise PolicyUnavailable(f"{exc.__class__.__name__}: {exc}") from exc
+
+
 def approval() -> dict | None:
     path = state_paths.path(APPROVAL_NAME)
     try:

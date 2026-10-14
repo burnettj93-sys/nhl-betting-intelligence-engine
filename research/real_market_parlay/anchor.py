@@ -216,7 +216,8 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     for g in games:
         by_game[g].sort(key=lambda t: -t[1])                     # most likely leg first, so the floor test can stop a game's loop at the first leg that fails it (exact: the rest are lower)
     top_p = [by_game[g][0][1] for g in games]
-    diag = {"games_with_supported_legs": len(by_game), "supported_legs": len(pool), "combinations_checked": 0, "reaching_plus_100": 0, "best_reaching_plus_100": None, "truncated": False}
+    diag = {"games_with_supported_legs": len(by_game), "supported_legs": len(pool), "combinations_checked": 0, "reaching_plus_100": 0, "best_reaching_plus_100": None, "truncated": False,
+            "below_minimum": 0, "above_maximum": 0, "insufficient_value": 0, "other_rejected": 0}
     ml = [l for l in pool if l.market_family == "MONEYLINE"]
     shots = [l for l in pool if l.market_family != "MONEYLINE"]
     diag.update({"moneyline_legs": len(ml), "moneyline_games": len({l.game_id for l in ml}), "prop_legs": len(shots), "prop_games": len({l.game_id for l in shots})})
@@ -249,14 +250,16 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                     return
                 D2, Pm2, Ps2 = D * d, Pm * pm, Ps * ps
                 if D2 > ceiling_D:                                  # (precomputed: this test runs once per node of a search that can visit millions)
-                    if chosen:
-                        diag["above_ceiling"] = diag.get("above_ceiling", 0) + 1          # a combination that reaches +100 but is longer than the policy's ceiling: counted, so the reason can say so
+                    if len(chosen) == 1:
+                        diag["above_maximum"] += 1                  # a two-leg combination longer than the policy's ceiling (counted once per pair; longer extensions of an in-range ticket are not "alternatives that were too long")
                     continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
                 if len(chosen) >= 2:
                     diag["combinations_checked"] += 1
-                    if D2 >= policy.min_combined_decimal:
-                        diag["reaching_plus_100"] += 1
+                    if D2 < policy.min_combined_decimal:
+                        diag["below_minimum"] += 1
+                    else:
+                        diag["reaching_plus_100"] += 1                                  # inside the price range (+100 up to the ceiling)
                         best = diag["best_reaching_plus_100"]
                         if best is None or Ps2 * D2 - 1.0 > best["ev_after_shade"]:
                             diag["best_reaching_plus_100"] = {"hit_probability": P2, "ev_estimated": P2 * D2 - 1.0, "ev_after_shade": Ps2 * D2 - 1.0,
@@ -265,6 +268,10 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                             combo = evaluate(list(chosen))
                             if combo is not None and ticket_passes(combo, policy, veto):
                                 found[key_of(chosen)] = combo
+                            else:
+                                diag["other_rejected"] += 1                              # priced inside the range with value on the plain numbers, but a ticket-level test or exposure rule refused it
+                        else:
+                            diag["insufficient_value"] += 1
                 if len(chosen) < MAX_LEGS:
                     visit(gi + 1, P2, D2, Pm2, Ps2)
                 chosen.pop()
