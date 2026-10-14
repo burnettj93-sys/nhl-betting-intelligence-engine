@@ -118,6 +118,10 @@ def builder_pool() -> dict:
     return _optional("builder_pool")
 
 
+def slate_board() -> dict:
+    return _optional("slate_board")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 

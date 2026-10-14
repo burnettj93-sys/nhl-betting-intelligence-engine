@@ -171,7 +171,14 @@ def uncertainty(legs: list, cap: float | None = None) -> dict:
 
 def ticket_passes(combo, policy, veto) -> bool:
     """The policy's acceptance test for ONE ticket, in one place (used by the search above and by Best Options for single-leg offers)."""
-    return (combo.combined_decimal >= policy.min_combined_decimal and combo.ev_estimated >= policy.min_estimated_ev and combo.ev_conservative >= 0.0 and veto(combo, policy) is None)
+    return (combo.combined_decimal >= policy.min_combined_decimal and within_ceiling(combo.combined_decimal, policy)
+            and combo.ev_estimated >= policy.min_estimated_ev and combo.ev_conservative >= 0.0 and veto(combo, policy) is None)
+
+
+def within_ceiling(decimal: float, policy) -> bool:
+    """The policy's longest allowed combined price (+500 for the primary slip), judged on the American price as it is stated, so a ticket whose product rounds to +500 is inside."""
+    ceiling = getattr(policy, "max_combined_decimal", None)
+    return ceiling is None or round((decimal - 1.0) * 100.0) <= round((ceiling - 1.0) * 100.0)
 
 
 MAX_SEARCH_NODES = 5_000_000   # a safety bound, not a tuning knob: a search that reaches it says so (diag["truncated"]) instead of silently dropping tickets
@@ -239,6 +246,8 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                     diag["truncated"] = True
                     return
                 D2, Pm2, Ps2 = D * d, Pm * pm, Ps * ps
+                if not within_ceiling(D2, policy):
+                    continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
                 if len(chosen) >= 2:
                     diag["combinations_checked"] += 1

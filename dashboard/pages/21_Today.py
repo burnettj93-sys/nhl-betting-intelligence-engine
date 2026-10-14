@@ -72,9 +72,18 @@ else:
     st.caption("Model home win is a display estimate (validated strength model); moneyline quotes are DraftKings US-feed prices and are not used for tickets unless fresh.")
 
 slots = tk["slots"]
-st.subheader("Automatic tickets")
-st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket is a distinct cross-game bet at +100 or better; recorded tickets are paper bets and never change, "
-           "recommended ones can still move with the next price refresh.")
+_single = slots.get("total") == 1
+st.subheader("Primary parlay" if _single else "Automatic tickets")
+if _single:
+    st.caption(f"{slots['used']} of {slots['total']} daily slot used. One parlay a day, priced +100 to +500, the fewest legs that qualify, ranked by estimated hit chance; recorded tickets are paper bets "
+               "and never change, a recommended one can still move with the next price refresh.")
+    try:
+        st.page_link("pages/41_Slate_Board.py", label="Open the Slate Board: every game's goal scorers, shots values, goalie saves and side", icon="📋")
+    except Exception:  # noqa: BLE001 - the link is a convenience; the page is also in the sidebar
+        st.caption("The Slate Board (sidebar) analyses every game on the slate.")
+else:
+    st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket is a distinct cross-game bet at +100 or better; recorded tickets are paper bets and never change, "
+               "recommended ones can still move with the next price refresh.")
 _proposed = [t for t in tk["tickets"] if t.get("proposed")]
 if _proposed:
     st.caption(f"{len(_proposed)} of the tickets below are **proposed, not recorded**: automatic recording is paused until the ticket policy is approved, so they are what the selector would "

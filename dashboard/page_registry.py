@@ -49,6 +49,7 @@ class PageSpec:
 PAGES: tuple[PageSpec, ...] = (
     # ---- Operate
     PageSpec("21_Today.py", "Today", "☀️", "Operate", CORE_USER, True, default=True),
+    PageSpec("41_Slate_Board.py", "Slate Board", "📋", "Operate", CORE_USER, True),
     PageSpec("1_Game_Slate.py", "Games", "🗓️", "Operate", CORE_USER, True),
     PageSpec("39_Tomorrow.py", "Tomorrow", "🌅", "Operate", CORE_USER, True),
     PageSpec("2_Game_Detail.py", "Game Detail", "🔍", "Operate", CORE_USER, True),
