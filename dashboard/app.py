@@ -100,7 +100,7 @@ with st.sidebar:
             pass
     st.divider()
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
-        st.caption("🌐 Public, read-only. Paper accounts are separate from the model's book.")
+        st.caption("🌐 Public, read-only. Nothing a visitor does is recorded.")
         if _user["role"] == "ADMIN":
             st.caption("Owner pages unlocked for this browser session.")
             if st.button("Lock owner pages"):
