@@ -1,0 +1,50 @@
+{
+ "note": "Real DraftKings payload archived by the engine (public odds data), trimmed to the DraftKings market under test.",
+ "captured_file_stamp": "20261008T185819Z",
+ "event": {
+  "id": "100868f90e5446c13a23eb2b7710724d",
+  "sport_key": "icehockey_nhl",
+  "commence_time": "2026-10-08T23:00:00Z",
+  "home_team": "Boston Bruins",
+  "away_team": "Utah Mammoth"
+ },
+ "bookmakers": [
+  {
+   "key": "draftkings",
+   "title": "DraftKings",
+   "last_update": null,
+   "markets": [
+    {
+     "key": "player_total_saves",
+     "last_update": "2026-10-08T18:56:38Z",
+     "outcomes": [
+      {
+       "description": "Jeremy Swayman",
+       "name": "Over",
+       "point": 24.5,
+       "price": -115
+      },
+      {
+       "description": "Jeremy Swayman",
+       "name": "Under",
+       "point": 24.5,
+       "price": -115
+      },
+      {
+       "description": "Sebastian Cossa",
+       "name": "Over",
+       "point": 23.5,
+       "price": -105
+      },
+      {
+       "description": "Sebastian Cossa",
+       "name": "Under",
+       "point": 23.5,
+       "price": -125
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

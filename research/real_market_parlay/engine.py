@@ -463,19 +463,21 @@ def anchor_reason(diag: dict, policy) -> str:
     ceiling = getattr(policy, "max_combined_decimal", None)
     top = f"+{round((ceiling - 1.0) * 100)}" if ceiling else None
     rng = f"+100 to {top}" if top else "+100 or better"
+    from research.real_market_parlay import anchor as _anchor
     parts = []
     if diag.get("below_minimum"):
         parts.append(f"{diag['below_minimum']} priced below +100")
-    if diag.get("above_maximum"):
-        parts.append(f"{diag['above_maximum']} two-leg combination(s) priced above the {top} ceiling")
     n_in = diag.get("reaching_plus_100", 0)
     if n_in:
         rejected = (diag.get("insufficient_value", 0), diag.get("other_rejected", 0))
         parts.append(f"{n_in} priced inside {rng}" + (f" ({rejected[0]} without enough value at the real prices" + (f", {rejected[1]} refused by another rule" if rejected[1] else "") + ")" if sum(rejected) else ""))
-    summary = (f"Of {diag['combinations_checked']} cross-game combination(s): " + "; ".join(parts)) if parts else "No cross-game combination could be formed from them"
+    pairs = diag.get("above_maximum", 0)
+    summary = (f"{diag['combinations_checked']} cross-game combination(s) of 2 to {_anchor.MAX_LEGS} legs were examined: " + "; ".join(parts)) if parts else \
+        f"{diag['combinations_checked']} cross-game combination(s) of 2 to {_anchor.MAX_LEGS} legs were examined and none is priced inside {rng}"
+    if pairs:
+        summary += (f". Separately, {pairs} two-leg pair(s) were already priced above the {top} ceiling; any longer slip containing such a pair is longer still, so those slips were not enumerated or counted")
     if best is None:
-        tail = (f" None is priced inside {rng}." if not n_in else "")
-        return f"No ticket today: {head}. {summary}.{tail} A slot left empty is a correct answer."
+        return f"No ticket today: {head}. {summary}. A slot left empty is a correct answer."
     return (f"No ticket today: {head}. {summary}. The best of those inside the range hits about {best['hit_probability']:.0%} of the time "
             f"with estimated value {best['ev_estimated']:+.1%} ({best['ev_after_shade']:+.1%} with every leg lowered {policy.value_shade * 100:.0f} points); "
             f"the policy needs at least {policy.min_estimated_ev:+.0%} and {policy.min_value_after_shade:+.0%}. A slot left empty is a correct answer.")

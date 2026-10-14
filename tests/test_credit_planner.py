@@ -96,6 +96,38 @@ class TestTransitionDay(unittest.TestCase):
         self.assertGreater(len(plan2["morning_games"]), 0)                            # credits that really are free fund a morning look
 
 
+class TestGoalsComeBeforeTheDisplayRefreshAndTheTomorrowCheck(unittest.TestCase):
+    def setUp(self):
+        p = mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY})       # production's shots-only default (the test package's default is the two-market capture)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_a_two_game_day_funds_goals_for_both_games(self):
+        two = starts(("a", 0), ("b", 60))
+        a = cp.allocate(10.94, two, set(), {})
+        self.assertEqual(a["goals_games"], ["a", "b"])                                  # the board's section 1 has prices for both games
+        self.assertEqual(a["allowance"][cp.GOALS], 2.0)
+        self.assertEqual(a["allowance"][cp.TOMORROW], 0.0)                              # the tomorrow check gives way (a not-posted answer is free anyway; a posted one is reported budget-blocked)
+        self.assertLessEqual(sum(a["allowance"].values()), 10.94 + 1e-9)
+        self.assertEqual(a["morning_games"], ["a", "b"])                                # the 8 AM look is still bought first
+
+    def test_a_plan_saved_with_the_old_order_is_retaken_for_those_classes_only_and_never_overspends(self):
+        old = {"day": "2026-10-14", "made_at_utc": "x", "D": 10.94, "games_today": 2, "games_priced": ["a", "b"], "games_not_priced": [], "goals_games": [], "points_games": ["a", "b"],
+               "morning_games": ["a", "b"], "morning_markets": [cp.SHOTS_KEY], "saves_games": [],
+               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.94, cp.PROPS: 2.0, cp.MORNING: 2.0, cp.SAVES: 0.0, cp.GOALS: 0.0, cp.POINTS_ADDON: 2.0, cp.REFRESH: 0.0, cp.TOMORROW: 0.0},
+               "budget": {"D": 10.94}}
+        two = starts(("a", 0), ("b", 60))
+        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(cp, "day_budget", return_value={"D": 10.94}):
+            plan = cp.day_plan(NOW, "2026-10-14", two, remaining=200)
+        self.assertEqual(plan["goals_games"], ["a", "b"])
+        self.assertEqual(plan["points_games"], [])
+        self.assertEqual(plan["games_priced"], ["a", "b"])                              # the priced set is not reshuffled
+        self.assertEqual(plan["morning_games"], ["a", "b"])
+        self.assertLessEqual(sum(plan["allowance"].values()), 10.94 + 1e-6)
+        self.assertEqual(plan["alloc_version"], cp.ALLOC_VERSION)
+
+
 class TestPlanState(unittest.TestCase):
     def test_the_priced_set_is_saved_for_the_day_and_not_reshuffled(self):
         with mock.patch.object(cp, "_persist") as persist, mock.patch.object(cp, "load_plan", return_value=None), mock.patch.object(cp, "spent_today", return_value={}):

@@ -816,6 +816,12 @@ def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_da
                              "Built on an earlier look at today's prices that is past its freshness limit: shown for review, not recordable until the prices are refreshed and it still qualifies.")
             return doc
         reason = picked.get("reason")
+        best = (picked.get("anchor") or {}).get("best_reaching_plus_100")
+        if best and not doc.get("closest"):
+            doc["closest"] = {"legs": [{"participant": l[0], "threshold": l[1], "market_family": l[2], "american_price": l[3]} for l in best["legs"]],
+                              "combined_american": round(best["price"]), "hit_probability": round(best["hit_probability"], 4), "ev_estimated": round(best["ev_estimated"], 4),
+                              "ev_after_haircut": round(best["ev_after_shade"], 4), "status": status,
+                              "note": "The closest combination inside +100 to +500 (best value after the haircut). It does NOT qualify: shown so the analysis is not hidden, not as a recommendation."}
     doc["reason"] = reason or "No combination of supported selections qualifies at the prices available now."
     doc["strongest_singles"] = _strongest_singles(_with_provisional_eligible(legs))
     return doc

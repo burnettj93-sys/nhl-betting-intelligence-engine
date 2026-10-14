@@ -84,6 +84,11 @@ class TestTheBoard(unittest.TestCase):
         missing = {m["item"]: m["reason"] for m in g["coverage"]["missing"]}
         self.assertIn("Shots prices", missing)
         self.assertEqual(sb._market_status({"markets": {}}, "player_total_saves")["status"], "NOT_FETCHED")
+        yesterday = {"markets": {"player_goal_scorer_anytime": {"status": "NOT_POSTED", "checked_utc": "2026-10-07T20:17:00Z"}}}
+        word = sb._market_status(yesterday, "player_goal_scorer_anytime", NOW)["word"]                     # asked the evening before: not today's answer
+        self.assertIn("earlier day", word)
+        today_ = {"markets": {"player_goal_scorer_anytime": {"status": "NOT_POSTED", "checked_utc": "2026-10-08T17:00:00Z"}}}
+        self.assertEqual(sb._market_status(today_, "player_goal_scorer_anytime", NOW)["word"], "not posted by DraftKings")
         self.assertEqual(sb._market_status({"markets": {"x": {"status": "BUDGET_BLOCKED"}}}, "x")["word"], "budget blocked")
 
     def test_an_unconfirmed_starter_gets_a_conditional_projection_and_no_saves_selection(self):
@@ -333,6 +338,43 @@ class TestTheLivePath(unittest.TestCase):
         self.assertEqual((r["scheduled"], r["shots_legs_evaluated_in_games"], r["moneyline_legs_evaluated_in_games"]), (1, 1, 1))
 
 
+class TestArchivedRealPayloads(unittest.TestCase):
+    """ARCHIVED verification only: real DraftKings payloads the engine archived on 2026-10-08 (saves) and 2026-10-10 (anytime goals), trimmed to the DraftKings market. This proves the parsers and the
+    identity matching against the real shapes; it is NOT evidence of what is posted today (that is the live hosted check)."""
+    def load(self, name):
+        import json
+        from pathlib import Path
+        return json.loads((Path(__file__).parent / "fixtures" / "real_payloads" / name).read_text())
+
+    def test_the_real_saves_payload_gives_both_goalies_their_line_and_prices_and_matches_by_name(self):
+        from unittest import mock
+        payload = self.load("saves_BOS_UTA_2026-10-08.json")
+        with mock.patch("operational.best_bets.latest_capture", return_value=(NOW, payload)):
+            by_name = sb._saves_lines({"games": {"G": {"event_id": payload["event"]["id"]}}}, NOW)
+        self.assertEqual(set(by_name["G"]), {"jeremy swayman", "sebastian cossa"})
+        sway = by_name["G"]["jeremy swayman"]
+        self.assertEqual((sway["line"], sway["over"], sway["under"]), (24.5, -115.0, -115.0))
+        self.assertEqual(by_name["G"]["sebastian cossa"]["line"], 23.5)
+        by_id = sb._by_goalie_id(by_name, {"8480280": {"name": "Jeremy Swayman"}, "8482657": {"name": "Sebastian Cossa"}, "1": {"name": "Someone Else"}})
+        self.assertEqual(set(by_id["G"]), {"8480280", "8482657"})
+
+    def test_the_real_goals_payload_parses_with_the_builders_reader_and_prices_a_scorer_on_the_board(self):
+        from operational import builder_pool as bp
+        payload = self.load("goals_2026-10-10.json")
+        rows = [(upd, o) for upd, outs in bp._outcomes({"bookmakers": payload["bookmakers"]}, "player_goal_scorer_anytime") for o in outs]
+        self.assertEqual(len(rows), 35)
+        self.assertTrue(all(o["name"] == "Yes" and o.get("price") is not None for _, o in rows))
+        upd, pastrnak = [r for r in rows if r[1]["description"] == "David Pastrnak"][0]
+        self.assertEqual(pastrnak["price"], 135)
+        # the same price, as the pool stores it, is what the board shows beside the model's chance
+        p = product()
+        pl = pool()
+        pl["games"]["2026020900"]["players"]["P1"]["m"]["GOAL"] = {"q": upd, "r": upd, "l": [[1, float(pastrnak["price"]), None]]}
+        row = sb.build_doc(NOW, p, pl, {}, avail(goals="POSTED"), {}, None)["games"][0]["scorers"][0]
+        self.assertEqual(row["price"]["american"], 135.0)
+        self.assertAlmostEqual(row["price"]["ev_estimated"], 0.31 * 2.35 - 1.0, places=3)
+
+
 class TestThePage(unittest.TestCase):
     def snap(self, **kw) -> dict:
         s = snapshot()
@@ -367,6 +409,18 @@ class TestThePage(unittest.TestCase):
         s["slate_board"]["games"][0]["side"]["sides"]["away"]["quote_captured_at_utc"] = old      # only the OTHER side aged out: the estimate rests on both quotes
         at = run_page("41_Slate_Board.py", s)
         self.assertIn("Not a current recommendation", " ".join(x.value for x in at.markdown))
+
+    def test_the_closest_combination_is_displayed_with_its_label(self):
+        s = snapshot()
+        s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "r", "strongest_singles": [], "closest": {
+            "legs": [{"participant": "Test Skater One", "threshold": 2, "market_family": "PLAYER_SOG_ALTERNATE", "american_price": -200}, {"participant": "COL", "threshold": None, "market_family": "MONEYLINE", "american_price": -148}],
+            "combined_american": 238, "hit_probability": 0.45, "ev_estimated": 0.081, "ev_after_haircut": -0.013, "status": "FRESH", "note": "The closest combination ... It does NOT qualify: shown so the analysis is not hidden."}}})
+        at = run_page("41_Slate_Board.py", s)
+        self.assertFalse(at.exception, at.exception)
+        blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)
+        self.assertIn("Closest combination (does not qualify)", blob)
+        self.assertIn("Test Skater One 2+", blob)
+        self.assertIn("COL to win", blob)
 
     def test_a_missing_board_says_so_instead_of_failing(self):
         s = snapshot()

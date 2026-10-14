@@ -1,0 +1,201 @@
+{
+ "note": "Real DraftKings payload archived by the engine (public odds data), trimmed to the DraftKings market under test.",
+ "captured_file_stamp": "20261010T001957Z",
+ "event": {
+  "id": "d85b0a6ad02d473031876a3286f80638",
+  "sport_key": "icehockey_nhl",
+  "commence_time": "2026-10-10T17:10:00Z",
+  "home_team": "Boston Bruins",
+  "away_team": "Philadelphia Flyers"
+ },
+ "bookmakers": [
+  {
+   "key": "draftkings",
+   "title": "DraftKings",
+   "last_update": null,
+   "markets": [
+    {
+     "key": "player_goal_scorer_anytime",
+     "last_update": "2026-10-10T00:19:32Z",
+     "outcomes": [
+      {
+       "description": "David Pastrnak",
+       "name": "Yes",
+       "price": 135
+      },
+      {
+       "description": "Morgan Geekie",
+       "name": "Yes",
+       "price": 215
+      },
+      {
+       "description": "JJ Peterka",
+       "name": "Yes",
+       "price": 230
+      },
+      {
+       "description": "Tyson Foerster",
+       "name": "Yes",
+       "price": 250
+      },
+      {
+       "description": "Travis Konecny",
+       "name": "Yes",
+       "price": 255
+      },
+      {
+       "description": "Pavel Zacha",
+       "name": "Yes",
+       "price": 260
+      },
+      {
+       "description": "Matvei Michkov",
+       "name": "Yes",
+       "price": 275
+      },
+      {
+       "description": "Trevor Zegras",
+       "name": "Yes",
+       "price": 295
+      },
+      {
+       "description": "Elias Lindholm",
+       "name": "Yes",
+       "price": 300
+      },
+      {
+       "description": "Owen Tippett",
+       "name": "Yes",
+       "price": 300
+      },
+      {
+       "description": "Porter Martone",
+       "name": "Yes",
+       "price": 340
+      },
+      {
+       "description": "James Hagens",
+       "name": "Yes",
+       "price": 425
+      },
+      {
+       "description": "Christian Dvorak",
+       "name": "Yes",
+       "price": 425
+      },
+      {
+       "description": "Fraser Minten",
+       "name": "Yes",
+       "price": 475
+      },
+      {
+       "description": "Casey Mittelstadt",
+       "name": "Yes",
+       "price": 500
+      },
+      {
+       "description": "Noah Cates",
+       "name": "Yes",
+       "price": 550
+      },
+      {
+       "description": "Denver Barkey",
+       "name": "Yes",
+       "price": 550
+      },
+      {
+       "description": "Noel Acciari",
+       "name": "Yes",
+       "price": 600
+      },
+      {
+       "description": "Marat Khusnutdinov",
+       "name": "Yes",
+       "price": 600
+      },
+      {
+       "description": "Frederic Brunet",
+       "name": "Yes",
+       "price": 650
+      },
+      {
+       "description": "Sean Couturier",
+       "name": "Yes",
+       "price": 650
+      },
+      {
+       "description": "Matthew Poitras",
+       "name": "Yes",
+       "price": 650
+      },
+      {
+       "description": "Mark Kastelic",
+       "name": "Yes",
+       "price": 700
+      },
+      {
+       "description": "Mason Lohrei",
+       "name": "Yes",
+       "price": 800
+      },
+      {
+       "description": "Tanner Jeannot",
+       "name": "Yes",
+       "price": 850
+      },
+      {
+       "description": "David Jiricek",
+       "name": "Yes",
+       "price": 850
+      },
+      {
+       "description": "Jamie Drysdale",
+       "name": "Yes",
+       "price": 950
+      },
+      {
+       "description": "Hampus Lindholm",
+       "name": "Yes",
+       "price": 1000
+      },
+      {
+       "description": "Travis Sanheim",
+       "name": "Yes",
+       "price": 1100
+      },
+      {
+       "description": "Cam York",
+       "name": "Yes",
+       "price": 1200
+      },
+      {
+       "description": "Rasmus Ristolainen",
+       "name": "Yes",
+       "price": 1300
+      },
+      {
+       "description": "Connor Clifton",
+       "name": "Yes",
+       "price": 1400
+      },
+      {
+       "description": "Nikita Zadorov",
+       "name": "Yes",
+       "price": 1400
+      },
+      {
+       "description": "Will Borgen",
+       "name": "Yes",
+       "price": 1500
+      },
+      {
+       "description": "Nick Seeler",
+       "name": "Yes",
+       "price": 2200
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

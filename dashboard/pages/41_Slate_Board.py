@@ -61,6 +61,12 @@ if ticket:
             st.write({k: v for k, v in anchor.items() if k in ("hit_low", "hit_high", "ev_estimated", "ev_after_haircut", "ev_midpoint", "ev_after_shade") and v is not None})
 else:
     ui.banner("<b>No primary parlay qualifies right now.</b> " + ui.esc(primary.get("reason") or "No combination of supported selections reaches +100 to +500 with value at the prices available."), "warn")
+    closest = primary.get("closest")
+    if closest:
+        legs_txt = " + ".join(f"{ui.esc(str(l['participant']))}{(' ' + str(l['threshold']) + '+') if l.get('threshold') else ' to win'} ({ui.american(l['american_price'])})" for l in closest["legs"])
+        st.markdown(f"**Closest combination (does not qualify):** {legs_txt} → {ui.american(closest['combined_american'])} calculated · estimated hit chance {ui.pct(closest['hit_probability'])} · "
+                    f"value {closest['ev_estimated']:+.1%} ({closest['ev_after_haircut']:+.1%} after the haircut)")
+        st.caption(ui.esc(closest.get("note") or ""))
     singles = primary.get("strongest_singles") or []
     if singles:
         st.markdown("**Strongest individual selections** (informational: a single is not a recommendation)")

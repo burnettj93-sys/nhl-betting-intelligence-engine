@@ -604,6 +604,12 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
                 with_points = (decision == "FIRST" and cp.points_addon_enabled() and str(gid) in set(plan.get("points_games") or []))
                 markets = ",".join(base_list + ([POINTS_MARKET_KEY] if with_points else []) + ([GOALS_MARKET_KEY] if with_goals else []))
                 est_cost = cp.base_cost() + (cp.POINTS_COST if with_points else 0) + (cp.GOALS_COST if with_goals else 0)
+                if decision == "FIRST" and not with_goals:
+                    pa.note_unfetched(day, gid, GOALS_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots are bought first; today's credits did not cover anytime-goal prices for this game",
+                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
+                if decision == "FIRST":
+                    pa.note_unfetched(day, gid, "player_total_saves", pa.NOT_FETCHED, now, detail="a saves line is bought only for a confirmed starter, and no permitted automatic source confirms starters",
+                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
                 if decision == "FIRST" and cp.points_addon_enabled() and not with_points:
                     pa.note_unfetched(day, gid, POINTS_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots are bought first; today's credits did not cover points for this game",
                                       matchup=matchup, game_date=day, start_utc=gstart.isoformat())
