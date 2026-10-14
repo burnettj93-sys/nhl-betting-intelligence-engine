@@ -44,7 +44,8 @@ MARKETS = (("player_shots_on_goal_alternate", "Shots (1+ to 5+)"), ("player_goal
 # ------------------------------------------------------------------ small helpers
 
 def _dec(american: float) -> float:
-    return 1.0 + (american / 100.0 if american > 0 else 100.0 / abs(american))
+    from operational import builder_pool                    # the one decimal-price definition the builder and the slip use
+    return builder_pool._decimal(american)
 
 
 def _implied(american: float) -> float:
@@ -66,6 +67,12 @@ def _pct(p) -> str:
 
 def _ev(p: float, american: float) -> float:
     return p * _dec(american) - 1.0
+
+
+def _ev_haircut(p: float, american: float) -> float:
+    """Value with the policy's per-leg haircut, by the same function the selector uses for a ticket (daily_tickets.haircut_ev)."""
+    from operational import daily_tickets
+    return daily_tickets.haircut_ev([p], _dec(american), _haircut())
 
 
 def _eligible(p: dict) -> bool:
@@ -114,7 +121,7 @@ def scorers(game: dict, side_players: list[dict], pool_game: dict | None, opp_go
         if goal and goal.get("l"):
             k, price, _ = goal["l"][0]
             price_info = {"american": price, "implied": round(_implied(price), 4), "quote_updated_utc": goal.get("q"), "retrieved_at_utc": goal.get("r"),
-                          "ev_estimated": round(_ev(pg, price), 4), "ev_after_haircut": round(_ev(pg - _haircut(), price), 4)}
+                          "ev_estimated": round(_ev(pg, price), 4), "ev_after_haircut": round(_ev_haircut(pg, price), 4)}
         why = [f"model {_pct(pg)} to score", f"{exp.get('shots', 0):.1f} expected shots", f"{exp.get('toi', 0):.0f} min expected" + (f" ({exp.get('toi_pp', 0):.1f} on the power play)" if exp.get("toi_pp") else ""),
                _season_line(p)]
         if opp_goalie and (opp_goalie.get("season") or {}).get("save_pct"):
@@ -148,7 +155,7 @@ def shots_picks(game: dict, side_players: list[dict], pool_game: dict | None) ->
             if final is None:
                 continue                                              # no record-based estimate for this line: not offered as a pick (the model alone is not the ticket estimate)
             ladder.append({"threshold": int(k), "american": price, "model": prob, "recent_hits": r[0], "recent_games": r[1], "games_this_season": n_cur, "estimate": round(final, 4),
-                           "implied": round(_implied(price), 4), "ev_estimated": round(_ev(final, price), 4), "ev_after_haircut": round(_ev(final - _haircut(), price), 4),
+                           "implied": round(_implied(price), 4), "ev_estimated": round(_ev(final, price), 4), "ev_after_haircut": round(_ev_haircut(final, price), 4),
                            "supported_for_slip": final >= anchor.SHOTS_LEG_FLOOR})
         usable = [x for x in ladder if x["estimate"] >= SHOTS_PICK_FLOOR and x["implied"] <= SHOTS_PICK_MAX_IMPLIED]
         if not usable:
@@ -206,6 +213,8 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
                                                          "note": conf.get("note")},
            "alternate": ({"name": (goalies.get(str(ranked[1]["player_id"])) or {}).get("name") or ranked[1].get("name"), "start_probability": ranked[1].get("start_probability")} if len(ranked) > 1 else None),
            "projection": None, "line": None, "recommendation": None}
+    if not proj:
+        out["projection_unavailable"] = "No projection is available for this goalie yet (too few starts logged); nothing is estimated."
     if proj:
         season = g.get("season") or {}
         out["projection"] = {"expected_saves": proj.get("expected_saves"), "saves_range_80": proj.get("saves_range_80"), "expected_shots_against": proj.get("expected_shots_against"),
@@ -218,8 +227,8 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
     if line:
         p_over = _saves_over_probability(proj, line["line"])
         out["line"] = {**line, "p_over": p_over, "p_under": (None if p_over is None else round(1 - p_over, 4)),
-                       "ev_over": (None if p_over is None or line.get("over") is None else round(_ev(p_over - _haircut(), line["over"]), 4)),
-                       "ev_under": (None if p_over is None or line.get("under") is None else round(_ev((1 - p_over) - _haircut(), line["under"]), 4))}
+                       "ev_over": (None if p_over is None or line.get("over") is None else round(_ev_haircut(p_over, line["over"]), 4)),
+                       "ev_under": (None if p_over is None or line.get("under") is None else round(_ev_haircut(1 - p_over, line["under"]), 4))}
         if not confirmed:
             out["recommendation"] = {"side": None, "conditional": True, "text": "Conditional on the start: the starter is unconfirmed, so no saves selection is made and none goes in the slip."}
         elif not saves_verdict_ok or p_over is None:
@@ -236,17 +245,13 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
 
 # ------------------------------------------------------------------ section 4: moneyline / puck line
 
-FRESH_LIMIT_MIN = 150.0           # the engine's freshness rule for a price (docs/MORNING_WORKFLOW.md): 150 minutes, 100 when puck drop is under two hours away
-FRESH_LIMIT_NEAR_MIN = 100.0
-
-
 def _quote_fresh(american_row: dict, now: dt.datetime, start_utc: str | None) -> bool:
-    """A moneyline quote is fresh by its own age against the engine's limit; the snapshot row's status says only that the quote is the latest one."""
+    """A moneyline quote is fresh by its own provider time against the engine's price limit (operational/quote_freshness.price_limit_min, the limit its slip legs use); the snapshot row's
+    status says only that the quote is the latest one. The hosted page repeats this judgement when it is opened (dashboard/pages/41_Slate_Board.py)."""
     from operational import quote_freshness as qf
     start = qf.parse_utc(start_utc)
-    near = start is not None and (start - now).total_seconds() < 7200
-    r = qf.assess(american_row.get("quote_captured_at_utc"), None, now, FRESH_LIMIT_NEAR_MIN if near else FRESH_LIMIT_MIN, require_retrieval=False)
-    return bool(r["fresh"])
+    hours = (start - now).total_seconds() / 3600.0 if start is not None else 99.0
+    return bool(qf.assess(american_row.get("quote_captured_at_utc"), None, now, qf.price_limit_min(hours), require_retrieval=False)["fresh"])
 
 
 def side_block(game: dict, now: dt.datetime | None = None) -> dict:
@@ -304,7 +309,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
             saves_ok = bool(summ.get("markets_scored")) and summ.get("beating_baselines") == summ.get("markets_scored")
     out_games = []
     counts = {"scheduled": len(games), "analysed": 0, "shots_priced": 0, "goals_priced": 0, "saves_priced": 0, "moneyline_priced": 0, "with_recommendation": 0}
-    for g in games:
+    def _one(g: dict):
         gid = g["game_id"]
         d = details.get(gid) or {}
         sides = d.get("sides") or {}
@@ -368,14 +373,27 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                "markets": mk, "moneyline_priced": ml_priced, "models": {"skater_shots": "SUPPORTED", "anytime_goal": "SUPPORTED", "goalie_saves": "SUPPORTED_NEEDS_CONFIRMED_STARTER" if saves_ok else "NOT_SUPPORTED",
                                                                         "moneyline": "STRENGTH_MODEL_AND_MARKET", "puck_line": "NOT_VALIDATED"},
                "recommended": recommended, "missing": missing}
-        counts["analysed"] += 1 if analysis_ok else 0
-        counts["shots_priced"] += 1 if mk["player_shots_on_goal_alternate"]["status"] == "POSTED" else 0
-        counts["goals_priced"] += 1 if mk["player_goal_scorer_anytime"]["status"] == "POSTED" else 0
-        counts["saves_priced"] += 1 if mk["player_total_saves"]["status"] == "POSTED" else 0
-        counts["moneyline_priced"] += 1 if ml_priced else 0
-        counts["with_recommendation"] += 1 if recommended else 0
-        out_games.append({"game_id": gid, "away": g["away"], "home": g["home"], "start_utc": g.get("start_utc"), "start_et": g.get("start_et"), "state": g.get("state"),
-                          "scorers": sc, "shots": shots, "goalies": gblocks, "side": side, "coverage": cov})
+        bump = {"analysed": 1 if analysis_ok else 0, "shots_priced": 1 if mk["player_shots_on_goal_alternate"]["status"] == "POSTED" else 0,
+                "goals_priced": 1 if mk["player_goal_scorer_anytime"]["status"] == "POSTED" else 0, "saves_priced": 1 if mk["player_total_saves"]["status"] == "POSTED" else 0,
+                "moneyline_priced": 1 if ml_priced else 0, "with_recommendation": 1 if recommended else 0}
+        return ({"game_id": gid, "away": g["away"], "home": g["home"], "start_utc": g.get("start_utc"), "start_et": g.get("start_et"), "state": g.get("state"),
+                 "scorers": sc, "shots": shots, "goalies": gblocks, "side": side, "coverage": cov}, bump)
+
+    counts["failed_games"] = 0
+    for g in games:
+        try:
+            entry, bump = _one(g)
+        except Exception as exc:  # noqa: BLE001 - one game's failure must not stop the others; it is recorded on that game, counted, and surfaced (never silent)
+            import traceback
+            counts["failed_games"] += 1
+            out_games.append({"game_id": g.get("game_id"), "away": g.get("away"), "home": g.get("home"), "start_utc": g.get("start_utc"), "start_et": g.get("start_et"), "state": g.get("state"),
+                              "scorers": [], "shots": {"picks": [], "shortfall": "analysis failed for this game"}, "goalies": [], "side": {"market": "Moneyline", "recommendation": None, "reason": "analysis failed for this game"},
+                              "error": f"{exc.__class__.__name__}: {exc}", "error_where": traceback.format_exc().strip().splitlines()[-3:],
+                              "coverage": {"analysis_available": False, "markets": {}, "recommended": [], "missing": [{"item": "Analysis", "reason": f"failed: {exc.__class__.__name__}: {exc}"}]}})
+            continue
+        for k, v in bump.items():
+            counts[k] += v
+        out_games.append(entry)
     primary = (tickets or {}).get("primary")
     doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary,
            "policy": (tickets or {}).get("ticket_policy"), "recording_paused": bool((tickets or {}).get("recording_paused")),
@@ -423,7 +441,7 @@ def _saves_lines(pool: dict | None, now: dt.datetime) -> dict:
                 if m.get("key") != "player_total_saves":
                     continue
                 for o in m.get("outcomes") or []:
-                    if o.get("price") is None or o.get("point") is None or not o.get("description"):
+                    if o.get("price") is None or o.get("point") is None or not o.get("description") or o.get("name") not in ("Over", "Under"):
                         continue
                     rec = out.setdefault(gid, {}).setdefault(bb.norm_name(o["description"]), {"name": o["description"], "line": float(o["point"]), "quote_updated_utc": m.get("last_update") or bm.get("last_update")})
                     if o.get("name") == "Over":
@@ -445,6 +463,50 @@ def _by_goalie_id(saves_by_name: dict, goalies: dict) -> dict:
     return out
 
 
+SCAN_STATE = "slate_board_scan.json"
+
+
+def _day_games_in_log(day: str) -> tuple[set, set]:
+    """(games with a shots leg, games with a moneyline leg) in the frozen-prediction log for one Eastern day, read INCREMENTALLY: only the bytes appended since the last refresh are examined, the
+    position and the day's running result are kept in a small state file (so a restart continues, and a rotated or shortened log is rescanned). The log itself is never rewritten."""
+    from operational import shadow_selection
+    path = state_paths.path(shadow_selection.NAME)
+    scan_path = state_paths.path(SCAN_STATE)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return set(), set()
+    st = {}
+    try:
+        st = json.loads(scan_path.read_text())
+    except (OSError, json.JSONDecodeError):
+        st = {}
+    if st.get("day") != day or int(st.get("offset", 0)) > size:
+        st = {"day": day, "offset": 0, "shots": [], "moneyline": []}
+    shots, ml = set(st.get("shots") or []), set(st.get("moneyline") or [])
+    needle = f'"et_date":"{day}"'.encode()
+    with open(path, "rb") as fh:
+        fh.seek(int(st["offset"]))
+        data = fh.read()
+    cut = data.rfind(b"\n")
+    if cut >= 0:                                           # complete lines only: a record being written is picked up on the next refresh
+        for line in data[:cut + 1].splitlines():
+            if needle in line:
+                rec = json.loads(line)
+                if rec.get("et_date") == day:
+                    for row in rec.get("pool") or []:
+                        (ml if row[2] == "MONEYLINE" else shots).add(str(row[0]))
+        st["offset"] = int(st["offset"]) + cut + 1
+    st["shots"], st["moneyline"] = sorted(shots), sorted(ml)
+    try:
+        tmp = scan_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(st))
+        tmp.replace(scan_path)
+    except OSError:
+        pass                                               # the scan state is an optimisation: without it the next refresh rescans
+    return shots, ml
+
+
 def _previous_day_check(product: dict, today: str) -> dict | None:
     """Yesterday's slate against what was priced and evaluated: the count reconciliation behind 'reported 16 games, captured 3'. Priced = DraftKings shots prices posted and archived;
     evaluated = games that had at least one leg in the frozen-prediction log that day."""
@@ -456,25 +518,14 @@ def _previous_day_check(product: dict, today: str) -> dict | None:
             return None
         av = (pa.read(prev).get("games") or {})
         posted = {gid for gid, v in av.items() if ((v.get("markets") or {}).get("player_shots_on_goal_alternate") or {}).get("status") == "POSTED"}
-        shots_eval: set = set()
-        ml_eval: set = set()
-        needle = f'"et_date":"{prev}"'
-        path = state_paths.path(shadow_selection.NAME)
-        with open(path) as fh:
-            for line in fh:                          # the log is append-only and large: parse only that day's records
-                if needle not in line:
-                    continue
-                rec = json.loads(line)
-                if rec.get("et_date") == prev:
-                    for row in rec.get("pool") or []:
-                        (ml_eval if row[2] == "MONEYLINE" else shots_eval).add(str(row[0]))
+        shots_eval, ml_eval = _day_games_in_log(prev)
         sched = {g["game_id"] for g in games}
         return {"date_et": prev, "scheduled": len(sched), "shots_priced": len(sched & posted), "shots_legs_evaluated_in_games": len(sched & shots_eval),
                 "moneyline_legs_evaluated_in_games": len(sched & ml_eval), "not_priced": sorted(sched - posted),
                 "note": ("Each game on that slate had analysis available from the projections; prices were bought for the games the day's odds credits covered (the free allowance is "
                          "about 11 credits a day), so the rest could be analysed but not priced. Games without prices are listed on the board with the reason.")}
-    except Exception:  # noqa: BLE001
-        return None
+    except Exception as exc:  # noqa: BLE001 - informational block: it reports its own failure instead of failing the board
+        return {"error": f"{exc.__class__.__name__}: {exc}"}
 
 
 def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | None = None) -> dict:

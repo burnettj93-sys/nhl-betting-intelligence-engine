@@ -452,21 +452,31 @@ def _policy_veto(combo: ParlayResult, policy) -> tuple[str, str] | None:
 
 
 def anchor_reason(diag: dict, policy) -> str:
+    """Why no ticket qualifies, by what actually happened to the combinations: priced below +100, priced above the ceiling, inside the price range but without enough value, or refused by another rule."""
     best = diag.get("best_reaching_plus_100")
     split = ""
     if "prop_legs" in diag:
         # A game counts once if it has any supported leg; the player-prop legs only come from games whose prop prices were fetched, the moneyline legs from the league-wide moneyline pull.
         split = (f" ({diag['prop_legs']} player-prop leg(s) in {diag['prop_games']} game(s) with prop prices, "
                  f"{diag['moneyline_legs']} moneyline leg(s) in {diag['moneyline_games']} game(s))")
-    head = (f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s){split}; "
-            f"{diag['reaching_plus_100']} of {diag['combinations_checked']} cross-game combinations reach +100")
-    if best is None and diag.get("above_ceiling"):
-        ceiling = round(((getattr(policy, "max_combined_decimal", None) or 0) - 1.0) * 100)
-        return (f"No ticket today: {head}. {diag['above_ceiling']} combination(s) of the supported legs are priced above the +{ceiling} ceiling, and none inside +100 to +{ceiling} qualifies. "
-                "A slot left empty is a correct answer.")
+    head = f"{diag['supported_legs']} well-supported leg(s) in {diag['games_with_supported_legs']} game(s){split}"
+    ceiling = getattr(policy, "max_combined_decimal", None)
+    top = f"+{round((ceiling - 1.0) * 100)}" if ceiling else None
+    rng = f"+100 to {top}" if top else "+100 or better"
+    parts = []
+    if diag.get("below_minimum"):
+        parts.append(f"{diag['below_minimum']} priced below +100")
+    if diag.get("above_maximum"):
+        parts.append(f"{diag['above_maximum']} priced above the {top} ceiling")
+    n_in = diag.get("reaching_plus_100", 0)
+    if n_in:
+        rejected = (diag.get("insufficient_value", 0), diag.get("other_rejected", 0))
+        parts.append(f"{n_in} priced inside {rng}" + (f" ({rejected[0]} without enough value at the real prices" + (f", {rejected[1]} refused by another rule" if rejected[1] else "") + ")" if sum(rejected) else ""))
+    summary = (f"Of {diag['combinations_checked']} cross-game combination(s): " + "; ".join(parts)) if parts else "No cross-game combination could be formed from them"
     if best is None:
-        return f"No ticket today: {head}. No combination of the supported legs gets to +100 at today's prices."
-    return (f"No ticket today: {head}, but none has enough value at the real prices. The best of them hits about {best['hit_probability']:.0%} of the time "
+        tail = (f" None is priced inside {rng}." if not n_in else "")
+        return f"No ticket today: {head}. {summary}.{tail} A slot left empty is a correct answer."
+    return (f"No ticket today: {head}. {summary}. The best of those inside the range hits about {best['hit_probability']:.0%} of the time "
             f"with estimated value {best['ev_estimated']:+.1%} ({best['ev_after_shade']:+.1%} with every leg lowered {policy.value_shade * 100:.0f} points); "
             f"the policy needs at least {policy.min_estimated_ev:+.0%} and {policy.min_value_after_shade:+.0%}. A slot left empty is a correct answer.")
 

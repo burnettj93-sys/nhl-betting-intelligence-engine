@@ -47,12 +47,31 @@ TRACK = "REAL_MARKET_PAPER"
 SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY            # the engine's constant (five); the number in force is the active policy's (slot_count())
 
 
-def slot_count() -> int:
-    """Tickets the active policy allows a day: five under the 2026-10-11/13 policies, ONE under the primary-slip policy (2026-10-14)."""
+class PolicyUnavailable(RuntimeError):
+    """The ticket policy could not be loaded or is unusable. Recording is blocked and the error reported; the superseded five-ticket behaviour is never substituted."""
+
+
+def active_policy():
     try:
-        return int(ticket_policy.active().slots)
-    except Exception:  # noqa: BLE001 - fail safe: one slip, never the superseded five
-        return 1
+        pol = ticket_policy.active()
+        if int(pol.slots) < 0 or not pol.digest():
+            raise ValueError(f"unusable policy {getattr(pol, 'policy_id', '?')}")
+        return pol
+    except Exception as exc:  # noqa: BLE001 - re-raised as one named failure that the cycle turns into a blocked, reported state
+        raise PolicyUnavailable(f"{exc.__class__.__name__}: {exc}") from exc
+
+
+def slot_count() -> int:
+    """Tickets the active policy allows a day: five under the 2026-10-11/13 policies, ONE under the primary-slip policy (2026-10-14). Raises PolicyUnavailable: a caller that can record must not guess."""
+    return int(active_policy().slots)
+
+
+def slot_count_for_display() -> int:
+    """For pages and state documents only: zero when the policy cannot be loaded (so nothing is advertised as open), never a guess."""
+    try:
+        return slot_count()
+    except PolicyUnavailable:
+        return 0
 RECENT_SETTLED_LIMIT = 10
 
 FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
@@ -219,9 +238,9 @@ def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[se
         return sum(1 for w in waves if w["index"] > i and dt.datetime.fromisoformat(w["start_utc"]) > now)
 
     def cap(i: int) -> int:
-        if slot_count() == 1:
+        if slot_count_for_display() == 1:
             return 1                          # a single slip a day: nothing is held back for later waves; it is recorded the first time a ticket qualifies on pregame-window prices
-        return slot_count() - min(RESERVED_FOR_LATER, later_waves_pending(i))
+        return slot_count_for_display() - min(RESERVED_FOR_LATER, later_waves_pending(i))
 
     used: dict[int, int] = defaultdict(int)
     for gs in recorded_game_sets:
@@ -535,7 +554,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         if card["ticket_id"] not in recorded_ids:
             cards.append(card)
     slots_used = len(cards)
-    empty = max(0, slot_count() - slots_used)
+    empty = max(0, slot_count_for_display() - slots_used)
     funds_blocked = any(r.get("status") == "INSUFFICIENT_FUNDS" for r in record_results) or \
         (account["available_cash"] < pb.PAPER_BET_STAKE)
     notice = None
@@ -554,7 +573,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
     other_alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in settled + open_rows])
     return {
         "date_et": et_date, "generated_at_utc": now.isoformat(),
-        "account": account, "slots": {"total": slot_count(), "used": slots_used, "empty": empty},
+        "account": account, "slots": {"total": slot_count_for_display(), "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
         "origins": pb.origin_performance(bankroll_conn, TRACK),
         "singles": [single_card(l) for l in singles],
@@ -708,7 +727,7 @@ def early_policy(existing_rows: list[dict]):
     """Ticket veto: at most EARLY_TICKET_CAP tickets a day may rest on early prices, so a morning look cannot use up the day's slots (or the exposure limits that go with them)
     before the later games are priced. A ticket entirely on pregame-window prices is never affected."""
     used = early_tickets_recorded(existing_rows)
-    cap = 0 if slot_count() == 1 else EARLY_TICKET_CAP       # the single primary slip rests on pregame-window prices only: coordinated captures, compared across games
+    cap = 0 if slot_count_for_display() == 1 else EARLY_TICKET_CAP       # the single primary slip rests on pregame-window prices only: coordinated captures, compared across games
 
     def veto(combo, already) -> str | None:
         if not any(getattr(l, "early", False) for l in combo.legs):
@@ -739,7 +758,7 @@ def _provisional_section(legs: list, existing: list, now: dt.datetime, et_date: 
     if not prov_legs:
         return section
     try:
-        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=slot_count(), policy=ticket_policy.active())
+        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=slot_count(), policy=active_policy())
     except Exception as exc:  # noqa: BLE001 - informational only
         section["error"] = f"{exc.__class__.__name__}: {exc}"
         return section
@@ -812,13 +831,32 @@ def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_da
     return doc
 
 
+def _blocked_cycle(bankroll_conn, now: dt.datetime, et_date: str, message: str) -> dict:
+    """The cycle when the policy cannot be loaded: no selection, no recording, the state document says why (observable on the board and by the watchdog), the book is untouched."""
+    previous = read_state() or {}
+    same_day = previous.get("date_et") == et_date
+    state = build_state(bankroll_conn, now, recommended=[], singles=[], empty_reason=message, diagnostics=previous.get("diagnostics", {}) if same_day else {},
+                        record_results=[], options=previous.get("options") if same_day else None, provisional=previous.get("provisional") if same_day else None, proposed=True)
+    state["policy_error"] = message
+    state["notice"] = message
+    state["recording_paused"] = {"paused": True, "since_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "reason": message, "set_by": "policy_unavailable"}
+    state["primary"] = {"status": "ERROR", "reason": message, "ticket": None, "strongest_singles": []}
+    changed = _write_state(state)
+    return {"eastern_date": et_date, "qualifying_tickets_found": 0, "recording_paused": True, "newly_recorded": 0, "already_recorded": 0, "insufficient_funds": 0, "results": [],
+            "state_changed": changed, "reason": message, "slots_left_before": 0, "recording_blocked": message}
+
+
 def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | None = None) -> dict:
     """One selection + recording pass. Safe to repeat: recorded tickets are
     never rewritten and never staked twice."""
     et_date = et.eastern_today(now)
     existing_rows = recorded_today(bankroll_conn, et_date)
     existing = [_identities(r) for r in existing_rows]
-    slots_left = max(0, slot_count() - len(existing_rows))
+    try:
+        slots_total = slot_count()
+    except PolicyUnavailable as exc:
+        return _blocked_cycle(bankroll_conn, now, et_date, f"The ticket policy could not be loaded ({exc}). Nothing is selected or recorded until it can; prices, settlement and publishing continue.")
+    slots_left = max(0, slots_total - len(existing_rows))
 
     collected = collected if collected is not None else collect_candidate_legs(nhl_conn, now)
     legs = collected["legs"]
@@ -829,7 +867,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         waves = []
     wave_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
     early_filter = early_policy(existing_rows)
-    wave_info["early_price_cap"] = {"cap": 0 if slot_count() == 1 else EARLY_TICKET_CAP, "used": early_tickets_recorded(existing_rows)}
+    wave_info["early_price_cap"] = {"cap": 0 if slot_count_for_display() == 1 else EARLY_TICKET_CAP, "used": early_tickets_recorded(existing_rows)}
 
     def ticket_filter(combo, already):
         return wave_filter(combo, already) or early_filter(combo, already)
@@ -860,7 +898,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         reason = (recording_pause.notice(pause) + (f" The {n} ticket(s) below are what the selector would record: proposed, not recorded, nothing staked." if n else
                                                      f" Nothing would be recorded right now: {picked['reason']}"))
     elif slots_left == 0:
-        reason = f"All {slot_count()} of today's ticket slot{'s' if slot_count() != 1 else ''} {'are' if slot_count() != 1 else 'is'} recorded."
+        reason = f"All {slots_total} of today's ticket slot{'s' if slots_total != 1 else ''} {'are' if slots_total != 1 else 'is'} recorded."
     else:
         reason = picked["reason"]
         if not legs:
@@ -924,7 +962,7 @@ def refresh_state_only(bankroll_conn, now: dt.datetime) -> bool:
                 and previous.get("date_et") == state["date_et"]:
             state["tickets"].append(card)
     state["slots"]["used"] = len(state["tickets"])
-    state["slots"]["empty"] = max(0, slot_count() - len(state["tickets"]))
+    state["slots"]["empty"] = max(0, slot_count_for_display() - len(state["tickets"]))
     if previous.get("date_et") == state["date_et"]:
         state["singles"] = previous.get("singles", [])
         if previous.get("primary") is not None:

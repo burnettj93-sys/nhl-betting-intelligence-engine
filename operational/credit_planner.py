@@ -206,9 +206,9 @@ POINTS_ADDON_ENV = "NHL_ENGINE_POINTS_ADDON"
 
 
 def points_addon_enabled() -> bool:
-    """Points are OFF by default since 2026-10-14: the board (section 1) needs anytime-goal prices and the slip uses shots and moneylines, so the credit that bought a game's points now buys its
-    anytime-goal prices instead (the GOALS class below). `NHL_ENGINE_POINTS_ADDON=on` (environment or .env) restores the points add-on; so does buying points with every game's shots
-    (NHL_ENGINE_PROP_MARKETS), in which case there is no separate add-on."""
+    """Points ride along on a priced game's pregame capture as an add-on, bought AFTER the morning look and the anytime-goal prices (the Slate Board's section 1) with whatever credits the day has
+    left; a game whose points are not funded is recorded BUDGET_BLOCKED so the Paper Parlay Builder says why its Points market is missing. `NHL_ENGINE_POINTS_ADDON=off` (environment or .env)
+    switches the add-on off; buying points with every game's shots (NHL_ENGINE_PROP_MARKETS) makes it unnecessary."""
     import os
     raw = os.environ.get(POINTS_ADDON_ENV) or ""
     if not raw:
@@ -218,7 +218,7 @@ def points_addon_enabled() -> bool:
                 k, sep, v = line.strip().partition("=")
                 if sep and k.strip() == POINTS_ADDON_ENV:
                     raw = v.strip().strip("\"'")
-    return POINTS_KEY not in prop_markets() and raw.strip().lower() in ("on", "1", "true", "yes")
+    return POINTS_KEY not in prop_markets() and raw.strip().lower() not in ("off", "0", "false", "no")
 
 
 def base_cost() -> int:
@@ -244,8 +244,6 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     order = rank_games(starts)
     k_pre = min(n, PREGAME_MIN_GAMES, int(max(left, 0.0) // BASE_COST)); left -= k_pre * BASE_COST
     addon = points_addon_enabled()
-    k_pts_lead = min(k_pre, int(max(left, 0.0) // POINTS_COST)) if addon else 0       # the lead games keep their points prices (the personal builder and Players pages use them)
-    left -= k_pts_lead * POINTS_COST
     both = left - n * 1 - (n - k_pre) * BASE_COST >= n            # can every game afford shots AND points this morning, with the pregame still funded?
     owner_markets = list(prop_markets())[:max(BASE_COST, 1)]       # the owner's market choice also bounds the morning look
     morning_markets = tuple(owner_markets) if (both and n) else tuple(owner_markets[:1])
@@ -260,11 +258,11 @@ def allocate(D: float, starts: dict[str, dt.datetime], confirmed_games: set[str]
     saves_games = _take(saves_games, k_saves); left -= k_saves * SAVES_COST
     ui_extra = take(UI_SECOND) if k_pre == n else 0.0; left -= ui_extra
     tomorrow = take(TOMORROW_COST); left -= tomorrow
-    k_pts_extra = min(max(len(props_games) - k_pts_lead, 0), int(max(left, 0.0) // POINTS_COST)) if addon else 0     # then any other priced game, with what shots coverage leaves over
-    left -= k_pts_extra * POINTS_COST
-    points_games = _take(props_games, k_pts_lead + k_pts_extra)
-    k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))
+    k_goals = min(len(props_games), int(max(left, 0.0) // GOALS_COST))                    # anytime goals first (the board's section 1), lead games first...
     goals_games = _take(props_games, k_goals); left -= k_goals * GOALS_COST
+    k_pts = min(len(props_games), int(max(left, 0.0) // POINTS_COST)) if addon else 0     # ...then the personal builder's points with what is left; the rest are recorded BUDGET_BLOCKED
+    left -= k_pts * POINTS_COST
+    points_games = _take(props_games, k_pts)
     refresh = max(left, 0.0)
     full_need = DECISION_RESERVE + UI_FIRST + UI_SECOND + TOMORROW_COST + n * (BASE_COST + GOALS_COST + (POINTS_COST if addon else 0)) + n * 2 + min(n, SAVES_MAX_PER_DAY) * SAVES_COST
     base_need = DECISION_RESERVE + UI_FIRST + n * BASE_COST

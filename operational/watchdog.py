@@ -403,6 +403,16 @@ def check_recording_pause(now: dt.datetime) -> dict:
     return {"name": "recording_pause", "status": WARN if days >= PAUSE_REMINDER_DAYS else OK, "detail": detail[:300]}
 
 
+def check_ticket_policy() -> dict:
+    """The selector's policy must load: if it cannot, the trader blocks recording (it never falls back to the superseded five tickets), and this says so."""
+    try:
+        from operational import daily_tickets, ticket_policy
+        pol = daily_tickets.active_policy()
+        return {"name": "ticket_policy", "status": OK, "detail": f"{pol.policy_id} ({pol.digest()}), {pol.slots} slot(s) a day, {'approved' if ticket_policy.is_approved(pol) else 'NOT approved by the owner'}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "ticket_policy", "status": FAIL, "detail": f"the ticket policy cannot be loaded; automatic recording is blocked: {exc.__class__.__name__}: {exc}"[:300]}
+
+
 PREDICTION_LOG_MAX_AGE_MIN = 60.0
 
 
@@ -477,6 +487,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_database())
     checks.append(check_publishing_enabled())
     checks.append(check_recording_pause(now))
+    checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
     ready = None

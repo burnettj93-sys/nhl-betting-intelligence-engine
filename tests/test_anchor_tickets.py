@@ -132,6 +132,22 @@ class TestSelection(unittest.TestCase):
         self.assertFalse(anchor.within_ceiling(6.02, capped_ok))
         self.assertTrue(anchor.within_ceiling(50.0, POL))                              # no ceiling in the earlier policies
 
+    def test_the_reason_says_which_way_each_combination_was_rejected(self):
+        capped = dataclasses.replace(POL, max_combined_decimal=6.0)
+        # all pairs priced above +500: the old wording claimed nothing reaches +100
+        above = rmp.select_tickets([shots(1, 1, 28, +450, 0.72), shots(2, 2, 28, +450, 0.72)], max_tickets=1, policy=capped)
+        self.assertEqual(above["tickets"], [])
+        self.assertIn("priced above the +500 ceiling", above["reason"])
+        self.assertIn("None is priced inside +100 to +500", above["reason"])
+        self.assertNotIn("gets to +100", above["reason"])
+        # all pairs below +100 (two -300 legs: 1.33 x 1.33 = 1.78)
+        below = rmp.select_tickets([shots(1, 1, 27, -300, 0.72), shots(2, 2, 27, -300, 0.72)], max_tickets=1, policy=capped)
+        self.assertIn("priced below +100", below["reason"])
+        # priced inside the range but no value at the real prices
+        novalue = rmp.select_tickets([shots(1, 1, 22, -200, 0.6), shots(2, 2, 22, -200, 0.6), shots(3, 3, 22, -130, 0.6)], max_tickets=1, policy=capped)
+        if novalue["tickets"] == []:
+            self.assertTrue("without enough value" in novalue["reason"] or "priced below +100" in novalue["reason"])
+
     def test_the_midpoint_test_sits_between_the_record_and_the_price(self):
         leg = anchor.prepare_pool([shots(1, 1, 30, +100, 0.70)])[0]                                 # estimate 0.80 (held to model +10 points), price implies 0.50
         self.assertAlmostEqual(anchor.midpoint_probability(leg), (0.80 + 0.50) / 2, places=2)
@@ -500,6 +516,37 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         self.assertIsNone(st["primary"]["ticket"])
         self.assertTrue(st["primary"]["strongest_singles"])                                             # the strongest individual selections are shown instead
         self.assertEqual(st["slots"]["empty"], 1)
+
+    def test_an_unloadable_policy_blocks_recording_and_is_reported_never_five_tickets(self):
+        from operational import daily_tickets as dtk, ticket_policy, watchdog
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70), shots(3, 3, 28, +115, 0.72)]
+        with mock.patch.object(ticket_policy, "active", side_effect=RuntimeError("approval file unreadable")):
+            res = self.cycle(legs)
+            with self.assertRaises(dtk.PolicyUnavailable):
+                dtk.slot_count()
+            self.assertEqual(dtk.slot_count_for_display(), 0)
+            chk = watchdog.check_ticket_policy()
+        self.assertEqual(res["newly_recorded"], 0)
+        self.assertIn("could not be loaded", res["recording_blocked"])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+        st = dtk.read_state()
+        self.assertIn("approval file unreadable", st["policy_error"])
+        self.assertEqual(st["slots"]["total"], 0)
+        self.assertEqual(st["primary"]["status"], "ERROR")
+        self.assertEqual(chk["status"], watchdog.FAIL)
+        self.assertEqual(self.cycle(legs, minutes=35)["newly_recorded"], 1)                          # the policy loads again: the normal single slip resumes by itself
+
+    def test_the_slip_the_ticket_list_and_the_account_agree_in_the_cycle_that_records_it(self):
+        from operational import daily_tickets as dtk
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70)]
+        self.cycle(legs)
+        st = dtk.read_state()
+        ids = [t["ticket_id"] for t in st["tickets"] if t["recorded"]]
+        self.assertEqual(len(ids), 1)
+        self.assertEqual(st["primary"]["ticket"]["ticket_id"], ids[0])
+        self.assertEqual(st["primary"]["status"], "RECORDED")
+        self.assertEqual((st["account"]["open_stakes"], st["account"]["available_cash"], st["account"]["open_tickets"]), (10.0, 490.0, 1))
+        self.assertEqual(st["slots"], {"total": 1, "used": 1, "empty": 0})
 
     def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):
         res = self.cycle([shots(1, 1, 27, +120, 0.70)])

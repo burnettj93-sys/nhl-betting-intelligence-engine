@@ -15,6 +15,19 @@ import streamlit as st
 from dashboard import product_source as ps
 from dashboard import ui
 
+from operational import quote_freshness as qf
+
+
+def stale_now(quoted_at, start_utc) -> tuple[bool, str]:
+    """Judged when the page is opened, from the provider's own quote time and the engine's price limit (the board's own flags are from when it was built, up to 15 minutes ago)."""
+    now = ui._utcnow()
+    start = qf.parse_utc(start_utc)
+    hours = (start - now).total_seconds() / 3600.0 if start is not None else 99.0
+    r = qf.assess(quoted_at, None, now, qf.price_limit_min(hours), require_retrieval=False)
+    age = r.get("quote_age_min")
+    return (not r["fresh"], "no quote time" if age is None else f"quoted {age:.0f} min ago")
+
+
 ui.header("Slate Board", "Every game today, analysed, and one primary parlay built from the strongest supported selections.")
 board = ui.load(ps.slate_board, "The slate board")
 if not board.get("games") and not board.get("generated_at_utc"):
@@ -48,13 +61,17 @@ else:
     if singles:
         st.markdown("**Strongest individual selections** (informational: a single is not a recommendation)")
         for s in singles:
+            stale, age = stale_now(s.get("quote_updated_utc"), None)
             st.markdown(f"- **{ui.esc(s['label'])}** {ui.american(s['american_price'])} · estimate {ui.pct(s['probability'])} · value {s['ev_estimated']:+.0%} "
-                        f"({s['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(s.get('quote_updated_utc'), True)}{' · provisional' if s.get('provisional') else ''}")
+                        f"({s['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(s.get('quote_updated_utc'), True)} ({age}){' · STALE' if stale else ''}"
+                        f"{' · provisional' if s.get('provisional') else ''}")
     st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
 
 # ---------------------------------------------------------------- coverage
 c = board.get("counts") or {}
 st.divider()
+if c.get("failed_games"):
+    st.warning(f"{c['failed_games']} game(s) could not be analysed in the latest update; they are marked below. The rest of the board is current.")
 cols = st.columns(5)
 cols[0].metric("Games", c.get("scheduled", 0))
 cols[1].metric("Analysed", c.get("analysed", 0))
@@ -62,7 +79,9 @@ cols[2].metric("Shots priced", c.get("shots_priced", 0))
 cols[3].metric("Goals priced", c.get("goals_priced", 0))
 cols[4].metric("Moneylines", c.get("moneyline_priced", 0))
 prev = board.get("previous_day")
-if prev:
+if prev and prev.get("error"):
+    st.caption(f"The previous-day coverage check could not be built: {ui.esc(prev['error'])}")
+elif prev:
     with st.expander(f"Coverage check: {prev['date_et']} ({prev['scheduled']} games)"):
         st.write(f"{prev['scheduled']} games scheduled · shots prices captured for {prev['shots_priced']} · games with shots legs evaluated in the frozen log: "
                  f"{prev['shots_legs_evaluated_in_games']} · games with a moneyline evaluated: {prev['moneyline_legs_evaluated_in_games']}.")
@@ -79,6 +98,9 @@ for g in board.get("games", []):
         st_ = (cov.get("markets") or {}).get(key, {})
         chips.append(f"{label}: {st_.get('word', '—')}")
     with st.expander(f"{title}   ·   " + " · ".join(chips), expanded=len(board.get("games", [])) <= 3):
+        if g.get("error"):
+            st.error(f"The analysis of this game failed and is not shown: {ui.esc(g['error'])}. Other games are unaffected; the engine retries on its next update.")
+            continue
         if g.get("state") != "SCHEDULED":
             st.info(f"This game is {str(g.get('state')).lower()}; the pregame board applies to scheduled games.")
             continue
@@ -90,7 +112,9 @@ for g in board.get("games", []):
                 st.write("No skater has a supported projection for this game (sample or role too small).")
             for r in sc:
                 price = r.get("price")
-                val = (f" · DraftKings {ui.american(price['american'])} (value {price['ev_estimated']:+.0%}, {price['ev_after_haircut']:+.0%} after the haircut)" if price else " · no price on file")
+                p_stale, p_age = stale_now(price.get("quote_updated_utc"), g.get("start_utc")) if price else (False, "")
+                val = (f" · DraftKings {ui.american(price['american'])} (value {price['ev_estimated']:+.0%}, {price['ev_after_haircut']:+.0%} after the haircut; {p_age}"
+                       f"{' — STALE: shown for reference only' if p_stale else ''})" if price else " · no price on file")
                 tag = " · **best value at its price**" if r.get("best_value_at_price") else (" · outside the top five, listed for value" if r.get("outside_top") else "")
                 st.markdown(f"**{(str(r['rank']) + '. ') if r.get('rank') else ''}{ui.esc(r['name'])}** ({r['team']}) — {ui.pct(r['probability'])} to score{val}{tag}")
                 st.caption(ui.esc(r["explanation"]))
@@ -99,8 +123,9 @@ for g in board.get("games", []):
             sh = g.get("shots") or {}
             for c_ in sh.get("picks") or []:
                 ch = c_["chosen"]
+                c_stale, c_age = stale_now(c_.get("quote_updated_utc"), g.get("start_utc"))
                 st.markdown(f"**{ui.esc(c_['name'])}** ({c_['team']}) — **{ch['threshold']}+ shots at {ui.american(ch['american'])}** · estimate {ui.pct(ch['estimate'])} · value {ch['ev_estimated']:+.0%} "
-                            f"({ch['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(c_.get('quote_updated_utc'), True)}")
+                            f"({ch['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(c_.get('quote_updated_utc'), True)} ({c_age}){' · STALE: reference only, not a current pick' if c_stale else ''}")
                 st.caption(ui.esc(c_["explanation"]))
                 with st.expander(f"Ladder for {c_['name']}"):
                     st.dataframe([{"Line": f"{x['threshold']}+", "Price": ui.american(x["american"]), "Estimate": ui.pct(x["estimate"]), "Model": ui.pct(x["model"]),
@@ -119,13 +144,17 @@ for g in board.get("games", []):
                 st.markdown(f"**{ui.esc(s['name'])}** ({b['team']}) — {conf}; start chance {ui.pct(s.get('start_probability'))}"
                             + (f" · source {ui.esc(s['source'])} at {ui.et_time(s.get('checked_at_utc'), True)}" if s.get("source") else " · no confirmation source on file"))
                 pr = b.get("projection")
+                if not pr and b.get("projection_unavailable"):
+                    st.caption(ui.esc(b["projection_unavailable"]))
                 if pr:
                     lo, hi = pr["saves_range_80"]
                     st.markdown(f"Expected saves **{pr['expected_saves']:.0f}** (80% range {lo}–{hi}) · shots against {pr['expected_shots_against']:.0f} · save rate used {pr['save_pct_used'] * 100:.1f}%")
                     st.caption(ui.esc(pr["explanation"]))
                 ln = b.get("line")
                 if ln:
-                    st.markdown(f"DraftKings line **{ln['line']}** · over {ui.american(ln.get('over'))} · under {ui.american(ln.get('under'))} · quote {ui.et_time(ln.get('quote_updated_utc'), True)}")
+                    l_stale, l_age = stale_now(ln.get("quote_updated_utc"), g.get("start_utc"))
+                    st.markdown(f"DraftKings line **{ln['line']}** · over {ui.american(ln.get('over'))} · under {ui.american(ln.get('under'))} · quote {ui.et_time(ln.get('quote_updated_utc'), True)} "
+                                f"({l_age}){' · STALE: no recommendation from this line' if l_stale else ''}")
                 rec = b.get("recommendation") or {}
                 st.caption(ui.esc(rec.get("text") or ""))
                 if b.get("alternate"):
@@ -133,6 +162,13 @@ for g in board.get("games", []):
         with t4:
             sd = g.get("side") or {}
             rec = sd.get("recommendation")
+            if rec:
+                r_stale, r_age = stale_now(rec.get("quote_captured_at_utc"), g.get("start_utc"))
+                if r_stale:                       # the board was built when the quote was fresh; it has aged past its limit since
+                    ui.banner(f"<b>Not a current recommendation.</b> The {ui.esc(rec['team'])} moneyline quote is {ui.esc(r_age)}, past its freshness limit. It is shown for reference and "
+                              "cannot be recorded; it returns when the price is refreshed.", "warn")
+                    rec = None
+                    sd = {**sd, "reason": "The moneyline quote has aged past its freshness limit."}
             if rec:
                 st.markdown(f"**{rec['market']}: {rec['team']} {ui.american(rec['american'])}** · estimate {ui.pct(rec['estimate'])} · model {ui.pct(rec.get('model'))}")
                 st.caption(ui.esc(rec["explanation"]))

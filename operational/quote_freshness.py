@@ -21,6 +21,13 @@ import datetime as dt
 
 FUTURE_TOLERANCE_S = 60.0
 
+PRICE_LIMIT_FAR_MIN = 150.0       # the engine's limit for a player or moneyline price when puck drop is two or more hours away
+PRICE_LIMIT_NEAR_MIN = 100.0      # ...and inside two hours (best_bets.MAX_PRICE_AGE_MIN_* take these values; one definition, shared by the selector, the board and the pages)
+
+
+def price_limit_min(hours_to_start: float) -> float:
+    return PRICE_LIMIT_FAR_MIN if hours_to_start >= 2.0 else PRICE_LIMIT_NEAR_MIN
+
 FRESH = "FRESH"
 MISSING_QUOTE_TIMESTAMP = "MISSING_QUOTE_TIMESTAMP"
 MALFORMED_QUOTE_TIMESTAMP = "MALFORMED_QUOTE_TIMESTAMP"
