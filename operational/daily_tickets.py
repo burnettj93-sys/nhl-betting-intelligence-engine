@@ -47,18 +47,8 @@ TRACK = "REAL_MARKET_PAPER"
 SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY            # the engine's constant (five); the number in force is the active policy's (slot_count())
 
 
-class PolicyUnavailable(RuntimeError):
-    """The ticket policy could not be loaded or is unusable. Recording is blocked and the error reported; the superseded five-ticket behaviour is never substituted."""
-
-
-def active_policy():
-    try:
-        pol = ticket_policy.active()
-        if int(pol.slots) < 0 or not pol.digest():
-            raise ValueError(f"unusable policy {getattr(pol, 'policy_id', '?')}")
-        return pol
-    except Exception as exc:  # noqa: BLE001 - re-raised as one named failure that the cycle turns into a blocked, reported state
-        raise PolicyUnavailable(f"{exc.__class__.__name__}: {exc}") from exc
+PolicyUnavailable = ticket_policy.PolicyUnavailable
+active_policy = ticket_policy.checked_active
 
 
 def slot_count() -> int:

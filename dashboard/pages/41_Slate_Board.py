@@ -34,6 +34,10 @@ if not board.get("games") and not board.get("generated_at_utc"):
     ui.unavailable("The board has not been written yet; the engine writes it with every 15-minute update.", "The slate board")
     st.stop()
 
+if board.get("policy_error"):
+    ui.banner("<b>The ticket policy could not be loaded.</b> " + ui.esc(board["policy_error"]) + " Recording is blocked. Value figures below use a fallback 3-point haircut and are not the slip's.", "bad")
+if board.get("input_errors"):
+    st.warning(f"A saves capture could not be read for {len(board['input_errors'])} game(s); those games' saves lines are shown as unavailable, not as 'not posted'.")
 st.caption(f"Board built {ui.et_time(board.get('generated_at_utc'), True)} for Eastern date {board.get('date_et')}. Prices are DraftKings US-feed quotes with the provider's own quote times; "
            "probabilities are estimates, and a lower threshold is not a safe one. Nothing is recorded by looking at this page.")
 
@@ -163,7 +167,9 @@ for g in board.get("games", []):
             sd = g.get("side") or {}
             rec = sd.get("recommendation")
             if rec:
-                r_stale, r_age = stale_now(rec.get("quote_captured_at_utc"), g.get("start_utc"))
+                _both = [stale_now(v_.get("quote_captured_at_utc"), g.get("start_utc")) for v_ in (sd.get("sides") or {}).values()] or [stale_now(rec.get("quote_captured_at_utc"), g.get("start_utc"))]
+                r_stale = any(x[0] for x in _both)                    # the no-vig estimate rests on BOTH sides' quotes: either one aging out withdraws it
+                r_age = next((x[1] for x in _both if x[0]), _both[0][1])
                 if r_stale:                       # the board was built when the quote was fresh; it has aged past its limit since
                     ui.banner(f"<b>Not a current recommendation.</b> The {ui.esc(rec['team'])} moneyline quote is {ui.esc(r_age)}, past its freshness limit. It is shown for reference and "
                               "cannot be recorded; it returns when the price is refreshed.", "warn")

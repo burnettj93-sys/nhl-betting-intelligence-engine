@@ -250,8 +250,8 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                     return
                 D2, Pm2, Ps2 = D * d, Pm * pm, Ps * ps
                 if D2 > ceiling_D:                                  # (precomputed: this test runs once per node of a search that can visit millions)
-                    if chosen:
-                        diag["above_maximum"] += 1                  # a combination longer than the policy's ceiling (counted where the search stops; its longer extensions are not enumerated)
+                    if len(chosen) == 1:
+                        diag["above_maximum"] += 1                  # a two-leg combination longer than the policy's ceiling (counted once per pair; longer extensions of an in-range ticket are not "alternatives that were too long")
                     continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
                 if len(chosen) >= 2:

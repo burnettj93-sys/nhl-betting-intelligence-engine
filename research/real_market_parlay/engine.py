@@ -467,7 +467,7 @@ def anchor_reason(diag: dict, policy) -> str:
     if diag.get("below_minimum"):
         parts.append(f"{diag['below_minimum']} priced below +100")
     if diag.get("above_maximum"):
-        parts.append(f"{diag['above_maximum']} priced above the {top} ceiling")
+        parts.append(f"{diag['above_maximum']} two-leg combination(s) priced above the {top} ceiling")
     n_in = diag.get("reaching_plus_100", 0)
     if n_in:
         rejected = (diag.get("insufficient_value", 0), diag.get("other_rejected", 0))

@@ -406,9 +406,13 @@ def check_recording_pause(now: dt.datetime) -> dict:
 def check_ticket_policy() -> dict:
     """The selector's policy must load: if it cannot, the trader blocks recording (it never falls back to the superseded five tickets), and this says so."""
     try:
-        from operational import daily_tickets, ticket_policy
-        pol = daily_tickets.active_policy()
-        return {"name": "ticket_policy", "status": OK, "detail": f"{pol.policy_id} ({pol.digest()}), {pol.slots} slot(s) a day, {'approved' if ticket_policy.is_approved(pol) else 'NOT approved by the owner'}"}
+        from operational import recording_pause, ticket_policy
+        pol = ticket_policy.checked_active()
+        approved = ticket_policy.is_approved(pol)
+        unapproved_and_live = (not approved) and not recording_pause.status()["paused"]
+        return {"name": "ticket_policy", "status": WARN if unapproved_and_live else OK,
+                "detail": (f"{pol.policy_id} ({pol.digest()}), {pol.slots} slot(s) a day, {'approved' if approved else 'NOT approved by the owner'}"
+                           + ("; automatic recording is ON with an unapproved policy" if unapproved_and_live else ""))}
     except Exception as exc:  # noqa: BLE001
         return {"name": "ticket_policy", "status": FAIL, "detail": f"the ticket policy cannot be loaded; automatic recording is blocked: {exc.__class__.__name__}: {exc}"[:300]}
 

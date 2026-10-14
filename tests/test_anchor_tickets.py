@@ -137,16 +137,18 @@ class TestSelection(unittest.TestCase):
         # all pairs priced above +500: the old wording claimed nothing reaches +100
         above = rmp.select_tickets([shots(1, 1, 28, +450, 0.72), shots(2, 2, 28, +450, 0.72)], max_tickets=1, policy=capped)
         self.assertEqual(above["tickets"], [])
-        self.assertIn("priced above the +500 ceiling", above["reason"])
+        self.assertIn("two-leg combination(s) priced above the +500 ceiling", above["reason"])
         self.assertIn("None is priced inside +100 to +500", above["reason"])
         self.assertNotIn("gets to +100", above["reason"])
         # all pairs below +100 (two -300 legs: 1.33 x 1.33 = 1.78)
         below = rmp.select_tickets([shots(1, 1, 27, -300, 0.72), shots(2, 2, 27, -300, 0.72)], max_tickets=1, policy=capped)
         self.assertIn("priced below +100", below["reason"])
         # priced inside the range but no value at the real prices
-        novalue = rmp.select_tickets([shots(1, 1, 22, -200, 0.6), shots(2, 2, 22, -200, 0.6), shots(3, 3, 22, -130, 0.6)], max_tickets=1, policy=capped)
-        if novalue["tickets"] == []:
-            self.assertTrue("without enough value" in novalue["reason"] or "priced below +100" in novalue["reason"])
+        novalue = rmp.select_tickets([shots(1, 1, 22, -200, 0.6), shots(2, 2, 22, -170, 0.6)], max_tickets=1, policy=capped)       # +8.1% before the haircut, -1.3% after: the policy needs +5% and +3%
+        self.assertEqual(novalue["tickets"], [])
+        self.assertIn("1 priced inside +100 to +500 (1 without enough value at the real prices)", novalue["reason"])
+        self.assertNotIn("priced below +100", novalue["reason"])
+        self.assertNotIn("ceiling", novalue["reason"])
 
     def test_the_midpoint_test_sits_between_the_record_and_the_price(self):
         leg = anchor.prepare_pool([shots(1, 1, 30, +100, 0.70)])[0]                                 # estimate 0.80 (held to model +10 points), price implies 0.50

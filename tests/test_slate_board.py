@@ -144,6 +144,17 @@ class TestTheBoard(unittest.TestCase):
         self.assertIn("freshness limit", side["reason"])
         self.assertFalse(side["fresh"])
 
+    def test_an_unloadable_policy_is_stated_on_the_board_and_the_fallback_haircut_is_labelled(self):
+        from unittest import mock
+        from operational import ticket_policy
+        prod, pl_, av = product(), pool(), avail()
+        with mock.patch.object(ticket_policy, "active", side_effect=RuntimeError("policy file damaged")):
+            d = sb.build_doc(NOW, prod, pl_, {}, av, {}, None)
+        self.assertIn("policy file damaged", d["policy_error"])
+        self.assertEqual(d["haircut"], sb.FALLBACK_HAIRCUT)
+        ok = sb.build_doc(NOW, prod, pl_, {}, av, {}, None)
+        self.assertIsNone(ok["policy_error"])
+
     def test_a_goalie_projection_with_missing_numbers_does_not_break_the_board(self):
         p = product()
         p["goalies"]["G1"]["projection"].update(expected_shots_against=None, save_pct_used=None, expected_saves=None, expected_goals_against=None, saves_range_80=None)
@@ -160,10 +171,10 @@ class TestTheBoard(unittest.TestCase):
         p["game_details"]["2026020911"] = {**p["game_details"]["2026020900"], "game_id": "2026020911"}
         real = sb.shots_picks
 
-        def flaky(game, players, pool_game):
+        def flaky(game, players, pool_game, haircut=None):
             if game["game_id"] == "2026020911":
                 raise ValueError("bad ladder row")
-            return real(game, players, pool_game)
+            return real(game, players, pool_game, haircut)
         with mock.patch.object(sb, "shots_picks", flaky):
             d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)
         by = {g["game_id"]: g for g in d["games"]}
@@ -228,8 +239,13 @@ class TestTheLivePath(unittest.TestCase):
         self.assertNotIn("under", by_name["2026020900"]["test goalie two"])
         with mock.patch("operational.best_bets.latest_capture", return_value=None):
             self.assertEqual(sb._saves_lines(pool(), NOW), {})                                  # no archived capture: no lines, no error
+        errs: dict = {}
         with mock.patch("operational.best_bets.latest_capture", side_effect=OSError("archive unreadable")):
-            self.assertEqual(sb._saves_lines(pool(), NOW), {})
+            self.assertEqual(sb._saves_lines(pool(), NOW, errs), {})
+        self.assertIn("archive unreadable", errs["2026020900"])                                  # an unreadable archive is reported, not mistaken for "no line posted"
+        d_err = sb.build_doc(NOW, product(), pool(), {}, avail(), {}, None, errs)
+        self.assertIn("could not be read", [m for m in d_err["games"][0]["coverage"]["missing"] if m["item"] == "Saves line"][0]["reason"])
+        self.assertIn("2026020900", d_err["input_errors"])
         d = sb.build_doc(NOW, product(), pool(), {}, avail(), sb._by_goalie_id(by_name, {"G2": {"name": "Test Goalie Two"}}), None)
         b = [x for x in d["games"][0]["goalies"] if x["team"] == "BBB"][0]
         self.assertEqual(b["line"]["line"], 25.5)
@@ -347,7 +363,8 @@ class TestThePage(unittest.TestCase):
         at = run_page("41_Slate_Board.py", s)                                              # the page is "opened" at FIXTURE_NOW: still fresh
         self.assertFalse(at.exception, at.exception)
         self.assertNotIn("Not a current recommendation", " ".join(x.value for x in at.markdown))
-        s["slate_board"]["games"][0]["side"]["recommendation"]["quote_captured_at_utc"] = (FIXTURE_NOW - dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        old = (FIXTURE_NOW - dt.timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        s["slate_board"]["games"][0]["side"]["sides"]["away"]["quote_captured_at_utc"] = old      # only the OTHER side aged out: the estimate rests on both quotes
         at = run_page("41_Slate_Board.py", s)
         self.assertIn("Not a current recommendation", " ".join(x.value for x in at.markdown))
 

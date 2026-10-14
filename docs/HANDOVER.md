@@ -54,3 +54,9 @@ thin goalie projections no longer break the board; the haircut comes from the po
 (`NHL_ENGINE_POINTS_ADDON=on` restores points; the 20K plan covers both).
 **Known flaky guard:** `test_a_sixteen_game_night_is_searched_in_full_and_quickly` has a 60 s bound and fails on a loaded machine (load average about 6: 57-73 s measured, 61-69 s on the commit before this change);
 the search itself did not slow down.
+
+## Review rounds on the primary slip (2026-10-14)
+Round 1 (PR 142) and round 2 (PR 143) code-review findings are fixed with regression tests: fail-closed policy loading (`ticket_policy.checked_active`, blocked cycle, watchdog `ticket_policy` check),
+moneyline freshness from the provider quote time against `quote_freshness.price_limit_min` (both sides, again when the hosted page is opened), rejection reasons by cause (below +100 / above +500 / value / other),
+primary slip RECORDED in the recording cycle, per-game failure isolation, points planned after goals with explicit budget gaps in the builder, shared price helpers, observable saves-capture read errors and
+policy errors, incremental previous-day scan. Points support: bought after the morning look and anytime goals with what the day has left (free plan: usually none; the builder says why).
