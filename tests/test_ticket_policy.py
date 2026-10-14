@@ -37,9 +37,14 @@ class TestPolicyObject(unittest.TestCase):
         self.assertNotEqual(a.digest(), dataclasses.replace(a, floor=0.35).digest())
         self.assertEqual(a.digest(), dataclasses.replace(a).digest())
 
-    def test_the_proposal_keeps_five_slots_and_allows_none(self):
-        self.assertEqual((P.PROPOSED.slots, P.LEGACY.slots), (5, 5))
-        self.assertIn("up to 5 tickets a day (zero is allowed)", P.PROPOSED.summary())
+    def test_the_cap_policy_keeps_five_slots_and_allows_none(self):
+        self.assertEqual((P.ANCHOR_V2.slots, P.LEGACY.slots), (5, 5))
+        self.assertIn("up to 5 tickets a day (zero is allowed)", P.ANCHOR_V2.summary())
+
+    def test_the_primary_slip_policy_is_one_ticket_between_plus_100_and_plus_500(self):
+        self.assertEqual((P.PROPOSED.slots, P.PROPOSED.max_combined_decimal, P.PROPOSED.min_combined_decimal), (1, 6.0, 2.0))
+        self.assertIn("up to 1 ticket a day (zero is allowed)", P.PROPOSED.summary())
+        self.assertIn("no longer than +500", P.PROPOSED.summary())
 
     def test_it_is_labelled_as_a_proposal_not_a_result(self):
         self.assertIn("NOT_VALIDATED", P.PROPOSED.status)

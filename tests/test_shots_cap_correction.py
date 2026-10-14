@@ -20,15 +20,18 @@ from tests.test_anchor_tickets import oct12_legs, shots  # noqa: E402
 class TestThePolicies(unittest.TestCase):
     def test_the_approved_policy_keeps_its_digest_and_the_new_one_differs_only_by_the_cap(self):
         self.assertEqual(P.ANCHOR_V1.digest(), "c236c526e00b9f04")                                    # the digest the owner approved on 2026-10-11 and every earlier ticket was recorded under
-        self.assertNotEqual(P.PROPOSED.digest(), P.ANCHOR_V1.digest())
-        a, b = P.ANCHOR_V1.as_dict(), P.PROPOSED.as_dict()
+        self.assertEqual(P.ANCHOR_V2.digest(), "9f5e3448e10ff62e")                                    # the cap-correction policy keeps the digest shown for review on 2026-10-13
+        self.assertNotEqual(P.ANCHOR_V2.digest(), P.ANCHOR_V1.digest())
+        a, b = P.ANCHOR_V1.as_dict(), P.ANCHOR_V2.as_dict()
         self.assertNotIn("anchor_cap", a)                                                              # absent when None, which is why the old digest did not move
         self.assertEqual(b["anchor_cap"], 0.02)
         self.assertEqual({k for k in set(a) | set(b) if a.get(k) != b.get(k)}, {"policy_id", "anchor_cap"})   # nothing else loosened or tightened
-        self.assertEqual(P.SUPERSEDED_BY[P.ANCHOR_V1.digest()], P.PROPOSED.policy_id)
+        self.assertEqual(P.SUPERSEDED_BY[P.ANCHOR_V1.digest()], P.ANCHOR_V2.policy_id)
+        self.assertEqual(P.SUPERSEDED_BY[P.ANCHOR_V2.digest()], P.PROPOSED.policy_id)
 
     def test_the_policy_and_the_estimate_code_state_the_same_cap(self):
         self.assertEqual(anchor.cap_for(P.PROPOSED), anchor.ANCHOR_CAP)
+        self.assertEqual(anchor.cap_for(P.ANCHOR_V2), anchor.ANCHOR_CAP)
         self.assertEqual(anchor.cap_for(P.ANCHOR_V1), anchor.ANCHOR_CAP_V1)
         self.assertEqual((anchor.ANCHOR_CAP_V1, anchor.ANCHOR_CAP), (0.10, 0.02))
 
@@ -38,7 +41,7 @@ class TestThePolicies(unittest.TestCase):
                 tp.approve(P.ANCHOR_V1.digest())
                 self.assertTrue(tp.is_approved(P.ANCHOR_V1))
             with mock.patch.object(state_paths, "path", lambda name, **kw: Path(d) / name), mock.patch.dict(os.environ, {"NHL_ENGINE_TICKET_POLICY": "proposed"}):
-                self.assertEqual(tp.active().policy_id, "anchor-tickets-2026-10-13")
+                self.assertEqual(tp.active().policy_id, "primary-slip-2026-10-14")
                 self.assertFalse(tp.is_approved())                                                      # the new policy waits for the owner's own approval
                 with self.assertRaises(ValueError):
                     tp.approve(P.ANCHOR_V1.digest())                                                    # approving the old digest does not approve the active one
@@ -87,7 +90,7 @@ class TestTheSelectionUnderTheCorrection(unittest.TestCase):
     def test_the_2026_10_12_pool_no_longer_produces_those_tickets(self):
         legs = oct12_legs()
         v1 = rmp.select_tickets(legs, max_tickets=5, policy=P.ANCHOR_V1)
-        v2 = rmp.select_tickets(legs, max_tickets=5, policy=P.PROPOSED)
+        v2 = rmp.select_tickets(legs, max_tickets=5, policy=P.ANCHOR_V2)
         self.assertTrue(v1["tickets"])                                       # the superseded rule still reproduces the recorded behaviour
         self.assertEqual(v2["tickets"], [])
         self.assertLess(v2["pool_size"], v1["pool_size"])                    # fewer legs are "well supported": the legs whose record ran far above the model drop out
@@ -95,7 +98,9 @@ class TestTheSelectionUnderTheCorrection(unittest.TestCase):
 
     def test_no_other_threshold_is_changed_to_compensate(self):
         for field in ("floor", "min_estimated_ev", "min_value_after_shade", "value_shade", "max_per_leg", "max_per_game", "max_per_player", "slots", "min_combined_decimal"):
-            self.assertEqual(getattr(P.PROPOSED, field), getattr(P.ANCHOR_V1, field), field)
+            self.assertEqual(getattr(P.ANCHOR_V2, field), getattr(P.ANCHOR_V1, field), field)
+        for field in ("floor", "min_estimated_ev", "min_value_after_shade", "value_shade", "max_per_leg", "max_per_game", "max_per_player", "min_combined_decimal", "anchor_cap"):
+            self.assertEqual(getattr(P.PROPOSED, field), getattr(P.ANCHOR_V2, field), field)      # the primary slip changes only the number of slips and the +500 ceiling
         self.assertEqual((anchor.SHOTS_LEG_FLOOR, anchor.HIGH_LINE_CAP, anchor.MIN_SAMPLE_GAMES), (0.60, 0.70, 20))
 
     def test_the_builder_shows_the_estimate_a_ticket_would_use(self):

@@ -202,9 +202,23 @@ def morning_enabled() -> bool:
     return raw.strip().lower() not in ("off", "0", "false", "no")
 
 
+POINTS_ADDON_ENV = "NHL_ENGINE_POINTS_ADDON"
+
+
 def points_addon_enabled() -> bool:
-    """Points ride along on the pregame capture as an add-on unless the owner already buys them with every game's shots (NHL_ENGINE_PROP_MARKETS)."""
-    return POINTS_KEY not in prop_markets()
+    """Points are OFF by default since 2026-10-14: the board (section 1) needs anytime-goal prices and the slip uses shots and moneylines, so the credit that bought a game's points now buys its
+    anytime-goal prices instead (the GOALS class below). `NHL_ENGINE_POINTS_ADDON=on` (environment or .env) restores the points add-on; so does buying points with every game's shots
+    (NHL_ENGINE_PROP_MARKETS), in which case there is no separate add-on."""
+    import os
+    raw = os.environ.get(POINTS_ADDON_ENV) or ""
+    if not raw:
+        env = state_paths.REPO_ROOT / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                k, sep, v = line.strip().partition("=")
+                if sep and k.strip() == POINTS_ADDON_ENV:
+                    raw = v.strip().strip("\"'")
+    return POINTS_KEY not in prop_markets() and raw.strip().lower() in ("on", "1", "true", "yes")
 
 
 def base_cost() -> int:

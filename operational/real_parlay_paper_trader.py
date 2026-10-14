@@ -125,6 +125,11 @@ def run(now: dt.datetime | None = None) -> dict:
             product_summary = product_data.refresh_state(now, nhl=nhl_conn, tickets_state=daily_tickets.read_state())
         except Exception as exc:  # noqa: BLE001 - the product pages keep the last good document
             product_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+        try:                                       # the per-game board and the primary slip (informational; the model book never waits on it)
+            from operational import slate_board
+            board_summary = slate_board.refresh(now, tickets=daily_tickets.read_state())
+        except Exception as exc:  # noqa: BLE001
+            board_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
     finally:
         fcntl.flock(lock_file, fcntl.LOCK_UN)
         lock_file.close()
@@ -133,7 +138,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "manual_orders": manual_summary, "personal_logs": personal_summary, "builder_pool": builder_summary, "product_state": product_summary, "starter_feed": df_summary}
+              "manual_orders": manual_summary, "personal_logs": personal_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

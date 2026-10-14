@@ -92,3 +92,24 @@ probability, the final estimate, the selector's decision and the reason (`SUPPOR
 the code and policy versions, and the tickets chosen with the nearest rejected ones. The watchdog warns if the log has not been looked at for an hour. `deploy/score_selection_shadow.py` scores it against
 official results (`anchor_estimates`: recent rate, model, final estimate, price-implied and what happened, counted as player-games and games, not independent bets) and the daily review shows the day's score,
 shared exposure, participation problems and corrective actions.
+
+## The primary slip and the Slate Board (2026-10-14)
+
+**One parlay a day.** The five-ticket workflow is replaced by a single primary parlay (policy `primary-slip-2026-10-14`, one slot): combined price **+100 to +500 inclusive**, the **fewest legs** that qualify,
+ranked by estimated hit chance. Every leg rule and value test is the one of the cap-correction policy (`anchor-tickets-2026-10-13`, digest `9f5e3448e10ff62e`, kept unchanged): corrected +0.02 shots cap, the
+30% floor, estimated value of at least +5% and +3% after the 3-point haircut, the midpoint test, one ticket per leg and per player, three per game. Nothing was loosened to produce a slip; a day on which
+nothing qualifies records nothing and the board says why.
+
+* **Same-game combinations are never built.** A same-game price needs a quoted combined price and this feed has none; the slip is always cross-game and its price is labelled *calculated* (the product of the
+  legs' DraftKings prices).
+* **Recording** (only after the owner approves the new digest and resumes): at most one ticket, only on pregame-window prices (no morning-look price), after the same recording-time revalidation as before.
+* **Legs that can enter a slip:** shots legs (the corrected estimate) and moneylines (the market's own no-vig chance, strength model agreeing); goalie saves only with a confirmed starter and a validated model
+  (none today); goals and points are shown on the board but are not slip legs (their estimates are not calibrated for tickets).
+
+**The Slate Board** (`operational/slate_board.py`, page *Slate Board*) analyses every scheduled game: (1) the most likely goal scorers with the DraftKings price beside them (likelihood is not value); (2) the
+two best shots values from the offered 1+ to 5+ ladder (the best value after the haircut among thresholds at least 45% likely and not priced shorter than about -400, so a -4000 1+ is not the "safe" pick);
+(3) goalie saves: expected starter and status, expected saves and range, the offered line, conditional until the start is confirmed; (4) the moneyline with its exact price, or *No recommended side*
+(puck line not assessed: its cover model has no validated result and no spreads price is fetched). Each game shows what was analysed, priced, supported and recommended, and what is missing and why
+(*not posted*, *not fetched*, *budget blocked*, *fetch failed*). Prices missing for budget reasons are the odds-credit allowance, not a defect (docs/ODDS_BUDGET_CONFIGURATIONS.md).
+
+Credits: the add-on credit that bought a lead game's points prices now buys its anytime-goal prices (`NHL_ENGINE_POINTS_ADDON=on` restores points).

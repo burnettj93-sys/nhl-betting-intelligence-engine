@@ -120,6 +120,18 @@ class TestSelection(unittest.TestCase):
         self.assertIn("2 moneyline leg(s) in 2 game(s)", out["reason"])
         self.assertIn("in 4 game(s)", out["reason"])
 
+    def test_the_primary_slip_ceiling_excludes_longer_prices_and_keeps_the_rest(self):
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +120, 0.70)]               # two legs at +120: combined 4.84, i.e. +384
+        capped_low = dataclasses.replace(POL, max_combined_decimal=4.0)              # +300 ceiling: this ticket is too long
+        capped_ok = dataclasses.replace(POL, max_combined_decimal=6.0)               # +500 ceiling: inside
+        self.assertEqual(rmp.select_tickets(legs, max_tickets=1, policy=capped_low)["tickets"], [])
+        out = rmp.select_tickets(legs, max_tickets=1, policy=capped_ok)
+        self.assertEqual(len(out["tickets"]), 1)
+        self.assertTrue(anchor.within_ceiling(out["tickets"][0].combined_decimal, capped_ok))
+        self.assertTrue(anchor.within_ceiling(6.004, capped_ok))                       # a product that rounds to +500 is inside
+        self.assertFalse(anchor.within_ceiling(6.02, capped_ok))
+        self.assertTrue(anchor.within_ceiling(50.0, POL))                              # no ceiling in the earlier policies
+
     def test_the_midpoint_test_sits_between_the_record_and_the_price(self):
         leg = anchor.prepare_pool([shots(1, 1, 30, +100, 0.70)])[0]                                 # estimate 0.80 (held to model +10 points), price implies 0.50
         self.assertAlmostEqual(anchor.midpoint_probability(leg), (0.80 + 0.50) / 2, places=2)

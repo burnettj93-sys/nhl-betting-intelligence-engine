@@ -44,7 +44,15 @@ from research.real_market_parlay import engine as rmp
 
 STATE_NAME = "tickets_state.json"
 TRACK = "REAL_MARKET_PAPER"
-SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY
+SLOT_COUNT = rmp.MAX_TICKETS_PER_DAY            # the engine's constant (five); the number in force is the active policy's (slot_count())
+
+
+def slot_count() -> int:
+    """Tickets the active policy allows a day: five under the 2026-10-11/13 policies, ONE under the primary-slip policy (2026-10-14)."""
+    try:
+        return int(ticket_policy.active().slots)
+    except Exception:  # noqa: BLE001
+        return SLOT_COUNT
 RECENT_SETTLED_LIMIT = 10
 
 FEED_LABEL = ("US-feed paper experiment. Prices are DraftKings (US feed via The Odds API) and have NOT been matched to "
@@ -211,7 +219,9 @@ def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[se
         return sum(1 for w in waves if w["index"] > i and dt.datetime.fromisoformat(w["start_utc"]) > now)
 
     def cap(i: int) -> int:
-        return SLOT_COUNT - min(RESERVED_FOR_LATER, later_waves_pending(i))
+        if slot_count() == 1:
+            return 1                          # a single slip a day: nothing is held back for later waves; it is recorded the first time a ticket qualifies on pregame-window prices
+        return slot_count() - min(RESERVED_FOR_LATER, later_waves_pending(i))
 
     used: dict[int, int] = defaultdict(int)
     for gs in recorded_game_sets:
@@ -525,7 +535,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
         if card["ticket_id"] not in recorded_ids:
             cards.append(card)
     slots_used = len(cards)
-    empty = max(0, SLOT_COUNT - slots_used)
+    empty = max(0, slot_count() - slots_used)
     funds_blocked = any(r.get("status") == "INSUFFICIENT_FUNDS" for r in record_results) or \
         (account["available_cash"] < pb.PAPER_BET_STAKE)
     notice = None
@@ -544,7 +554,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
     other_alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in settled + open_rows])
     return {
         "date_et": et_date, "generated_at_utc": now.isoformat(),
-        "account": account, "slots": {"total": SLOT_COUNT, "used": slots_used, "empty": empty},
+        "account": account, "slots": {"total": slot_count(), "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
         "origins": pb.origin_performance(bankroll_conn, TRACK),
         "singles": [single_card(l) for l in singles],
@@ -698,13 +708,15 @@ def early_policy(existing_rows: list[dict]):
     """Ticket veto: at most EARLY_TICKET_CAP tickets a day may rest on early prices, so a morning look cannot use up the day's slots (or the exposure limits that go with them)
     before the later games are priced. A ticket entirely on pregame-window prices is never affected."""
     used = early_tickets_recorded(existing_rows)
+    cap = 0 if slot_count() == 1 else EARLY_TICKET_CAP       # the single primary slip rests on pregame-window prices only: coordinated captures, compared across games
 
     def veto(combo, already) -> str | None:
         if not any(getattr(l, "early", False) for l in combo.legs):
             return None
         taken = used + sum(1 for t in already if any(getattr(l, "early", False) for l in t.legs))
-        if taken >= EARLY_TICKET_CAP:
-            return f"{taken} of the day's {EARLY_TICKET_CAP} early-price tickets are taken; the rest wait for prices closer to puck drop"
+        if taken >= cap:
+            return (f"{taken} of the day's {cap} early-price tickets are taken; the rest wait for prices closer to puck drop" if cap else
+                    "the primary slip is recorded only on pregame-window prices (about 105 minutes before puck drop), not on a morning look")
         return None
     return veto
 
@@ -727,7 +739,7 @@ def _provisional_section(legs: list, existing: list, now: dt.datetime, et_date: 
     if not prov_legs:
         return section
     try:
-        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=SLOT_COUNT, policy=ticket_policy.active())
+        picked = rmp.select_tickets(_with_provisional_eligible(legs), existing=existing, max_tickets=slot_count(), policy=ticket_policy.active())
     except Exception as exc:  # noqa: BLE001 - informational only
         section["error"] = f"{exc.__class__.__name__}: {exc}"
         return section
@@ -742,13 +754,71 @@ def _provisional_section(legs: list, existing: list, now: dt.datetime, et_date: 
     return section
 
 
+PRIMARY_RANGE_LABEL = "+100 to +500"
+CALCULATED_PRICE_LABEL = ("Calculated price: the product of the legs' DraftKings prices. The legs are from different games, so no combined quote exists or is needed; a same-game combination "
+                          "would need a quoted combined price, and none is available from this feed, so none is ever built.")
+
+
+def _strongest_singles(legs: list, limit: int = 5) -> list[dict]:
+    """The strongest individual supported selections (leg rules of the active policy), shown when no combination qualifies. Informational: a single is not a recommendation to bet."""
+    pol = ticket_policy.active()
+    out = []
+    try:
+        pool = anchor.prepare_pool(rmp.dedupe_legs_by_economic_identity([l for l in legs if rmp.leg_is_eligible(l)]))
+    except Exception:  # noqa: BLE001
+        return out
+    for l in sorted(pool, key=lambda x: -x.conservative_probability)[:limit]:
+        dec = rmp.leg_decimal(l)
+        ev = l.conservative_probability * dec - 1.0
+        out.append({"label": rmp.leg_label(l), "game_id": l.game_id, "team": l.team, "market_family": l.market_family, "american_price": l.american_price,
+                    "probability": round(l.conservative_probability, 4), "ev_estimated": round(ev, 4),
+                    "ev_after_haircut": round((l.conservative_probability - pol.value_shade) * dec - 1.0, 4),
+                    "quote_updated_utc": l.quote_updated_utc, "freshness_status": l.freshness_status or None, "provisional": bool(getattr(l, "provisional", False)),
+                    "evidence": anchor.leg_evidence(l, anchor.cap_for(pol))})
+    return out
+
+
+def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_date: str, alerts=None) -> dict:
+    """THE recommendation: one parlay, +100 to +500, the fewest legs that qualify, ranked by estimated hit chance, under the active policy's own leg and value rules (nothing is loosened to
+    produce it). A ticket already recorded today is the primary slip. Otherwise the best qualifying combination on FRESH prices; failing that, the best on today's earlier (provisional) prices,
+    labelled as not recordable; failing that, none, with the reason and the strongest individual selections."""
+    pol = ticket_policy.active()
+    doc = {"policy_id": pol.policy_id, "digest": pol.digest(), "range_label": PRIMARY_RANGE_LABEL, "status": "NONE", "ticket": None, "reason": None, "stake": pb.PAPER_BET_STAKE,
+           "price_kind": "CALCULATED", "price_note": CALCULATED_PRICE_LABEL, "strongest_singles": [], "as_of_utc": now.isoformat()}
+    if existing_rows:
+        card = ticket_from_row(existing_rows[0], now, alerts or [])
+        doc.update(status="RECORDED", ticket=card, reason="Today's primary slip is already recorded; the book allows one a day.")
+        return doc
+    reason = None
+    for status, pool_legs in (("FRESH", legs), ("PROVISIONAL", _with_provisional_eligible(legs))):
+        if status == "PROVISIONAL" and not any(getattr(l, "provisional", False) for l in legs):
+            continue
+        picked = rmp.select_tickets(pool_legs, existing=[], max_tickets=1, policy=pol)
+        if picked["tickets"]:
+            card = ticket_from_combo(picked["tickets"][0], et_date, proposed=True)
+            if status == "PROVISIONAL" and not any(l.get("provisional") for l in card["legs"]):
+                continue
+            card["price_label"] = "Calculated price (product of the legs' DraftKings prices; cross-game)"
+            if status == "PROVISIONAL":
+                card["status"] = STATUS_PROVISIONAL
+                card["provisional"] = True
+            doc.update(status=status, ticket=card)
+            doc["reason"] = ("Built on fresh prices." if status == "FRESH" else
+                             "Built on an earlier look at today's prices that is past its freshness limit: shown for review, not recordable until the prices are refreshed and it still qualifies.")
+            return doc
+        reason = picked.get("reason")
+    doc["reason"] = reason or "No combination of supported selections qualifies at the prices available now."
+    doc["strongest_singles"] = _strongest_singles(_with_provisional_eligible(legs))
+    return doc
+
+
 def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | None = None) -> dict:
     """One selection + recording pass. Safe to repeat: recorded tickets are
     never rewritten and never staked twice."""
     et_date = et.eastern_today(now)
     existing_rows = recorded_today(bankroll_conn, et_date)
     existing = [_identities(r) for r in existing_rows]
-    slots_left = max(0, SLOT_COUNT - len(existing_rows))
+    slots_left = max(0, slot_count() - len(existing_rows))
 
     collected = collected if collected is not None else collect_candidate_legs(nhl_conn, now)
     legs = collected["legs"]
@@ -759,7 +829,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         waves = []
     wave_filter, wave_info = wave_policy(waves, now, [{i[0] for i in e} for e in existing])
     early_filter = early_policy(existing_rows)
-    wave_info["early_price_cap"] = {"cap": EARLY_TICKET_CAP, "used": early_tickets_recorded(existing_rows)}
+    wave_info["early_price_cap"] = {"cap": 0 if slot_count() == 1 else EARLY_TICKET_CAP, "used": early_tickets_recorded(existing_rows)}
 
     def ticket_filter(combo, already):
         return wave_filter(combo, already) or early_filter(combo, already)
@@ -790,7 +860,7 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         reason = (recording_pause.notice(pause) + (f" The {n} ticket(s) below are what the selector would record: proposed, not recorded, nothing staked." if n else
                                                      f" Nothing would be recorded right now: {picked['reason']}"))
     elif slots_left == 0:
-        reason = f"All {SLOT_COUNT} of today's ticket slots are recorded."
+        reason = f"All {slot_count()} of today's ticket slot{'s' if slot_count() != 1 else ''} {'are' if slot_count() != 1 else 'is'} recorded."
     else:
         reason = picked["reason"]
         if not legs:
@@ -822,6 +892,10 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
                         diagnostics=diagnostics, record_results=record_results, options=options, provisional=provisional,
                         proposed=bool(pause["paused"]))
     state["ticket_policy"] = ticket_policy.describe()
+    try:
+        state["primary"] = _primary_slip(legs, existing_rows, now, et_date)
+    except Exception as exc:  # noqa: BLE001 - the primary slip is a presentation of the same selection; a failure here must not stop the cycle
+        state["primary"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "ticket": None, "strongest_singles": []}
     if pause["paused"]:
         state["notice"] = recording_pause.notice(pause)
         state["recording_paused"] = pause
@@ -850,7 +924,9 @@ def refresh_state_only(bankroll_conn, now: dt.datetime) -> bool:
                 and previous.get("date_et") == state["date_et"]:
             state["tickets"].append(card)
     state["slots"]["used"] = len(state["tickets"])
-    state["slots"]["empty"] = max(0, SLOT_COUNT - len(state["tickets"]))
+    state["slots"]["empty"] = max(0, slot_count() - len(state["tickets"]))
     if previous.get("date_et") == state["date_et"]:
         state["singles"] = previous.get("singles", [])
+        if previous.get("primary") is not None:
+            state["primary"] = previous["primary"]
     return _write_state(state)

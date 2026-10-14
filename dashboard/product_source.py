@@ -105,6 +105,14 @@ def builder_pool() -> dict:
     return bp.load() or {"generated_at_utc": None, "games": {}}
 
 
+def slate_board() -> dict:
+    """The per-game board and primary slip. Local mode reads the engine's own file."""
+    if _cloud():
+        return _wrap(cloud_snapshot.slate_board)
+    from operational import slate_board as sb
+    return sb.load() or {"generated_at_utc": None, "games": [], "primary": None}
+
+
 def personal_logs() -> dict:
     """The published personal-log section ({"logs": {hash: {...}}, "rules": {...}}). Local mode builds it from the personal database."""
     if _cloud():

@@ -228,6 +228,12 @@ def _builder_pool() -> dict:
     return builder_pool.load() or {"generated_at_utc": None, "games": {}}
 
 
+def _slate_board() -> dict:
+    """The per-game board and the primary slip (operational/slate_board.py), written by the 15-minute trader."""
+    from operational import slate_board
+    return slate_board.load() or {"generated_at_utc": None, "games": [], "primary": None}
+
+
 _SECTION_BUILDERS = {
     "tickets": _tickets,
     "product_meta": _product_meta,
@@ -240,6 +246,7 @@ _SECTION_BUILDERS = {
     "manual_orders": _manual_orders,
     "personal_logs": _personal_logs,
     "builder_pool": _builder_pool,
+    "slate_board": _slate_board,
     "performance": _performance,
     "morning_review": _morning_review,
     "ledger": _ledger,

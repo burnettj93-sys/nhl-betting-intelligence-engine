@@ -39,11 +39,14 @@ class TicketPolicy:
     max_per_player: int | None = 2       # None = no per-player limit
     mode: str = "legacy"                 # "anchor": legs are scored by the player's own record / the market, ticket-level value, up to five legs (research/real_market_parlay/anchor.py)
     anchor_cap: float | None = None      # anchor mode: a shots leg's final estimate is held to the model's calibrated probability plus this. None = the original +0.10 (anchor.ANCHOR_CAP_V1); left out of as_dict() when None so the digest of a policy written before this field existed is unchanged
+    max_combined_decimal: float | None = None   # a ticket whose combined price is longer than this is not selected (6.0 = +500). None = no upper limit; left out of as_dict() when None so earlier digests are unchanged
 
     def as_dict(self) -> dict:
         d = dataclasses.asdict(self)
         if d.get("anchor_cap") is None:
             d.pop("anchor_cap", None)
+        if d.get("max_combined_decimal") is None:
+            d.pop("max_combined_decimal", None)
         return d
 
     def digest(self) -> str:
@@ -51,7 +54,8 @@ class TicketPolicy:
 
     def summary(self) -> str:
         if self.mode == "anchor":
-            return (f"up to {self.slots} tickets a day (zero is allowed); each +100 or better, 2 to 5 legs, every leg from a different game; legs are well supported (2+ shots for a player who reaches the line in "
+            top = f" and no longer than +{round((self.max_combined_decimal - 1) * 100)}" if self.max_combined_decimal else ""
+            return (f"up to {self.slots} ticket{'s' if self.slots != 1 else ''} a day (zero is allowed); each +100 or better{top}, 2 to 5 legs (the fewest that qualify), every leg from a different game; legs are well supported (2+ shots for a player who reaches the line in "
                     f"most of his last 30 games, or a moneyline at the market's own chance), never points or goal bets; estimated hit chance of at least {self.floor:.0%}; estimated value of at least "
                     f"{self.min_estimated_ev:+.0%}, at least {self.min_value_after_shade:+.0%} after lowering every leg by {self.value_shade * 100:.0f} points, and not negative if the true chance is halfway "
                     f"between the player's record and the price; ranked by estimated hit chance; each player on at most {self.max_per_player} ticket a day")
@@ -78,9 +82,15 @@ EARLIER_PROPOSAL = TicketPolicy(policy_id="restart-proposal-2026-10-10b", status
                                 floor=0.25, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=2, max_per_player=1)
 # The policy the owner approved on 2026-10-11 (digest c236c526e00b9f04) and under which the tickets of 2026-10-12 were recorded. Its shots estimates held a leg to the model +0.10; the chronological
 # validation shows that over-stated the capped 2+ legs by about 8 points (docs/PROPOSAL_ANCHOR_CAP.md). Superseded 2026-10-13; kept unchanged so its digest, its tickets and its logged predictions stay interpretable.
-SUPERSEDED_BY = {"c236c526e00b9f04": "anchor-tickets-2026-10-13"}     # the digest of the 2026-10-11 policy -> the policy that replaced it (2026-10-13); the old digest is part of the record of every ticket recorded under it
+SUPERSEDED_BY = {"c236c526e00b9f04": "anchor-tickets-2026-10-13", "9f5e3448e10ff62e": "primary-slip-2026-10-14"}     # the digest of the 2026-10-11 policy -> the policy that replaced it (2026-10-13); the old digest is part of the record of every ticket recorded under it
 ANCHOR_V1 = TicketPolicy(policy_id="anchor-tickets-2026-10-11", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",   # (status text unchanged: it is part of the digest; SUPERSEDED_BY lists the successor)
                          floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1)
 # The same policy with ONE change: the shots cap is +0.02 (chosen on the 2024 calibration season only, evaluated on 2025; deploy/anchor_cap_study.py). Every other number is unchanged.
-PROPOSED = TicketPolicy(policy_id="anchor-tickets-2026-10-13", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",
-                        floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1, anchor_cap=0.02)
+# Up to five tickets a day. Superseded 2026-10-14 by the single-primary-slip workflow below; kept unchanged so its digest (9f5e3448e10ff62e) and the predictions logged under it stay interpretable.
+ANCHOR_V2 = TicketPolicy(policy_id="anchor-tickets-2026-10-13", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor",
+                         floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1, anchor_cap=0.02)
+# 2026-10-14 workflow (owner instruction): ONE primary recommended parlay a day, combined price +100 to +500 inclusive, the fewest legs that qualify, ranked by estimated hit chance. Every leg rule and
+# value test is the ANCHOR_V2 one (corrected +0.02 cap, floor 30%, value >= +5% and >= +3% after the 3-point haircut, midpoint test): nothing is loosened to produce a slip. Changed: slots 5 -> 1
+# and the +500 ceiling. A day with no qualifying combination records nothing.
+PROPOSED = TicketPolicy(policy_id="primary-slip-2026-10-14", status="PROPOSED_NOT_VALIDATED_AWAITING_OWNER_APPROVAL", mode="anchor", slots=1,
+                        floor=0.30, value_shade=0.03, min_value_after_shade=0.03, max_per_leg=1, max_per_game=3, max_per_player=1, anchor_cap=0.02, max_combined_decimal=6.0)

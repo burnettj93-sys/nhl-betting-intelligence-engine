@@ -267,6 +267,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         from operational import dailyfaceoff
         lineup_state = lineup_state if lineup_state is not None else dailyfaceoff.load_state()
         reported = reported_lineups(lineup_state, sk["players"], now)
+        prior = prior_season_totals(srows, history.CURRENT_SEASON - 1)
         players_out, by_team = {}, defaultdict(list)
         for pid, p in sk["players"].items():
             team = p["team"]
@@ -284,7 +285,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                    "recent_games": p["recent_games"], "recent_avg": {k.replace("recent_", ""): round(p[k], 2) for k in
                                                                     ("recent_toi", "recent_toi_pp", "recent_shots", "recent_goals", "recent_assists", "recent_hits", "recent_blocks")},
                    "last_game_date": p["last_game_date"], "games_total": p["games_total"], "next_game": ng, "projection": proj,
-                   "option_id": person_option.get(pid)}
+                   "option_id": person_option.get(pid), "prior_season": prior.get(str(pid))}
             players_out[pid] = rec
             by_team[team].append(pid)
 
@@ -340,6 +341,28 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
     finally:
         if owns:
             nhl.close()
+
+
+def prior_season_totals(rows: list[dict], season: int) -> dict[str, dict]:
+    """Per player, last regular season's games, goals, shots and average ice time from the same MoneyPuck game log the current numbers come from, labelled with its season. It is the baseline
+    for a player whose current-season sample is still small, shown beside (never mixed into) the current-season line."""
+    acc: dict[str, dict] = {}
+    for r in rows:
+        if r.get("season") != season:
+            continue
+        a = acc.setdefault(str(r["player_id"]), {"games": 0, "goals": 0.0, "shots": 0.0, "toi": 0.0, "toi_pp": 0.0})
+        a["games"] += 1
+        a["goals"] += float(r.get("goals") or 0.0)
+        a["shots"] += float(r.get("shots") or 0.0)
+        a["toi"] += float(r.get("toi") or 0.0)
+        a["toi_pp"] += float(r.get("toi_pp") or 0.0)
+    label = f"{season}-{str(season + 1)[2:]}"
+    out = {}
+    for pid, a in acc.items():
+        n = a["games"]
+        out[pid] = {"season": label, "games": n, "goals": round(a["goals"], 1), "shots": round(a["shots"], 1), "goals_per_game": round(a["goals"] / n, 3),
+                    "shots_per_game": round(a["shots"] / n, 2), "toi_avg": round(a["toi"] / n, 1), "toi_pp_avg": round(a["toi_pp"] / n, 2)}
+    return out
 
 
 def reported_lineups(state: dict, skaters: dict[str, dict], now: dt.datetime | None = None) -> dict[str, dict]:
