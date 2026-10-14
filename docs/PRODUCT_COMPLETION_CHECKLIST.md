@@ -106,6 +106,17 @@ bought for the lead games from the 2026-10-14 pregame wave (first live check pen
 | The $500 model book is the only book | **VERIFIED** | Ledger rows with `origin = 'AUTOMATIC'` only are counted; the watchdog re-derives the account from raw rows (`check_reconciliation`, model only); `deploy/export_audit_zip.py` writes `model_book_reconciliation.json`. |
 | Earlier personal records preserved, inactive, separate | **VERIFIED** | `deploy/archive_personal_logs.py` copied `operational/runtime/personal_logs.db` read-only to `operational/archive/` (1 log, 1 bet, 1 migration row) and nothing reads it; the model ledger's earlier manual ticket stays in the ledger outside the model book, untouched. |
 
+## D2. Eggy's Parlay Pick of the Day and the one-ticket rule (2026-10-14)
+
+| Requirement | Status | Evidence / limit |
+|---|---|---|
+| The single primary ticket is branded "Eggy's Parlay Pick of the Day": Eggy artwork, legs with prices, combined price, estimated hit chance with range, $10 stake, potential return, a short explanation; the same ticket, not an extra bet | **VERIFIED IN TESTS** (hosted check after the release reboot) | `ui.eggy_pick_card` on Slate Board and Today; `tests/test_slate_board.py` (pick state, no-pick state, banned words absent), `tests/test_product_pages.py`. Desktop and 375 px layouts checked in a browser on a fixture. |
+| No qualifying ticket: "No Eggy pick today" with the exact reason; no invented pick; strongest singles and the closest non-qualifying combination stay visible | **VERIFIED IN TESTS** | Same tests; the live board is in this state until a combination qualifies (0 of 18 logged snapshots qualified under the corrected estimates). |
+| Never "guaranteed", "lock" or "slam dunk"; estimates stated as estimates with a range | **VERIFIED IN TESTS** | Asserted on the card text and on the generated explanation. |
+| At most one primary ticket per Eastern day at exactly $10, enforced in the recording path (not only on the page) | **VERIFIED IN TESTS** | `daily_tickets.record_tickets`: DAILY_LIMIT, REVALIDATION_FAILED, BLOCKED_POLICY, STAKE_NOT_PERMITTED; the ledger keeps funds, duplicates and immutability. `tests/test_anchor_tickets.py::TestThePrimarySlipThroughTheNormalCycle`. |
+| Anytime-goal legs are candidates compared like other legs | **PARTIAL (by design)** | Logged with a decision code (`BELOW_STRONG_LEG_FLOOR` / `GOALS_NO_CAPPED_ESTIMATE`) and never promoted without a capped estimate: no cap study exists for the goals model and the strong-leg floor (60%) is not loosened. Goals appear in the per-game analysis with price and value. Adding them to the ticket search needs a validated capped estimate and a new policy digest for your approval. |
+| Automatic recording | **PAUSED, awaiting owner approval** | Digest `1fad3ba03503cf94` unchanged and unapproved. |
+
 ## E. Settlement and ledger integrity
 
 | Item | Status | Evidence |
