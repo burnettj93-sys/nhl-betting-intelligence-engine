@@ -373,7 +373,19 @@ class TestTheSearchHidesNothing(unittest.TestCase):
             pool = anchor.prepare_pool(legs)
             found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
             self.assertEqual({key_of(c) for c in found}, set(brute_force(pool, POL)), f"seed {seed}")
-            self.assertTrue(any(len(c.legs) >= 3 for c in found) or diag.get("covered_by_shorter", 0) >= 0)
+        # one pool built to exercise the skip: four strong legs in four games, every pair passes, so every triple and quad has a passing prefix
+        strong = [shots(g, f"s{g}", 28, -150, 0.78, name=f"S{g}") for g in range(1, 5)]
+        found, diag = anchor.qualifying(anchor.prepare_pool(strong), POL, rmp._evaluate_combo, rmp._policy_veto)
+        self.assertGreater(diag.get("covered_by_shorter", 0), 0)                                    # the skip really was exercised...
+        self.assertTrue(found and all(len(c.legs) == 2 for c in found))                              # ...and only the shortest passing tickets are offered, exactly as before
+        self.assertEqual({key_of(c) for c in found}, set(brute_force(anchor.prepare_pool(strong), POL)))
+
+    def test_a_duplicate_leg_in_the_pool_does_not_make_a_ticket_twice(self):
+        a, b = shots(1, 1, 28, -150, 0.78, name="A"), shots(2, 2, 28, -150, 0.78, name="B")
+        once, _ = anchor.qualifying(anchor.prepare_pool([a, b]), POL, rmp._evaluate_combo, rmp._policy_veto)
+        twice, _ = anchor.qualifying(anchor.prepare_pool([a, dataclasses.replace(a), b]), POL, rmp._evaluate_combo, rmp._policy_veto)
+        self.assertEqual(len(once), 1)
+        self.assertEqual(len(twice), 1)
 
     def test_the_selector_offers_them_and_the_exposure_limits_still_bind(self):
         out = rmp.select_tickets(oct12_legs(), max_tickets=5, policy=POL)
@@ -409,7 +421,7 @@ class TestTheSearchHidesNothing(unittest.TestCase):
         pool = anchor.prepare_pool(legs)
         t = time.time()
         found, diag = anchor.qualifying(pool, POL, rmp._evaluate_combo, rmp._policy_veto)
-        self.assertLess(time.time() - t, 60.0)                                                      # (about 4 s on a quiet machine since the prefix skip; it was 58-73 s and flaky under load before)
+        self.assertLess(time.time() - t, 30.0)                                                      # about 4 s on a quiet machine since the prefix skip (58-73 s before, flaky under load)
         self.assertFalse(diag["truncated"])
         self.assertEqual(diag["games_with_supported_legs"], 16)                                     # no game was dropped before the search
         self.assertGreater(len(found), 1000)

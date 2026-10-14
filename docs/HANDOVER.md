@@ -52,8 +52,7 @@ Fixed: moneyline freshness judged by quote age (not the row status); empty-board
 thin goalie projections no longer break the board; the haircut comes from the policy; `slot_count()` fails safe to one; the previous-day check parses only that day's log records; live saves-line path tested.
 **Not changed, owner trade-off:** with the free odds plan the credit that used to buy lead games' points prices now buys anytime-goal prices, so the personal builder usually has no Points market
 (`NHL_ENGINE_POINTS_ADDON=on` restores points; the 20K plan covers both).
-**Known flaky guard:** `test_a_sixteen_game_night_is_searched_in_full_and_quickly` has a 60 s bound and fails on a loaded machine (load average about 6: 57-73 s measured, 61-69 s on the commit before this change);
-the search itself did not slow down.
+**Timing guard (resolved 2026-10-14):** the 16-game search guard used to take 58-73 s; the search now skips slips already covered by a passing prefix (exact: same 3,676 tickets on that pool) and takes about 4 s; the bound is 30 s.
 
 ## Review rounds on the primary slip (2026-10-14)
 Round 1 (PR 142) and round 2 (PR 143) code-review findings are fixed with regression tests: fail-closed policy loading (`ticket_policy.checked_active`, blocked cycle, watchdog `ticket_policy` check),

@@ -210,8 +210,10 @@ _SEARCH_CACHE: dict = {}      # one trader cycle asks the same question three ti
 def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
     margin = _eng.LEG_PROBABILITY_MARGIN
     by_game: dict[str, list] = defaultdict(list)
+    canon: dict = {}
     for leg in pool:
-        by_game[leg.game_id].append((leg, leg.conservative_probability, _decimal(leg), max(leg.conservative_probability - margin, 0.0), max(leg.conservative_probability - policy.value_shade, 0.0)))
+        cid = canon.setdefault((leg.game_id, leg.participant_id, leg.market_family, leg.threshold, leg.side), len(canon))     # equal legs share one id, so a duplicate in the pool cannot make a ticket twice
+        by_game[leg.game_id].append((leg, leg.conservative_probability, _decimal(leg), max(leg.conservative_probability - margin, 0.0), max(leg.conservative_probability - policy.value_shade, 0.0), cid))
     games = sorted(by_game)
     for g in games:
         by_game[g].sort(key=lambda t: -t[1])                     # most likely leg first, so the floor test can stop a game's loop at the first leg that fails it (exact: the rest are lower)
@@ -239,7 +241,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
         for gi in range(start, len(games)):
             if P * top_p[gi] < floor:
                 continue                                          # no leg of this game keeps the hit chance at the floor
-            for leg, p, d, pm, ps in by_game[games[gi]]:
+            for leg, p, d, pm, ps, cid in by_game[games[gi]]:
                 P2 = P * p
                 if P2 < floor:
                     break
@@ -253,7 +255,7 @@ def _search(pool: list, policy, evaluate, veto, _eng) -> tuple[list, dict]:
                         diag["above_maximum"] += 1                  # a two-leg combination longer than the policy's ceiling (counted once per pair; longer extensions of an in-range ticket are not "alternatives that were too long")
                     continue                                      # the price only lengthens as legs are added, so nothing below this leg can be inside the ceiling either
                 chosen.append(leg)
-                idstack.append(id(leg))
+                idstack.append(cid)
                 if len(chosen) >= 2:
                     diag["combinations_checked"] += 1
                     if D2 < policy.min_combined_decimal:
