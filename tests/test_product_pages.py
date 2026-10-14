@@ -127,6 +127,17 @@ class TestTheAccountIsShownSplit(unittest.TestCase):
         self.assertIn("Final estimate 73%", blob)
         self.assertIn("range 47–66%", blob)
 
+    def test_today_in_single_slot_mode_shows_eggys_card_and_no_eggy_pick_when_nothing_qualifies(self):
+        snap = snapshot()
+        snap["tickets"]["slots"] = {"total": 1, "used": 0, "empty": 1}
+        snap["tickets"]["primary"] = {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value.", "strongest_singles": []}
+        at = run_page("21_Today.py", snap)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:200] for e in at.exception])
+        body = " ".join(m.value for m in at.markdown)
+        self.assertIn("No Eggy pick today", body)
+        self.assertIn("Eggy's Parlay Pick of the Day", body + " " + " ".join(h.value for h in at.subheader))
+        self.assertNotIn("slot(s) empty", text(at))
+
     def test_a_split_that_does_not_reconcile_is_called_a_bookkeeping_fault(self):
         snap = snapshot()
         snap["tickets"]["origins"]["RECONCILIATION"]["all_agree"] = False

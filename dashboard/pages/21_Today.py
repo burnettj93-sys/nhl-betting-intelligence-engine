@@ -73,7 +73,7 @@ else:
 
 slots = tk["slots"]
 _single = slots.get("total") == 1
-st.subheader("Primary parlay" if _single else "Automatic tickets")
+st.subheader("Eggy's Parlay Pick of the Day" if _single else "Automatic tickets")
 if _single:
     st.caption(f"{slots['used']} of {slots['total']} daily slot used. One parlay a day, priced +100 to +500, the fewest legs that qualify, ranked by estimated hit chance; recorded tickets are paper bets "
                "and never change, a recommended one can still move with the next price refresh.")
@@ -88,9 +88,15 @@ _proposed = [t for t in tk["tickets"] if t.get("proposed")]
 if _proposed:
     st.caption(f"{len(_proposed)} of the tickets below are **proposed, not recorded**: automatic recording is paused until the ticket policy is approved, so they are what the selector would "
                "record at the prices shown now, ranked by estimated hit chance. Each shows the evidence behind every leg's number.")
+_prim = tk.get("primary") if _single else None
+_eggy = bool(_prim)
+if _eggy:
+    ui.eggy_pick_card(_prim, recording_paused=bool(tk.get("recording_paused")))
+_shown = {((_prim or {}).get("ticket") or {}).get("ticket_id")} if _eggy else set()
 for t in tk["tickets"]:
-    ui.ticket_card(t)
-if slots["empty"]:
+    if t.get("ticket_id") not in _shown:
+        ui.ticket_card(t)
+if slots["empty"] and not _eggy:
     theme.empty_state("<b>%d slot(s) empty.</b> %s" % (slots["empty"], ui.esc(tk.get("empty_slot_reason") or "No further ticket qualifies right now.")),
                       "The engine leaves a slot empty rather than fill it with a ticket that fails the rules.")
     tpol = tk.get("ticket_policy")
@@ -103,6 +109,13 @@ if slots["empty"]:
         st.caption(f"A ticket must reach +100 combined, show an estimated edge of at least {pol.get('min_estimated_ev', 0.05):.0%} and stay positive after lowering "
                    f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
                    f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
+
+if _eggy and _single:
+    _tp = tk.get("ticket_policy")
+    if _tp:
+        st.caption(f"Ticket policy ({_tp['policy_id']}): {_tp['summary']}. "
+                   + ("Approved by the owner." if _tp.get("approved") else "A proposal: the numbers are judgements, not validated results, and the owner has not approved them, so automatic recording stays paused.")
+                   + " A day without a pick is a correct answer.")
 
 ui.provisional_section(tk)
 ui.selection_report(tk, quiet=True)

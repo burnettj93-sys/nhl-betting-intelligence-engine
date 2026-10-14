@@ -103,6 +103,13 @@ def leg_estimate(leg, cap: float | None = None) -> Estimate | None:
 
 def leg_decision(leg) -> tuple[float | None, str]:
     """(final estimate or None, decision code) for one leg, for the frozen prediction record: why a priced leg was or was not a candidate for a ticket."""
+    if leg.market_family == "PLAYER_GOALS":
+        # Anytime goals are compared like every other leg, not excluded by market: a goal leg reaches a ticket only with an estimate that clears the same strong-leg floor as a shots leg.
+        # The calibrated goals model has no capped, record-based final estimate (no cap study exists for it), so it is never promoted into a ticket on its own say-so.
+        p = leg.model_probability
+        if p is None:
+            return None, "NO_MODEL_ESTIMATE"
+        return None, ("BELOW_STRONG_LEG_FLOOR" if p < SHOTS_LEG_FLOOR else "GOALS_NO_CAPPED_ESTIMATE")      # no final estimate: none is used on a ticket
     if leg.market_family not in SHOT_FAMILIES and leg.market_family != "MONEYLINE":
         return None, "NOT_USED_IN_TICKETS_MARKET"
     if leg.market_family in SHOT_FAMILIES:

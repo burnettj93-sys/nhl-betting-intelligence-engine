@@ -588,6 +588,55 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         self.assertIn("does NOT qualify", closest["note"])
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
 
+    def test_the_recording_path_itself_refuses_a_second_ticket_the_same_day_even_when_called_directly(self):
+        from operational import daily_tickets as dtk, paper_bankroll as pb, ticket_policy
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70), shots(3, 3, 28, +115, 0.72)]
+        now = NOW + dt.timedelta(minutes=20)
+        first = rmp.select_tickets(legs[:2], existing=[], max_tickets=1, policy=ticket_policy.active())["tickets"]
+        second = rmp.select_tickets(legs[1:], existing=[], max_tickets=1, policy=ticket_policy.active())["tickets"]
+        picked = first + second                                                                         # two different qualifying tickets handed to the recorder at once
+        self.assertEqual(len(picked), 2)
+        out = dtk.record_tickets(self.conn, picked, now)
+        self.assertEqual([r["status"] for r in out][:2], ["INSERTED", "DAILY_LIMIT"])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 1)
+        self.assertEqual(self.conn.execute("SELECT stake FROM paper_bets").fetchone()[0], 10.0)
+        again = dtk.record_tickets(self.conn, picked, now)                                             # a second call, another process, the next cycle: same answer
+        self.assertNotIn("INSERTED", [r["status"] for r in again])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 1)
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["available_cash"], 490.0)
+
+    def test_the_recording_path_re_judges_prices_at_the_moment_of_recording(self):
+        from operational import daily_tickets as dtk, ticket_policy
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70)]
+        picked = rmp.select_tickets(legs, existing=[], max_tickets=1, policy=ticket_policy.active())["tickets"]
+        self.assertEqual(len(picked), 1)
+        late = NOW + dt.timedelta(hours=30)                                                           # long after both the quotes and the game
+        out = dtk.record_tickets(self.conn, picked, late)
+        self.assertEqual(out[0]["status"], "REVALIDATION_FAILED")
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+
+    def test_an_unloadable_policy_makes_the_recording_path_stake_nothing(self):
+        from operational import daily_tickets as dtk, ticket_policy
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70)]
+        picked = rmp.select_tickets(legs, existing=[], max_tickets=1, policy=ticket_policy.active())["tickets"]
+        with mock.patch.object(ticket_policy, "active", side_effect=RuntimeError("unreadable")):
+            out = dtk.record_tickets(self.conn, picked, NOW + dt.timedelta(minutes=20))
+        self.assertEqual([r["status"] for r in out], ["BLOCKED_POLICY"])
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 0)
+
+    def test_the_primary_slip_carries_a_plain_explanation_for_the_eggy_card(self):
+        from operational import daily_tickets as dtk
+        legs = [shots(1, 1, 27, +120, 0.70), shots(2, 2, 27, +125, 0.70), shots(3, 3, 28, +115, 0.72)]
+        with mock.patch.object(dtk.recording_pause, "is_paused", return_value=True), mock.patch.object(dtk.recording_pause, "status", return_value={"paused": True, "since_utc": None}):
+            self.cycle(legs)
+        prim = dtk.read_state()["primary"]
+        self.assertIn(prim["status"], ("FRESH", "PROVISIONAL"))
+        text = prim["explanation"]
+        self.assertIn("different game", text)
+        self.assertIn("estimated hit chance", text)
+        for banned in ("guarantee", "lock", "slam dunk", "sure thing"):
+            self.assertNotIn(banned, text.lower())
+
     def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):
         res = self.cycle([shots(1, 1, 27, +120, 0.70)])
         self.assertEqual(res["newly_recorded"], 0)

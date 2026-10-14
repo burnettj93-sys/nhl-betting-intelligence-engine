@@ -455,7 +455,8 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False, now:
     with st.container(border=True):
         if not ticket:
             reason = primary.get("reason") or "No combination of supported selections reaches +100 to +500 with value at the prices available."
-            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(EGGY_NO_PICK)}</div>"
+            title = "Eggy's pick is unavailable right now" if primary.get("status") == "ERROR" else EGGY_NO_PICK
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div>"
                         f"<div class='sub'>{_h(reason)}</div></div></div>", unsafe_allow_html=True)
             st.caption("A day without a pick is a correct answer: Eggy does not loosen the rules to produce one, and no weaker slip is offered in its place.")
             return
