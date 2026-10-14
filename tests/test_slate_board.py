@@ -80,7 +80,7 @@ class TestTheBoard(unittest.TestCase):
         d = sb.build_doc(NOW, product(), p, {}, avail(shots="NOT_POSTED"), {}, None)
         g = d["games"][0]
         self.assertEqual(g["shots"]["picks"], [])
-        self.assertEqual(g["coverage"]["markets"]["player_shots_on_goal_alternate"]["word"], "not posted by DraftKings")
+        self.assertEqual(g["coverage"]["markets"]["player_shots_on_goal_alternate"]["word"], "not posted by DraftKings (asked at 5:58 PM ET)")
         missing = {m["item"]: m["reason"] for m in g["coverage"]["missing"]}
         self.assertIn("Shots prices", missing)
         self.assertEqual(sb._market_status({"markets": {}}, "player_total_saves")["status"], "NOT_FETCHED")
@@ -88,7 +88,7 @@ class TestTheBoard(unittest.TestCase):
         word = sb._market_status(yesterday, "player_goal_scorer_anytime", NOW)["word"]                     # asked the evening before: not today's answer
         self.assertIn("earlier day", word)
         today_ = {"markets": {"player_goal_scorer_anytime": {"status": "NOT_POSTED", "checked_utc": "2026-10-08T17:00:00Z"}}}
-        self.assertEqual(sb._market_status(today_, "player_goal_scorer_anytime", NOW)["word"], "not posted by DraftKings")
+        self.assertEqual(sb._market_status(today_, "player_goal_scorer_anytime", NOW)["word"], "not posted by DraftKings (asked at 1:00 PM ET)")
         self.assertEqual(sb._market_status({"markets": {"x": {"status": "BUDGET_BLOCKED"}}}, "x")["word"], "budget blocked")
 
     def test_an_unconfirmed_starter_gets_a_conditional_projection_and_no_saves_selection(self):

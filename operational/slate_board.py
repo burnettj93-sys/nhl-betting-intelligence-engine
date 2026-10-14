@@ -97,6 +97,12 @@ def _market_status(avail_game: dict, key: str, now: dt.datetime | None = None) -
         checked = qf.parse_utc(m["checked_utc"])
         if checked is not None and et.eastern_today(checked) != et.eastern_today(now):
             word = "not posted when last asked (an earlier day); not asked again yet today"
+    if st == "NOT_POSTED" and m.get("checked_utc") and "earlier day" not in word:
+        from zoneinfo import ZoneInfo
+        from operational import quote_freshness as qf
+        asked = qf.parse_utc(m["checked_utc"])
+        if asked is not None:
+            word += f" (asked at {asked.astimezone(ZoneInfo('America/New_York')).strftime('%-I:%M %p')} ET)"
     return {"status": st, "word": word, "detail": detail, "checked_utc": m.get("checked_utc"), "quote_updated_utc": m.get("last_update"), "outcomes": m.get("outcomes")}
 
 

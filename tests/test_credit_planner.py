@@ -107,7 +107,8 @@ class TestGoalsComeBeforeTheDisplayRefreshAndTheTomorrowCheck(unittest.TestCase)
         a = cp.allocate(10.94, two, set(), {})
         self.assertEqual(a["goals_games"], ["a", "b"])                                  # the board's section 1 has prices for both games
         self.assertEqual(a["allowance"][cp.GOALS], 2.0)
-        self.assertEqual(a["allowance"][cp.TOMORROW], 0.0)                              # the tomorrow check gives way (a not-posted answer is free anyway; a posted one is reported budget-blocked)
+        self.assertGreater(a["allowance"][cp.TOMORROW], 0.0)                            # the Tomorrow page's check keeps what is left, ahead of the second display refresh
+        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 1.0)                          # (the first, morning display pull is unaffected)
         self.assertLessEqual(sum(a["allowance"].values()), 10.94 + 1e-9)
         self.assertEqual(a["morning_games"], ["a", "b"])                                # the 8 AM look is still bought first
 
@@ -126,6 +127,20 @@ class TestGoalsComeBeforeTheDisplayRefreshAndTheTomorrowCheck(unittest.TestCase)
         self.assertEqual(plan["morning_games"], ["a", "b"])
         self.assertLessEqual(sum(plan["allowance"].values()), 10.94 + 1e-6)
         self.assertEqual(plan["alloc_version"], cp.ALLOC_VERSION)
+
+    def test_a_game_whose_pregame_capture_already_ran_gets_no_goals_reservation(self):
+        old = {"day": "2026-10-14", "made_at_utc": "x", "D": 10.94, "games_today": 2, "games_priced": ["a", "b"], "games_not_priced": [], "goals_games": [], "points_games": [],
+               "morning_games": ["a", "b"], "morning_markets": [cp.SHOTS_KEY], "saves_games": [],
+               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.94, cp.PROPS: 2.0, cp.MORNING: 2.0, cp.SAVES: 0.0, cp.GOALS: 0.0, cp.POINTS_ADDON: 0.0, cp.REFRESH: 0.0, cp.TOMORROW: 0.0},
+               "budget": {"D": 10.94}}
+        two = starts(("a", 0), ("b", 60))
+        ledger = [{"at": "2026-10-14T20:00:00Z", "class": cp.PROPS, "credits": 1.0, "game_id": "a", "markets": cp.SHOTS_KEY}]
+        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
+                mock.patch.object(cp, "day_budget", return_value={"D": 10.94}), mock.patch.object(cp, "read_ledger", return_value=ledger):
+            plan = cp.day_plan(NOW, "2026-10-14", two, remaining=200)
+        self.assertEqual(plan["goals_games"], ["b"])                                    # "a" was captured without goals; its goals cannot be added later
+        self.assertEqual(plan["allowance"][cp.GOALS], 1.0)
+        self.assertGreater(plan["allowance"][cp.TOMORROW], 0.0)
 
 
 class TestPlanState(unittest.TestCase):

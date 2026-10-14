@@ -112,4 +112,5 @@ two best shots values from the offered 1+ to 5+ ladder (the best value after the
 (puck line not assessed: its cover model has no validated result and no spreads price is fetched). Each game shows what was analysed, priced, supported and recommended, and what is missing and why
 (*not posted*, *not fetched*, *budget blocked*, *fetch failed*). Prices missing for budget reasons are the odds-credit allowance, not a defect (docs/ODDS_BUDGET_CONFIGURATIONS.md).
 
-Credits: the add-on credit that bought a lead game's points prices now buys its anytime-goal prices (`NHL_ENGINE_POINTS_ADDON=on` restores points).
+Credits: after pregame shots and the morning look, anytime-goal prices are bought for the lead games (the board's section 1), then the Tomorrow availability check, the second display refresh and, with
+what is left, the builder's points (`NHL_ENGINE_POINTS_ADDON=off` switches the points add-on off). A game with no points or goals prices is recorded BUDGET_BLOCKED and the builder and the board say so.
