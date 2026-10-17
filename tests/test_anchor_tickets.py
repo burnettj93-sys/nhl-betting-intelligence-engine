@@ -637,6 +637,22 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         for banned in ("guarantee", "lock", "slam dunk", "sure thing"):
             self.assertNotIn(banned, text.lower())
 
+    def test_an_empty_slip_says_when_it_reflects_thin_price_coverage_not_only_the_rules(self):
+        from operational import daily_tickets as dtk, price_availability as pa
+        day = "2026-10-11"                                                                       # the Eastern day of NOW + 20 min
+        pa.record(day, "g1", "player_shots_on_goal_alternate", pa.POSTED, NOW, outcomes=40)
+        pa.record(day, "g2", "player_shots_on_goal_alternate", pa.BUDGET_BLOCKED, NOW)
+        pa.record(day, "g3", "player_shots_on_goal_alternate", pa.NOT_POSTED, NOW)
+        pa.record_missed_window(day, "g4", "PREGAME", NOW, NOW, NOW, asleep=True, detail="asleep")
+        self.cycle([shots(1, 1, 22, -150, 0.6), shots(2, 2, 22, -140, 0.6)])
+        st = dtk.read_state()
+        self.assertEqual(st["primary"]["status"], "NONE")
+        lim = st["primary"]["data_limit"]
+        self.assertEqual((lim["games"], lim["with_prop_prices"]), (4, 1))
+        self.assertEqual(lim["missing_because"], {"credit budget": 1, "not posted by DraftKings": 1, "missed capture window": 1})
+        self.assertIn("may reflect thin price coverage", lim["note"])
+        self.assertIn("rules were not loosened", lim["note"])
+
     def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):
         res = self.cycle([shots(1, 1, 27, +120, 0.70)])
         self.assertEqual(res["newly_recorded"], 0)

@@ -50,7 +50,7 @@ class TestRun(unittest.TestCase):
     def test_run_writes_state_and_view_reages_it(self):
         state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
-        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "missed_windows", "morning_update"})
+        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "morning_update"})
         stored = wd.load_state()
         self.assertEqual(stored["checked_at_utc"], "2026-10-09T12:00:00Z")
         self.assertEqual(wd.view(stored, NOW + dt.timedelta(minutes=20))["status"], stored["status"])
@@ -162,3 +162,44 @@ class TestMorningUpdateCheck(unittest.TestCase):
         wd.check_morning_update(self.at(9, 0))
         feats = {f["feature"]: f for f in wd.readiness(self.at(9, 0))["features"]}
         self.assertEqual(next(v for k, v in feats.items() if k.startswith("Morning update"))["status"], "WORKING")
+
+
+class TestJobsActuallyRan(unittest.TestCase):
+    DEFS = {"com.nhlengine.real-parlay-paper-trader": {"StartInterval": 900, "StandardOutPath": "/x/trader.log"},
+            "com.nhlengine.morning-update": {"StartCalendarInterval": {"Hour": 8, "Minute": 0}, "StandardOutPath": "/x/morning.log"},
+            "com.nhlengine.watchdog": {"StartInterval": 1800, "StandardOutPath": "/x/watchdog.log"}}
+
+    def check(self, ages_min):
+        now = dt.datetime(2026, 10, 17, 21, 0, tzinfo=dt.timezone.utc)
+
+        def mtime(path):
+            if path not in ages_min:
+                raise OSError("no such log")
+            return now.timestamp() - ages_min[path] * 60
+        return wd.check_jobs_ran(now, definitions=self.DEFS, mtime=mtime)
+
+    def test_jobs_that_wrote_to_their_logs_inside_their_schedule_are_ok(self):
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 20, "/x/morning.log": 600})
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("all 2 scheduled jobs", r["detail"])                          # the watchdog does not check itself
+
+    def test_a_loaded_job_that_has_not_run_is_named_with_its_age(self):
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 4 * 60, "/x/morning.log": 600})
+        self.assertEqual(r["status"], wd.WARN)
+        self.assertIn("real-parlay-paper-trader 4.0 h ago", r["detail"])
+        self.assertNotIn("morning-update", r["detail"])
+
+    def test_a_calendar_job_is_late_after_26_hours_and_a_job_with_no_log_is_reported(self):
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 5, "/x/morning.log": 27 * 60})
+            self.assertIn("morning-update 27.0 h ago", r["detail"])
+            r2 = self.check({"/x/trader.log": 5})
+            self.assertIn("no log at all: morning-update", r2["detail"])
+
+    def test_missing_definitions_are_a_warning_not_all_ok(self):
+        now = dt.datetime(2026, 10, 17, 21, 0, tzinfo=dt.timezone.utc)
+        r = wd.check_jobs_ran(now, definitions={}, mtime=lambda p: now.timestamp())
+        self.assertEqual(r["status"], wd.WARN)
+        self.assertIn("could be checked", r["detail"])
