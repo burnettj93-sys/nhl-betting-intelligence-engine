@@ -325,7 +325,7 @@ class Test08DataFreshnessEnforcement(unittest.TestCase):
 
     def test_prediction_before_event_start_has_not_happened_is_never_a_settlement_candidate(self):
         ledger = pl.init_db(db_path=":memory:")
-        future_start = "2026-10-15T23:00:00.000000Z"
+        future_start = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S.000000Z")      # always in the future, whatever day the suite runs
         pl.record_model_observation(
             ledger, event_start_utc=future_start, created_at_utc=CUTOFF, prediction_cutoff_utc=CUTOFF,
             game_id=10, game_date="2026-10-15", player_id="P10", team="EDM", opponent="CGY",

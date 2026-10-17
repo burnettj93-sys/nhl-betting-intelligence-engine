@@ -23,6 +23,19 @@ Resume from this file alone. Repository: `/Users/johnburnett/Downloads/nhl_engin
 **Superseded:** the five-ticket-a-day workflow (policy `anchor-tickets-2026-10-13`, digest `9f5e3448e10ff62e`, kept unchanged for the record); the 2026-10-11 policy `c236c526e00b9f04` (cap +0.10, approved
 then, superseded 2026-10-13); "points add-on" credit priority (goals now take that credit).
 
+## State by Eastern date (verified 2026-10-17 16:00 ET)
+
+**Wednesday 2026-10-14 (the day of the release):** PR 147 merged 14:30 ET; release `dde76ed9b6` and trader restarted ~14:31; the hosted app threw `StreamlitAPIException` from ~14:31 until it was rebooted from the owner's signed-in Chrome (~15:15); after the reboot the footer read "Code dde76ed · data built by dde76ed". The Mac then slept from ~15:17 ET: **both 7:30 PM and 8:30 PM ET moneyline pull windows were missed (MACHINE_ASLEEP)** and no pregame prop, goals or saves capture happened (credit ledger: Oct 14 spent only the morning look and one display refresh). Hosted QA of 14 pages passed (evidence note HOSTED_QA_2026-10-14_post_release.md, shipped in the audit ZIP).
+**Thursday 2026-10-15:** a pregame prop capture was made (2 credits); all 5 moneyline windows missed (asleep). **Friday 2026-10-16:** 2 of 2 moneyline windows missed (asleep); no pregame prop capture.
+**Saturday 2026-10-17:** 14 games; morning look 6 credits (shots posted for 6 games, 7 budget-blocked); moneyline windows 3 missed so far (2 asleep); the trader was down 11:48-16:00 ET (Mac asleep, battery); restarted at 16:00 ET and published. Goals priced 0, saves priced 0 (free plan funds neither; see docs/ODDS_PLAN_DECISION.md). **No Eggy pick:** 54 combinations examined, none with enough value (best: McCann 2+ and Josi 2+ shots, +138, 42%, value -0.3%).
+Selection thresholds and probability rules were not changed in any of this. Recording stays paused; digest `1fad3ba03503cf94` is unapproved.
+
+## Recovery after sleep or lost connectivity (2026-10-17 branch)
+* Still-upcoming games are refreshed automatically when the machine is awake again: the pregame slot buys a FIRST capture for any planned game inside its window; the moneyline display refreshes whenever its newest price is older than its target; new `UI_RECOVERY` (6 credits, only from spare credits) allows enough refreshes.
+* Windows that closed without their capture are **reported, never bought late**: `price_availability` records a MISSED_WINDOW per game (tag MACHINE_ASLEEP when the trader did not run for more than 30 minutes across the end of the window), the Slate Board lists it under "missing", and the watchdog check `missed_windows` warns on any in the last 24 h. Tickets are never recorded on expired prices (`record_tickets` revalidates at the moment of recording).
+* Goals and saves PRICES are collected independently of starter confirmation (one extra credit each on the pregame call); confirmation is still required to recommend or record a saves leg.
+* Always-on host and odds plan decisions: docs/ALWAYS_ON_HOST.md, docs/ODDS_PLAN_DECISION.md.
+
 ## Policy and state
 * Active, **unapproved**: `primary-slip-2026-10-14`, digest `1fad3ba03503cf94` (1 slot, ceiling +500; every other number identical to the cap-correction policy).
 * Recording paused since 2026-10-13T15:35:57Z (owner request). Collection, settlement, publishing and prediction logging run.

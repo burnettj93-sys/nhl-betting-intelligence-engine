@@ -8,7 +8,7 @@
     <!-- P0.8 (2026-09-24 hardening block): timestamped, rotated
          backups (via sqlite3's online backup API, safe against a
          concurrently-writing process) of the real, accumulating,
-         non-reproducible databases -- nhl.db, prospective_observations.db,
+         non-reproducible databases — nhl.db, prospective_observations.db,
          paper_bankroll.db, auth_store.db. Runs after the morning
          sync/settlement/post-mortem sequence (07:00/07:15/07:30) so the
          day's freshly-committed real data is included. See

@@ -6,18 +6,18 @@
     <string>com.nhlengine.daily-nhl-sync</string>
 
     <!-- Production Readiness Audit (2026-09-24), P0 item 1: real NHL
-         schedule/boxscore/roster data had never been scheduled at all --
+         schedule/boxscore/roster data had never been scheduled at all —
          nhl.db's most recent row was 2025-11-27 despite real preseason
          games being played since 2026-09-19. sync_daily.py (root) is the
          pre-existing "Part 13: THE daily operational sync command" entry
-         point -- runs nhl_sync + moneypuck_daily + crosscheck + readiness
+         point — runs nhl_sync + moneypuck_daily + crosscheck + readiness
          cache in one call. Runs before the 08:00 moneyline snapshot so
          settlement/post-mortem have real, current game data to work from
          each morning. KNOWN ISSUE (found via this same audit's manual
          dry run): the current-roster sub-step has no retry/backoff and
          can fail the whole run's status on a transient 429 from the NHL
          API even though schedule/boxscore data still committed
-         successfully first -- tracked as a P1 reliability fix, not fixed
+         successfully first — tracked as a P1 reliability fix, not fixed
          here. -->
     <key>ProgramArguments</key>
     <array>

@@ -43,16 +43,21 @@ class TestWaterfall(unittest.TestCase):
         a = cp.allocate(30.0, starts(("a", 0), ("b", 0), ("c", 15)), confirmed_games={"a"})
         self.assertEqual(len(a["games_priced"]), 3)
         self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY, cp.POINTS_KEY])   # affordable for every game: shots and points both
-        self.assertEqual(a["saves_games"], ["a"])
+        self.assertEqual(a["saves_games"], ["a", "b", "c"])                  # saves PRICES are collected for every priced game, the confirmed starter's game first
         self.assertEqual(len(a["goals_games"]), 3)
-        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 2)
+        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 2 + cp.UI_RECOVERY)      # two planned refreshes plus the recovery refreshes funded from spare credits only
+        self.assertEqual(cp.allocate(11.5, SEVEN)["allowance"][cp.MONEYLINE_UI], 1)   # a tight day gets no recovery refreshes: they never take credits from prices
 
-    def test_saves_only_for_confirmed_games_and_only_after_games_are_priced(self):
-        a = cp.allocate(16.0, SEVEN, confirmed_games={"a"})
-        self.assertEqual(len(a["games_priced"]), 2)                        # pregame for two games and the morning look come first
-        self.assertEqual(a["saves_games"], ["a"])                          # the leftover credit goes to saves before goals
-        self.assertEqual(a["goals_games"], [])
-        self.assertEqual(cp.allocate(16.0, SEVEN)["saves_games"], [])      # no confirmed starter, no saves purchase
+    def test_saves_prices_need_no_confirmed_starter_but_come_after_pricing_and_goals(self):
+        a = cp.allocate(18.0, SEVEN, confirmed_games={"a"})
+        self.assertEqual(len(a["games_priced"]), 3)                        # pregame for three games and the morning look come first
+        self.assertEqual(a["goals_games"], ["a"])                          # then goals for the lead game
+        self.assertEqual(a["saves_games"], [])                             # and nothing is left for saves prices
+        roomy = cp.allocate(45.0, SEVEN)
+        self.assertEqual(len(roomy["saves_games"]), 6)                     # with room, saves prices are collected although no starter is confirmed
+        self.assertTrue(set(roomy["saves_games"]) <= set(roomy["games_priced"]))
+        first = cp.allocate(45.0, SEVEN, confirmed_games={"d"})["saves_games"]
+        self.assertEqual(first[0], "d")                                    # a game with a confirmed starter is served first
         self.assertEqual(cp.allocate(11.5, SEVEN, confirmed_games={"a"})["saves_games"], [])   # and none when the morning look has used the credit
 
     def test_decision_pulls_are_never_starved(self):
@@ -80,7 +85,7 @@ class TestTransitionDay(unittest.TestCase):
     def test_a_plan_saved_before_the_morning_look_cannot_be_pushed_over_its_budget_by_it(self):
         old = {"day": "2026-10-09", "made_at_utc": "x", "D": 11.43, "games_today": 4, "games_priced": ["a", "b", "c"], "games_not_priced": ["d"], "goals_games": ["a"], "saves_games": [],
                "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.0, cp.PROPS: 6.0, cp.SAVES: 0.0, cp.GOALS: 1.0, cp.REFRESH: 0.43},
-               "budget": {"D": 11.43}}
+               "budget": {"D": 11.43}, "alloc_version": cp.ALLOC_VERSION}
         starts4 = starts(("a", 0), ("b", 0), ("c", 15), ("d", 30))
         with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
                 mock.patch.object(cp, "day_budget", return_value={"D": 11.43}):
@@ -353,7 +358,7 @@ class TestPointsAddOn(unittest.TestCase):
         with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: ""}):
             self.assertTrue(cp.points_addon_enabled())                      # the add-on is on by default: the builder keeps its Points market whenever credits allow
             tight = cp.allocate(11.5, SEVEN)
-            roomy = cp.allocate(30.0, SEVEN)
+            roomy = cp.allocate(50.0, SEVEN)
         self.assertEqual(tight["points_games"], [])                           # a tight day: shots, the morning look and goals first; points are not funded and are reported as such
         self.assertEqual(roomy["goals_games"], roomy["games_priced"][:len(roomy["goals_games"])])
         self.assertGreaterEqual(len(roomy["goals_games"]), 1)
@@ -362,7 +367,7 @@ class TestPointsAddOn(unittest.TestCase):
         self.assertGreaterEqual(len(roomy["goals_games"]), len(roomy["points_games"]))   # goals are funded first
         with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: "off"}):
             self.assertFalse(cp.points_addon_enabled())
-            self.assertEqual(cp.allocate(30.0, SEVEN)["points_games"], [])
+            self.assertEqual(cp.allocate(50.0, SEVEN)["points_games"], [])
 
     def test_the_morning_look_is_still_bought_before_goals_or_points(self):
         with mock.patch.dict("os.environ", self.SHOTS_ONLY):
@@ -377,7 +382,7 @@ class TestPointsAddOn(unittest.TestCase):
 
     def test_a_generous_day_adds_points_to_every_priced_game(self):
         with mock.patch.dict("os.environ", self.SHOTS_ONLY):
-            a = cp.allocate(40.0, SEVEN)
+            a = cp.allocate(50.0, SEVEN)
         self.assertEqual(sorted(a["points_games"]), sorted(a["games_priced"]))
 
     def test_no_add_on_when_the_owner_already_buys_points_with_every_game(self):
@@ -433,7 +438,7 @@ class TestScenarioCoverageArithmetic(unittest.TestCase):
         rich = cp.allocate(800.0, SEVEN, confirmed_games={"a", "b", "c"})
         self.assertEqual(len(rich["games_priced"]), 7)
         self.assertEqual(len(rich["goals_games"]), 7)
-        self.assertEqual(len(rich["saves_games"]), 3)
+        self.assertEqual(len(rich["saves_games"]), 7)                         # saves prices for every priced game, confirmed or not
         self.assertGreater(rich["allowance"][cp.REFRESH], 100)
 
 

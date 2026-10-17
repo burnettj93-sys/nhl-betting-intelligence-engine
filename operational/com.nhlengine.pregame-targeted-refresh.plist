@@ -7,9 +7,9 @@
 
     <!-- Intraday Refresh Architecture (P0.1, docs/INTRADAY_REFRESH_SCHEDULE.md
          Part D): fires every 30 minutes, but operational.nhl_sync
-         --mode=pregame internally checks whether any game's scheduled
+         —mode=pregame internally checks whether any game's scheduled
          start falls inside a 3.0-4.5 hour puck-drop-relative window
-         (teams_playing_in_window()) -- most firings find nothing
+         (teams_playing_in_window()) — most firings find nothing
          in-window and make zero roster API calls at all. Only the
          teams actually playing within that window get a targeted
          roster refresh, never a full-league sweep. Same StartInterval

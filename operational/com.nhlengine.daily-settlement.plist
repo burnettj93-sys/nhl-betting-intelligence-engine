@@ -8,7 +8,7 @@
     <!-- Production Readiness Audit (2026-09-24), P0 item 2: settlement
          (operational.settle_daily_observations) already exists, is
          idempotent, and already defers any observation whose game isn't
-         FINAL yet -- it had simply never been scheduled. Runs 15 minutes
+         FINAL yet — it had simply never been scheduled. Runs 15 minutes
          after daily-nhl-sync (07:00) so the day's final game data has a
          chance to land first; idempotent regardless, so a late-running
          sync job can't cause a double-settlement. -->
