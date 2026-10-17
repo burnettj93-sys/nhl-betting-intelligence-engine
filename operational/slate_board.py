@@ -308,8 +308,29 @@ def side_block(game: dict, now: dt.datetime | None = None) -> dict:
 
 # ------------------------------------------------------------------ the document
 
+def _frozen_block(previous_doc: dict | None, today: str, g: dict) -> tuple[dict, dict] | None:
+    """A game that has started (or finished) keeps the analysis it had before puck drop, labelled as frozen, instead of collapsing to "not scheduled". It comes from the last board built for the same
+    Eastern day while the game was still scheduled; it is never recomputed with in-game information and is not a current recommendation."""
+    if not previous_doc or previous_doc.get("date_et") != today:
+        return None
+    prev = next((x for x in previous_doc.get("games") or [] if x.get("game_id") == g.get("game_id")), None)
+    if prev is None or not (prev.get("coverage") or {}).get("analysis_available"):
+        return None
+    at = prev.get("frozen_at_utc") or previous_doc.get("generated_at_utc")
+    cov = dict(prev["coverage"])
+    cov["frozen_at_utc"] = at
+    cov["recommended"] = []                                         # nothing on a started game is a current recommendation
+    entry = {**prev, "state": g.get("state"), "start_et": g.get("start_et") or prev.get("start_et"), "frozen_at_utc": at, "coverage": cov}
+    mk = cov.get("markets") or {}
+    bump = {"analysed": 1, "shots_priced": 1 if (mk.get("player_shots_on_goal_alternate") or {}).get("status") == "POSTED" else 0,
+            "goals_priced": 1 if (mk.get("player_goal_scorer_anytime") or {}).get("status") == "POSTED" else 0,
+            "saves_priced": 1 if (mk.get("player_total_saves") or {}).get("status") == "POSTED" else 0,
+            "moneyline_priced": 1 if cov.get("moneyline_priced") else 0, "with_recommendation": 0}
+    return entry, bump
+
+
 def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict | None, availability: dict | None, saves_by_game: dict | None = None,
-              previous_day: dict | None = None, saves_errors: dict | None = None) -> dict:
+              previous_day: dict | None = None, saves_errors: dict | None = None, previous_doc: dict | None = None) -> dict:
     today = product.get("et_today")
     haircut, policy_error = _policy_haircut()
     games = [g for g in (product.get("games") or {}).get("games", []) if g.get("date_et") == today and g.get("type") == "REGULAR"]
@@ -412,6 +433,10 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                               "error": f"{exc.__class__.__name__}: {exc}", "error_where": traceback.format_exc().strip().splitlines()[-3:],
                               "coverage": {"analysis_available": False, "markets": {}, "recommended": [], "missing": [{"item": "Analysis", "reason": f"failed: {exc.__class__.__name__}: {exc}"}]}})
             continue
+        if not (entry.get("coverage") or {}).get("analysis_available") and g.get("state") != "SCHEDULED":
+            frozen = _frozen_block(previous_doc, today, g)
+            if frozen is not None:
+                entry, bump = frozen
         for k, v in bump.items():
             counts[k] += v
         out_games.append(entry)
@@ -560,7 +585,7 @@ def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | No
     avail = pa.read(today) if today else {}
     saves_errors: dict = {}
     saves = _by_goalie_id(_saves_lines(pool, now, saves_errors), product.get("goalies") or {})
-    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors)
+    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=load())
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

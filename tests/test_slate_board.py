@@ -392,6 +392,35 @@ class TestMissedWindowsAreShownOnTheBoard(unittest.TestCase):
         self.assertIn("still needs a confirmed starter", reason)
 
 
+class TestStartedGamesKeepTheirPregameAnalysis(unittest.TestCase):
+    def test_a_game_that_has_started_keeps_its_frozen_pregame_block_and_is_not_a_recommendation(self):
+        before = doc()
+        self.assertTrue(before["games"][0]["coverage"]["analysis_available"])
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "LIVE"
+        after = sb.build_doc(NOW + dt.timedelta(hours=3), p, pool(), {}, avail(), {}, None, previous_doc=before)
+        g = after["games"][0]
+        self.assertEqual(g["state"], "LIVE")
+        self.assertEqual(g["frozen_at_utc"], before["generated_at_utc"])
+        self.assertTrue(g["coverage"]["analysis_available"])
+        self.assertEqual(g["coverage"]["recommended"], [])
+        self.assertEqual(g["scorers"], before["games"][0]["scorers"])
+        self.assertEqual(after["counts"]["analysed"], 1)
+        again = sb.build_doc(NOW + dt.timedelta(hours=4), p, pool(), {}, avail(), {}, None, previous_doc=after)
+        self.assertEqual(again["games"][0]["frozen_at_utc"], before["generated_at_utc"])         # the freeze time never moves
+
+    def test_without_a_saved_pregame_block_a_started_game_is_listed_with_the_reason(self):
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "FINAL"
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)
+        self.assertFalse(d["games"][0]["coverage"]["analysis_available"])
+        self.assertNotIn("frozen_at_utc", d["games"][0])
+
+
 class TestThePage(unittest.TestCase):
     def snap(self, **kw) -> dict:
         s = snapshot()
