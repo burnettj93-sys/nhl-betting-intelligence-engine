@@ -12,6 +12,7 @@ Persistent self-check (launchd, every 30 minutes; deploy/launchd/com.nhlengine.w
       source_freshness      the sources the engine depends on (schedule, results, player logs) are inside their own freshness policies;
       quote_freshness       prop and moneyline prices are inside their rules (a price stale only because the credit budget forbids a refresh is readiness, not failure);
       publishing_enabled    publication to the hosted app is switched ON (a demonstration that left it OFF is a FAIL).
+      jobs_ran              every expected job wrote to its log within its own schedule (loaded is not enough)
       missed_windows        capture windows that closed without a capture in the last 24 h (reported, never bought late; WARN)
   PRODUCT READINESS -- which user-facing features actually work end to end, and which are blocked, limited or unverified, with the owner action each needs.
 
@@ -397,6 +398,49 @@ def check_prediction_log(now: dt.datetime) -> dict:
     return {"name": "prediction_log", "status": OK, "detail": f"the frozen-prediction log was checked {age:.0f} min ago (last change {st.get('written_at_utc') or 'n/a'})"}
 
 
+def _job_definitions() -> dict[str, dict]:
+    """{label: plist} for the scheduled jobs the watchdog expects (the repository copies, which match the installed ones)."""
+    import glob
+    import plistlib
+    out: dict[str, dict] = {}
+    for f in sorted(glob.glob(str(REPO_ROOT / "deploy" / "launchd" / "*.plist"))) + sorted(glob.glob(str(REPO_ROOT / "operational" / "*.plist"))):
+        try:
+            d = plistlib.loads(Path(f).read_bytes())
+        except Exception:  # noqa: BLE001 - an unreadable definition is reported by tests, not here
+            continue
+        if d.get("Label") in EXPECTED_JOBS:
+            out.setdefault(d["Label"], d)
+    return out
+
+
+def check_jobs_ran(now: dt.datetime, *, definitions: dict | None = None, mtime=None) -> dict:
+    """A loaded scheduler proves nothing: this checks that each expected job actually RAN recently, from the modification time of its own log (every run writes to it). An interval job is late
+    after three intervals (at least 20 minutes), a calendar job after 26 hours. WARN, not FAIL: a sleeping Mac produces exactly this and is reported as such by missed_windows; the detail names every
+    late job with its age so a job that silently stopped is never hidden behind 'loaded'."""
+    definitions = definitions if definitions is not None else _job_definitions()
+    mtime = mtime or (lambda path: Path(path).stat().st_mtime)
+    late, never, checked = [], [], 0
+    for label, d in sorted(definitions.items()):
+        if label == "com.nhlengine.watchdog":
+            continue
+        log = d.get("StandardOutPath")
+        if not log:
+            continue
+        checked += 1
+        limit_min = max(3 * int(d["StartInterval"]) / 60.0, 20.0) if d.get("StartInterval") else 26 * 60.0
+        try:
+            age_min = (now.timestamp() - mtime(log)) / 60.0
+        except OSError:
+            never.append(label.removeprefix("com.nhlengine."))
+            continue
+        if age_min > limit_min:
+            late.append(f"{label.removeprefix('com.nhlengine.')} {age_min / 60.0:.1f} h ago (limit {limit_min / 60.0:.1f} h)")
+    if never or late:
+        parts = ([f"no log at all: {', '.join(never)}"] if never else []) + ([f"late: {'; '.join(late)}"] if late else [])
+        return {"name": "jobs_ran", "status": WARN, "detail": f"{checked} job(s) checked; " + " | ".join(parts) + ". A job that is loaded but has not run is not working."}
+    return {"name": "jobs_ran", "status": OK, "detail": f"all {checked} scheduled jobs wrote to their logs within their own schedule (loaded is not enough; they ran)"}
+
+
 def check_missed_windows(now: dt.datetime) -> dict:
     """Capture windows that CLOSED without their capture in the last 24 hours: the moneyline T-35 pulls (operational/moneyline_pregame.py audit) and the planned pregame prop captures
     (operational/price_availability.py). A missed window is reported, never bought late and never backfilled; MACHINE_ASLEEP means the Mac (not the code) was not running."""
@@ -483,6 +527,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
+    checks.append(check_jobs_ran(now))
     checks.append(check_missed_windows(now))
     ready = None
     if deep:

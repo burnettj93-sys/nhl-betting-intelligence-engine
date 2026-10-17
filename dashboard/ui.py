@@ -458,6 +458,8 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
             title = "Eggy's pick is unavailable right now" if primary.get("status") == "ERROR" else EGGY_NO_PICK
             st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div>"
                         f"<div class='sub'>{_h(reason)}</div></div></div>", unsafe_allow_html=True)
+            if primary.get("data_limit"):
+                st.warning(primary["data_limit"]["note"])
             st.caption("A day without a pick is a correct answer: Eggy does not loosen the rules to produce one, and no weaker slip is offered in its place.")
             return
         if ticket.get("recorded"):

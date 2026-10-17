@@ -531,6 +531,14 @@ class TestThePage(unittest.TestCase):
             self.assertNotIn(banned, blob.lower())
         self.assertIn("data:image/webp;base64", blob)                                                  # Eggy's artwork is on the card
 
+    def test_a_data_limit_is_shown_beside_the_reason_when_price_coverage_is_thin(self):
+        s = snapshot()
+        s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination qualifies.", "strongest_singles": [],
+                                                    "data_limit": {"note": "Data limit: shots prices are on file for 1 of 4 games today (3 credit budget). An empty slip here reflects thin price coverage as well as the rules; the rules were not loosened."}}})
+        at = run_page("41_Slate_Board.py", s)
+        self.assertFalse(at.exception, at.exception)
+        self.assertIn("Data limit: shots prices are on file for 1 of 4 games", " ".join(w.value for w in at.warning))
+
     def test_with_no_ticket_the_card_says_no_eggy_pick_and_gives_the_reason_without_inventing_one(self):
         s = snapshot()
         s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value after the haircut.", "strongest_singles": []}})

@@ -831,6 +831,32 @@ def _primary_explanation(card: dict, qualifying: int | None) -> str:
     return f"{first} {second}"
 
 
+def _data_limit(et_date: str) -> dict | None:
+    """When player prices exist for only some of the day's games, an empty primary slip is partly a statement about missing data, not only about the rules: say how many games have prop prices and why
+    the rest do not (credit budget, a window missed while the machine was asleep, a failed fetch, or not posted by DraftKings). None when every scheduled game has prices."""
+    try:
+        from operational import price_availability as pa
+        games = (pa.read(et_date).get("games") or {})
+    except Exception:  # noqa: BLE001 - informational
+        return None
+    if not games:
+        return None
+    shots = "player_shots_on_goal_alternate"
+    posted, why = 0, {}
+    for g in games.values():
+        st = ((g.get("markets") or {}).get(shots) or {}).get("status")
+        if st == pa.POSTED:
+            posted += 1
+        else:
+            key = "missed capture window" if g.get("missed_windows") else {pa.BUDGET_BLOCKED: "credit budget", pa.NOT_POSTED: "not posted by DraftKings", pa.FETCH_ERROR: "fetch failed"}.get(st, "not fetched")
+            why[key] = why.get(key, 0) + 1
+    if posted >= len(games):
+        return None
+    reasons = ", ".join(f"{n} {k}" for k, n in sorted(why.items(), key=lambda kv: -kv[1]))
+    return {"games": len(games), "with_prop_prices": posted, "missing_because": why,
+            "note": f"Data limit: shots prices are on file for {posted} of {len(games)} games today ({reasons}). An empty slip here reflects thin price coverage as well as the rules; the rules were not loosened."}
+
+
 def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_date: str, alerts=None) -> dict:
     """THE recommendation: one parlay, +100 to +500, the fewest legs that qualify, ranked by estimated hit chance, under the active policy's own leg and value rules (nothing is loosened to
     produce it). A ticket already recorded today is the primary slip. Otherwise the best qualifying combination on FRESH prices; failing that, the best on today's earlier (provisional) prices,
@@ -868,6 +894,9 @@ def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_da
                               "ev_after_haircut": round(best["ev_after_shade"], 4), "status": status,
                               "note": "The closest combination inside +100 to +500 (best value after the haircut). It does NOT qualify: shown so the analysis is not hidden, not as a recommendation."}
     doc["reason"] = reason or "No combination of supported selections qualifies at the prices available now."
+    limit = _data_limit(et_date)
+    if limit:
+        doc["data_limit"] = limit
     doc["strongest_singles"] = _strongest_singles(_with_provisional_eligible(legs))
     return doc
 
