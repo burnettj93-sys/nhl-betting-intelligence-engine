@@ -848,13 +848,14 @@ def _data_limit(et_date: str) -> dict | None:
         if st == pa.POSTED:
             posted += 1
         else:
-            key = "missed capture window" if g.get("missed_windows") else {pa.BUDGET_BLOCKED: "credit budget", pa.NOT_POSTED: "not posted by DraftKings", pa.FETCH_ERROR: "fetch failed"}.get(st, "not fetched")
+            key = ("not posted by DraftKings" if st == pa.NOT_POSTED else "missed capture window" if g.get("missed_windows") else
+                   {pa.BUDGET_BLOCKED: "credit budget", pa.FETCH_ERROR: "fetch failed"}.get(st, "not fetched"))
             why[key] = why.get(key, 0) + 1
     if posted >= len(games):
         return None
     reasons = ", ".join(f"{n} {k}" for k, n in sorted(why.items(), key=lambda kv: -kv[1]))
     return {"games": len(games), "with_prop_prices": posted, "missing_because": why,
-            "note": f"Data limit: shots prices are on file for {posted} of {len(games)} games today ({reasons}). An empty slip here reflects thin price coverage as well as the rules; the rules were not loosened."}
+            "note": f"Data limit: shots prices are on file for {posted} of {len(games)} games today ({reasons}). An empty slip here may reflect thin price coverage as well as the rules; the rules were not loosened."}
 
 
 def _primary_slip(legs: list, existing_rows: list[dict], now: dt.datetime, et_date: str, alerts=None) -> dict:

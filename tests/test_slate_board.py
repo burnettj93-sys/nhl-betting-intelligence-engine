@@ -534,7 +534,7 @@ class TestThePage(unittest.TestCase):
     def test_a_data_limit_is_shown_beside_the_reason_when_price_coverage_is_thin(self):
         s = snapshot()
         s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination qualifies.", "strongest_singles": [],
-                                                    "data_limit": {"note": "Data limit: shots prices are on file for 1 of 4 games today (3 credit budget). An empty slip here reflects thin price coverage as well as the rules; the rules were not loosened."}}})
+                                                    "data_limit": {"note": "Data limit: shots prices are on file for 1 of 4 games today (3 credit budget). An empty slip here may reflect thin price coverage as well as the rules; the rules were not loosened."}}})
         at = run_page("41_Slate_Board.py", s)
         self.assertFalse(at.exception, at.exception)
         self.assertIn("Data limit: shots prices are on file for 1 of 4 games", " ".join(w.value for w in at.warning))

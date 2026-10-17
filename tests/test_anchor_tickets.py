@@ -650,6 +650,7 @@ class TestThePrimarySlipThroughTheNormalCycle(unittest.TestCase):
         lim = st["primary"]["data_limit"]
         self.assertEqual((lim["games"], lim["with_prop_prices"]), (4, 1))
         self.assertEqual(lim["missing_because"], {"credit budget": 1, "not posted by DraftKings": 1, "missed capture window": 1})
+        self.assertIn("may reflect thin price coverage", lim["note"])
         self.assertIn("rules were not loosened", lim["note"])
 
     def test_a_single_leg_pool_gives_no_slip_and_no_invented_second_leg(self):

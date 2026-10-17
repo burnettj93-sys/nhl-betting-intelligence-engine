@@ -179,18 +179,27 @@ class TestJobsActuallyRan(unittest.TestCase):
         return wd.check_jobs_ran(now, definitions=self.DEFS, mtime=mtime)
 
     def test_jobs_that_wrote_to_their_logs_inside_their_schedule_are_ok(self):
-        r = self.check({"/x/trader.log": 20, "/x/morning.log": 600})
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 20, "/x/morning.log": 600})
         self.assertEqual(r["status"], wd.OK)
         self.assertIn("all 2 scheduled jobs", r["detail"])                          # the watchdog does not check itself
 
     def test_a_loaded_job_that_has_not_run_is_named_with_its_age(self):
-        r = self.check({"/x/trader.log": 4 * 60, "/x/morning.log": 600})
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 4 * 60, "/x/morning.log": 600})
         self.assertEqual(r["status"], wd.WARN)
         self.assertIn("real-parlay-paper-trader 4.0 h ago", r["detail"])
         self.assertNotIn("morning-update", r["detail"])
 
     def test_a_calendar_job_is_late_after_26_hours_and_a_job_with_no_log_is_reported(self):
-        r = self.check({"/x/trader.log": 5, "/x/morning.log": 27 * 60})
-        self.assertIn("morning-update 27.0 h ago", r["detail"])
-        r2 = self.check({"/x/trader.log": 5})
-        self.assertIn("no log at all: morning-update", r2["detail"])
+        with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
+            r = self.check({"/x/trader.log": 5, "/x/morning.log": 27 * 60})
+            self.assertIn("morning-update 27.0 h ago", r["detail"])
+            r2 = self.check({"/x/trader.log": 5})
+            self.assertIn("no log at all: morning-update", r2["detail"])
+
+    def test_missing_definitions_are_a_warning_not_all_ok(self):
+        now = dt.datetime(2026, 10, 17, 21, 0, tzinfo=dt.timezone.utc)
+        r = wd.check_jobs_ran(now, definitions={}, mtime=lambda p: now.timestamp())
+        self.assertEqual(r["status"], wd.WARN)
+        self.assertIn("could be checked", r["detail"])

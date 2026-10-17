@@ -435,6 +435,9 @@ def check_jobs_ran(now: dt.datetime, *, definitions: dict | None = None, mtime=N
             continue
         if age_min > limit_min:
             late.append(f"{label.removeprefix('com.nhlengine.')} {age_min / 60.0:.1f} h ago (limit {limit_min / 60.0:.1f} h)")
+    expected = len(EXPECTED_JOBS) - (1 if "com.nhlengine.watchdog" in EXPECTED_JOBS else 0)
+    if checked < expected:
+        return {"name": "jobs_ran", "status": WARN, "detail": f"only {checked} of {expected} expected jobs could be checked (a plist is missing or unreadable, or no log path is defined): the rest are unverified"}
     if never or late:
         parts = ([f"no log at all: {', '.join(never)}"] if never else []) + ([f"late: {'; '.join(late)}"] if late else [])
         return {"name": "jobs_ran", "status": WARN, "detail": f"{checked} job(s) checked; " + " | ".join(parts) + ". A job that is loaded but has not run is not working."}
@@ -527,8 +530,11 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
-    checks.append(check_jobs_ran(now))
-    checks.append(check_missed_windows(now))
+    for fn in (check_jobs_ran, check_missed_windows):
+        try:
+            checks.append(fn(now))
+        except Exception as exc:  # noqa: BLE001 - one broken check must not stop the watchdog from writing its state
+            checks.append({"name": fn.__name__.removeprefix("check_"), "status": WARN, "detail": f"the check itself failed: {exc.__class__.__name__}: {exc}"})
     ready = None
     if deep:
         try:
