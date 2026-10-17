@@ -1,7 +1,27 @@
-# Product completion checklist — one complete list (revision 20, 2026-10-14)
+# Product completion checklist — one complete list (revision 21, 2026-10-17)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
+
+## Live status, 2026-10-17 (evidence labelled: OBSERVED LIVE / TESTED / AWAITING)
+
+| Requirement | State | Evidence |
+|---|---|---|
+| Every game of the Eastern day on the Slate Board with analysis / priced / missing-and-why | **OBSERVED LIVE** (started games keep a frozen pregame block from the first build after release #150; the three games that started before it were already collapsed) | 14 of 14 games listed 2026-10-17; coverage per game; missed windows shown |
+| Goal scorers with evidence-based explanations | **OBSERVED LIVE** (explanations); **AWAITING** prices: anytime-goal prices need the 20K plan | 5 scorers per scheduled game with record, TOI, PP, goalie context |
+| Two supported SOG players per game, actual ladder and prices | **OBSERVED LIVE** for the 7 of 14 games priced; the other 7 are budget-blocked (free plan) | ladder 1+..5+ with estimate, price, value after haircut |
+| Both goalies: projection, starter status, lines and prices | Projections and status **OBSERVED LIVE**; lines and prices **AWAITING** the 20K plan (planner now collects them regardless of confirmation: TESTED); confirmation needs a licensed source | Slate Board goalie tab; `tests/test_morning_capture.py` |
+| Moneyline vs handicap | Moneyline side **OBSERVED LIVE** (9 games with a side after the 17:21 ET pull); handicap **not assessed**: no spreads price is bought and the cover model is unvalidated | Side tab text |
+| One Eggy's Parlay Pick of the Day (+100..+500) | **OBSERVED LIVE** as "No Eggy pick today" with the exact reason and a data-limit note; a qualifying slip has **never been observed** under the corrected estimates | Today / Slate Board; recording paused |
+| Read-only Parlay Builder with fresh prices | **OBSERVED LIVE** (single -115 -> $18.70; cross-game estimate +112 -> $21.20; same-game unpriced draft); stale prices disable Add | hosted, 2026-10-17 |
+| $500 model book, history, settlement, reconciliation, scoring, postmortems | **OBSERVED LIVE**: $439.62, 14 tickets, reconciled three ways; settlement/postmortem jobs ran today | watchdog |
+| Public desktop and phone layouts, Eggy | **OBSERVED LIVE** (375 px and desktop) | |
+| Recovery after sleep; missed-window reporting; nothing bought late or backfilled | Reporting **OBSERVED LIVE** (5 moneyline windows flagged MACHINE_ASLEEP); recovery **OBSERVED LIVE** (21:21Z pull made at T-39 min once the Mac was awake); network-interruption recovery **TESTED** only | `missed_windows` check; audit |
+| Jobs actually ran, not just loaded | **OBSERVED LIVE** (`jobs_ran` check: 14 of 14 logs inside schedule) | watchdog |
+| Always-on host and rollback | **PREPARED, not migrated** (docs/ALWAYS_ON_HOST.md, systemd exporter TESTED) | needs owner authorization |
+| Recording | **PAUSED**; digest `1fad3ba03503cf94` unapproved | |
+
+Open blockers (smallest action, cost, what it prevents): (1) The Odds API 20K plan, $30/month: prevents goals, saves and spreads prices and pricing more than about half of each day's games. (2) A licensed goalie-confirmation source (SportsDataIO commercial quote; price not published): prevents any saves selection. (3) Always-on host, about $14.40/month: prevents unattended captures while the Mac sleeps. (4) Review of a qualifying live slip, then approval or not of the policy digest.
 
 ## Legend
 
