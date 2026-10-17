@@ -659,7 +659,8 @@ def _frozen_sources(product: dict, today: str | None, previous: dict | None) -> 
         todo = missing - pregame_archive.attempted(today)
         if todo:
             out.update(pregame_archive.recover(today, todo))
-            pregame_archive.mark_attempted(today, todo)
+            if pregame_archive.LAST_RECOVERY.get("searched"):
+                pregame_archive.mark_attempted(today, todo)           # only after the publication history was really searched; a failed fetch is tried again
     except Exception:  # noqa: BLE001 - recovery is best-effort and never blocks the board
         pass
     return out

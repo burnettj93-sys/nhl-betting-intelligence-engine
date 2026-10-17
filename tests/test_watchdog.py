@@ -264,3 +264,15 @@ class JobStateTests(unittest.TestCase):
 
     def test_stale_output_when_it_never_succeeded(self):
         self.assertEqual(self._rows(health=self._health(None), log_age_min=2)["state"], "STALE_OUTPUT")
+
+
+class NoGameDayTests(unittest.TestCase):
+    def test_a_day_with_no_scheduled_games_has_no_plan_and_is_not_a_failure(self):
+        now = dt.datetime(2026, 10, 17, 15, 0, tzinfo=dt.timezone.utc)                       # 11:00 ET, long after the analysis time
+        from operational import day_status, morning_refresh
+        with mock.patch.object(day_status, "build", return_value={"plan_present": False}), mock.patch.object(morning_refresh, "first_start_today", return_value=None):
+            r = wd.check_morning_update(now)
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("no games", r["detail"])
+        with mock.patch.object(day_status, "build", return_value={"plan_present": False}), mock.patch.object(morning_refresh, "first_start_today", return_value=now):
+            self.assertEqual(wd.check_morning_update(now)["status"], wd.FAIL)                  # games exist and no plan was made: still reported

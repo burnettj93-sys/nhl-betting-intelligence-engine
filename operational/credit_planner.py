@@ -313,8 +313,11 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     saves_games = [g for g in chosen if SAVES_KEY in markets[g]]
     league_planned = (LEAGUE_PULLS_PER_DAY + extra_pulls) if budget["league_total"] >= LEAGUE_PULLS_PER_DAY * lc else int(budget["league_total"] // max(lc, 1))
     recovery_today = math.ceil(budget["recovery_pool"] / max(budget["days_left"], 1)) if budget["recovery_pool"] else 0
-    allowance = {MONEYLINE_UI: float(league_planned * lc), PROPS: float(shots_c * BASE_COST), GOALS: float(len(goals_games) * GOALS_COST), SAVES: float(len(saves_games) * SAVES_COST),
-                 POINTS_ADDON: float(len(points_games) * POINTS_COST), REFRESH: float(recovery_today), MONEYLINE_DECISION: 0.0, MORNING: 0.0, TOMORROW: 0.0}
+    # reserve() compares today's SPENT + pending + planned with the allowance, so a plan rebuilt mid-day (a version change, a lost file) adds what the class already spent: the games still to be
+    # captured keep exactly the credits the plan gives them instead of being starved by the captures that already happened.
+    allowance = {MONEYLINE_UI: float(league_planned * lc), PROPS: float(shots_c * BASE_COST) + spent.get(PROPS, 0.0), GOALS: float(len(goals_games) * GOALS_COST) + spent.get(GOALS, 0.0),
+                 SAVES: float(len(saves_games) * SAVES_COST) + spent.get(SAVES, 0.0), POINTS_ADDON: float(len(points_games) * POINTS_COST) + spent.get(POINTS_ADDON, 0.0),
+                 REFRESH: float(recovery_today), MONEYLINE_DECISION: 0.0, MORNING: 0.0, TOMORROW: 0.0}
     first_start = min(starts.values()) if starts else None
     prep = capture_timeline.prep_times(dt.date.fromisoformat(day), first_start) if first_start else {}
     wave_docs = [{"index": w.index, "first_start_utc": w.first_start.strftime("%Y-%m-%dT%H:%M:%SZ"), "target_utc": w.target.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -326,7 +329,7 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     if not budget.get("league_cost_observed"):
         notes.append(f"A league pull is assumed to cost {lc} credits (moneyline + spreads); the first recorded charge replaces the assumption.")
     return {"day": day, "made_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "alloc_version": ALLOC_VERSION, "budget": budget, "waves": wave_docs, "prep": {k_: v.strftime("%Y-%m-%dT%H:%M:%SZ") for k_, v in prep.items()},
-            "games_today": len(starts), "games_priced": chosen, "games_not_priced": [g for g in starts if g not in chosen], "game_markets": markets,
+            "games_today": len(starts), "games_priced": chosen, "games_not_priced": [g for g in starts if g not in chosen and g not in done], "game_markets": markets,
             "goals_games": goals_games, "saves_games": saves_games, "points_games": points_games, "morning_games": [], "morning_markets": [],
             "league_pulls": {"planned": league_planned, "cost_each": lc, "cost_observed": observed, "extra_for_later_waves": extra_pulls}, "allowance": allowance,
             "confirmed_games": sorted(confirmed_games or []), "surplus_credits": round(max(left, 0.0), 2), "notes": notes}
@@ -418,15 +421,21 @@ def pending_reserved(now: dt.datetime) -> dict[str, float]:
     return out
 
 
-def reserve(klass: str, planned: float, now: dt.datetime, *, plan: dict | None = None, remaining: int | None = None, note: str = "") -> dict:
+def reserve(klass: str, planned: float, now: dt.datetime, *, plan: dict | None = None, remaining: int | None = None, note: str = "", key: str | None = None) -> dict:
     """Reserve `planned` credits for `klass` BEFORE a paid call. Under a file lock it checks the real balance minus every pending reservation (so a concurrent job cannot spend the same
-    credits), the hard reserve and the class's allowance for today. Returns {"allow": True, "id": ...} or {"allow": False, "reason": ...}. Settle it with settle() after the call."""
+    credits), the hard reserve and the class's allowance for today. `key` names WHAT is being bought (day, game, market, wave): a second reservation with the same key while the first is pending, or
+    after a paid call with that key was ledgered, is refused as DUPLICATE, so two jobs that both saw "missing" cannot buy the same price twice. Returns {"allow": True, "id": ...} or {"allow": False, "reason": ...}. Settle it with settle() after the call."""
     if remaining is None:
         remaining = odds_quota.latest_remaining()
     if remaining is None:
         return {"allow": False, "reason": "QUOTA_UNKNOWN"}
     with _Lock():
         rows = _load_reservations(now)
+        if key is not None:
+            if any(r.get("key") == key for r in rows):
+                return {"allow": False, "reason": "DUPLICATE", "pending": 1}
+            if any(r.get("key") == key and r.get("credits", 0) > 0 for r in read_ledger()):
+                return {"allow": False, "reason": "DUPLICATE", "pending": 0}
         pending_total = sum(r["credits"] for r in rows)
         if remaining - pending_total - planned < odds_quota.RESERVE:
             return {"allow": False, "reason": "HARD_RESERVE", "remaining": remaining, "pending": pending_total}
@@ -436,20 +445,27 @@ def reserve(klass: str, planned: float, now: dt.datetime, *, plan: dict | None =
         if allowance is None or spent + pend_cls + planned > allowance + 1e-9:
             return {"allow": False, "reason": f"{klass}_ALLOWANCE", "allowance": allowance, "spent": spent, "pending": pend_cls}
         rid = uuid.uuid4().hex[:12]
-        rows.append({"id": rid, "class": klass, "credits": float(planned), "at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "note": note})
+        rows.append({"id": rid, "class": klass, "credits": float(planned), "at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "note": note, **({"key": key} if key else {})})
         _save_reservations(rows)
         return {"allow": True, "id": rid, "reason": "OK", "remaining": remaining, "allowance": allowance, "spent": spent}
 
 
-def settle(reservation_id: str, actual: float, now: dt.datetime, **extra) -> None:
-    """Replace a reservation by what the provider actually charged (the `x-requests-last` header). The ledger row keeps the planned figure too, so a mismatch is visible."""
+def settle(reservation_id: str, actual: float, now: dt.datetime, *, klass: str | None = None, **extra) -> None:
+    """Replace a reservation by what the provider actually charged (the `x-requests-last` header). The ledger row keeps the planned figure too, so a mismatch is visible.
+    The reservation is removed and the charge written under ONE lock, so a concurrent reserve() never sees neither. If the reservation already expired (the call outlived its 15-minute life)
+    the charge is still recorded, in `klass`, because a paid call is never left out of the ledger."""
     with _Lock():
-        rows = _load_reservations(now)
-        mine = next((r for r in rows if r["id"] == reservation_id), None)
-        rows = [r for r in rows if r["id"] != reservation_id]
-        _save_reservations(rows)
-    if mine is not None:
-        record(mine["class"], actual, now, planned=mine["credits"], **extra)
+        all_rows = []
+        try:
+            all_rows = json.loads(state_paths.path(RESERVATIONS_NAME).read_text())
+        except (OSError, json.JSONDecodeError):
+            pass
+        mine = next((r for r in all_rows if r.get("id") == reservation_id), None)
+        _save_reservations([r for r in _load_reservations(now) if r["id"] != reservation_id])
+        if mine is not None:
+            record(mine["class"], max(float(actual), 0.0), now, planned=mine["credits"], **({"key": mine["key"]} if mine.get("key") else {}), **extra)
+        elif klass is not None:
+            record(klass, max(float(actual), 0.0), now, planned=None, expired_reservation=True, **extra)
 
 
 def release(reservation_id: str, now: dt.datetime) -> None:

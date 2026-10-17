@@ -307,7 +307,12 @@ def check_morning_update(now: dt.datetime) -> dict:
     except Exception as exc:  # noqa: BLE001
         return {"name": "morning_update", "status": WARN, "detail": f"could not evaluate today's preparation: {type(exc).__name__}"}
     if not ds.get("plan_present"):
-        from operational import capture_timeline as ct
+        from operational import capture_timeline as ct, morning_refresh
+        try:
+            if morning_refresh.first_start_today(now) is None:
+                return {"name": "morning_update", "status": OK, "detail": "no games are scheduled today: there is no plan to make"}
+        except Exception:  # noqa: BLE001 - without the schedule, judge by the clock below
+            pass
         due = ct.prep_times(ct.et_date(now), None)["analysis_at"]
         late = (now - due).total_seconds() / 60.0
         if late < MORNING_WARN_MIN:

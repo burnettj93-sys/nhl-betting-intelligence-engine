@@ -56,6 +56,19 @@ class TestMorningRefresh(Isolated):
         self.assertEqual(out["steps"]["statistics"]["status"], "ERROR")
         self.assertEqual(out["steps"]["starters"]["status"], "OK")
 
+    def test_a_failed_refresh_is_retried_after_a_gap_not_every_cycle(self):
+        out = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: 1, starters=lambda: {"status": "ERROR"})
+        self.assertEqual(out["status"], "FAILED")
+        self.assertEqual(morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["reason"], "RETRY_GAP")
+        self.assertEqual(morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["status"], "DONE")
+
+    def test_two_runners_never_refresh_at_the_same_time(self):
+        import fcntl
+        with open(self.dir / "morning_refresh.lock", "w") as held:
+            fcntl.flock(held, fcntl.LOCK_EX)                                                      # the launchd job holds the refresh
+            out = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: self.fail("must not run"), starters=lambda: {})
+        self.assertEqual(out["reason"], "ANOTHER_REFRESH_IS_RUNNING")
+
     def test_a_machine_that_slept_through_0745_runs_it_on_waking(self):
         out = morning_refresh.run_if_due(at(10, 20), first_start=at(13), sync=lambda: 0, starters=lambda: {})
         self.assertEqual(out["status"], "DONE")

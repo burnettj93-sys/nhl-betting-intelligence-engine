@@ -54,6 +54,9 @@ def first_start_today(now: dt.datetime) -> dt.datetime | None:
     return min(starts) if starts else None
 
 
+RETRY_GAP_MIN = 60
+
+
 def due(now: dt.datetime, first_start: dt.datetime | None) -> dict:
     from operational import capture_timeline as ct, eastern_time as et
     day = et.eastern_today(now)
@@ -63,6 +66,9 @@ def due(now: dt.datetime, first_start: dt.datetime | None) -> dict:
         return {"due": False, "reason": "DONE_TODAY", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
     if now < at:
         return {"due": False, "reason": "NOT_YET", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    tried = st.get("finished_utc") if st.get("day") == day else None
+    if tried and (now - dt.datetime.fromisoformat(tried.replace("Z", "+00:00"))).total_seconds() < RETRY_GAP_MIN * 60:
+        return {"due": False, "reason": "RETRY_GAP", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}    # a failed refresh is retried, not every cycle
     return {"due": True, "reason": "DUE", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ"), "late_min": round((now - at).total_seconds() / 60.0, 1)}
 
 
@@ -75,9 +81,23 @@ def run_if_due(now: dt.datetime | None = None, *, first_start: dt.datetime | Non
             first_start = first_start_today(now)
         except Exception:  # noqa: BLE001 - without a schedule the default 07:45 applies
             first_start = None
+    import fcntl
+    lock_path = state_paths.path("morning_refresh.lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "w") as lock_file:
+        try:
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return {"status": "SKIPPED", "reason": "ANOTHER_REFRESH_IS_RUNNING"}     # the launchd job and the trader never run the refresh at the same time
+        return _run_locked(now, first_start, sync, starters, force)
+
+
+def _run_locked(now, first_start, sync, starters, force) -> dict:
+    from operational import eastern_time as et
     d = due(now, first_start)
     if not d["due"] and not force:
         return {"status": "SKIPPED", **d}
+    _t0 = dt.datetime.now(dt.timezone.utc)
     doc = {"day": et.eastern_today(now), "started_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "due": d, "steps": {}}
     try:
         import sync_daily
@@ -98,7 +118,7 @@ def run_if_due(now: dt.datetime | None = None, *, first_start: dt.datetime | Non
         doc["steps"]["starters"] = (starters or _starters)()
     except Exception as exc:  # noqa: BLE001
         doc["steps"]["starters"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
-    doc["finished_utc"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    doc["finished_utc"] = (now + (dt.datetime.now(dt.timezone.utc) - _t0)).strftime("%Y-%m-%dT%H:%M:%SZ")      # `now` plus the real elapsed time (a test clock stays consistent)
     bad = [k for k, v in doc["steps"].items() if str(v.get("status")) in ("ERROR", "FAILED")]
     doc["status"] = "DONE" if not bad else ("PARTIAL" if len(bad) < len(doc["steps"]) else "FAILED")
     _write(doc)

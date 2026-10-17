@@ -651,6 +651,9 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
             start = effective_start(e["commence_time"], g_info["start_utc"])
             if start <= now:
                 continue
+            if (start - now).total_seconds() < ct.LAST_CHANCE_MIN * 60:
+                summary["skipped"].append({"game_id": gid, "reason": "GAME_STARTS_WITHIN_THE_LAST_CHANCE_LIMIT"})       # the game's own start (the provider may have moved it earlier) closes its window
+                continue
             wanted = list((plan.get("game_markets") or {}).get(gid) or [])
             got = _captured_times(e["id"], wanted)
             for m_, t_ in _posted_context(day, gid).items():
@@ -673,9 +676,10 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
             reservations = []
             for m in list(missing):
                 klass = _class_of(m)
-                res = cp.reserve(klass, 1, now, plan=plan, note=f"{gid}:{m}")
+                key = f"{day}:{gid}:{m}:w{w.index}"
+                res = cp.reserve(klass, 1, now, plan=plan, note=f"{gid}:{m}", key=key)
                 if not res.get("allow") and res.get("reason") in (f"{klass}_ALLOWANCE",) and not res.get("pending"):
-                    res = cp.reserve(cp.REFRESH, 1, now, plan=plan, note=f"recovery {gid}:{m}")         # the recovery pool covers a market the class allowance no longer does
+                    res = cp.reserve(cp.REFRESH, 1, now, plan=plan, note=f"recovery {gid}:{m}", key=key)         # the recovery pool covers a market the class allowance no longer does
                     klass = cp.REFRESH
                 if not res.get("allow"):
                     missing.remove(m)
@@ -692,20 +696,34 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
                 summary["skipped"].append({"event_id": e["id"], "reason": f"API_ERROR: {r.error}"})
                 _record_answer(day, gid, missing, r, now, (start - now).total_seconds() / 3600.0, matchup, day, start.isoformat())
                 continue
-            archive_mod.archive_result(r, event_id=e["id"], market_filter=",".join(missing), bookmaker_filter="draftkings")
-            cost = int(r.requests_last or 0)
-            got_now = _record_answer(day, gid, missing, r, now, (start - now).total_seconds() / 3600.0, matchup, day, start.isoformat())
-            posted = [m for m in missing if (got_now.get(m) or {}).get("status") == pa.POSTED]
-            attributed = {m: (1 if m in posted else 0) for m in missing}
-            diff = cost - sum(attributed.values())
-            if diff and missing:                                  # the provider charged a different amount than one credit per returned market: the difference lands on the first market
-                attributed[missing[0]] += diff
-            for m, klass, rid in reservations:
-                cp.settle(rid, attributed.get(m, 0), now, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late)
+            cost = len(reservations) if r.requests_last is None else max(int(r.requests_last), 0)        # no header: assume what was reserved rather than record a free call
+            attributed = {m: 0 for m in missing}
+            try:
+                archive_mod.archive_result(r, event_id=e["id"], market_filter=",".join(missing), bookmaker_filter="draftkings")
+                got_now = _record_answer(day, gid, missing, r, now, (start - now).total_seconds() / 3600.0, matchup, day, start.isoformat())
+                posted = [m for m in missing if (got_now.get(m) or {}).get("status") == pa.POSTED]
+                attributed = {m: (1 if m in posted else 0) for m in missing}
+                diff = cost - sum(attributed.values())
+                if diff > 0:                                          # the provider charged more than one credit per returned market: the difference lands on the first market
+                    attributed[missing[0]] += diff
+                for m in posted:                                      # ... or less: take it back from posted markets, never below zero
+                    if diff >= 0:
+                        break
+                    attributed[m] -= 1
+                    diff += 1
+            finally:                                                  # a paid call is ALWAYS ledgered, even if archiving or recording it raised
+                if not any(attributed.values()) and cost:
+                    attributed[missing[0]] = cost
+                for m, klass, rid in reservations:
+                    cp.settle(rid, attributed.get(m, 0), now, klass=klass, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late)
             summary["credits_spent"] += cost
             summary["events_captured"] += 1
-            wstate["games"][gid] = {"captured_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "markets": missing, "posted": posted, "credits": cost,
-                                    "minutes_before_wave_first_game": round((w.first_start - now).total_seconds() / 60.0, 1), "late": late}
+            entry = {"captured_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "markets": missing, "posted": posted, "credits": cost,
+                     "minutes_before_wave_first_game": round((w.first_start - now).total_seconds() / 60.0, 1), "late": late}
+            if posted:
+                wstate["games"][gid] = entry
+            else:                                                     # asked, nothing posted: that is an attempt (retried on schedule), not a capture
+                wstate.setdefault("tried", {})[gid] = entry
             summary["slots"][e["id"]] = {"wave": w.index, "decision": "FIRST" if len(missing) == len(wanted) else "RETRY", "why": "OK", "late": late}
         done = all(g in wstate["games"] or g not in by_gid for g in chosen)
         wstate["state"] = "CAPTURED" if done and wstate["games"] else wstate.get("state", "PENDING")
@@ -714,6 +732,21 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
     _save_wave_state(state)
     summary["wave_state"] = {k: {kk: v for kk, v in w_.items() if kk != "games"} for k, w_ in state["waves"].items()}
     return summary
+
+
+def _blocked_in_window(day: str, gid: str, start: dt.datetime, end: dt.datetime) -> str | None:
+    """Why the trader, running inside the window, did not capture this game: a BUDGET_BLOCKED or FETCH_ERROR answer recorded for it between `start` and `end`."""
+    from operational import price_availability as pa
+    try:
+        markets = (((pa.read(day).get("games") or {}).get(gid)) or {}).get("markets") or {}
+    except Exception:  # noqa: BLE001
+        return None
+    for m, rec in markets.items():
+        if rec.get("status") in (pa.BUDGET_BLOCKED, pa.FETCH_ERROR) and rec.get("checked_utc"):
+            t = _parse_utc(rec["checked_utc"])
+            if start <= t <= end:
+                return f"{m} was {str(rec['status']).replace('_', ' ').lower()}" + (f" ({rec['detail']})" if rec.get("detail") else "")
+    return None
 
 
 def note_missed_pregame_windows(now: dt.datetime, plan: dict, games: dict | None = None, *, sleep_fn=None, ran_fn=None, wave_state: dict | None = None) -> dict:
@@ -743,11 +776,17 @@ def note_missed_pregame_windows(now: dt.datetime, plan: dict, games: dict | None
             if gid in captured or gid in ((wave_state.get("waves") or {}).get(str(w.index)) or {}).get("games", {}):
                 continue
             ev = sleep_fn(w.target, w.last_chance)
-            asleep = ev.get("evidence") == "ASLEEP"
-            ran = None if asleep else ran_fn(w.target, w.last_chance)
+            window_min = (w.last_chance - w.target).total_seconds() / 60.0
+            ran = ran_fn(w.target, w.last_chance)
+            blocked = _blocked_in_window(day, str(gid), w.target, w.last_chance)
+            # Sleep is named as the cause only when it explains the miss: the power log shows sleep AND the trader did not run (or the machine slept through most of the window), and the game was not
+            # simply refused by the budget or the provider while the trader was running.
+            asleep = ev.get("evidence") == "ASLEEP" and not blocked and (ran is not True or ev.get("slept_minutes", 0) >= window_min / 2.0)
             if asleep:
                 tag, detail = "MACHINE_ASLEEP", (f"the Mac was asleep for {ev['slept_minutes']:.0f} of the window's minutes (power log: {', '.join(f'{a}-{b}' for a, b in ev['intervals'][:4])}); "
                                                    "the game's wave closed before a capture could be made. Nothing is bought after the window.")
+            elif blocked:
+                tag, detail = None, (f"the trader was running during the window and the game was not captured: {blocked}. Nothing is bought after the window.")
             elif ran is False:
                 tag, detail = "ENGINE_OUTAGE_OBSERVED", ("no sleep evidence, and the 15-minute trader did not start a run between the wave's target and its last chance: an engine outage was observed "
                                                           "(job unloaded, crashed or blocked). Nothing is bought after the window.")

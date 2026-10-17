@@ -100,7 +100,7 @@ def wave_of(game_id: str, wave_list: list[Wave]) -> Wave | None:
 def league_pull_due(now: dt.datetime, *, day_first_start: dt.datetime | None, wave_list: list[Wave], pull_times: list[dt.datetime]) -> dict:
     """Is a league-wide moneyline + spread pull due now? `pull_times` are today's pulls (UTC), newest last.
 
-    MORNING   due from the analysis time (08:00 ET, earlier on an early day) until the first game starts, when no pull has been made since then.
+    MORNING   due from the analysis time (08:00 ET, earlier on an early day) until every game has started, when no pull has been made since then (after a long sleep it still serves the waves not yet started).
     PREGAME   the day's shared pull: due from the FIRST wave's capture target (90 minutes before its first game) to LAST_CHANCE when no pull has been made since the morning.
     WAVE      a further pull for a later wave, due from that wave's target: asked for only when the caller has funded it (the plan's surplus); the decision to buy it is the caller's.
     Nothing is due once the pulls it would serve are behind us (all games started)."""

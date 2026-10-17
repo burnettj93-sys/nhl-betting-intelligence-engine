@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -205,6 +206,89 @@ class TestMissedWindows(Isolated):
         self.assertEqual(self.note(at(13, 5), asleep=True)["recorded"], 0)
         cp.record(cp.PROPS, 1, at(12, 55), game_id="2", markets=cp.SHOTS_KEY)
         self.assertEqual(pa.missed_windows(DAY)[0]["game_id"], "1")
+
+
+class TestReviewFixes(Isolated):
+    """Independent review of PR 153: duplicate purchases, expired reservations, rebuilt plans, header-less charges, moved start times, attribution."""
+
+    def test_the_same_game_and_market_cannot_be_reserved_twice(self):
+        first = cp.reserve(cp.PROPS, 1, at(11, 35), plan=self.plan, remaining=190, key="k1")
+        self.assertTrue(first["allow"])
+        again = cp.reserve(cp.PROPS, 1, at(11, 35), plan=self.plan, remaining=190, key="k1")
+        self.assertEqual((again["allow"], again["reason"]), (False, "DUPLICATE"))
+        cp.settle(first["id"], 1, at(11, 36))
+        cp.record(cp.PROPS, 1, at(11, 36), key="k2")
+        self.assertEqual(cp.reserve(cp.PROPS, 1, at(11, 37), plan=self.plan, remaining=190, key="k2")["reason"], "DUPLICATE")      # a paid call with that key is already in the ledger
+
+    def test_a_charge_settled_after_its_reservation_expired_is_still_ledgered(self):
+        res = cp.reserve(cp.PROPS, 1, at(11, 35), plan=self.plan, remaining=190)
+        cp.settle(res["id"], 1, at(12, 5), klass=cp.PROPS, game_id="1")                              # 30 minutes later: past the 15-minute life
+        rows = [r for r in cp.read_ledger(DAY) if r.get("game_id") == "1"]
+        self.assertEqual([(r["class"], r["credits"]) for r in rows], [(cp.PROPS, 1.0)])
+
+    def test_a_plan_rebuilt_mid_day_keeps_the_credits_of_the_games_still_to_come(self):
+        cp.record(cp.PROPS, 1, at(11, 35), game_id="1")
+        cp.record(cp.GOALS, 1, at(11, 35), game_id="1")
+        cp.record(cp.SAVES, 1, at(11, 35), game_id="1")
+        starts = {"1": at(13), "2": at(19), "3": at(19, 20)}
+        rebuilt = cp.build_day_plan(at(12), DAY, starts, remaining=49, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4}, done_games={"1"})
+        self.assertGreaterEqual(rebuilt["allowance"][cp.PROPS], 1.0 + sum(1 for g in rebuilt["games_priced"] if cp.SHOTS_KEY in rebuilt["game_markets"][g]))
+        self.assertNotIn("1", rebuilt["games_not_priced"])                                           # a game already captured is not reported as excluded by the budget
+        self.assertTrue(cp.reserve(cp.PROPS, 1, at(17, 35), plan=rebuilt, remaining=49)["allow"])
+
+    def test_a_charge_with_no_header_is_recorded_as_what_was_reserved(self):
+        class NoHeader(FakeClient):
+            def get_event_odds(self, eid, markets):
+                r = super().get_event_odds(eid, markets)
+                r.requests_last = None
+                return r
+        out = self.capture(at(11, 35), NoHeader())
+        self.assertEqual(out["credits_spent"], 3)
+        self.assertEqual(sum(r["credits"] for r in cp.read_ledger(DAY) if r.get("game_id") == "1"), 3.0)
+
+    def test_a_charge_below_the_posted_markets_never_makes_a_negative_ledger_row(self):
+        out = self.capture(at(11, 35), FakeClient(cost=1))
+        rows = [r for r in cp.read_ledger(DAY) if r.get("game_id") == "1"]
+        self.assertTrue(all(r["credits"] >= 0 for r in rows))
+        self.assertEqual(sum(r["credits"] for r in rows), 1.0)
+        self.assertEqual(out["credits_spent"], 1)
+
+    def test_a_paid_call_is_ledgered_even_if_recording_the_answer_fails(self):
+        with mock.patch.object(bb, "_record_answer", side_effect=RuntimeError("disk full")):
+            with self.assertRaises(RuntimeError):
+                self.capture(at(11, 35), FakeClient())
+        self.assertEqual(sum(r["credits"] for r in cp.read_ledger(DAY) if r.get("game_id") == "1"), 3.0)
+        self.assertEqual(cp.pending_reserved(at(11, 36)), {})
+
+    def test_a_game_whose_provider_start_moved_earlier_is_not_bought_inside_its_own_last_chance(self):
+        moved = [dict(EVENTS[0], start=(11, 45))] + EVENTS[1:]
+        with mock.patch.object(sys.modules[__name__], "EVENTS", moved):
+            c = FakeClient()
+            out = self.capture(at(11, 35), c)                                                        # 10 minutes before the provider's 11:45 start
+        self.assertEqual(c.calls, [])
+        self.assertTrue(any(x.get("reason") == "GAME_STARTS_WITHIN_THE_LAST_CHANCE_LIMIT" for x in out["skipped"]))
+
+    def test_nothing_posted_is_an_attempt_not_a_capture(self):
+        c = FakeClient(answers={"e1": payload()})
+        out = self.capture(at(11, 35), c)
+        self.assertEqual(out["credits_spent"], 0)
+        self.assertNotIn("1", out["wave_state"]["0"].get("games", {}))
+        import json
+        doc = json.loads((self.dir / "wave_capture_state.json").read_text())
+        self.assertIn("1", doc["waves"]["0"]["tried"])
+
+    def test_a_budget_refusal_while_the_trader_ran_is_not_blamed_on_sleep(self):
+        pa.note_unfetched(DAY, "1", cp.SHOTS_KEY, pa.BUDGET_BLOCKED, at(11, 40), detail="HARD_RESERVE", game_date=DAY)
+        ev = {"evidence": "ASLEEP", "slept_minutes": 10.0, "intervals": [("11:50Z", "12:00Z")]}
+        bb.note_missed_pregame_windows(at(12, 50), self.plan, GAMES, sleep_fn=lambda a, b: ev, ran_fn=lambda a, b: True)
+        mw = pa.missed_windows(DAY)
+        self.assertEqual(mw[0]["tags"], ["MISSED_WINDOW"])
+        self.assertIn("budget blocked", mw[0]["detail"])
+
+    def test_a_short_sleep_with_the_trader_running_is_not_blamed_on_sleep(self):
+        ev = {"evidence": "ASLEEP", "slept_minutes": 8.0, "intervals": [("11:50Z", "11:58Z")]}
+        bb.note_missed_pregame_windows(at(12, 50), self.plan, GAMES, sleep_fn=lambda a, b: ev, ran_fn=lambda a, b: True)
+        self.assertEqual(pa.missed_windows(DAY)[0]["tags"], ["MISSED_WINDOW"])
 
 
 if __name__ == "__main__":

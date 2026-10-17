@@ -77,8 +77,14 @@ def run(now: dt.datetime | None = None) -> dict:
 
         # The 07:45 refresh (or, on an early day or after a sleep, as soon as it is due): statistics, results, rosters, participation evidence, before any capture.
         try:
-            from operational import morning_refresh
-            refresh_summary = {k: v for k, v in morning_refresh.run_if_due(now).items() if k in ("status", "reason", "steps", "due_at_utc")}
+            from operational import credit_planner, eastern_time, morning_refresh
+            def _parse(t):
+                return dt.datetime.fromisoformat(t.replace("Z", "+00:00"))
+            open_wave = any(_parse(w["target_utc"]) <= now <= _parse(w["last_chance_utc"]) for w in (credit_planner.load_plan(eastern_time.eastern_today(now)) or {}).get("waves") or [])
+            if open_wave:                                           # a capture window is open: the statistics refresh can wait, a price window cannot
+                refresh_summary = {"status": "DEFERRED", "reason": "A_CAPTURE_WINDOW_IS_OPEN"}
+            else:
+                refresh_summary = {k: v for k, v in morning_refresh.run_if_due(now).items() if k in ("status", "reason", "steps", "due_at_utc")}
         except Exception as exc:  # noqa: BLE001
             refresh_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
 

@@ -46,7 +46,10 @@ def remember(doc: dict) -> int:
     store = _load()
     mine = store.setdefault(day, {})
     n = 0
+    built = doc.get("generated_at_utc")
     for g in doc.get("games") or []:
+        if g.get("start_utc") and built and str(built) >= str(g["start_utc"]):
+            continue                                                  # the board was built at or after puck drop: this block is no longer a pregame block, whatever the database still says
         if g.get("state") == "SCHEDULED" and (g.get("coverage") or {}).get("analysis_available") and not g.get("frozen_at_utc"):
             mine[str(g["game_id"])] = {**g, "_stored_at_utc": doc.get("generated_at_utc")}
             n += 1
@@ -75,17 +78,22 @@ def _git(args: list[str], cwd, timeout: int = 60) -> str | None:
     return r.stdout if r.returncode == 0 else None
 
 
+LAST_RECOVERY = {"searched": False}      # whether the last recover() call could actually read the publication history (a timed-out fetch must not mark a game as searched)
+
+
 def recover(day: str, game_ids: set[str], *, repo=None, ref: str = "origin/cloud-data", log_fn=None, show_fn=None, fetch: bool = True) -> dict[str, dict]:
     """{game_id: block} for the requested games, from the newest published snapshots in which each was still SCHEDULED and analysed (searching back at most MAX_COMMITS publications)."""
     from pathlib import Path
     repo = repo or Path(__file__).resolve().parent.parent
+    LAST_RECOVERY["searched"] = False
     if not game_ids:
         return {}
     if fetch and log_fn is None:
-        _git(["fetch", "--quiet", "origin", "cloud-data"], repo, 120)
+        _git(["fetch", "--quiet", "origin", "cloud-data"], repo, 30)
     log = (log_fn or (lambda: _git(["log", "--format=%H", f"-n{MAX_COMMITS}", ref], repo)))()
     if not log:
         return {}
+    LAST_RECOVERY["searched"] = True
     show = show_fn or (lambda sha: _git(["show", f"{sha}:current/snapshot.json"], repo, 60))
     found: dict[str, dict] = {}
     for sha in log.split():

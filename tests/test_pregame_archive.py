@@ -28,6 +28,19 @@ class Isolated(unittest.TestCase):
         self.addCleanup(p.stop)
 
 
+class TestReviewFixes(Isolated):
+    def test_a_board_built_after_puck_drop_never_replaces_the_saved_pregame_block(self):
+        pa.remember({"date_et": DAY, "generated_at_utc": "2026-10-17T16:00:00Z", "games": [block("1", start_utc="2026-10-17T17:00:00Z", scorers=[{"name": "before"}])]})
+        pa.remember({"date_et": DAY, "generated_at_utc": "2026-10-17T17:05:00Z", "games": [block("1", start_utc="2026-10-17T17:00:00Z", scorers=[{"name": "after"}])]})   # database still says SCHEDULED
+        self.assertEqual(pa.recall(DAY, "1")["scorers"], [{"name": "before"}])
+
+    def test_a_failed_history_search_is_not_remembered_as_searched(self):
+        pa.recover(DAY, {"1"}, log_fn=lambda: None)
+        self.assertFalse(pa.LAST_RECOVERY["searched"])
+        pa.recover(DAY, {"1"}, log_fn=lambda: "abc", show_fn=lambda sha: None)
+        self.assertTrue(pa.LAST_RECOVERY["searched"])
+
+
 class TestSavedBlocks(Isolated):
     def test_the_last_scheduled_block_is_kept_and_a_started_game_never_overwrites_it(self):
         pa.remember({"date_et": DAY, "generated_at_utc": "2026-10-17T15:00:00Z", "games": [block("1"), block("2", analysed=False)]})
