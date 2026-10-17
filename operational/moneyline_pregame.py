@@ -166,6 +166,12 @@ def run_pregame(now: dt.datetime | None = None, *, starts_fn: Callable | None = 
     result = {"mode": "moneyline-pregame", "run_at_utc": now.isoformat(), "ran": False, "status": "IDLE",
               "reason": None, "cluster": None, "credits_spent_this_run": 0}
     try:
+        from operational import credit_planner as _cp
+        if guard_fn is None and pull_fn is None and starts_fn is None and _cp.enforced():
+            # RETIRED 2026-10-17: the T-35 per-cluster decision pull (up to 13 credits a day) is not in the core allocation. The league-wide moneyline + spread pulls
+            # (scheduled by operational/capture_timeline.py) serve every consumer. No credit, no network call, no audit record.
+            result.update(status="RETIRED", reason="RETIRED_BY_CREDIT_PLAN")
+            return result
         lock_path = lock_path or LOCK_PATH
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         with open(lock_path, "w") as lock:

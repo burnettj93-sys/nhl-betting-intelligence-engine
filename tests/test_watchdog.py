@@ -95,73 +95,94 @@ class TestPredictionLogCheck(unittest.TestCase):
 
 
 class TestMorningUpdateCheck(unittest.TestCase):
-    """The 08:00 ET update is judged from the availability record; late is WARN, very late FAIL, and every day's outcome is logged persistently."""
+    """The day's preparation (07:45 refresh, 08:00 whole-slate analysis, league pull) is judged from the day status: late is WARN, very late FAIL, and each complete day is logged persistently."""
+    DAY = "2026-10-09"
 
     def setUp(self):
         import tempfile
         from pathlib import Path
         from unittest import mock
-        from operational import price_availability as pa
-        self.pa = pa
+        from operational import credit_planner as cp
+        self.cp = cp
         self.tmp = tempfile.TemporaryDirectory()
-        patcher = mock.patch.object(pa.state_paths, "path", side_effect=lambda n, **kw: Path(self.tmp.name) / n)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        for p in (mock.patch.object(cp.state_paths, "path", side_effect=lambda n, **kw: Path(self.tmp.name) / n),
+                  mock.patch.object(cp.odds_quota, "reset_status", return_value={"status": "OWNER_VERIFICATION_REQUIRED", "reset_day": 1, "assumed": True, "invalid": False})):
+            p.start()
+            self.addCleanup(p.stop)
         self.addCleanup(self.tmp.cleanup)
 
     def at(self, h, m=0):
         return dt.datetime(2026, 10, 9, h + 4, m, tzinfo=dt.timezone.utc)     # ET wall clock
 
-    def seed(self, looked_at, markets=("m",), status=None, start="2026-10-09T23:00:00Z"):
-        pa = self.pa
-        pa.record("2026-10-09", "g1", markets[0], status or pa.POSTED, looked_at, hours_to_start=11, outcomes=3, start_utc=start)
+    def plan(self, first=13):
+        self.cp._persist(self.cp.build_day_plan(self.at(7, 30), self.DAY, {"g1": self.at(first), "g2": self.at(19)}, remaining=200, counts_ahead={"2026-10-10": 4}))
 
-    def test_before_8_nothing_is_due(self):
+    def write(self, name, doc):
+        import json
+        from pathlib import Path
+        (Path(self.tmp.name) / name).write_text(json.dumps(doc))
+
+    def prepared(self, refresh_status="DONE", board_at=None, pulls=True):
+        self.plan()
+        self.write("morning_refresh_state.json", {"day": self.DAY, "status": refresh_status, "finished_utc": self.at(7, 50).strftime("%Y-%m-%dT%H:%M:%SZ")})
+        if board_at is not None:
+            self.write("slate_board.json", {"date_et": self.DAY, "generated_at_utc": board_at.strftime("%Y-%m-%dT%H:%M:%SZ"), "counts": {"analysed": 2}})
+        if pulls:
+            self.cp.record(self.cp.MONEYLINE_UI, 2, self.at(8, 1), markets="h2h,spreads")
+
+    def test_before_the_analysis_time_nothing_is_due(self):
         self.assertEqual(wd.check_morning_update(self.at(7, 0))["status"], wd.OK)
 
-    def test_done_when_every_game_was_looked_at_after_8(self):
-        self.seed(self.at(8, 6))
-        r = wd.check_morning_update(self.at(9, 0))
-        self.assertEqual(r["status"], wd.OK)
-        self.assertIn("morning update done", r["detail"])
-        self.assertTrue([e for e in wd.morning_evidence() if e["state"] == "DONE"])
-
-    def test_missed_is_warn_after_845_and_fail_after_10(self):
-        self.pa.note_unfetched("2026-10-09", "g1", "m", self.pa.NOT_FETCHED, self.at(6, 0), start_utc="2026-10-09T23:00:00Z")
-        self.assertEqual(wd.check_morning_update(self.at(8, 30))["status"], wd.OK)       # inside the grace period
+    def test_no_plan_is_warn_after_845_and_fail_after_10(self):
+        self.assertEqual(wd.check_morning_update(self.at(8, 30))["status"], wd.OK)
         self.assertEqual(wd.check_morning_update(self.at(8, 50))["status"], wd.WARN)
         self.assertEqual(wd.check_morning_update(self.at(10, 5))["status"], wd.FAIL)
 
-    def test_a_morning_where_every_game_was_budget_blocked_is_a_warning_not_done(self):
-        self.pa.note_unfetched("2026-10-09", "g1", "m", self.pa.BUDGET_BLOCKED, self.at(8, 5), start_utc="2026-10-09T23:00:00Z")
+    def test_done_when_refreshed_analysed_published_and_pulled(self):
+        self.prepared(board_at=self.at(8, 4))
+        r = wd.check_morning_update(self.at(9, 0))
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("preparation done", r["detail"])
+        self.assertTrue([e for e in wd.morning_evidence() if e["state"] == "DONE"])
+
+    def test_a_refresh_that_never_completed_warns_then_fails(self):
+        self.prepared(refresh_status="NOT_RUN_YET", board_at=self.at(8, 4))
+        self.assertEqual(wd.check_morning_update(self.at(8, 25))["status"], wd.OK)       # inside the 45-minute grace after 07:45
+        self.assertEqual(wd.check_morning_update(self.at(8, 50))["status"], wd.WARN)
+        r = wd.check_morning_update(self.at(9, 50))
+        self.assertEqual(r["status"], wd.FAIL)
+        self.assertIn("refresh", r["detail"])
+
+    def test_an_analysis_published_before_8_does_not_count_and_a_late_one_is_named(self):
+        self.prepared(board_at=self.at(7, 30))
         r = wd.check_morning_update(self.at(9, 0))
         self.assertEqual(r["status"], wd.WARN)
-        self.assertIn("could not look at any game", r["detail"])
+        self.assertIn("whole-slate analysis", r["detail"])
         self.assertFalse([e for e in wd.morning_evidence() if e["state"] == "DONE"])
 
-    def test_a_first_look_in_the_afternoon_is_late_not_done(self):
-        self.seed(self.at(15, 44), start="2026-10-09T23:00:00Z")
-        r = wd.check_morning_update(self.at(17, 0))
+    def test_a_missing_league_pull_is_named(self):
+        self.prepared(board_at=self.at(8, 4), pulls=False)
+        r = wd.check_morning_update(self.at(9, 0))
         self.assertEqual(r["status"], wd.WARN)
-        self.assertIn("came late", r["detail"])
-        self.assertFalse([e for e in wd.morning_evidence() if e["state"] == "DONE"])
+        self.assertIn("league-wide moneyline", r["detail"])
 
-    def test_a_look_before_8_does_not_count(self):
-        self.seed(self.at(7, 30))
-        self.assertEqual(wd.check_morning_update(self.at(9, 0))["status"], wd.WARN)
+    def test_an_early_first_game_moves_the_due_times_earlier(self):
+        self.plan(first=10)
+        from operational import day_status
+        ds = day_status.build(self.at(8, 0))
+        self.assertTrue(ds["prep"]["refresh_due_utc"].startswith("2026-10-09T11:15"))     # 07:15 ET for a 10:00 AM first game
+        self.assertTrue(ds["prep"]["analysis_due_utc"].startswith("2026-10-09T11:30"))
 
-    def test_readiness_calls_morning_unmet_until_a_scheduled_morning_is_on_record(self):
+    def test_readiness_calls_the_preparation_unmet_until_a_prepared_morning_is_on_record(self):
         feats = {f["feature"]: f for f in wd.readiness(self.at(9, 0))["features"]}
-        morning = next(v for k, v in feats.items() if k.startswith("Morning update"))
-        self.assertEqual(morning["status"], "NOT_VERIFIED")
-        self.assertIn("UNMET", morning["detail"])
-        refresh = feats["Several price refreshes a day"]
-        self.assertEqual(refresh["status"], "LIMITED")
-        self.assertIn("NOT MET", refresh["detail"])
-        self.seed(self.at(8, 6))
+        prep = next(v for k, v in feats.items() if k.startswith("Morning preparation"))
+        self.assertEqual(prep["status"], "NOT_VERIFIED")
+        self.assertIn("UNMET", prep["detail"])
+        self.assertEqual(feats["Coordinated player-odds captures by start-time wave"]["status"], "LIMITED")
+        self.prepared(board_at=self.at(8, 4))
         wd.check_morning_update(self.at(9, 0))
         feats = {f["feature"]: f for f in wd.readiness(self.at(9, 0))["features"]}
-        self.assertEqual(next(v for k, v in feats.items() if k.startswith("Morning update"))["status"], "WORKING")
+        self.assertEqual(next(v for k, v in feats.items() if k.startswith("Morning preparation"))["status"], "WORKING")
 
 
 class TestJobsActuallyRan(unittest.TestCase):
@@ -176,7 +197,9 @@ class TestJobsActuallyRan(unittest.TestCase):
             if path not in ages_min:
                 raise OSError("no such log")
             return now.timestamp() - ages_min[path] * 60
-        return wd.check_jobs_ran(now, definitions=self.DEFS, mtime=mtime)
+        fresh = (now - dt.timedelta(minutes=2)).isoformat().replace("+00:00", "Z")
+        health = {"real_parlay_paper_trader": {"last_success_utc": fresh, "last_attempt_utc": fresh, "last_status": "OK"}}
+        return wd.check_jobs_ran(now, definitions=self.DEFS, mtime=mtime, launchctl_text="", health=health)
 
     def test_jobs_that_wrote_to_their_logs_inside_their_schedule_are_ok(self):
         with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
@@ -188,18 +211,68 @@ class TestJobsActuallyRan(unittest.TestCase):
         with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
             r = self.check({"/x/trader.log": 4 * 60, "/x/morning.log": 600})
         self.assertEqual(r["status"], wd.WARN)
-        self.assertIn("real-parlay-paper-trader 4.0 h ago", r["detail"])
+        self.assertIn("real-parlay-paper-trader OVERDUE (last started 4.0 h ago", r["detail"])
         self.assertNotIn("morning-update", r["detail"])
 
     def test_a_calendar_job_is_late_after_26_hours_and_a_job_with_no_log_is_reported(self):
         with mock.patch.object(wd, "EXPECTED_JOBS", ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-update")):
             r = self.check({"/x/trader.log": 5, "/x/morning.log": 27 * 60})
-            self.assertIn("morning-update 27.0 h ago", r["detail"])
+            self.assertIn("morning-update OVERDUE (last started 27.0 h ago", r["detail"])
             r2 = self.check({"/x/trader.log": 5})
-            self.assertIn("no log at all: morning-update", r2["detail"])
+            self.assertIn("morning-update OVERDUE (no log at all)", r2["detail"])
 
     def test_missing_definitions_are_a_warning_not_all_ok(self):
         now = dt.datetime(2026, 10, 17, 21, 0, tzinfo=dt.timezone.utc)
-        r = wd.check_jobs_ran(now, definitions={}, mtime=lambda p: now.timestamp())
+        r = wd.check_jobs_ran(now, definitions={}, mtime=lambda p: now.timestamp(), launchctl_text="", health={})
         self.assertEqual(r["status"], wd.WARN)
         self.assertIn("could be checked", r["detail"])
+
+
+class JobStateTests(unittest.TestCase):
+    """RUNNING / FAILED / OVERDUE / STALE_OUTPUT / OK are told apart from launchctl, the log's age and the recorded output; log activity alone is not success."""
+    NOW = dt.datetime(2026, 10, 17, 15, 0, tzinfo=dt.timezone.utc)
+    LABEL = "com.nhlengine.real-parlay-paper-trader"
+
+    def _rows(self, *, launchctl="", health=None, log_age_min=5.0):
+        defs = {self.LABEL: {"StartInterval": 900, "StandardOutPath": "/x/trader.log"}}
+        mtime = lambda _p: (self.NOW - dt.timedelta(minutes=log_age_min)).timestamp()  # noqa: E731
+        return wd.job_states(self.NOW, launchctl_text=launchctl, health=health or {}, definitions=defs, mtime=mtime)[0]
+
+    def _health(self, ok_min_ago, status="OK", try_min_ago=1):
+        iso = lambda m: (self.NOW - dt.timedelta(minutes=m)).isoformat().replace("+00:00", "Z")  # noqa: E731
+        return {"real_parlay_paper_trader": {"last_success_utc": None if ok_min_ago is None else iso(ok_min_ago), "last_attempt_utc": iso(try_min_ago), "last_status": status}}
+
+    def test_ok_when_started_and_output_fresh(self):
+        self.assertEqual(self._rows(health=self._health(3))["state"], "OK")
+
+    def test_running_when_a_pid_is_alive(self):
+        self.assertEqual(self._rows(launchctl=f"4242\t0\t{self.LABEL}\n", health=self._health(3))["state"], "RUNNING")
+
+    def test_failed_when_the_last_attempt_failed_after_the_last_success(self):
+        row = self._rows(health=self._health(120, status="FAILED", try_min_ago=2))
+        self.assertEqual(row["state"], "FAILED")
+
+    def test_failed_from_launchd_exit_status(self):
+        self.assertEqual(self._rows(launchctl=f"-\t1\t{self.LABEL}\n", health=self._health(3))["state"], "FAILED")
+
+    def test_overdue_when_the_log_is_old(self):
+        self.assertEqual(self._rows(health=self._health(3), log_age_min=300)["state"], "OVERDUE")
+
+    def test_stale_output_when_it_runs_but_produces_nothing_valid(self):
+        row = self._rows(health=self._health(600), log_age_min=2)          # logging every cycle, last success ten hours ago
+        self.assertEqual(row["state"], "STALE_OUTPUT")
+
+    def test_stale_output_when_it_never_succeeded(self):
+        self.assertEqual(self._rows(health=self._health(None), log_age_min=2)["state"], "STALE_OUTPUT")
+
+
+class NoGameDayTests(unittest.TestCase):
+    def test_a_day_with_no_scheduled_games_has_no_plan_and_is_not_a_failure(self):
+        now = dt.datetime(2026, 10, 17, 15, 0, tzinfo=dt.timezone.utc)                       # 11:00 ET, long after the analysis time
+        from operational import day_status, morning_refresh
+        with mock.patch.object(day_status, "build", return_value={"plan_present": False}), mock.patch.object(morning_refresh, "first_start_today", return_value=None):
+            r = wd.check_morning_update(now)
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("no games", r["detail"])
+        with mock.patch.object(day_status, "build", return_value={"plan_present": False}), mock.patch.object(morning_refresh, "first_start_today", return_value=now):
+            self.assertEqual(wd.check_morning_update(now)["status"], wd.FAIL)                  # games exist and no plan was made: still reported

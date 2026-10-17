@@ -41,6 +41,12 @@ Not covered by this price: The Odds API plan (see `docs/ODDS_PLAN_DECISION.md`) 
 7. After one clean day (all windows captured, nothing missed), retire the Mac jobs permanently and delete the Mac's token.
 8. Keep **recording paused** throughout; the host inherits `recording_pause.json` and the unapproved policy digest as files.
 
+## Rollback and duplicate-engine prevention
+
+* **Cost, in USD:** $12.00/month droplet + $2.40/month weekly backups = **$14.40/month** (about $173/year); no setup fee; billed per second, capped monthly. Not purchased.
+* **Only one engine may buy credits and publish.** Before the host's first run, `launchctl bootout` every `com.nhlengine.*` job on the Mac and confirm `launchctl list | grep nhlengine` prints nothing. The reservation ledger is file-locked on ONE machine only; two machines would each see a full balance and double-spend. There is no automatic cross-machine lock today: this is a manual step, and the migration PR should add one (the host would read the provider's remaining-credit header at start and refuse to run if it is lower than the last recorded balance).
+* **Rollback:** stop the timers (`systemctl disable --now 'nhl-*.timer'`), rsync the host's `operational/runtime/` and `paper_bankroll.db` back to the Mac, verify the ledger hash, then `launchctl bootstrap` the jobs. The Mac copy is kept untouched for 7 days after cut-over.
+
 ## Until then: exact Mac power requirements
 
 The engine cannot buy a pregame price while the Mac sleeps. Required, 7:50 AM until about 30 minutes after the last puck drop (about 11:30 PM ET on late-West nights):

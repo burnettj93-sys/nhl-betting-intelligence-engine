@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.nhlengine.morning-refresh</string>
+
+    <!-- The 07:45 ET refresh (operational/morning_refresh.py): schedules, results, statistics, rosters and participation evidence before the 08:00 analysis. Install with WorkingDirectory at the pinned release. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin/python3</string>
+        <string>-m</string>
+        <string>operational.morning_refresh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/johnburnett/nhl_engine_release</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>45</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/morning_update.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/morning_update.err.log</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>

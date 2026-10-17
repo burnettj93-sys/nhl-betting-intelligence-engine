@@ -98,6 +98,14 @@ def slate_board() -> dict:
     return sb.load() or {"generated_at_utc": None, "games": [], "primary": None}
 
 
+def day_status() -> dict:
+    """The day's capture timeline (refresh, analysis, league pulls, waves, budget). Local mode reads the engine's own file."""
+    if _cloud():
+        return _wrap(cloud_snapshot.day_status)
+    from operational import day_status as ds
+    return ds.load() or {"generated_at_utc": None, "plan_present": False}
+
+
 def performance() -> dict:
     from dashboard import paper_performance_view as ppv
     try:

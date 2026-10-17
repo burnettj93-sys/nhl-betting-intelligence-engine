@@ -336,36 +336,75 @@ def availability_block(tk: dict) -> dict:
     return ((tk.get("diagnostics") or {}).get("price_availability") or {})
 
 
+WAVE_STATE_WORDS = {"PENDING": "Not yet due", "DUE": "Due now", "CAPTURED_ON_TIME": "Captured on time", "CAPTURED_LATE": "Captured late (after the 60-minute publish deadline)",
+                    "PARTIAL": "Partly captured", "MISSED": "Missed: nothing is bought after the window", "NONE_SELECTED": "No game selected (budget)", "CLOSED": "Window closed"}
+
+
 def morning_strip(tk: dict, now: dt.datetime | None = None) -> None:
-    """One line on whether this morning's update happened and what it found: judged now, from the published availability record."""
-    from operational import price_availability as pa
-    av = availability_block(tk)
-    today = av.get("today") or {}
-    games = today.get("games") or {}
-    if not games:
-        st.caption("Morning update: no prices have been looked at yet today.")
+    """One banner on today's timeline: the 07:45 refresh, the 08:00 analysis and league pull, and the next capture, from the published day status."""
+    ds = day_status_or_none()
+    if not ds or not ds.get("plan_present"):
+        st.caption("Today's capture plan has not been made yet: the first 15-minute engine cycle of the day makes it.")
         return
-    now = now or _utcnow()
-    m = pa.morning_status_from(games, now, today["day"])
-    prov = ((tk.get("provisional") or {}).get("tickets")) or []
-    opts = ((tk.get("options") or {}).get("options")) or []
-    sched = av.get("schedule") or {}
-    if m["state"] == pa.MORNING_NO_GAMES:
+    p, lp = ds.get("prep") or {}, ds.get("league_pulls") or {}
+    parts = [f"07:45 refresh: {str(p.get('refresh_status') or '—').replace('_', ' ').lower()}"
+             + (f" ({et_time(p['refresh_finished_utc'], True)})" if p.get("refresh_finished_utc") else ""),
+             f"whole-slate analysis: {p.get('analysis_games') or 0} of {p.get('slate_games') or 0} games"
+             + (f", published {et_time(p['analysis_published_utc'], True)}" if p.get("analysis_published_utc") else ", not published yet"),
+             f"league moneyline + spread pulls: {len(lp.get('made') or [])} made of {lp.get('planned') if lp.get('planned') is not None else '—'} planned"]
+    nxt = next((w for w in ds.get("waves") or [] if w["state"] in ("PENDING", "DUE")), None)
+    if nxt:
+        parts.append(f"next player-odds capture: wave {nxt['index'] + 1}, target {et_time(nxt['target_utc'], True)} ({nxt['selected']} game(s) selected)")
+    banner("<b>Today's timeline.</b> " + esc(" · ".join(parts)), "info")
+
+
+def day_status_or_none() -> dict | None:
+    try:
+        return product_source.day_status()
+    except Exception:  # noqa: BLE001 - the timeline is informational
+        return None
+
+
+def day_timeline(ds: dict | None = None) -> None:
+    """The day's capture timeline in full: waves with their targets and states, the games each priced and with which markets, the games the credit budget excluded, and the budget with its assumptions."""
+    ds = ds if ds is not None else day_status_or_none()
+    if not ds or not ds.get("plan_present"):
+        st.caption(esc((ds or {}).get("note") or "No capture plan for today yet."))
         return
-    if m["state"] == pa.MORNING_NOT_YET:
-        banner(f"<b>Morning update at {sched.get('morning_from_et', '08:00')} ET.</b> It will look at today's games and DraftKings' prices and build provisional picks. {esc(today.get('sentence') or '')}", "info")
-        return
-    first = et_time(m["first_look_utc"], True) if m.get("first_look_utc") else "—"
-    body = (f"{m['looked']} of {m['total']} games looked at (first look {first}) · prices posted for {m['posted']}, not posted yet for {m['not_posted']}, "
-            f"not fetched for budget for {m['budget_blocked']} · {len(opts)} option(s), {len(prov)} provisional ticket(s).")
-    if m["state"] == pa.MORNING_DONE:
-        banner(f"<b>Morning update done.</b> {esc(body)}", "good")
-    elif m["state"] == pa.MORNING_LATE:
-        banner(f"<b>Morning update was late.</b> {esc(body)} The first price look is normally at 8:00 AM ET.", "warn")
-    elif m["state"] == pa.MORNING_BUDGET_ONLY:
-        banner(f"<b>Morning update ran, but today's odds-credit plan left nothing for an early look.</b> {esc(body)} The pregame price (about 105 minutes before puck drop) still follows for the games the plan covers.", "warn")
-    else:
-        banner(f"<b>Morning update {m['state'].lower()}.</b> {esc(body)} The engine looks again every 15 minutes.", "warn")
+    p, lp = ds.get("prep") or {}, ds.get("league_pulls") or {}
+    st.markdown(f"**07:45 refresh** {esc(str(p.get('refresh_status') or '—').replace('_', ' ').lower())} · due {et_time(p.get('refresh_due_utc'), True)}"
+                + f" &nbsp;|&nbsp; **08:00 analysis** published {et_time(p['analysis_published_utc'], True) if p.get('analysis_published_utc') else 'not yet'} for {p.get('analysis_games') or 0} of {p.get('slate_games') or 0} games"
+                + f" &nbsp;|&nbsp; **League pulls** (moneyline + standard spreads, {lp.get('cost_each', '?')} credit(s) each, {'observed' if lp.get('cost_observed') else 'ASSUMED until the first charge is recorded'}): "
+                + (", ".join(et_time(m['at_utc'], True) + f" ({m['credits']:g} cr)" for m in lp.get("made") or []) or "none yet") + f" of {lp.get('planned')} planned", unsafe_allow_html=True)
+    rows = []
+    for w in ds.get("waves") or []:
+        games = ", ".join(f"{g.get('matchup') or g['game_id']}" + (" ✓" if g["selected"] else " (not selected)") for g in w["games"])
+        rows.append({"Wave": w["index"] + 1, "First game": et_time(w["first_game_utc"], True), "Capture target": et_time(w["target_utc"], True), "Publish by": et_time(w["publish_deadline_utc"], True),
+                     "State": WAVE_STATE_WORDS.get(w["state"], w["state"]), "Selected": w["selected"], "Credits": w["credits"], "Games": games})
+    if rows:
+        st.dataframe(rows, hide_index=True, width="stretch")
+    detail = []
+    for w in ds.get("waves") or []:
+        for g in w["games"]:
+            if not g["selected"]:
+                continue
+            for mw in g.get("missed") or []:
+                detail.append(f"{g.get('matchup') or g['game_id']}: window missed ({', '.join(t for t in mw.get('tags', []) if t != 'MISSED_WINDOW') or 'no sleep or outage evidence'}). {mw.get('detail')}")
+    for line in detail:
+        st.warning(esc(line))
+    ex = ds.get("excluded_by_budget") or []
+    if ex:
+        st.caption("Excluded by the credit budget (analysis only, no player prices): " + esc("; ".join(f"{e.get('matchup') or e['game_id']} (wave {e['wave'] + 1})" for e in ex)))
+    b = ds.get("budget") or {}
+    line = (f"Credits: {b.get('remaining_header_now') if b.get('remaining_header_now') is not None else b.get('remaining_header')} remaining on the provider's last header · "
+            f"today's player-odds share {b.get('player_today')} · league pulls reserved {b.get('league_total')} · recovery pool {b.get('recovery_pool')} · reserve {b.get('reserve')} · "
+            f"{b.get('days_left')} day(s) to the assumed reset.")
+    st.caption(esc(line))
+    for n in b.get("notes") or []:
+        st.caption("⚠ " + esc(n))
+    rec = ds.get("reconciliation") or {}
+    if rec:
+        st.caption("Planned vs charged today: " + esc("; ".join(f"{k} {v['planned']:g} planned / {v['actual']:g} charged in {v['calls']} call(s)" for k, v in rec.items())))
 
 
 def availability_table(day_block: dict, *, only_unposted: bool = False) -> None:

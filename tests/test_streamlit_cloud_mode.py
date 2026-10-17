@@ -290,11 +290,39 @@ subprocess.Popen = _popen
 def digest(p):
     p = pathlib.Path(p)
     return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
-from db import resolve_db_path
-critical = {"nhl": resolve_db_path(), "ledger": f"{REPO}/operational/prospective_observations.db",
-            "bankroll": f"{REPO}/operational/paper_bankroll.db"}
+# The probe works on a CONSISTENT COPY of the three databases (sqlite backup, taken once, here), points every module at the copies, and checks THOSE: the live engine's jobs keep writing to the
+# real files while the suite runs, so hashing the live files raced them (seen 2026-10-17: a settlement write coincided with the render). Any write the pages make still shows up in the
+# sqlite trace and in the file-write spy below.
+import shutil
+_copy_dir = pathlib.Path(tempfile.mkdtemp())
+def _snapshot(src, name):
+    src = pathlib.Path(src)
+    if not src.exists():
+        return str(src)
+    dst = _copy_dir / name
+    s_conn = _real_connect(f"file:{src}?mode=ro", uri=True); d_conn = _real_connect(str(dst))
+    s_conn.backup(d_conn); s_conn.close(); d_conn.close()
+    return str(dst)
+import db as _db
+from operational import paper_bankroll as _pb, prospective_ledger as _pl
+_nhl = _snapshot(_db.resolve_db_path(), "nhl.db")
+_pb.DB_PATH = pathlib.Path(_snapshot(_pb.DB_PATH, "paper_bankroll.db"))
+_pl.DB_PATH = pathlib.Path(_snapshot(_pl.DB_PATH, "prospective_observations.db"))
+os.environ[_db.ENV_VAR] = _nhl
+_db.DB_PATH = pathlib.Path(_nhl)
+critical = {"nhl": _nhl, "ledger": str(_pl.DB_PATH), "bankroll": str(_pb.DB_PATH)}
 before = {k: digest(v) for k, v in critical.items()}
-snapshot_dir_before = sorted(os.listdir(f"{REPO}/operational"))
+file_writes = []
+import builtins
+_real_open = builtins.open
+def _open(file, mode="r", *a, **k):
+    try:
+        if any(c in str(mode) for c in "wax+") and str(file).startswith(REPO) and "probe_auth" not in str(file):
+            file_writes.append(str(file)[len(REPO):])
+    except Exception:
+        pass
+    return _real_open(file, mode, *a, **k)
+builtins.open = _open
 
 from operational import auth_store
 auth_store.DEFAULT_DB_PATH = pathlib.Path(tempfile.mkdtemp()) / "probe_auth.db"
@@ -329,7 +357,7 @@ print("RESULT " + json.dumps({
     "files": files, "exceptions": exceptions, "writes": writes, "net": net, "procs": procs,
     "forbidden_present": [m for m in json.loads(sys.argv[2]) if m in sys.modules],
     "critical_unchanged": {k: before[k] == digest(v) for k, v in critical.items()},
-    "operational_dir_unchanged": snapshot_dir_before == sorted(os.listdir(f"{REPO}/operational")),
+    "operational_dir_unchanged": not file_writes, "repo_file_writes": file_writes, "critical_paths": critical,
     "max_session_state_bytes": max(sessions.values()),
     "today_has_account": "Available cash" in today_text or "Added by hand today" in today_text,
 }))
@@ -359,6 +387,8 @@ class TestCommunityCloudRenderSafety(unittest.TestCase):
     def test_no_writes_to_any_database_during_rendering(self):
         self.assertEqual(self.result["writes"], [])
         self.assertTrue(all(self.result["critical_unchanged"].values()), self.result["critical_unchanged"])
+        for name, path in self.result["critical_paths"].items():                       # the probe checked COPIES, so a live job writing during the suite cannot fail it
+            self.assertNotIn(str(REPO), path, f"{name} must be a copy outside the repository, not the live file")
 
     def test_no_network_or_paid_api_calls_on_render(self):
         self.assertEqual(self.result["net"], [])

@@ -112,6 +112,28 @@ def team_records(games: list[dict]) -> dict[str, dict]:
     return dict(rec)
 
 
+def puck_line_quotes(now: dt.datetime) -> dict[tuple[str, str], dict]:
+    """The standard +/-1.5 DraftKings puck line per game from the newest league-wide pull (moneyline_snapshot_cache.json rows carry it from 2026-10-17), keyed (home, away), with the provider's quote
+    time and the age at `now`. Games the pull did not return a spreads market for are absent: the board says why (not asked, not posted, malformed) rather than inventing a price."""
+    from operational import live_odds_daily_pull as lop
+    try:
+        doc = json.loads(lop.MONEYLINE_CACHE_PATH.read_text())
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for r in doc.get("rows") or []:
+        sp = r.get("spreads")
+        if not isinstance(sp, dict):
+            continue
+        cap = _utc(r.get("captured_at_utc"))
+        upd = _utc(sp.get("last_update")) if sp.get("last_update") else None
+        out[(r.get("home_team_abbrev"), r.get("away_team_abbrev"))] = {
+            **{k: sp.get(k) for k in ("status", "home_point", "home_price", "away_point", "away_price", "reason")},
+            "quote_captured_at_utc": _iso(cap) if cap else None, "quote_updated_at_utc": _iso(upd) if upd else None,
+            "age_min": round((now - (upd or cap)).total_seconds() / 60.0, 1) if (upd or cap) else None}
+    return out
+
+
 def moneyline_quotes(nhl, now: dt.datetime) -> dict[str, dict]:
     """Latest DraftKings moneyline per game side, with the time the quote was captured and its age."""
     rows = nhl.execute(
@@ -196,6 +218,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         games = load_games(nhl, now)
         records = team_records(games)
         quotes = moneyline_quotes(nhl, now)
+        puck_lines = puck_line_quotes(now)
         grows = goalie_rows if goalie_rows is not None else history.goalie_games()
         srows = skater_rows if skater_rows is not None else history.skater_games()
         live_tg = tg.build_live(grows)
@@ -303,6 +326,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                 q = quotes.get(g["game_id"])
                 row["moneyline"] = ({"home": q.get(g["home"]), "away": q.get(g["away"]), "provider": "DraftKings (US feed via The Odds API)"}
                                     if q else None)
+                row["puck_line"] = puck_lines.get((g["home"], g["away"]))
                 row["goalies"] = {"home": _short_goalies(goalies_out, expected_starters(g["home"], g["date_et"]), tg_state),
                                   "away": _short_goalies(goalies_out, expected_starters(g["away"], g["date_et"]), tg_state)}
             elif g["state"] == "FINAL":

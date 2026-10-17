@@ -40,11 +40,13 @@ TRADER_MAX_AGE_MIN = 45.0
 PUBLISH_MAX_AGE_MIN = 60.0
 
 EXPECTED_JOBS = (
-    "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.moneyline-pregame", "com.nhlengine.moneyline-snapshot",
-    "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second", "com.nhlengine.daily-props-pull", "com.nhlengine.daily-nhl-sync",
+    "com.nhlengine.real-parlay-paper-trader", "com.nhlengine.moneyline-snapshot", "com.nhlengine.daily-nhl-sync", "com.nhlengine.morning-refresh",
     "com.nhlengine.midday-schedule-refresh", "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement", "com.nhlengine.daily-postmortem",
     "com.nhlengine.database-backup", "com.nhlengine.morning-update", "com.nhlengine.moneypuck-refresh",
 )
+# Retired 2026-10-17 (unloaded; their plists stay in the repository for the record): moneyline-pregame (the T-35 pull), prop-sweep-first and prop-sweep-second (saves ride on the wave capture),
+# daily-props-pull (retired earlier). They are not expected to be loaded and must not make the watchdog fail.
+RETIRED_JOBS = ("com.nhlengine.moneyline-pregame", "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second", "com.nhlengine.daily-props-pull")
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 
 
@@ -252,20 +254,19 @@ def readiness(now: dt.datetime, evaluated: dict | None = None) -> dict:
     except Exception:  # noqa: BLE001
         pass
     # the morning workflow and the refresh cadence: stated plainly, and judged only on what the engine has actually recorded
-    ev = [e for e in morning_evidence() if e.get("state") == "DONE"]
-    scheduled = [e for e in ev if e.get("first_look_utc") and e.get("starts_at_utc") and
-                 (dt.datetime.fromisoformat(e["first_look_utc"].replace("Z", "+00:00")) - dt.datetime.fromisoformat(e["starts_at_utc"].replace("Z", "+00:00"))).total_seconds() <= 45 * 60]
-    if scheduled:
-        add("Morning update (about 8 AM ET: games, statistics, prices, provisional picks)", "WORKING",
-            f"observed on {scheduled[-1]['day']}: first look at {scheduled[-1]['first_look_utc']}, {scheduled[-1]['looked']} of {scheduled[-1]['total']} games; "
-            "the hosted-app check is recorded in docs/MORNING_WORKFLOW.md")
+    ev = [e for e in morning_evidence() if e.get("state") == "DONE" and e.get("analysis_due_utc")]
+    on_time = [e for e in ev if (dt.datetime.fromisoformat(e["analysis_published_utc"].replace("Z", "+00:00")) - dt.datetime.fromisoformat(e["analysis_due_utc"].replace("Z", "+00:00"))).total_seconds() <= 45 * 60]
+    if on_time:
+        add("Morning preparation (07:45 refresh, 08:00 whole-slate analysis, league pull)", "WORKING",
+            f"observed on {on_time[-1]['day']}: refresh finished {on_time[-1].get('refresh_finished_utc')}, analysis of {on_time[-1].get('analysis_games')} of {on_time[-1].get('slate_games')} games published "
+            f"{on_time[-1]['analysis_published_utc']}")
     else:
-        add("Morning update (about 8 AM ET: games, statistics, prices, provisional picks)", "NOT_VERIFIED",
-            "built and tested, but no day on record shows a first look within 45 minutes of 08:00 ET; this requirement is UNMET until one does and the hosted app has been checked",
-            "None — the first scheduled morning after the release proves it")
-    add("Several price refreshes a day", "LIMITED",
-        "NOT MET under the free 500-credit allowance: the plan buys a morning look for part of the slate and the pregame price for fewer games; it cannot also refresh every game midday. "
-        "Meeting it for every game needs about 60 credits a day (1,812 a month; docs/MORNING_WORKFLOW.md)", "Budget decision: the provider's 20K tier is the smallest above the free allowance (not purchased)")
+        add("Morning preparation (07:45 refresh, 08:00 whole-slate analysis, league pull)", "NOT_VERIFIED",
+            "built and tested, but no day on record shows the analysis published within 45 minutes of its due time; this requirement is UNMET until one does",
+            "None: the first scheduled morning after the release proves it")
+    add("Coordinated player-odds captures by start-time wave", "LIMITED",
+        "ONE capture per selected game (shots ladder, anytime goal, goalie saves) 90 minutes before its wave, within the existing 500-credit allowance: about four games a day on average at 3 credits each; the "
+        "games the budget excludes are named on the Slate Board with analysis but no prices", "Budget decision only if more coverage is wanted: the 20K tier ($30/month, not purchased)")
     add("Automatic starting-goalie confirmation", "BLOCKED", df.get("disabled_reason") or "no permitted automatic source is connected",
         "Grant or choose a permitted source (docs/STARTING_GOALIE_SOURCE_AUDIT.md); until then confirmations are recorded by hand")
     add("Reported lines and power-play units", "BLOCKED", "same source; the app shows only the inferred estimate, labelled as such", "same as above")
@@ -293,46 +294,68 @@ def readiness(now: dt.datetime, evaluated: dict | None = None) -> dict:
 
 
 MORNING_EVIDENCE = "morning_update_evidence.jsonl"
+MORNING_WARN_MIN, MORNING_FAIL_MIN = 45.0, 120.0
 
 
 def check_morning_update(now: dt.datetime) -> dict:
-    """The 08:00 ET update (first look at today's games and prices) must happen on its own. Late = WARN from 08:45 ET, FAIL from 10:00 ET; it is judged from the engine's own
-    availability record, and each day's outcome is appended to a persistent evidence file, so 'it ran every morning' does not depend on anyone watching."""
-    from operational import price_availability as pa
+    """The day's preparation must happen on its own: the 07:45 ET refresh (earlier when the first game is early), the whole-slate analysis published after 08:00 ET, and the league-wide moneyline +
+    spread pull. Judged from the published day status (operational/day_status.py): WARN when something is more than 45 minutes late, FAIL at two hours. Each complete day is appended to a persistent
+    evidence file, so 'it ran every morning' does not depend on anyone watching."""
+    from operational import day_status as ds_mod
     try:
-        m = pa.morning_status(now)
+        ds = ds_mod.build(now)
     except Exception as exc:  # noqa: BLE001
-        return {"name": "morning_update", "status": WARN, "detail": f"could not evaluate the morning update: {type(exc).__name__}"}
-    _log_morning_evidence(m, now)
-    state = m["state"]
-    if state in (pa.MORNING_NO_GAMES, pa.MORNING_NOT_YET):
-        return {"name": "morning_update", "status": OK, "detail": "no morning update is due yet" if state == pa.MORNING_NOT_YET else "no games today"}
-    if state == pa.MORNING_LATE:
-        return {"name": "morning_update", "status": WARN, "detail": f"the first price look came late ({m['first_look_utc']}, scheduled 08:00 ET): {m['looked']} of {m['total']} games looked at since"}
-    if state == pa.MORNING_BUDGET_ONLY:
-        return {"name": "morning_update", "status": WARN, "detail": f"the morning update ran but could not look at any game: today's credit plan left no credits for it ({m['budget_blocked']} of {m['total']} games budget-blocked); "
-                                                                   "a pregame price still follows for the games the plan covers"}
-    if state == pa.MORNING_DONE:
-        return {"name": "morning_update", "status": OK, "detail": f"morning update done: {m['looked']} of {m['total']} games looked at (first look {m['first_look_utc']}); "
-                                                                f"prices posted for {m['posted']}, not posted yet for {m['not_posted']}, not fetched for budget for {m['budget_blocked']}"}
-    from operational import capture_schedule as sched
-    ten = sched._localize(dt.date.fromisoformat(m["day"]), 10, 0)
-    status = FAIL if now >= ten else WARN
-    return {"name": "morning_update", "status": status, "detail": f"morning update {state.lower()}: {m['looked']} of {m['total']} games looked at since 08:00 ET"}
+        return {"name": "morning_update", "status": WARN, "detail": f"could not evaluate today's preparation: {type(exc).__name__}"}
+    if not ds.get("plan_present"):
+        from operational import capture_timeline as ct, morning_refresh
+        try:
+            if morning_refresh.first_start_today(now) is None:
+                return {"name": "morning_update", "status": OK, "detail": "no games are scheduled today: there is no plan to make"}
+        except Exception:  # noqa: BLE001 - without the schedule, judge by the clock below
+            pass
+        due = ct.prep_times(ct.et_date(now), None)["analysis_at"]
+        late = (now - due).total_seconds() / 60.0
+        if late < MORNING_WARN_MIN:
+            return {"name": "morning_update", "status": OK, "detail": "no day plan is due yet"}
+        return {"name": "morning_update", "status": FAIL if late >= MORNING_FAIL_MIN else WARN, "detail": f"no capture plan has been made today ({late:.0f} min after the 08:00 ET analysis time); the first trader cycle makes it"}
+    p, lp = ds.get("prep") or {}, ds.get("league_pulls") or {}
+    problems, worst = [], 0.0
+    def late_min(due):
+        return None if not due else (now - dt.datetime.fromisoformat(due.replace("Z", "+00:00"))).total_seconds() / 60.0
+    r_late = late_min(p.get("refresh_due_utc"))
+    if r_late is not None and r_late >= MORNING_WARN_MIN and p.get("refresh_status") not in ("DONE", "PARTIAL"):
+        problems.append(f"the refresh (due {p['refresh_due_utc']}) has not completed ({p.get('refresh_status')})")
+        worst = max(worst, r_late)
+    a_late = late_min(p.get("analysis_due_utc"))
+    published = p.get("analysis_published_utc")
+    if a_late is not None and a_late >= MORNING_WARN_MIN and not (published and published >= p["analysis_due_utc"]):
+        problems.append(f"the whole-slate analysis (due {p['analysis_due_utc']}) has not been published")
+        worst = max(worst, a_late)
+    if a_late is not None and a_late >= MORNING_WARN_MIN and lp.get("planned") and not lp.get("made"):
+        problems.append("the league-wide moneyline + spread pull has not been made (check credits, the connection and the deferral reason)")
+        worst = max(worst, a_late * 0.0 + MORNING_WARN_MIN)
+    if problems:
+        return {"name": "morning_update", "status": FAIL if worst >= MORNING_FAIL_MIN else WARN, "detail": "; ".join(problems)}
+    if a_late is not None and a_late >= 0 and p.get("refresh_status") in ("DONE", "PARTIAL") and published:
+        _log_morning_evidence({"day": ds["day"], "state": "DONE", "refresh_finished_utc": p.get("refresh_finished_utc"), "analysis_published_utc": published,
+                               "analysis_games": p.get("analysis_games"), "slate_games": p.get("slate_games"), "league_pulls_made": len(lp.get("made") or []),
+                               "analysis_due_utc": p.get("analysis_due_utc"), "first_look_utc": published, "starts_at_utc": p.get("analysis_due_utc"),
+                               "looked": p.get("analysis_games"), "total": p.get("slate_games")}, now)
+        return {"name": "morning_update", "status": OK, "detail": f"preparation done: refresh {p.get('refresh_status', '').lower()} ({p.get('refresh_finished_utc')}); analysis of {p.get('analysis_games')} of "
+                                                                f"{p.get('slate_games')} games published {published}; {len(lp.get('made') or [])} league pull(s) made"}
+    return {"name": "morning_update", "status": OK, "detail": "today's preparation is not due yet"}
 
 
 def _log_morning_evidence(m: dict, now: dt.datetime) -> None:
-    """One line per day, the last state seen once the first look has happened (appended again only when the state or counts change)."""
+    """One line per day once the preparation is complete (appended again only when the counts change)."""
     try:
-        if m["state"] in ("NOT_YET", "NO_GAMES"):
-            return
         p = state_paths.path(MORNING_EVIDENCE)
         last = None
         if p.exists():
             rows = [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
             last = next((r for r in reversed(rows) if r.get("day") == m["day"]), None)
-        key = (m["state"], m["looked"], m["total"], m["posted"], m["not_posted"], m["budget_blocked"])
-        if last and (last["state"], last["looked"], last["total"], last["posted"], last["not_posted"], last["budget_blocked"]) == key:
+        key = (m["state"], m.get("analysis_games"), m.get("league_pulls_made"))
+        if last and (last.get("state"), last.get("analysis_games"), last.get("league_pulls_made")) == key:
             return
         with open(p, "a") as f:
             f.write(json.dumps({**m, "logged_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")}) + "\n")
@@ -413,62 +436,119 @@ def _job_definitions() -> dict[str, dict]:
     return out
 
 
-def check_jobs_ran(now: dt.datetime, *, definitions: dict | None = None, mtime=None) -> dict:
-    """A loaded scheduler proves nothing: this checks that each expected job actually RAN recently, from the modification time of its own log (every run writes to it). An interval job is late
-    after three intervals (at least 20 minutes), a calendar job after 26 hours. WARN, not FAIL: a sleeping Mac produces exactly this and is reported as such by missed_windows; the detail names every
-    late job with its age so a job that silently stopped is never hidden behind 'loaded'."""
+# What each scheduled job PRODUCES: the ingestion-health component it records on success, and how old that success may be. Log activity alone does not prove success: a job can run every cycle and
+# fail every cycle, or run and produce nothing.
+JOB_OUTPUTS = {
+    "com.nhlengine.real-parlay-paper-trader": ("real_parlay_paper_trader", 45.0), "com.nhlengine.daily-nhl-sync": ("nhl_sync_full", 26 * 60.0),
+    "com.nhlengine.morning-refresh": ("morning_refresh", 26 * 60.0), "com.nhlengine.midday-schedule-refresh": ("nhl_midday_schedule_refresh", 26 * 60.0),
+    "com.nhlengine.pregame-targeted-refresh": ("nhl_pregame_targeted_refresh", 3 * 60.0), "com.nhlengine.daily-settlement": ("settlement", 26 * 60.0),
+    "com.nhlengine.daily-postmortem": ("postmortem", 26 * 60.0), "com.nhlengine.database-backup": ("database_backups", 26 * 60.0),
+    "com.nhlengine.moneypuck-refresh": ("moneypuck_afternoon_refresh", 26 * 60.0),
+}
+RUNNING, FAILED_STATE, OVERDUE, STALE_OUTPUT, JOB_OK = "RUNNING", "FAILED", "OVERDUE", "STALE_OUTPUT", "OK"
+
+
+def job_states(now: dt.datetime, *, launchctl_text: str = "", health: dict | None = None, definitions: dict | None = None, mtime=None) -> list[dict]:
+    """One row per scheduled job with a state that says what is actually true:
+      RUNNING       a process of the job is alive now (launchctl shows a PID);
+      FAILED        its last attempt failed (ingestion health says so, or launchctl's last exit status is non-zero) and has not been followed by a success;
+      OVERDUE       it has not started within its own schedule (three intervals, at least 20 minutes; 26 hours for a calendar job), judged from its log's modification time;
+      STALE_OUTPUT  it started recently but its last SUCCESSFUL output is older than the job's output limit (it runs and produces nothing valid);
+      OK            started on schedule and its output is fresh.
+    Log activity alone is never taken as success."""
     definitions = definitions if definitions is not None else _job_definitions()
     mtime = mtime or (lambda path: Path(path).stat().st_mtime)
-    late, never, checked = [], [], 0
+    health = health if health is not None else {}
+    live = {}
+    for line in launchctl_text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[2].startswith("com.nhlengine."):
+            live[parts[2]] = (parts[0], parts[1])                   # (pid or '-', last exit status)
+    rows = []
     for label, d in sorted(definitions.items()):
         if label == "com.nhlengine.watchdog":
             continue
-        log = d.get("StandardOutPath")
-        if not log:
-            continue
-        checked += 1
+        short = label.removeprefix("com.nhlengine.")
         limit_min = max(3 * int(d["StartInterval"]) / 60.0, 20.0) if d.get("StartInterval") else 26 * 60.0
+        log = d.get("StandardOutPath")
+        age_min = None
+        if log:
+            try:
+                age_min = (now.timestamp() - mtime(log)) / 60.0
+            except OSError:
+                age_min = None
+        pid, exit_status = live.get(label, ("-", "0"))
+        comp, out_limit = JOB_OUTPUTS.get(label, (None, None))
+        row = health.get(comp) or {} if comp else {}
+        last_ok = row.get("last_success_utc")
+        last_try = row.get("last_attempt_utc")
+        def _age(stamp):
+            return None if not stamp else (now - dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds() / 60.0
+        ok_age, try_age = _age(last_ok), _age(last_try)
+        failed = bool(comp and row.get("last_status") in ("FAILED", "FAIL", "HALT") and (last_ok is None or (last_try and last_try > last_ok))) or (exit_status not in ("0", "-") and pid == "-")
+        if pid not in ("-", ""):
+            state, why = RUNNING, f"a process is alive (pid {pid})"
+        elif failed:
+            state, why = FAILED_STATE, (f"last attempt failed ({row.get('last_status')}: {str(row.get('last_detail') or '')[:80]})" if comp and row.get("last_status") in ("FAILED", "FAIL", "HALT") else f"launchd last exit status {exit_status}")
+        elif age_min is None or age_min > limit_min:
+            state, why = OVERDUE, ("no log at all" if age_min is None else f"last started {age_min / 60.0:.1f} h ago (limit {limit_min / 60.0:.1f} h)")
+        elif comp and (ok_age is None or ok_age > out_limit):
+            state, why = STALE_OUTPUT, ("it has never recorded a success" if ok_age is None else f"last successful output {ok_age / 60.0:.1f} h ago (limit {out_limit / 60.0:.1f} h)")
+        else:
+            state, why = JOB_OK, "started on schedule" + (f"; last success {ok_age:.0f} min ago" if ok_age is not None else "")
+        rows.append({"job": short, "state": state, "detail": why, "log_age_min": None if age_min is None else round(age_min, 1), "last_success_age_min": None if ok_age is None else round(ok_age, 1)})
+    return rows
+
+
+def check_jobs_ran(now: dt.datetime, *, definitions: dict | None = None, mtime=None, launchctl_text: str | None = None, health: dict | None = None) -> dict:
+    """A loaded scheduler proves nothing, and neither does a log that was written to. Each expected job is classified RUNNING / FAILED / OVERDUE / STALE_OUTPUT / OK (see job_states) from launchctl, its log
+    and its recorded output. WARN when any job is FAILED, OVERDUE or STALE_OUTPUT (a sleeping Mac produces OVERDUE, and missed_windows says so); the detail names each with its reason."""
+    definitions = definitions if definitions is not None else _job_definitions()
+    if launchctl_text is None:
         try:
-            age_min = (now.timestamp() - mtime(log)) / 60.0
-        except OSError:
-            never.append(label.removeprefix("com.nhlengine."))
-            continue
-        if age_min > limit_min:
-            late.append(f"{label.removeprefix('com.nhlengine.')} {age_min / 60.0:.1f} h ago (limit {limit_min / 60.0:.1f} h)")
+            launchctl_text = _run(["launchctl", "list"])
+        except Exception:  # noqa: BLE001
+            launchctl_text = ""
+    if health is None:
+        try:
+            from operational import ingestion_health
+            health = ingestion_health.load_health()
+        except Exception:  # noqa: BLE001
+            health = {}
+    rows = job_states(now, launchctl_text=launchctl_text, health=health, definitions=definitions, mtime=mtime)
     expected = len(EXPECTED_JOBS) - (1 if "com.nhlengine.watchdog" in EXPECTED_JOBS else 0)
-    if checked < expected:
-        return {"name": "jobs_ran", "status": WARN, "detail": f"only {checked} of {expected} expected jobs could be checked (a plist is missing or unreadable, or no log path is defined): the rest are unverified"}
-    if never or late:
-        parts = ([f"no log at all: {', '.join(never)}"] if never else []) + ([f"late: {'; '.join(late)}"] if late else [])
-        return {"name": "jobs_ran", "status": WARN, "detail": f"{checked} job(s) checked; " + " | ".join(parts) + ". A job that is loaded but has not run is not working."}
-    return {"name": "jobs_ran", "status": OK, "detail": f"all {checked} scheduled jobs wrote to their logs within their own schedule (loaded is not enough; they ran)"}
+    if len(rows) < expected:
+        return {"name": "jobs_ran", "status": WARN, "detail": f"only {len(rows)} of {expected} expected jobs could be checked (a plist is missing or unreadable, or no log path is defined): the rest are unverified", "jobs": rows}
+    bad = [r for r in rows if r["state"] in (FAILED_STATE, OVERDUE, STALE_OUTPUT)]
+    if bad:
+        return {"name": "jobs_ran", "status": WARN, "jobs": rows,
+                "detail": f"{len(rows)} job(s) checked; " + "; ".join(f"{r['job']} {r['state']} ({r['detail']})" for r in bad) + ". A job that is loaded but has not run, or has run without producing valid output, is not working."}
+    running = [r["job"] for r in rows if r["state"] == RUNNING]
+    return {"name": "jobs_ran", "status": OK, "jobs": rows,
+            "detail": f"all {len(rows)} scheduled jobs started on schedule and produced timely output" + (f" ({len(running)} running now)" if running else "")}
 
 
 def check_missed_windows(now: dt.datetime) -> dict:
-    """Capture windows that CLOSED without their capture in the last 24 hours: the moneyline T-35 pulls (operational/moneyline_pregame.py audit) and the planned pregame prop captures
-    (operational/price_availability.py). A missed window is reported, never bought late and never backfilled; MACHINE_ASLEEP means the Mac (not the code) was not running."""
-    from operational import eastern_time as et, moneyline_pregame, price_availability as pa, quote_freshness as qf
+    """Planned wave capture windows that CLOSED without their capture in the last 24 hours (operational/price_availability.py). A missed window is reported, never bought late and never
+    backfilled. It is attributed to machine sleep only when the operating system's power log shows sleep inside the window (MACHINE_ASLEEP); with no sleep evidence and no trader run in the window
+    it is an observed engine outage (ENGINE_OUTAGE_OBSERVED); otherwise it is unattributed (the engine ran and made no capture)."""
+    from operational import eastern_time as et, price_availability as pa, quote_freshness as qf
     cutoff = now - dt.timedelta(hours=24)
-    ml_missed = ml_asleep = prop_missed = prop_asleep = 0
-    audit = moneyline_pregame.load_audit().get("records") or {}
-    for rec in audit.values():
-        t = qf.parse_utc((rec.get("scheduled_starts") or [None])[0])
-        if rec.get("outcome") == "MISSED_WINDOW" and t is not None and cutoff <= t <= now:
-            ml_missed += 1
-            ml_asleep += int("MACHINE_ASLEEP" in (rec.get("tags") or []))
+    n = asleep = outage = 0
     for day in {et.eastern_today(now), et.eastern_today(cutoff)}:
         for m in pa.missed_windows(day):
             t = qf.parse_utc(m.get("closed_utc"))
             if t is not None and cutoff <= t <= now:
-                prop_missed += 1
-                prop_asleep += int("MACHINE_ASLEEP" in (m.get("tags") or []))
-    total = ml_missed + prop_missed
-    if not total:
-        return {"name": "missed_windows", "status": OK, "detail": "no capture window closed without its capture in the last 24 hours"}
-    asleep = ml_asleep + prop_asleep
+                n += 1
+                asleep += int("MACHINE_ASLEEP" in (m.get("tags") or []))
+                outage += int("ENGINE_OUTAGE_OBSERVED" in (m.get("tags") or []))
+    if not n:
+        return {"name": "missed_windows", "status": OK, "detail": "no planned capture window closed without its capture in the last 24 hours"}
+    advice = (" Keep the Mac plugged in with the lid open from 7:50 AM to the last puck drop, or move the engine to an always-on host." if asleep else
+              " The engine itself was down or blocked in those windows: see the job states." if outage else "")
     return {"name": "missed_windows", "status": WARN,
-            "detail": f"{total} capture window(s) closed without a capture in the last 24 h ({ml_missed} moneyline pull(s), {prop_missed} pregame prop capture(s); {asleep} with the machine asleep). "
-                      "They are not bought late: a price taken after puck drop is not a pregame price. Keep the Mac plugged in with the lid open from 7:50 AM to the last puck drop, or move the engine to an always-on host."}
+            "detail": f"{n} planned capture window(s) closed without a capture in the last 24 h ({asleep} with sleep evidence, {outage} engine outage(s) observed, {n - asleep - outage} unattributed). "
+                      "They are not bought late: a price taken after the window is not a pregame price." + advice}
 
 
 def check_publishing_enabled() -> dict:

@@ -135,15 +135,29 @@ def _save_state(state: dict, path: Path | None) -> None:
 
 
 def _default_guard(now: dt.datetime) -> dict:
-    """The display refresh is the lowest-priority spend: the credit plan allows it one credit a day (two when every game is priced)."""
-    from operational import capture_schedule as sched, credit_planner as cp, odds_quota
+    """A read-only look at the plan before the pull; the pull itself RESERVES its credits under a lock (credit_planner.reserve) so two jobs cannot spend one allocation."""
+    from operational import credit_planner as cp, odds_quota
     if cp.enforced():
-        if now < sched._localize(sched._et_date(now), *sched.MORNING_START_ET):
-            # The day's first display refresh is the MORNING update's moneyline (it also carries tomorrow's early lines). Spent at midnight, as it was until
-            # 2026-10-09, it left the whole morning on a price from the night before.
-            return {"allow": False, "reason": "BEFORE_MORNING_UPDATE"}
-        return cp.authorize(cp.MONEYLINE_UI, 1, now, plan=cp.load_plan(cp._et_day(now.strftime("%Y-%m-%dT%H:%M:%SZ"))))
-    return odds_quota.guard(planned=1, now=now)   # default (1.0x) soft pace -- T-35 keeps its own 3x priority
+        lc, _ = cp.observed_league_cost()
+        return cp.authorize(cp.MONEYLINE_UI, lc, now, plan=cp.load_plan(cp._et_day(now.strftime("%Y-%m-%dT%H:%M:%SZ"))))
+    return odds_quota.guard(planned=1, now=now)
+
+
+def plan_due(now: dt.datetime) -> dict:
+    """The league-wide moneyline + spread pull is due on the day's timeline (operational/capture_timeline.py), not on a blanket price age: the 08:00 morning pull, ONE pregame pull shared by
+    every wave (at the first wave's capture target), and a further pull for a later wave only when the plan funded one from surplus. Read-only; spends nothing."""
+    from operational import capture_timeline as ct, credit_planner as cp, eastern_time as et
+    plan = cp.load_plan(et.eastern_today(now))
+    if plan is None or not plan.get("waves"):
+        return {"due": False, "reason": "NO_PLAN_FOR_TODAY", "target_max_age_min": None, "age_min": None}
+    waves = [ct.Wave(w["index"], schema.parse_utc(w["first_start_utc"]), tuple(w["games"])) for w in plan["waves"]]
+    first = min((w.first_start for w in waves), default=None)
+    pulls = cp.league_pull_times(now)
+    d = ct.league_pull_due(now, day_first_start=first, wave_list=waves, pull_times=pulls)
+    out = {"due": d["due"], "reason": d.get("reason"), "kind": d.get("kind"), "target_max_age_min": None, "age_min": None}
+    if d["due"] and d.get("kind") == "WAVE" and (plan.get("league_pulls") or {}).get("extra_for_later_waves", 0) <= 0:
+        out.update(due=False, reason="NOT_FUNDED: a pull for a later wave comes only from explicit surplus")
+    return out
 
 
 def run_if_due(now: dt.datetime | None = None, label: str | None = "ordinary_due", *,
@@ -164,7 +178,8 @@ def run_if_due(now: dt.datetime | None = None, label: str | None = "ordinary_due
         if not active_fn():
             out.update(action="SKIPPED", reason="STANDBY")
             return out
-        decision = (due_fn or due)(now)
+        from operational import credit_planner as _cpl
+        decision = (due_fn or (plan_due if _cpl.enforced() else due))(now)
         out["due_detail"] = decision
         if not decision["due"]:
             out.update(action="NONE", reason=decision["reason"])

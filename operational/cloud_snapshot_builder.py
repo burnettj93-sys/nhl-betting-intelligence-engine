@@ -220,6 +220,12 @@ def _builder_pool() -> dict:
     return builder_pool.load() or {"generated_at_utc": None, "games": {}}
 
 
+def _day_status() -> dict:
+    """The day's capture timeline (operational/day_status.py): refresh, analysis, league pulls, waves, games excluded by budget, the budget and its assumptions."""
+    from operational import day_status
+    return day_status.load() or {"generated_at_utc": None, "plan_present": False}
+
+
 def _slate_board() -> dict:
     """The per-game board and the primary slip (operational/slate_board.py), written by the 15-minute trader."""
     from operational import slate_board
@@ -238,6 +244,7 @@ _SECTION_BUILDERS = {
     "manual_orders": _manual_orders,
     "builder_pool": _builder_pool,
     "slate_board": _slate_board,
+    "day_status": _day_status,
     "performance": _performance,
     "morning_review": _morning_review,
     "ledger": _ledger,

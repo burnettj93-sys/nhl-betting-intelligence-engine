@@ -250,27 +250,31 @@ class TestCapturePlan(unittest.TestCase):
         row = self._plan(now, {bb.SOG_MARKET_KEY: (t0, {}), bb.POINTS_MARKET_KEY: (t0, {})})[0]
         self.assertTrue(row["next_planned_capture"].startswith("REFRESH"))
 
-    def test_a_game_the_credit_plan_does_not_price_is_not_promised_a_pregame_look(self):
-        """2026-10-12: the page said a pregame look would happen on the next cycle for a game the day's credits did not cover."""
-        from operational import credit_planner as cp
-        now = dt.datetime(2026, 10, 7, 22, 0, tzinfo=dt.timezone.utc)                                 # inside the game's pregame window (opens 21:45Z)
-        covered = {"day": "2026-10-07", "games_priced": ["2026020053"], "allowance": {"REFRESH": 0.0}}
-        uncovered = {"day": "2026-10-07", "games_priced": ["2026020099"], "allowance": {"REFRESH": 0.0}}
-        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=covered):
-            self.assertIn("pregame look on the next 15-minute trader cycle", self._plan(now, {})[0]["next_planned_capture"])
-        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=uncovered):
-            self.assertIn("no pregame look", self._plan(now, {})[0]["next_planned_capture"])
+    WAVE = {"index": 0, "games": ["2026020053"], "target_utc": "2026-10-07T22:00:00Z", "deadline_utc": "2026-10-07T22:30:00Z", "last_chance_utc": "2026-10-07T23:15:00Z"}
 
-    def test_an_unfunded_midday_look_is_not_listed_as_the_next_window(self):
+    def _enforced_text(self, now, plan):
         from operational import credit_planner as cp
-        now = dt.datetime(2026, 10, 7, 14, 0, tzinfo=dt.timezone.utc)                                 # after the morning look, before the 12:30 ET midday window opens at 16:30Z
-        plan = {"day": "2026-10-07", "games_priced": ["2026020053"], "allowance": {"REFRESH": 0.0}}
-        captured = {bb.SOG_MARKET_KEY: (dt.datetime(2026, 10, 7, 12, 5, tzinfo=dt.timezone.utc), {})}
-        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=plan), \
-                mock.patch.object(bb, "_captured_times", return_value={m: dt.datetime(2026, 10, 7, 12, 5, tzinfo=dt.timezone.utc) for m in (bb.SOG_MARKET_KEY, bb.POINTS_MARKET_KEY)}):
-            text = self._plan(now, captured)[0]["next_planned_capture"]
-        self.assertIn("midday look is not funded", text)
-        self.assertIn("pregame look for this game's wave opens", text)
+        with mock.patch.object(bb, "_cp_enforced", return_value=True), mock.patch.object(cp, "load_plan", return_value=plan):
+            return self._plan(now, {})[0]["next_planned_capture"]
+
+    def test_a_game_the_credit_plan_does_not_price_is_not_promised_a_capture(self):
+        """2026-10-12: the page said a look would happen on the next cycle for a game the day's credits did not cover."""
+        now = dt.datetime(2026, 10, 7, 22, 5, tzinfo=dt.timezone.utc)                                 # inside the wave's capture window
+        covered = {"day": "2026-10-07", "games_priced": ["2026020053"], "waves": [self.WAVE], "game_markets": {"2026020053": ["player_shots_on_goal_alternate"]}}
+        uncovered = {"day": "2026-10-07", "games_priced": ["2026020099"], "waves": [self.WAVE]}
+        self.assertIn("coordinated capture is due now", self._enforced_text(now, covered))
+        self.assertIn("excluded by budget", self._enforced_text(now, uncovered))
+
+    def test_a_wave_capture_is_announced_before_it_opens_and_closed_after_its_last_chance(self):
+        plan = {"day": "2026-10-07", "games_priced": ["2026020053"], "waves": [self.WAVE], "game_markets": {"2026020053": ["player_shots_on_goal_alternate", "player_anytime_goalscorer"]}}
+        early = self._enforced_text(dt.datetime(2026, 10, 7, 14, 0, tzinfo=dt.timezone.utc), plan)
+        self.assertIn("coordinated capture (shots_on_goal_alternate, anytime_goalscorer) from Oct 7 22:00 UTC, 90 minutes before wave 1", early)
+        late = self._enforced_text(dt.datetime(2026, 10, 7, 23, 20, tzinfo=dt.timezone.utc), plan)
+        self.assertIn("window has closed: nothing is bought after it", late)
+
+    def test_a_priced_game_missing_from_the_plans_waves_does_not_crash_the_page(self):
+        plan = {"day": "2026-10-07", "games_priced": ["2026020053"], "waves": []}
+        self.assertIn("not in the plan document yet", self._enforced_text(dt.datetime(2026, 10, 7, 14, 0, tzinfo=dt.timezone.utc), plan))
 
 
 AS_OF = "2026-10-16T00:00:00"
