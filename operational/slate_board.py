@@ -308,18 +308,36 @@ def side_block(game: dict, now: dt.datetime | None = None) -> dict:
 
 # ------------------------------------------------------------------ the document
 
+FREEZABLE_STATES = ("STARTED", "LIVE", "FINAL")
+
+
 def _frozen_block(previous_doc: dict | None, today: str, g: dict) -> tuple[dict, dict] | None:
     """A game that has started (or finished) keeps the analysis it had before puck drop, labelled as frozen, instead of collapsing to "not scheduled". It comes from the last board built for the same
     Eastern day while the game was still scheduled; it is never recomputed with in-game information and is not a current recommendation."""
-    if not previous_doc or previous_doc.get("date_et") != today:
+    if g.get("state") not in FREEZABLE_STATES:                      # a postponed or cancelled game has no "pregame analysis as of puck drop"
         return None
-    prev = next((x for x in previous_doc.get("games") or [] if x.get("game_id") == g.get("game_id")), None)
+    if not isinstance(previous_doc, dict) or previous_doc.get("date_et") != today:
+        return None
+    prev = next((x for x in previous_doc.get("games") or [] if isinstance(x, dict) and x.get("game_id") == g.get("game_id")), None)
     if prev is None or not (prev.get("coverage") or {}).get("analysis_available"):
         return None
+    import copy
+    prev = copy.deepcopy(prev)
     at = prev.get("frozen_at_utc") or previous_doc.get("generated_at_utc")
-    cov = dict(prev["coverage"])
+    cov = prev["coverage"]
     cov["frozen_at_utc"] = at
     cov["recommended"] = []                                         # nothing on a started game is a current recommendation
+    # The frozen block is for reference: every recommendation-shaped field is made inert so no page path can show it as a current pick.
+    note = "The game has started: the pregame view is kept for reference and is not a current recommendation."
+    prev["side"] = {**(prev.get("side") or {}), "recommendation": None, "reason": note}
+    for gb in prev.get("goalies") or []:
+        gb["recommendation"] = {"side": None, "conditional": True, "text": note}
+    for r in prev.get("scorers") or []:
+        r["best_value_at_price"] = False
+    for pick in ((prev.get("shots") or {}).get("picks") or []):
+        pick["has_value"] = False
+        if isinstance(pick.get("chosen"), dict):
+            pick["chosen"]["supported_for_slip"] = False
     entry = {**prev, "state": g.get("state"), "start_et": g.get("start_et") or prev.get("start_et"), "frozen_at_utc": at, "coverage": cov}
     mk = cov.get("markets") or {}
     bump = {"analysed": 1, "shots_priced": 1 if (mk.get("player_shots_on_goal_alternate") or {}).get("status") == "POSTED" else 0,

@@ -406,10 +406,60 @@ class TestStartedGamesKeepTheirPregameAnalysis(unittest.TestCase):
         self.assertEqual(g["frozen_at_utc"], before["generated_at_utc"])
         self.assertTrue(g["coverage"]["analysis_available"])
         self.assertEqual(g["coverage"]["recommended"], [])
-        self.assertEqual(g["scorers"], before["games"][0]["scorers"])
+        self.assertEqual([r["name"] for r in g["scorers"]], [r["name"] for r in before["games"][0]["scorers"]])
         self.assertEqual(after["counts"]["analysed"], 1)
         again = sb.build_doc(NOW + dt.timedelta(hours=4), p, pool(), {}, avail(), {}, None, previous_doc=after)
         self.assertEqual(again["games"][0]["frozen_at_utc"], before["generated_at_utc"])         # the freeze time never moves
+
+    def test_the_frozen_block_carries_no_live_recommendation_fields(self):
+        before = doc()
+        g0 = before["games"][0]
+        g0["side"]["recommendation"] = {"team": "AAA", "american": -150}           # pretend the pregame board had a side pick and a saves pick
+        g0["goalies"][0]["recommendation"] = {"side": "OVER", "text": "Over 24.5: value +8%", "conditional": False}
+        if g0["scorers"]:
+            g0["scorers"][0]["best_value_at_price"] = True
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "STARTED"
+        frozen = sb.build_doc(NOW + dt.timedelta(hours=3), p, pool(), {}, avail(), {}, None, previous_doc=before)["games"][0]
+        self.assertIsNone(frozen["side"]["recommendation"])
+        self.assertIsNone(frozen["goalies"][0]["recommendation"]["side"])
+        self.assertTrue(frozen["goalies"][0]["recommendation"]["conditional"])
+        self.assertFalse(any(r.get("best_value_at_price") for r in frozen["scorers"]))
+        self.assertFalse(any(pk.get("has_value") for pk in frozen["shots"]["picks"]))
+        self.assertTrue(g0["goalies"][0]["recommendation"]["side"] == "OVER")       # the source document is not mutated
+
+    def test_a_postponed_game_and_bad_or_foreign_previous_documents_never_freeze_or_crash(self):
+        before = doc()
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "POSTPONED"
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None, previous_doc=before)
+        self.assertNotIn("frozen_at_utc", d["games"][0])
+        for state in ("STARTED",):
+            for game in p["games"]["games"]:
+                if game["game_id"] == "2026020900":
+                    game["state"] = state
+        other_day = {**before, "date_et": "2020-01-01"}
+        for bad in (None, other_day, {"date_et": before["date_et"], "games": ["junk", 3, None]}, "not a dict"):
+            d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None, previous_doc=bad)
+            self.assertNotIn("frozen_at_utc", d["games"][0])
+
+    def test_a_game_goes_scheduled_to_started_to_final_across_three_builds_with_one_freeze_time(self):
+        first = doc()
+        p = product()
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "STARTED"
+        second = sb.build_doc(NOW + dt.timedelta(hours=3), p, pool(), {}, avail(), {}, None, previous_doc=first)
+        for game in p["games"]["games"]:
+            if game["game_id"] == "2026020900":
+                game["state"] = "FINAL"
+        third = sb.build_doc(NOW + dt.timedelta(hours=6), p, pool(), {}, avail(), {}, None, previous_doc=second)
+        self.assertEqual(third["games"][0]["state"], "FINAL")
+        self.assertEqual(third["games"][0]["frozen_at_utc"], first["generated_at_utc"])
 
     def test_without_a_saved_pregame_block_a_started_game_is_listed_with_the_reason(self):
         p = product()

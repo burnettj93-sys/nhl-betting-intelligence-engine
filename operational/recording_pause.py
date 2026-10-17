@@ -76,7 +76,7 @@ def notice(st: dict | None = None) -> str | None:
     if not st["paused"]:
         return None
     since = f" since {st['since_utc']}" if st.get("since_utc") else ""
-    reason = (st.get("reason") or "").replace(", prediction logging and personal accounts continue", ", prediction logging continue")      # the owner's 2026-10-13 reason predates the removal of personal accounts; the record itself is not edited
+    reason = (st.get("reason") or "").replace(", prediction logging and personal accounts continue", " and prediction logging continue")      # the owner's 2026-10-13 reason predates the removal of personal accounts; the record itself is not edited
     return (f"Automatic paper tickets are PAUSED{since}: no new automatic ticket is being recorded while the pause is in force. "
             f"Existing tickets still settle, prices still refresh and publishing continues. {reason}").strip()
 
