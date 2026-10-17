@@ -108,8 +108,12 @@ for g in board.get("games", []):
             st.error(f"The analysis of this game failed and is not shown: {ui.esc(g['error'])}. Other games are unaffected; the engine retries on its next update.")
             continue
         if g.get("state") != "SCHEDULED":
-            st.info(f"This game is {str(g.get('state')).lower()}; the pregame board applies to scheduled games.")
-            continue
+            if g.get("frozen_at_utc"):
+                st.info(f"This game is {str(g.get('state')).lower()}. What follows is the pregame analysis as it stood at {ui.et_time(g['frozen_at_utc'], True)}, kept for reference: "
+                        "it is not recomputed with in-game information and is not a current recommendation.")
+            else:
+                st.info(f"This game is {str(g.get('state')).lower()}; the pregame board applies to scheduled games, and no pregame analysis was saved for it.")
+                continue
         t1, t2, t3, t4, t5 = st.tabs(["Goal scorers", "Shots value", "Goalie saves", "Side", "Coverage"])
         with t1:
             st.caption(SECTION_NOTE["scorers"])

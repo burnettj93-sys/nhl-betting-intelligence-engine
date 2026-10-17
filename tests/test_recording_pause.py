@@ -179,5 +179,16 @@ class TestEveryAutomaticWriterIsCovered(Isolated):
         self.assertNotEqual(res["status"], "PAUSED")
 
 
+
+
+class TestNoticeWording(unittest.TestCase):
+    def test_the_obsolete_personal_accounts_phrase_is_dropped_from_the_stored_reason_without_editing_it(self):
+        st = {"paused": True, "since_utc": "x", "reason": "r; collection, settlement, publishing, prediction logging and personal accounts continue."}
+        text = rp.notice(st)
+        self.assertIn("publishing and prediction logging continue.", text)
+        self.assertNotIn("personal accounts", text)
+        self.assertIn("personal accounts", st["reason"])
+        self.assertIn("unchanged wording stays", rp.notice({"paused": True, "since_utc": None, "reason": "unchanged wording stays"}))
+
 if __name__ == "__main__":
     unittest.main()
