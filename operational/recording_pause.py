@@ -2,7 +2,7 @@
 A pause switch for NEW automatic paper tickets.
 
 While the file `recording_pause.json` (shared runtime directory) says `paused: true`, the 15-minute trader selects and records nothing new. Everything else is unaffected:
-odds collection, publishing, settlement of existing tickets, the personal accounts and the Paper Parlay Builder. Existing tickets are never touched, and the $500 model book is
+odds collection, publishing, settlement of existing tickets, and the read-only Parlay Builder. Existing tickets are never touched, and the $500 model book is
 neither reset nor rewritten. The pause is a plain file so it takes effect on the next cycle and is easy to inspect; it is ended only by an explicit `resume`.
 
     python3 -m operational.recording_pause status
@@ -77,7 +77,7 @@ def notice(st: dict | None = None) -> str | None:
         return None
     since = f" since {st['since_utc']}" if st.get("since_utc") else ""
     return (f"Automatic paper tickets are PAUSED{since}: no new automatic ticket is being recorded while the pause is in force. "
-            f"Existing tickets still settle, prices still refresh, and personal accounts are unaffected. {st.get('reason') or ''}").strip()
+            f"Existing tickets still settle, prices still refresh and publishing continues. {st.get('reason') or ''}").strip()
 
 
 if __name__ == "__main__":
