@@ -58,6 +58,11 @@ def _publish_heartbeat_due(now: dt.datetime) -> bool:
 def run(now: dt.datetime | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     today_et = et.eastern_today(now)
+    try:
+        from operational import run_heartbeat
+        run_heartbeat.beat("real_parlay_paper_trader", now)           # when a cycle STARTED: the evidence that tells an outage from sleep from a quiet window
+    except Exception:  # noqa: BLE001
+        pass
     nhl_conn = db.get_conn()
     bankroll_conn = pb.init_db()
     LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -70,6 +75,13 @@ def run(now: dt.datetime | None = None) -> dict:
                                       "reason": "ANOTHER_TRADER_RUN_IN_PROGRESS"},
                     "settlement_summary": None}
 
+        # The 07:45 refresh (or, on an early day or after a sleep, as soon as it is due): statistics, results, rosters, participation evidence, before any capture.
+        try:
+            from operational import morning_refresh
+            refresh_summary = {k: v for k, v in morning_refresh.run_if_due(now).items() if k in ("status", "reason", "steps", "due_at_utc")}
+        except Exception as exc:  # noqa: BLE001
+            refresh_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+
         revalidation_summary = bet_revalidation.revalidate_pending_real_market_bets(
             bankroll_conn, nhl_conn, now)
 
@@ -80,6 +92,20 @@ def run(now: dt.datetime | None = None) -> dict:
             price_refresh = best_bets.refresh(now, conn=nhl_conn)
         except Exception as exc:  # noqa: BLE001
             price_refresh = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
+
+        # The league-wide moneyline + standard-spread pull is on the day's timeline (08:00 morning pull, one pregame pull shared by every wave): it runs from this 15-minute cycle, self-gated
+        # by operational/capture_timeline.py and by credit reservations, so a late cycle after a sleep or an outage still takes the pull that is due.
+        try:
+            from operational import moneyline_freshness
+            league_summary = {k: v for k, v in moneyline_freshness.run_if_due(now, label=None).items() if k in ("action", "reason", "ran", "credits_spent_this_run", "api_error", "due_detail")}
+        except Exception as exc:  # noqa: BLE001
+            league_summary = {"action": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+
+        try:                                           # the day's timeline document, from the plan, the ledger, the wave state and the availability record
+            from operational import day_status
+            day_status.write(now)
+        except Exception:  # noqa: BLE001
+            pass
 
         # The Paper Parlay Builder's price list (every priced line for today's games, for people to pick from), written before the order queue is answered.
         try:
@@ -127,7 +153,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "evidence_queue": manual_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

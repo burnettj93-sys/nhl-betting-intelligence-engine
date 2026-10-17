@@ -157,6 +157,24 @@ def _violations_for_file(rel, py_path):
 # test_no_exception_is_granted_to_a_predictive_or_backtest_module.
 JUSTIFIED_EXCEPTIONS = [
     {
+        "file": "operational/credit_planner.py",
+        "kind": "sorted_by_game_id",
+        "marker": "confirmed_games",
+        "reason": "stable ordering of game ids in the odds-credit day plan's JSON document. It plans which games to buy prices for; it never gates what any model may learn.",
+    },
+    {
+        "file": "operational/credit_planner.py",
+        "kind": "sorted_by_game_id",
+        "marker": "key=lambda g: (next(w.first_start",
+        "reason": "orders the games chosen for a capture wave by start time (game id is only the tie-break) when planning which games to price. No model reads it.",
+    },
+    {
+        "file": "operational/pregame_archive.py",
+        "kind": "sorted_by_game_id",
+        "marker": "meta[day] = sorted(set(",
+        "reason": "stable ordering of the game ids archived for a day's frozen pregame analysis (display bookkeeping); no model reads it.",
+    },
+    {
         "file": "run_slate.py",
         "kind": "game_list_slice",
         "marker": "demo_display_ids = all_final[-5:]",

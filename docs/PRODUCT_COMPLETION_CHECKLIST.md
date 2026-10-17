@@ -1,4 +1,4 @@
-# Product completion checklist — one complete list (revision 21, 2026-10-17)
+# Product completion checklist — one complete list (revision 22, 2026-10-17)
 
 This is the single checklist. Every requirement from the owner's brief appears once, with its status and the evidence. Earlier "finished" claims were not used as evidence: each row was re-checked, on the
 hosted app where it is a hosted feature. Nothing here claims a betting edge; the model's value over the price has never been shown (there are no historical sportsbook prices).
@@ -22,6 +22,20 @@ hosted app where it is a hosted feature. Nothing here claims a betting edge; the
 | Recording | **PAUSED**; digest `1fad3ba03503cf94` unapproved | |
 
 Open blockers (smallest action, cost, what it prevents): (1) The Odds API 20K plan, $30/month: prevents goals, saves and spreads prices and pricing more than about half of each day's games. (2) A licensed goalie-confirmation source (SportsDataIO commercial quote; price not published): prevents any saves selection. (3) Always-on host, about $14.40/month: prevents unattended captures while the Mac sleeps. (4) Review of a qualifying live slip, then approval or not of the policy digest.
+
+## Revision 22 additions (evidence-labelled)
+
+| Requirement | State | Evidence |
+|---|---|---|
+| 07:45 refresh / 08:00 analysis + league pull / wave captures T-90 / publish by T-60 / early-day prep moves earlier | **TESTED**; live observation **AWAITING** the release promotion | `capture_timeline.py`, tests/test_wave_capture.py |
+| Budget across the remaining schedule, reserve-then-settle, no double spend, selective retries | **TESTED**; real charge reconciliation **AWAITING** first live pulls | `credit_planner.py`, docs/ODDS_PLAN_DECISION.md |
+| Coverage regression explained | **DONE** (documented from ledger, archives and power log) | docs/COVERAGE_REGRESSION.md |
+| Standard spreads from the league call; handicap contract/model reported separately | **TESTED**; cost assumed 2 until observed | `product_data.puck_line_quotes` |
+| Job states running / failed / overdue / stale-output | **TESTED** and run against the real machine (shows `morning-refresh` STALE_OUTPUT until installed) | `watchdog.job_states` |
+| Frozen last pregame analysis after start; recovery from archives; "pregame analysis unavailable" | **TESTED**; recovery from `cloud-data` history | `pregame_archive.py` |
+| Render-test race repaired (isolated copies, write spy) | **DONE** | tests/test_streamlit_cloud_mode.py |
+| Prediction evaluation by market and version vs baselines and market, cluster-aware | **DONE**; result: no evidence yet | docs/PREDICTION_EVALUATION.md |
+| Goalie confirmation from team posts / recognized reporters | Evidence path **EXISTS**; automated readers **OFF** (no permitted source) | docs/STARTING_GOALIE_SOURCE_AUDIT.md |
 
 ## Legend
 

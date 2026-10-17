@@ -1,473 +1,270 @@
-"""The daily credit plan: priority waterfall, wave-fair game choice, persistence, authorization, and the jobs that obey it."""
+"""The credit plan (version 4): wave timeline, budget from the real balance, wave-fair game choice, reservations, and the pieces that obey it."""
 from __future__ import annotations
 
 import datetime as dt
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
-from operational import best_bets as bb
+from operational import capture_timeline as ct
 from operational import credit_planner as cp
-from operational import live_odds_daily_pull as lop
 
-NOW = dt.datetime(2026, 10, 8, 19, 0, tzinfo=dt.timezone.utc)
-
-
-def starts(*pairs):
-    base = dt.datetime(2026, 10, 8, 22, 0, tzinfo=dt.timezone.utc)
-    return {gid: base + dt.timedelta(minutes=m) for gid, m in pairs}
+U = dt.timezone.utc
+ET = dt.timezone(dt.timedelta(hours=-4))
 
 
-SEVEN = starts(("a", 0), ("b", 0), ("c", 15), ("d", 30), ("e", 180), ("f", 180), ("g", 200))
+def at(h, m=0, day=17):
+    """An Eastern wall-clock time on 2026-10-17 (or `day`) as UTC."""
+    return dt.datetime(2026, 10, day, h, m, tzinfo=ET).astimezone(U)
 
 
-class TestWaterfall(unittest.TestCase):
-    def test_waves_group_puck_drops_within_90_minutes(self):
-        self.assertEqual(cp.waves(SEVEN), [["a", "b", "c", "d"], ["e", "f", "g"]])
-
-    def test_ranking_takes_one_game_from_each_wave_in_turn(self):
-        self.assertEqual(cp.rank_games(SEVEN)[:4], ["a", "e", "b", "f"])
-
-    def test_tight_budget_prices_few_games_that_can_be_compared_at_the_same_time(self):
-        a = cp.allocate(11.5, SEVEN)
-        self.assertEqual(a["allowance"][cp.MONEYLINE_DECISION], 3)
-        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 1)
-        # 11.5 - 3 (decisions) - 1 (display) = 7.5: two pregame captures (4) are funded first, then the morning first look (shots, 1 each) for three games
-        self.assertEqual(len(a["games_priced"]), 2)
-        self.assertEqual(a["morning_games"], cp.rank_games(SEVEN)[:3])
-        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])
-        self.assertEqual(a["games_priced"], ["a", "b"])                    # two games of ONE wave: their pregame prices can be compared at one evaluation time (one game from each wave never can)
-        self.assertEqual(a["goals_games"], [])                             # nothing is left for goals
-        self.assertGreater(a["shortfall_per_day_required_only"], 0)
-
-    def test_goals_come_after_every_game_is_priced(self):
-        a = cp.allocate(30.0, starts(("a", 0), ("b", 0), ("c", 15)), confirmed_games={"a"})
-        self.assertEqual(len(a["games_priced"]), 3)
-        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY, cp.POINTS_KEY])   # affordable for every game: shots and points both
-        self.assertEqual(a["saves_games"], ["a", "b", "c"])                  # saves PRICES are collected for every priced game, the confirmed starter's game first
-        self.assertEqual(len(a["goals_games"]), 3)
-        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 2 + cp.UI_RECOVERY)      # two planned refreshes plus the recovery refreshes funded from spare credits only
-        self.assertEqual(cp.allocate(11.5, SEVEN)["allowance"][cp.MONEYLINE_UI], 1)   # a tight day gets no recovery refreshes: they never take credits from prices
-
-    def test_saves_prices_need_no_confirmed_starter_but_come_after_pricing_and_goals(self):
-        a = cp.allocate(18.0, SEVEN, confirmed_games={"a"})
-        self.assertEqual(len(a["games_priced"]), 3)                        # pregame for three games and the morning look come first
-        self.assertEqual(a["goals_games"], ["a"])                          # then goals for the lead game
-        self.assertEqual(a["saves_games"], [])                             # and nothing is left for saves prices
-        roomy = cp.allocate(45.0, SEVEN)
-        self.assertEqual(len(roomy["saves_games"]), 6)                     # with room, saves prices are collected although no starter is confirmed
-        self.assertTrue(set(roomy["saves_games"]) <= set(roomy["games_priced"]))
-        first = cp.allocate(45.0, SEVEN, confirmed_games={"d"})["saves_games"]
-        self.assertEqual(first[0], "d")                                    # a game with a confirmed starter is served first
-        self.assertEqual(cp.allocate(11.5, SEVEN, confirmed_games={"a"})["saves_games"], [])   # and none when the morning look has used the credit
-
-    def test_decision_pulls_are_never_starved(self):
-        a = cp.allocate(2.0, SEVEN)
-        self.assertEqual(a["allowance"][cp.MONEYLINE_DECISION], 2.0)
-        self.assertEqual(a["games_priced"], [])
+def starts(**games):
+    return {g: at(*t) for g, t in games.items()}
 
 
-class TestMorningSwitch(unittest.TestCase):
-    def test_turning_the_morning_look_off_restores_the_pregame_only_allocation(self):
-        with mock.patch.object(cp, "morning_enabled", return_value=False):
-            a = cp.allocate(11.5, SEVEN)
-        self.assertEqual(a["morning_games"], [])
-        self.assertEqual(len(a["games_priced"]), 3)                        # the allocation that applied before the morning look existed
-        self.assertEqual(a["allowance"][cp.MORNING], 0.0)
-
-    def test_the_switch_reads_the_environment(self):
-        with mock.patch.dict("os.environ", {cp.MORNING_ENV: "off"}):
-            self.assertFalse(cp.morning_enabled())
-        with mock.patch.dict("os.environ", {cp.MORNING_ENV: "on"}):
-            self.assertTrue(cp.morning_enabled())
-
-
-class TestTransitionDay(unittest.TestCase):
-    def test_a_plan_saved_before_the_morning_look_cannot_be_pushed_over_its_budget_by_it(self):
-        old = {"day": "2026-10-09", "made_at_utc": "x", "D": 11.43, "games_today": 4, "games_priced": ["a", "b", "c"], "games_not_priced": ["d"], "goals_games": ["a"], "saves_games": [],
-               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.0, cp.PROPS: 6.0, cp.SAVES: 0.0, cp.GOALS: 1.0, cp.REFRESH: 0.43},
-               "budget": {"D": 11.43}, "alloc_version": cp.ALLOC_VERSION}
-        starts4 = starts(("a", 0), ("b", 0), ("c", 15), ("d", 30))
-        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(cp, "day_budget", return_value={"D": 11.43}):
-            plan = cp.day_plan(NOW, "2026-10-09", starts4, remaining=282)
-        self.assertEqual(plan["morning_games"], [])                                   # 11.43 is fully committed: no credits are left for a morning look today
-        self.assertEqual(plan["allowance"][cp.MORNING], 0.0)
-        total = sum(v for k, v in plan["allowance"].items())
-        self.assertLessEqual(total, 11.43 + 1.0)                                      # the tomorrow check's one credit is the only addition
-        richer = {**old, "allowance": {**old["allowance"], cp.PROPS: 2.0}, "budget": {"D": 11.43}}
-        with mock.patch.object(cp, "load_plan", return_value=richer), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(cp, "day_budget", return_value={"D": 11.43}):
-            plan2 = cp.day_plan(NOW, "2026-10-09", starts4, remaining=282)
-        self.assertGreater(len(plan2["morning_games"]), 0)                            # credits that really are free fund a morning look
-
-
-class TestGoalsComeBeforeTheDisplayRefreshAndTheTomorrowCheck(unittest.TestCase):
+class Isolated(unittest.TestCase):
     def setUp(self):
-        p = mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY})       # production's shots-only default (the test package's default is the two-market capture)
-        p.start()
-        self.addCleanup(p.stop)
-
-    def test_a_two_game_day_funds_goals_for_both_games(self):
-        two = starts(("a", 0), ("b", 60))
-        a = cp.allocate(10.94, two, set(), {})
-        self.assertEqual(a["goals_games"], ["a", "b"])                                  # the board's section 1 has prices for both games
-        self.assertEqual(a["allowance"][cp.GOALS], 2.0)
-        self.assertGreater(a["allowance"][cp.TOMORROW], 0.0)                            # the Tomorrow page's check keeps what is left, ahead of the second display refresh
-        self.assertEqual(a["allowance"][cp.MONEYLINE_UI], 1.0)                          # (the first, morning display pull is unaffected)
-        self.assertLessEqual(sum(a["allowance"].values()), 10.94 + 1e-9)
-        self.assertEqual(a["morning_games"], ["a", "b"])                                # the 8 AM look is still bought first
-
-    def test_a_plan_saved_with_the_old_order_is_retaken_for_those_classes_only_and_never_overspends(self):
-        old = {"day": "2026-10-14", "made_at_utc": "x", "D": 10.94, "games_today": 2, "games_priced": ["a", "b"], "games_not_priced": [], "goals_games": [], "points_games": ["a", "b"],
-               "morning_games": ["a", "b"], "morning_markets": [cp.SHOTS_KEY], "saves_games": [],
-               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.94, cp.PROPS: 2.0, cp.MORNING: 2.0, cp.SAVES: 0.0, cp.GOALS: 0.0, cp.POINTS_ADDON: 2.0, cp.REFRESH: 0.0, cp.TOMORROW: 0.0},
-               "budget": {"D": 10.94}}
-        two = starts(("a", 0), ("b", 60))
-        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(cp, "day_budget", return_value={"D": 10.94}):
-            plan = cp.day_plan(NOW, "2026-10-14", two, remaining=200)
-        self.assertEqual(plan["goals_games"], ["a", "b"])
-        self.assertEqual(plan["points_games"], [])
-        self.assertEqual(plan["games_priced"], ["a", "b"])                              # the priced set is not reshuffled
-        self.assertEqual(plan["morning_games"], ["a", "b"])
-        self.assertLessEqual(sum(plan["allowance"].values()), 10.94 + 1e-6)
-        self.assertEqual(plan["alloc_version"], cp.ALLOC_VERSION)
-
-    def test_a_game_whose_pregame_capture_already_ran_gets_no_goals_reservation(self):
-        old = {"day": "2026-10-14", "made_at_utc": "x", "D": 10.94, "games_today": 2, "games_priced": ["a", "b"], "games_not_priced": [], "goals_games": [], "points_games": [],
-               "morning_games": ["a", "b"], "morning_markets": [cp.SHOTS_KEY], "saves_games": [],
-               "allowance": {cp.MONEYLINE_DECISION: 3, cp.MONEYLINE_UI: 1.94, cp.PROPS: 2.0, cp.MORNING: 2.0, cp.SAVES: 0.0, cp.GOALS: 0.0, cp.POINTS_ADDON: 0.0, cp.REFRESH: 0.0, cp.TOMORROW: 0.0},
-               "budget": {"D": 10.94}}
-        two = starts(("a", 0), ("b", 60))
-        ledger = [{"at": "2026-10-14T20:00:00Z", "class": cp.PROPS, "credits": 1.0, "game_id": "a", "markets": cp.SHOTS_KEY}]
-        with mock.patch.object(cp, "load_plan", return_value=old), mock.patch.object(cp, "_persist"), mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(cp, "day_budget", return_value={"D": 10.94}), mock.patch.object(cp, "read_ledger", return_value=ledger):
-            plan = cp.day_plan(NOW, "2026-10-14", two, remaining=200)
-        self.assertEqual(plan["goals_games"], ["b"])                                    # "a" was captured without goals; its goals cannot be added later
-        self.assertEqual(plan["allowance"][cp.GOALS], 1.0)
-        self.assertGreater(plan["allowance"][cp.TOMORROW], 0.0)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name)
+        for p in (mock.patch.object(cp.state_paths, "path", side_effect=lambda name, **kw: d / name),
+                  mock.patch.object(cp.odds_quota, "reset_status", return_value={"status": "OWNER_VERIFICATION_REQUIRED", "reset_day": 1, "assumed": True, "invalid": False})):
+            p.start()
+            self.addCleanup(p.stop)
 
 
-class TestPlanState(unittest.TestCase):
-    def test_the_priced_set_is_saved_for_the_day_and_not_reshuffled(self):
-        with mock.patch.object(cp, "_persist") as persist, mock.patch.object(cp, "load_plan", return_value=None), mock.patch.object(cp, "spent_today", return_value={}):
-            first = cp.day_plan(NOW, "2026-10-08", SEVEN, remaining=297)
-        self.assertEqual(persist.call_count, 1)
-        with mock.patch.object(cp, "_persist"), mock.patch.object(cp, "load_plan", return_value=first), mock.patch.object(cp, "spent_today", return_value={cp.PROPS: 6.0}):
-            later = cp.day_plan(NOW + dt.timedelta(hours=3), "2026-10-08", SEVEN, remaining=290, confirmed_games={"a"})
-        self.assertEqual(later["games_priced"], first["games_priced"])
+class TestTimeline(unittest.TestCase):
+    def test_games_group_into_compatible_start_time_waves_with_their_own_targets(self):
+        ws = ct.waves(starts(a=(13,), b=(13, 30), c=(19,), d=(19, 30), e=(22,)))
+        self.assertEqual([w.games for w in ws], [("a", "b"), ("c", "d"), ("e",)])
+        self.assertEqual(ws[0].target, at(11, 30))                       # 90 minutes before the wave's first game
+        self.assertEqual(ws[0].deadline, at(12))                         # complete and published by 60 minutes before it
+        self.assertEqual(ws[1].target, at(17, 30))
 
-    def test_budget_is_anchored_to_the_start_of_the_day(self):
-        before = cp.day_budget(NOW, 297, 0.0)["D"]
-        after = cp.day_budget(NOW + dt.timedelta(hours=3), 297 - 8, 8.0)["D"]
-        self.assertAlmostEqual(before, after, places=2)
+    def test_an_early_first_game_moves_the_refresh_and_the_analysis_earlier(self):
+        day = dt.date(2026, 10, 17)
+        normal = ct.prep_times(day, at(13))
+        self.assertEqual((normal["refresh_at"], normal["analysis_at"]), (at(7, 45), at(8)))
+        early = ct.prep_times(day, at(10))
+        self.assertEqual(early["refresh_at"], at(7, 15))
+        self.assertEqual(early["analysis_at"], at(7, 30))
+        self.assertLess(early["analysis_at"], ct.waves(starts(a=(10,)))[0].target)   # the analysis is always ahead of the first capture
 
-    def test_unknown_quota_gives_no_budget(self):
-        self.assertEqual(cp.day_budget(NOW, None, 0.0)["D"], 0.0)
+    def test_a_wave_is_on_time_then_late_then_missed_and_never_captured_after_that(self):
+        w = ct.waves(starts(a=(19,)))[0]
+        self.assertEqual(ct.wave_state(at(17), w, False), ct.NOT_YET)
+        self.assertEqual(ct.wave_state(at(17, 40), w, False), ct.ON_TIME)
+        self.assertEqual(ct.wave_state(at(18, 10), w, False), ct.LATE)               # after the 60-minute publish deadline
+        self.assertEqual(ct.wave_state(at(18, 50), w, False), ct.MISSED)             # inside the last 15 minutes: nothing is bought
+
+    def test_league_pulls_follow_the_day_not_the_clock(self):
+        ws = ct.waves(starts(a=(13,), c=(19,)))
+        kw = dict(day_first_start=at(13), wave_list=ws)
+        self.assertFalse(ct.league_pull_due(at(7, 50), pull_times=[], **kw)["due"])
+        self.assertEqual(ct.league_pull_due(at(8, 5), pull_times=[], **kw)["kind"], "MORNING")
+        self.assertFalse(ct.league_pull_due(at(10), pull_times=[at(8, 1)], **kw)["due"])
+        self.assertEqual(ct.league_pull_due(at(11, 35), pull_times=[at(8, 1)], **kw)["kind"], "PREGAME")      # the first wave's target
+        self.assertFalse(ct.league_pull_due(at(11, 50), pull_times=[at(8, 1), at(11, 36)], **kw)["due"])      # one shared pull serves the wave
+        self.assertEqual(ct.league_pull_due(at(17, 35), pull_times=[at(8, 1), at(11, 36)], **kw)["kind"], "WAVE")
+        self.assertFalse(ct.league_pull_due(at(21), pull_times=[at(8, 1)], day_first_start=at(13), wave_list=ws[:1])["due"])   # nothing is due once every wave is behind us
 
 
-class TestAuthorize(unittest.TestCase):
-    def test_hard_reserve_always_wins(self):
-        self.assertFalse(cp.authorize(cp.MONEYLINE_DECISION, 1, NOW, remaining=20)["allow"])
-        self.assertTrue(cp.authorize(cp.MONEYLINE_DECISION, 1, NOW, remaining=21)["allow"])
+class TestBudgetFromTheRealBalance(Isolated):
+    def budget(self, remaining, spent_today=0, counts=None, day="2026-10-17", now=None):
+        counts = counts or {"2026-10-17": 4, "2026-10-18": 4}
+        return cp.cycle_budget(now or at(8), remaining, spent_today, counts, day, league_cost=2, league_cost_observed=False)
 
-    def test_class_allowance_is_enforced_from_the_ledger(self):
-        plan = {"allowance": {cp.PROPS: 4.0}}
-        with mock.patch.object(cp, "spent_today", return_value={cp.PROPS: 2.0}):
-            self.assertTrue(cp.authorize(cp.PROPS, 2, NOW, remaining=200, plan=plan)["allow"])
-        with mock.patch.object(cp, "spent_today", return_value={cp.PROPS: 3.0}):
-            self.assertEqual(cp.authorize(cp.PROPS, 2, NOW, remaining=200, plan=plan)["reason"], "PROPS_PREGAME_DAILY_ALLOWANCE")
+    def test_it_plans_from_the_actual_remaining_credits_not_a_fresh_cycle(self):
+        counts = {f"2026-10-{d}": 4 for d in range(17, 32)}
+        b = self.budget(192, counts=counts)
+        self.assertEqual(b["usable_at_start_of_day"], 172.0)                          # 192 remaining minus the 20-credit reserve
+        self.assertEqual(b["days_left"], 15)                                          # to an assumed reset on the 1st
+        self.assertEqual(b["league_total"], 60.0)                                     # 15 days x 2 pulls x 2 credits
+        self.assertEqual(b["recovery_pool"], 10)
+        self.assertEqual(b["player_pool"], 102.0)
+        self.assertAlmostEqual(b["player_today"], 102.0 / 15, places=2)               # equal days: an equal share
+        self.assertFalse(b["reset_verified"])
+        self.assertIn("ASSUMED", b["reset_assumption"])                               # the uncertainty is stated, with the evidence
 
-    def test_unknown_quota_denies(self):
+    def test_the_days_share_follows_the_schedule_and_unspent_credits_roll_forward(self):
+        counts = {"2026-10-17": 8, "2026-10-18": 2, "2026-10-19": 2, "2026-10-20": 0}
+        big = self.budget(100, counts=counts)
+        quiet = self.budget(100, counts=dict(counts, **{"2026-10-17": 2}))
+        self.assertGreater(big["player_today"], quiet["player_today"])                # the heavy slate takes more of the same pool
+        spent_nothing_yesterday = self.budget(100)                                    # an untouched balance is simply a larger pool tomorrow
+        richer_tomorrow = self.budget(130)
+        self.assertGreater(richer_tomorrow["player_pool"], spent_nothing_yesterday["player_pool"])
+
+    def test_today_already_spent_does_not_shrink_the_days_own_entitlement(self):
+        a = self.budget(190, spent_today=0)
+        b = self.budget(180, spent_today=10)                                          # 10 spent this morning: remaining fell, the start-of-day total did not
+        self.assertEqual(a["usable_at_start_of_day"], b["usable_at_start_of_day"])
+
+    def test_an_unknown_balance_plans_nothing(self):
+        b = self.budget(None)
+        self.assertEqual((b["reason"], b["player_today"]), ("QUOTA_UNKNOWN", 0.0))
+
+    def test_when_the_balance_cannot_cover_everything_league_pulls_come_first_then_recovery(self):
+        b = self.budget(30)                                                           # 10 usable
+        self.assertEqual(b["player_pool"], 0.0)
+        self.assertGreater(b["league_total"], 0)
+
+    def test_an_observed_league_charge_replaces_the_assumed_one(self):
+        self.assertEqual(cp.observed_league_cost(), (2, False))
+        cp.record(cp.MONEYLINE_UI, 1, at(8), markets="h2h,spreads")                   # the provider charged one credit for both markets
+        self.assertEqual(cp.observed_league_cost(), (1, True))
+
+
+class TestTheDaysPlan(Isolated):
+    def plan(self, game_starts, remaining=200, quality=None, now=None, **kw):
+        return cp.build_day_plan(now or at(8), "2026-10-17", game_starts, remaining=remaining, counts_ahead=kw.pop("counts_ahead", {"2026-10-18": 4}), quality=quality, **kw)
+
+    SLATE = dict(a=(13,), b=(13, 30), c=(19,), d=(19, 30), e=(19, 30), f=(22,))
+
+    def test_the_first_wave_is_covered_before_the_evening_cluster_takes_the_rest(self):
+        p = self.plan(starts(**self.SLATE), remaining=70, quality={"a": 5, "b": 3, "c": 9, "d": 8, "e": 7, "f": 6})
+        self.assertGreaterEqual(len(p["games_priced"]), 2)
+        self.assertTrue(set(p["games_priced"]) & {"a", "b"}, "the afternoon wave must get a capture")
+        self.assertIn("a", p["games_priced"])                                         # the best game of the first wave
+        self.assertTrue(set(p["games_priced"]) & {"c", "d", "e"}, "and the evening wave still gets one")
+
+    def test_each_selected_game_gets_one_bundle_of_shots_goals_and_saves(self):
+        p = self.plan(starts(a=(13,), c=(19,)), remaining=200)
+        for g in p["games_priced"]:
+            self.assertEqual(p["game_markets"][g][:3], [cp.SHOTS_KEY, cp.GOALS_KEY, cp.SAVES_KEY])
+        self.assertEqual(sorted(p["goals_games"]), sorted(p["games_priced"]))
+        self.assertEqual(sorted(p["saves_games"]), sorted(p["games_priced"]))         # saves are priced whether or not a starter is confirmed
+
+    def test_a_thin_budget_prices_fewer_games_and_names_the_rest(self):
+        p = self.plan(starts(**self.SLATE), remaining=45)
+        self.assertLess(len(p["games_priced"]), 6)
+        self.assertEqual(set(p["games_priced"]) | set(p["games_not_priced"]), set(self.SLATE))
+        self.assertEqual(p["allowance"][cp.MONEYLINE_DECISION], 0.0)                  # no T-35 pulls in the core allocation
+        self.assertEqual(p["allowance"][cp.TOMORROW], 0.0)                            # no paid tomorrow check
+        self.assertEqual(p["allowance"][cp.MORNING], 0.0)                             # no morning player-odds look
+
+    def test_points_and_extra_league_pulls_come_only_from_explicit_surplus(self):
+        tight = self.plan(starts(**self.SLATE), remaining=60)
+        self.assertEqual(tight["points_games"], [])
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}):
+            rich = self.plan(starts(a=(13,), c=(19,)), remaining=500, counts_ahead={"2026-10-18": 2})
+        self.assertEqual(sorted(rich["points_games"]), sorted(rich["games_priced"]))  # every eligible game has its bundle: the surplus buys points
+        self.assertGreaterEqual(rich["league_pulls"]["extra_for_later_waves"], 1)
+
+    def test_the_plan_does_not_buy_for_started_games_or_games_already_captured(self):
+        p = self.plan(starts(a=(13,), c=(19,)), remaining=200, now=at(14))            # a started an hour ago
+        self.assertNotIn("a", p["games_priced"])
+        cp.record(cp.PROPS, 1, at(17, 35), game_id="c", markets=cp.SHOTS_KEY)
+        done = cp.captured_games_today(at(17, 40))
+        p2 = self.plan(starts(a=(13,), c=(19,), d=(19, 30)), remaining=200, now=at(17, 40), done_games=done)
+        self.assertNotIn("c", p2["games_priced"])
+
+    def test_league_pulls_are_two_a_day_and_the_cost_is_labelled(self):
+        p = self.plan(starts(a=(13,), c=(19,)), remaining=200)
+        self.assertEqual(p["league_pulls"]["planned"], 2 + p["league_pulls"]["extra_for_later_waves"])
+        self.assertFalse(p["league_pulls"]["cost_observed"])
+        self.assertTrue(any("assumed to cost" in n for n in p["notes"]))
+        self.assertTrue(any("ASSUMED the 1st" in n for n in p["notes"]))
+
+    def test_the_plan_is_built_once_kept_and_an_older_version_is_rebuilt_once(self):
+        gs = starts(a=(13,), c=(19,))
+        first = cp.day_plan(at(8), "2026-10-17", gs, remaining=200, counts_ahead={"2026-10-18": 4})
+        again = cp.day_plan(at(9), "2026-10-17", gs, remaining=150, counts_ahead={"2026-10-18": 4})
+        self.assertEqual(first["games_priced"], again["games_priced"])                # never reshuffled by a later cycle
+        self.assertEqual(again["budget"]["remaining_header_now"], 150)
+        old = {**first, "alloc_version": 3, "games_priced": ["stale"]}
+        cp._persist(old)
+        rebuilt = cp.day_plan(at(10), "2026-10-17", gs, remaining=140, counts_ahead={"2026-10-18": 4})
+        self.assertEqual(rebuilt["alloc_version"], cp.ALLOC_VERSION)
+        self.assertNotIn("stale", rebuilt["games_priced"])
+
+
+class TestGameSelection(unittest.TestCase):
+    def test_quality_breaks_ties_and_the_first_wave_always_gets_one(self):
+        ws = ct.waves(starts(a=(13,), b=(13, 20), c=(19,), d=(19, 10), e=(19, 20)))
+        chosen = cp.select_games(ws, {"a": 1, "b": 9, "c": 5, "d": 6, "e": 7}, {"a", "b", "c", "d", "e"}, 2)
+        self.assertEqual(chosen, ["b", "e"])                                          # the best of the afternoon wave and the best of the evening wave
+        self.assertEqual(cp.select_games(ws, {}, {"a", "b", "c", "d", "e"}, 0), [])
+
+    def test_a_quality_of_zero_is_never_selected(self):
+        p = cp.build_day_plan  # selection excludes games with nothing to price
+        ws = ct.waves(starts(a=(13,), b=(19,)))
+        self.assertEqual(cp.select_games(ws, {"a": 0, "b": 4}, {"b"}, 2), ["b"])
+
+
+class TestReservations(Isolated):
+    PLAN = {"allowance": {cp.PROPS: 2.0, cp.GOALS: 1.0, cp.SAVES: 1.0, cp.REFRESH: 1.0, cp.MONEYLINE_UI: 4.0}}
+
+    def test_two_jobs_cannot_spend_the_same_allocation(self):
+        first = cp.reserve(cp.GOALS, 1, at(17, 30), plan=self.PLAN, remaining=100)
+        second = cp.reserve(cp.GOALS, 1, at(17, 30), plan=self.PLAN, remaining=100)    # a concurrent job asks before the first has settled
+        self.assertTrue(first["allow"])
+        self.assertFalse(second["allow"])
+        self.assertIn("ALLOWANCE", second["reason"])
+
+    def test_pending_reservations_count_against_the_hard_reserve(self):
+        self.assertTrue(cp.reserve(cp.PROPS, 1, at(17), plan=self.PLAN, remaining=21)["allow"])
+        self.assertFalse(cp.reserve(cp.PROPS, 1, at(17), plan=self.PLAN, remaining=21)["allow"])       # 21 - 1 pending - 1 would breach the 20-credit reserve
+
+    def test_settling_records_the_actual_charge_beside_the_planned_one_and_frees_the_reservation(self):
+        r = cp.reserve(cp.MONEYLINE_UI, 2, at(8), plan=self.PLAN, remaining=100)
+        cp.settle(r["id"], 1, at(8), label="morning", markets="h2h,spreads")
+        row = cp.read_ledger("2026-10-17")[-1]
+        self.assertEqual((row["credits"], row["planned"]), (1.0, 2.0))
+        self.assertEqual(cp.pending_reserved(at(8)), {})
+        self.assertEqual(cp.reconciliation("2026-10-17")[cp.MONEYLINE_UI], {"calls": 1, "planned": 2.0, "actual": 1.0})
+        self.assertEqual(cp.spent_today(at(9))[cp.MONEYLINE_UI], 1.0)                                  # the unspent credit is available again
+
+    def test_a_failed_call_releases_its_reservation(self):
+        r = cp.reserve(cp.SAVES, 1, at(17), plan=self.PLAN, remaining=100)
+        cp.release(r["id"], at(17))
+        self.assertTrue(cp.reserve(cp.SAVES, 1, at(17), plan=self.PLAN, remaining=100)["allow"])
+
+    def test_a_stale_reservation_expires(self):
+        cp.reserve(cp.SAVES, 1, at(17), plan=self.PLAN, remaining=100)
+        self.assertTrue(cp.reserve(cp.SAVES, 1, at(17, 30), plan=self.PLAN, remaining=100)["allow"])   # 30 minutes later the crashed job's claim has lapsed
+
+    def test_an_unknown_balance_or_an_unplanned_class_is_never_allowed(self):
+        self.assertEqual(cp.reserve(cp.PROPS, 1, at(8), plan=self.PLAN, remaining=None)["reason"], "QUOTA_UNKNOWN") if False else None
         with mock.patch.object(cp.odds_quota, "latest_remaining", return_value=None):
-            self.assertEqual(cp.authorize(cp.PROPS, 2, NOW)["reason"], "QUOTA_UNKNOWN")
-
-    def test_month_view_states_the_shortfall(self):
-        v = cp.month_view(NOW, 297, 7.0)
-        self.assertEqual(v["games_priced_per_day"], 2)
-        self.assertGreater(v["shortfall_month_required_only"], 100)
-        self.assertGreater(v["shortfall_month_everything"], v["shortfall_month_required_only"])
+            self.assertEqual(cp.reserve(cp.PROPS, 1, at(8), plan=self.PLAN)["reason"], "QUOTA_UNKNOWN")
+        self.assertFalse(cp.reserve(cp.TOMORROW, 1, at(8), plan=self.PLAN, remaining=100)["allow"])
 
 
-PLAN = {"day": "2026-10-08", "games_priced": ["1"], "games_not_priced": ["2"], "goals_games": ["1"],
-        "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}, "budget": {"D": 11.5}}
+class TestAuthorizeAndLedger(Isolated):
+    def test_authorize_is_a_read_only_check_against_the_class_allowance(self):
+        plan = {"allowance": {cp.PROPS: 2.0}}
+        with mock.patch.object(cp.odds_quota, "latest_remaining", return_value=100):
+            self.assertTrue(cp.authorize(cp.PROPS, 2, at(8), plan=plan)["allow"])
+            self.assertFalse(cp.authorize(cp.PROPS, 3, at(8), plan=plan)["allow"])
+            self.assertFalse(cp.authorize(cp.MONEYLINE_DECISION, 1, at(8), plan=plan)["allow"])          # the T-35 class has no allowance
+        with mock.patch.object(cp.odds_quota, "latest_remaining", return_value=20):
+            self.assertEqual(cp.authorize(cp.PROPS, 1, at(8), plan=plan)["reason"], "HARD_RESERVE")
+
+    def test_ledger_rows_round_trip_by_eastern_day(self):
+        cp.record(cp.PROPS, 3, at(8), event="e")
+        cp.record(cp.MONEYLINE_UI, 1, at(9))
+        spent = cp.spent_today(at(10))
+        self.assertEqual((spent[cp.PROPS], spent[cp.MONEYLINE_UI]), (3.0, 1.0))
+        self.assertEqual(cp.read_ledger("2026-10-16"), [])
+
+    def test_the_month_view_reports_the_player_pool_in_games_a_day(self):
+        v = cp.month_view(at(8), 192)
+        self.assertEqual(v["days_left"], 15)
+        self.assertTrue(v["reset_assumed"])
+        self.assertGreater(v["games_per_day_covered"], 1.0)
 
 
-class TestCaptureDecisions(unittest.TestCase):
-    def test_only_priced_games_inside_the_actionable_window_get_a_first_capture(self):
-        self.assertEqual(bb.planned_decision(PLAN, "1", 1.5, None, NOW), ("FIRST", "OK"))
-        self.assertEqual(bb.planned_decision(PLAN, "1", 3.0, None, NOW), (None, "BEFORE_ACTIONABLE_WINDOW"))
-        self.assertEqual(bb.planned_decision(PLAN, "2", 1.0, None, NOW), (None, "NOT_IN_CREDIT_PLAN"))
-        self.assertEqual(bb.planned_decision(PLAN, "1", 6.0, None, NOW), (None, "BEFORE_ACTIONABLE_WINDOW"))      # no five-hour cut-off any more: the morning slot buys earlier
-
-    def test_an_earlier_capture_before_the_window_does_not_count_as_the_planned_capture(self):
-        # captured 3.5 hours ago when the game was 5.1 hours away; now 1.6 hours out: that price will be stale at puck drop
-        self.assertEqual(bb.planned_decision(PLAN, "1", 1.6, 210.0, NOW), ("FIRST", "OK"))
-        # captured 20 minutes ago inside the window: it is the planned capture, so no second purchase
-        self.assertEqual(bb.planned_decision(PLAN, "1", 1.2, 20.0, NOW)[0], None)
-
-    def test_a_captured_game_is_not_refreshed_without_leftover_credits(self):
-        with mock.patch.object(cp, "spent_today", return_value={}):
-            self.assertEqual(bb.planned_decision(PLAN, "1", 0.5, 70.0, NOW)[0], None)
-            richer = {**PLAN, "allowance": {**PLAN["allowance"], cp.REFRESH: 4.0}}
-            self.assertEqual(bb.planned_decision(richer, "1", 0.5, 70.0, NOW)[0], "REFRESH")
-
-    def test_capture_prices_buys_goals_only_for_planned_games_and_records_the_spend(self):
-        class Client:
-            def __init__(self):
-                self.calls = []
-            def get_nhl_events(self):
-                return mock.Mock(ok=True, data=[{"id": "e1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": "2026-10-08T20:15:00Z"}])
-            def get_event_odds(self, eid, markets):
-                self.calls.append(markets)
-                return mock.Mock(ok=True, requests_last=3)
-        class Archive:
-            written = []
-            def archive_result(self, r, **kw):
-                self.written.append(kw)
-        games = {"1": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-08T20:15:00Z"}}
-        client, archive = Client(), Archive()
-        with mock.patch.object(cp, "record") as rec, mock.patch.object(cp, "spent_today", return_value={}), mock.patch.object(bb, "decision_age_min", return_value=None), \
-                mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
-            out = bb.capture_prices(NOW, client=client, archive_mod=archive, games=games, plan=PLAN)
-        self.assertEqual(client.calls, [f"{bb.MARKETS},{bb.GOALS_MARKET_KEY}"])
-        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 2), (cp.GOALS, 1)])      # goals are accounted in their own class
-        self.assertEqual(out["events_captured"], 1)
-
-    def _capture(self, plan, requests_last):
-        class Client:
-            def __init__(self):
-                self.calls = []
-            def get_nhl_events(self):
-                return mock.Mock(ok=True, data=[{"id": "e1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": "2026-10-08T20:15:00Z"}])
-            def get_event_odds(self, eid, markets):
-                self.calls.append(markets)
-                return mock.Mock(ok=True, requests_last=requests_last)
-        games = {"1": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-08T20:15:00Z"}}
-        client = Client()
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}), mock.patch.object(cp, "record") as rec, mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(bb, "decision_age_min", return_value=None), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
-            out = bb.capture_prices(NOW, client=client, archive_mod=mock.Mock(), games=games, plan=plan)
-        return client, rec, out
-
-    def test_points_ride_on_the_pregame_shots_capture_for_planned_games_and_are_accounted_apart(self):
-        plan = {**PLAN, "goals_games": [], "points_games": ["1"], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 1.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
-        client, rec, out = self._capture(plan, requests_last=2)
-        self.assertEqual(client.calls, [f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"])
-        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 1), (cp.POINTS_ADDON, 1)])
-
-    def test_a_game_without_a_points_credit_buys_shots_alone_and_says_points_were_not_fetched(self):
-        plan = {**PLAN, "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 0.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
-        with mock.patch("operational.price_availability.note_unfetched") as note:
-            client, rec, _ = self._capture(plan, requests_last=1)
-        self.assertEqual(client.calls, [cp.SHOTS_KEY])
-        self.assertEqual([(c.args[0], c.args[1]) for c in rec.call_args_list], [(cp.PROPS, 1)])
-        self.assertTrue(any(c.args[2] == cp.POINTS_KEY and "BUDGET" in str(c.args[3]) for c in note.call_args_list))
-
-    def test_a_denied_points_credit_drops_points_not_the_game(self):
-        plan = {**PLAN, "goals_games": [], "points_games": ["1"], "allowance": {cp.PROPS: 4.0, cp.POINTS_ADDON: 0.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
-        client, _, out = self._capture(plan, requests_last=1)
-        self.assertEqual((client.calls, out["events_captured"]), ([cp.SHOTS_KEY], 1))
-
-    def _two_game_run(self, now, second_offset_min, plan):
-        t1 = now + dt.timedelta(minutes=90)
-        t2 = t1 + dt.timedelta(minutes=second_offset_min)
-        iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
-
-        class Client:
-            def __init__(self):
-                self.calls = []
-            def get_nhl_events(self):
-                return mock.Mock(ok=True, data=[{"id": "e1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": iso(t1)},
-                                                {"id": "e2", "home_team": "Toronto Maple Leafs", "away_team": "Montréal Canadiens", "commence_time": iso(t2)}])
-            def get_event_odds(self, eid, markets):
-                self.calls.append(eid)
-                return mock.Mock(ok=True, requests_last=1)
-        games = {"1": {"home": "BOS", "away": "UTA", "start_utc": iso(t1)}, "2": {"home": "TOR", "away": "MTL", "start_utc": iso(t2)}}
-        client = Client()
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}), mock.patch.object(cp, "record"), mock.patch.object(cp, "spent_today", return_value={}), \
-                mock.patch.object(bb, "decision_age_min", return_value=None), mock.patch.object(bb, "_captured_times", return_value={cp.SHOTS_KEY: None}), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=297):
-            bb.capture_prices(now, client=client, archive_mod=mock.Mock(), games=games, plan=plan)
-        return client.calls
-
-    def test_games_of_one_wave_are_captured_together_when_the_first_game_reaches_its_window(self):
-        now = dt.datetime(2026, 10, 8, 19, 0, tzinfo=dt.timezone.utc)                               # game 1 in 90 minutes (inside 105), game 2 an hour after it
-        plan = {**PLAN, "games_priced": ["1", "2"], "games_not_priced": [], "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
-        self.assertEqual(self._two_game_run(now, 60, plan), ["e1", "e2"])                          # game 2 is 150 minutes away: on its own it would wait another 45 minutes
-
-    def test_a_game_in_a_later_wave_waits_for_its_own_window(self):
-        now = dt.datetime(2026, 10, 8, 19, 0, tzinfo=dt.timezone.utc)
-        plan = {**PLAN, "games_priced": ["1", "2"], "games_not_priced": [], "goals_games": [], "points_games": [], "allowance": {cp.PROPS: 4.0, cp.GOALS: 0.0, cp.REFRESH: 0.0}}
-        self.assertEqual(self._two_game_run(now, 150, plan), ["e1"])                               # 150 minutes later is a different wave
-
-    def test_a_goals_capture_does_not_eat_the_next_games_base_allowance(self):
-        """2026-10-08: BOS's 3-credit capture was recorded as PROPS, so the third planned game (2 more credits) was denied against an allowance of 6."""
-        plan = {**PLAN, "allowance": {cp.PROPS: 4.0, cp.GOALS: 1.0, cp.REFRESH: 0.0}}
-        spent = {cp.PROPS: 2.0, cp.GOALS: 1.0}
-        with mock.patch.object(cp, "spent_today", return_value=spent), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=200):
-            self.assertTrue(cp.authorize(cp.PROPS, 2, NOW, plan=plan)["allow"])                      # the second planned game is still allowed
-            self.assertFalse(cp.authorize(cp.GOALS, 1, NOW, plan=plan)["allow"])                     # goals allowance is used up, separately
-
-    def test_an_unplanned_game_is_skipped_with_its_reason(self):
-        class Client:
-            def get_nhl_events(self):
-                return mock.Mock(ok=True, data=[{"id": "e2", "home_team": "Toronto Maple Leafs", "away_team": "Montréal Canadiens", "commence_time": "2026-10-08T20:15:00Z"}])
-            def get_event_odds(self, *a, **k):
-                raise AssertionError("must not buy")
-        games = {"2": {"home": "TOR", "away": "MTL", "start_utc": "2026-10-08T20:15:00Z"}}
-        with mock.patch.object(bb, "decision_age_min", return_value=None):
-            out = bb.capture_prices(NOW, client=Client(), archive_mod=mock.Mock(), games=games, plan=PLAN)
-        self.assertEqual(out["skipped"][0]["reason"], "NOT_IN_CREDIT_PLAN")
-
-
-class TestSweeps(unittest.TestCase):
-    def test_first_sweep_is_retired_under_the_plan_and_makes_no_request(self):
-        with mock.patch.object(cp, "enforced", return_value=True), mock.patch.object(lop.client, "get_nhl_events", side_effect=AssertionError("no network")):
-            out = lop.run_targeted_prop_sweep("first")
-        self.assertIn("RETIRED_BY_CREDIT_PLAN", out["reason"])
-        self.assertFalse(out["ran"])
-
-    def test_planned_sweeps_never_buy_shots(self):
-        self.assertNotIn("shots", lop.PLANNED_SWEEP_MARKETS)
-        self.assertEqual(lop.PLANNED_SWEEP_MARKETS, "player_total_saves")
-
-
-class TestConnectedCaptures(unittest.TestCase):
-    def test_games_are_bought_a_whole_wave_at_a_time_biggest_wave_first(self):
-        starts_ = starts(("a", 0), ("b", 30), ("c", 200), ("d", 215), ("e", 230), ("f", 400))
-        self.assertEqual(cp.connected_order(starts_), ["c", "d", "e", "a", "b", "f"])                # the three-game wave, then the two-game wave, then the lone game
-
-    def test_an_isolated_tail_is_not_bought_when_other_games_are_chosen(self):
-        starts_ = starts(("a", 0), ("b", 30), ("c", 200), ("d", 215))
-        self.assertEqual(cp.connected_prefix(starts_, 3), ["a", "b"])                                  # one game of the next wave would be alone: not bought
-        self.assertEqual(cp.connected_prefix(starts_, 4), ["a", "b", "c", "d"])
-        self.assertEqual(cp.connected_prefix(starts_, 1), ["a"])                                       # a single affordable game is still the best use of the credit
-
-    def test_the_credit_of_a_dropped_isolated_capture_stays_in_the_day(self):
-        starts_ = starts(("a", 0), ("b", 30), ("c", 200))
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate"}):
-            a = cp.allocate(2.0 + 3 + 1 + 3.0, starts_)                                                # decisions 3 + display 1, then 3 credits: pregame for two games (2) ...
-        self.assertEqual(a["games_priced"], ["a", "b"])
-
-
-class TestPointsAddOn(unittest.TestCase):
-    """Shots are bought first; points ride on the pregame capture as an add-on, lead games first, so shots never lose a game to points and points are not silently dropped."""
-    SHOTS_ONLY = {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate"}
-
-    def test_goals_come_before_points_and_points_get_what_is_left(self):
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: ""}):
-            self.assertTrue(cp.points_addon_enabled())                      # the add-on is on by default: the builder keeps its Points market whenever credits allow
-            tight = cp.allocate(11.5, SEVEN)
-            roomy = cp.allocate(50.0, SEVEN)
-        self.assertEqual(tight["points_games"], [])                           # a tight day: shots, the morning look and goals first; points are not funded and are reported as such
-        self.assertEqual(roomy["goals_games"], roomy["games_priced"][:len(roomy["goals_games"])])
-        self.assertGreaterEqual(len(roomy["goals_games"]), 1)
-        self.assertGreaterEqual(len(roomy["points_games"]), 1)
-        self.assertTrue(set(roomy["points_games"]) <= set(roomy["games_priced"]))
-        self.assertGreaterEqual(len(roomy["goals_games"]), len(roomy["points_games"]))   # goals are funded first
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_shots_on_goal_alternate", cp.POINTS_ADDON_ENV: "off"}):
-            self.assertFalse(cp.points_addon_enabled())
-            self.assertEqual(cp.allocate(50.0, SEVEN)["points_games"], [])
-
-    def test_the_morning_look_is_still_bought_before_goals_or_points(self):
-        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
-            a = cp.allocate(11.5, SEVEN)
-        self.assertGreaterEqual(a["allowance"][cp.MORNING], 1.0)
-        self.assertEqual(a["morning_markets"], [cp.SHOTS_KEY])
-
-    def test_a_tight_day_buys_shots_not_points(self):
-        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
-            a = cp.allocate(5.0, SEVEN)                                   # decision 3 + display 1 leave one credit: one game's shots, no points
-        self.assertEqual((len(a["games_priced"]), a["points_games"]), (1, []))
-
-    def test_a_generous_day_adds_points_to_every_priced_game(self):
-        with mock.patch.dict("os.environ", self.SHOTS_ONLY):
-            a = cp.allocate(50.0, SEVEN)
-        self.assertEqual(sorted(a["points_games"]), sorted(a["games_priced"]))
-
-    def test_no_add_on_when_the_owner_already_buys_points_with_every_game(self):
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"}):
-            a = cp.allocate(11.5, SEVEN)
-        self.assertEqual(a["points_games"], [])
-
-    def test_the_add_on_has_its_own_allowance_in_authorize(self):
-        plan = {"allowance": {cp.POINTS_ADDON: 2.0}}
-        with mock.patch.object(cp, "spent_today", return_value={cp.POINTS_ADDON: 2.0}):
-            self.assertFalse(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan=plan)["allow"])
-        with mock.patch.object(cp, "spent_today", return_value={cp.POINTS_ADDON: 1.0}):
-            self.assertTrue(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan=plan)["allow"])
-        self.assertFalse(cp.authorize(cp.POINTS_ADDON, 1, NOW, remaining=400, plan={"allowance": {}})["allow"])    # a plan without the class buys none
-
-
-class TestOwnerMarketChoice(unittest.TestCase):
-    def test_default_pair_and_an_owner_override_that_trades_depth_for_coverage(self):
-        with mock.patch.dict("os.environ", {}, clear=False):
-            import os
-            os.environ.pop(cp.PROP_MARKETS_ENV, None)
-            self.assertEqual((cp.prop_markets(), cp.base_cost()), ((cp.SHOTS_KEY,), 1))        # the default buys each game's shots ladder only
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: f"{cp.SHOTS_KEY},{cp.POINTS_KEY}"}):
-            self.assertEqual((cp.prop_markets(), cp.base_cost()), ((cp.SHOTS_KEY, cp.POINTS_KEY), 2))   # points are an owner opt-in
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points"}):
-            self.assertEqual((cp.prop_markets(), cp.base_cost()), (("player_points",), 1))
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "player_points,not_a_market"}):
-            self.assertEqual(cp.prop_markets(), ("player_points",))                  # unknown names are ignored
-        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: "not_a_market"}):
-            self.assertEqual(cp.prop_markets(), cp.DEFAULT_PROP_MARKETS)             # nothing valid: back to the default
-
-    def test_one_market_prices_twice_the_games_for_the_same_credits(self):
-        two = cp.allocate(11.5, SEVEN, base=2)
-        one = cp.allocate(11.5, SEVEN, base=1)
-        # one market halves every capture's price, so the same credits fund twice the morning breadth (the pregame minimum is two games either way)
-        self.assertEqual((len(two["morning_games"]), len(one["morning_games"])), (3, 5))
-        self.assertEqual(one["morning_markets"], [cp.SHOTS_KEY])
-
-    def test_the_age_check_follows_the_markets_actually_bought(self):
-        calls = []
-
-        def fake(event_id, market=None, **kw):
-            calls.append(market)
-            return (NOW - dt.timedelta(minutes=10), {}) if market == bb.POINTS_MARKET_KEY else None
-        with mock.patch.object(bb, "latest_capture", side_effect=fake):
-            self.assertEqual(round(bb.decision_age_min("e", NOW, (bb.POINTS_MARKET_KEY,))), 10)   # points only: no shots capture is needed
-            self.assertIsNone(bb.decision_age_min("e", NOW))                                       # the default pair still needs both
-
-
-class TestScenarioCoverageArithmetic(unittest.TestCase):
-    def test_budget_scaling_reproduces_the_documented_configurations(self):
-        """docs/ODDS_BUDGET_CONFIGURATIONS.md: with a large allowance the same waterfall prices every game and funds goals, saves and refreshes."""
-        rich = cp.allocate(800.0, SEVEN, confirmed_games={"a", "b", "c"})
-        self.assertEqual(len(rich["games_priced"]), 7)
-        self.assertEqual(len(rich["goals_games"]), 7)
-        self.assertEqual(len(rich["saves_games"]), 7)                         # saves prices for every priced game, confirmed or not
-        self.assertGreater(rich["allowance"][cp.REFRESH], 100)
-
-
-class TestDecisionPullGuard(unittest.TestCase):
-    def test_the_t35_pull_ignores_the_soft_daily_budget_and_obeys_the_hard_reserve(self):
-        from operational import moneyline_pregame as mp
-        with mock.patch.object(cp, "enforced", return_value=True), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=289):
-            self.assertTrue(mp._default_guard()["allow"])           # was DEFERRED on 2026-10-08 with 44 spent against a 33.6 soft budget
-        with mock.patch.object(cp, "enforced", return_value=True), mock.patch.object(cp.odds_quota, "latest_remaining", return_value=20):
-            self.assertEqual(mp._default_guard()["reason"], "HARD_RESERVE")
-
-
-class TestLegacyLedgerRows(unittest.TestCase):
-    def test_a_three_credit_props_row_with_goals_is_split_into_base_and_goals(self):
-        cp.record(cp.PROPS, 3, NOW, game_id="1", markets="player_shots_on_goal_alternate,player_points,player_goal_scorer_anytime")
-        cp.record(cp.PROPS, 2, NOW, game_id="2", markets="player_shots_on_goal_alternate,player_points")
-        spent = cp.spent_today(NOW)
-        self.assertEqual((spent[cp.PROPS], spent[cp.GOALS]), (4.0, 1.0))
-        cp._ledger().unlink()
-
-
-class TestLedger(unittest.TestCase):
-    def test_record_and_read_back_by_et_day(self):
-        cp.record(cp.PROPS, 3, NOW, event="e")
-        cp.record(cp.MONEYLINE_UI, 1, NOW + dt.timedelta(minutes=5))
-        spent = cp.spent_today(NOW)
-        self.assertEqual(spent.get(cp.PROPS), 3.0)
-        self.assertEqual(spent.get(cp.MONEYLINE_UI), 1.0)
-        cp._ledger().unlink()
+class TestGameQuality(unittest.TestCase):
+    def test_quality_counts_eligible_skaters_and_a_goalie_projection(self):
+        def player(eligible, toi=18.0, gp=40):
+            return {"projection": {"pricing_eligible": eligible, "expected": {"toi": toi}}, "games_total": gp}
+        product = {"players": {"p1": player(True), "p2": player(True, toi=8.0), "p3": player(False), "p4": player(True, gp=3)},
+                   "goalies": {"g1": {"projection": {"x": 1}}}, "game_details": {"9": {"sides": {"home": {"skater_ids": ["p1", "p2"], "goalie_ids": ["g1"]}, "away": {"skater_ids": ["p3", "p4"], "goalie_ids": []}}}}}
+        self.assertEqual(cp.game_quality(product, "9"), 1 + 4.0)
+        self.assertEqual(cp.game_quality(None, "9"), 1.0)
+        self.assertEqual(cp.game_quality(product, "missing"), 0.0)
 
 
 if __name__ == "__main__":

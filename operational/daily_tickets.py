@@ -642,12 +642,12 @@ def _capture_plan(nhl_conn, now: dt.datetime) -> list[dict]:
 
 def _availability_block(nhl_conn, now: dt.datetime) -> dict:
     """Why each game's prices are or are not on file (operational/price_availability.py), today and tomorrow, plus the schedule that produced it."""
-    from operational import capture_schedule as sched, price_availability as pa
+    from operational import capture_timeline as ct, price_availability as pa
     today = et.eastern_today(now)
     tomorrow = (dt.date.fromisoformat(today) + dt.timedelta(days=1)).isoformat()
-    out = {"schedule": {"morning_from_et": "%02d:%02d" % sched.MORNING_START_ET, "midday_from_et": "%02d:%02d" % sched.MIDDAY_START_ET,
-                        "pregame_minutes_before_puck_drop": round(sched.PREGAME_HOURS * 60), "slot_close_hours_before": sched.SLOT_CLOSE_HOURS,
-                        "recheck_not_posted_minutes": sched.RECHECK_MINUTES, "tomorrow_checks_et": ["%02d:%02d" % t for t in sched.TOMORROW_CHECKS_ET]}}
+    out = {"schedule": {"refresh_et": "%02d:%02d" % ct.REFRESH_ET, "analysis_and_league_pull_et": "%02d:%02d" % ct.ANALYSIS_ET, "wave_minutes": ct.WAVE_MINUTES,
+                        "capture_target_minutes_before_wave": ct.CAPTURE_TARGET_MIN, "publish_deadline_minutes_before_wave": ct.PUBLISH_DEADLINE_MIN,
+                        "last_chance_minutes_before_wave": ct.LAST_CHANCE_MIN, "recheck_not_posted_minutes": 20.0, "tomorrow": "no paid check: tomorrow's games ride the league-wide pulls"}}
     try:
         out["today"] = pa.summary(today)
         out["today"]["sentence"] = pa.sentence(today)
@@ -674,8 +674,8 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
     if not starts:
         return "No games left to start today."
     first = best_bets._parse_utc(starts[0] if starts[0].endswith("Z") else starts[0] + "Z")
-    from operational import capture_schedule as sched, price_availability as pa
-    opens = first - dt.timedelta(hours=sched.PREGAME_HOURS)
+    from operational import capture_timeline as ct, price_availability as pa
+    opens = first - dt.timedelta(minutes=ct.CAPTURE_TARGET_MIN)
     first_et = first.astimezone(et.EASTERN).strftime("%-I:%M %p ET")
     if now < opens:
         try:
@@ -684,7 +684,7 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
         except Exception:  # noqa: BLE001
             avail = ""
         return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. No fresh price qualifies right now (a price is fresh for up to 150 minutes, 100 "
-                f"when the game is under two hours away). {avail} The engine looks again every 15 minutes, and again about {sched.PREGAME_HOURS * 60:.0f} minutes before each puck drop.").strip()
+                f"when the game is under two hours away). {avail} The engine looks every 15 minutes and makes each wave's coordinated capture about {ct.CAPTURE_TARGET_MIN} minutes before the wave's first puck drop.").strip()
     return base
 
 

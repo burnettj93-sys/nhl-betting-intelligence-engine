@@ -405,6 +405,22 @@ def _auto_snapshot_label(now: dt.datetime) -> str:
     return "late"
 
 
+LEAGUE_MARKETS = "h2h,spreads"
+
+
+def _spreads_row(event_payload: dict) -> dict | None:
+    """The standard +/-1.5 puck line from the same league-wide response (no extra credit beyond the market itself). None when DraftKings returned no spreads market for the game."""
+    from research.generic_prop_pricing import puck_line_contract
+    checked = puck_line_contract.validate_spreads_event(event_payload)
+    if checked["status"] != "SHAPE_OK":
+        return {"status": "NOT_POSTED" if "no draftkings spreads" in str(checked.get("reason")) else "MALFORMED", "reason": checked.get("reason")}
+    rows = [r for r in checked["rows"] if r["standard_line"]]
+    if not rows:
+        return {"status": "NO_STANDARD_LINE", "other_points": sorted({r["home_point"] for r in checked["rows"]})}
+    r = rows[0]
+    return {"status": "POSTED", "home_point": r["home_point"], "home_price": r["home_price"], "away_point": r["away_point"], "away_price": r["away_price"], "last_update": r["last_update"]}
+
+
 def run_moneyline_snapshot(snapshot_label: str | None = None,
                             max_events: int = MONEYLINE_MAX_EVENTS_PER_SNAPSHOT) -> dict:
     """League-wide moneyline snapshot. `snapshot_label` is operational
@@ -457,18 +473,33 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
 
     from research.generic_prop_pricing import provider_adapter
 
-    r_odds = client.get_sport_odds(markets=MONEYLINE_MARKET, bookmakers="draftkings")
+    from operational import credit_planner as _cp
+    markets = LEAGUE_MARKETS if _cp.enforced() else MONEYLINE_MARKET      # production asks for moneylines AND standard spreads in the one call (2 credits: markets x regions)
+    reservation = None
+    if _cp.enforced():
+        from operational import eastern_time as _et
+        lc, _obs = _cp.observed_league_cost()
+        reservation = _cp.reserve(_cp.MONEYLINE_UI, lc if "spreads" in markets else 1, now, plan=_cp.load_plan(_et.eastern_today(now)), note=f"league:{snapshot_label}")
+        if not reservation.get("allow"):
+            summary["api_error"] = None
+            summary["reason"] = f"NOT_FUNDED: {reservation.get('reason')}"
+            return summary                                              # reserved BEFORE the call: another job's pending spend or the allowance said no
+    r_odds = client.get_sport_odds(markets=markets, bookmakers="draftkings")
     if not r_odds.ok:
+        if reservation:
+            _cp.release(reservation["id"], now)
         summary["api_error"] = r_odds.error
         return summary
-    archive.archive_result(r_odds, event_id=None, market_filter=MONEYLINE_MARKET,
+    archive.archive_result(r_odds, event_id=None, market_filter=markets,
                             bookmaker_filter="draftkings")
     cost = int(r_odds.requests_last or 0)
     summary["credits_spent_this_run"] = cost
     summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
     summary["captured_at_utc"] = r_odds.retrieved_at_utc
-    from operational import credit_planner as _cp                       # the plan's ledger: T-35 decision pulls vs display refreshes
-    _cp.record(_cp.MONEYLINE_DECISION if snapshot_label == "pregame" else _cp.MONEYLINE_UI, cost, now, label=snapshot_label)
+    if reservation:
+        _cp.settle(reservation["id"], cost, now, label=snapshot_label, markets=markets)      # the actual charge replaces the reservation
+    else:
+        _cp.record(_cp.MONEYLINE_UI, cost, now, label=snapshot_label, markets=markets)
 
     future_event_ids = {e["id"] for e in future_events}
     rows = []
@@ -488,6 +519,7 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
                 # The provider's own h2h last_update. captured_at_utc above is only the retrieval time; the bridge
                 # prices freshness from THIS (operational/quote_freshness.py).
                 "quote_updated_at_utc": m.market_last_update_utc,
+                "spreads": _spreads_row(event_payload),
             })
 
     payload = {"generated_at_utc": now.isoformat(), "summary": summary, "rows": rows}
@@ -625,8 +657,10 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
     }
     from operational import credit_planner as cp
     planned = cp.enforced()
-    if planned and sweep == "first":
-        summary["reason"] = "RETIRED_BY_CREDIT_PLAN: nothing is bought 3-4.5 hours out; see docs/ODDS_CREDIT_AUDIT.md"
+    if planned:
+        # RETIRED 2026-10-17: goalie-saves prices ride on each selected game's coordinated wave capture (operational/best_bets.capture_wave_prices), confirmed starter or not. Neither sweep
+        # makes any call, free or paid, under the credit plan.
+        summary["reason"] = "RETIRED_BY_CREDIT_PLAN: saves prices are part of the wave capture; see docs/ODDS_PLAN_DECISION.md"
         return summary
 
     r_events = client.get_nhl_events()

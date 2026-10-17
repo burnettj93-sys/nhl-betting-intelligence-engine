@@ -48,6 +48,11 @@ def morning_snapshot(*, provisional=True):
                      "sentence": "DraftKings player prices are on file for 0 of 1 games; 1 not posted by DraftKings yet."},
         "tomorrow_last_check_utc": iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U)),
         "tomorrow_observations": [{"at": iso(dt.datetime(2026, 10, 15, 0, 30, tzinfo=U)), "game": "BBB at AAA", "market": "player_shots_on_goal_alternate", "status": "NOT_POSTED", "outcomes": 0, "hours_to_start": 22.5}]}
+    snap["day_status"] = {"generated_at_utc": GEN, "day": "2026-10-15", "plan_present": True,
+                          "prep": {"refresh_status": "DONE", "refresh_finished_utc": "2026-10-15T11:46:00Z", "analysis_published_utc": "2026-10-15T12:01:00Z", "analysis_games": 1, "slate_games": 1},
+                          "league_pulls": {"planned": 2, "cost_each": 2, "cost_observed": False, "made": [{"at_utc": "2026-10-15T12:02:00Z", "credits": 2.0}]},
+                          "waves": [{"index": 0, "state": "PENDING", "target_utc": "2026-10-15T21:30:00Z", "selected": 1, "first_game_utc": "2026-10-15T23:00:00Z",
+                                     "publish_deadline_utc": "2026-10-15T22:00:00Z", "credits": 0.0, "games": [{"game_id": "2026020900", "matchup": "BBB at AAA", "selected": True}]}]}
     if provisional:
         for o in tk["options"]["options"]:
             o["provisional"] = True
@@ -69,8 +74,9 @@ class TestMorningPages(unittest.TestCase):
         at = run_page("21_Today.py", morning_snapshot())
         self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
         t = text(at)
-        self.assertIn("Morning update done.", t)
-        self.assertIn("1 of 1 games looked at", t)
+        self.assertIn("07:45 refresh: done", t)
+        self.assertIn("whole-slate analysis: 1 of 1 games", t)
+        self.assertIn("league moneyline + spread pulls: 1 made of 2 planned", t)
         self.assertIn("Provisional recommendations", t)
         self.assertIn("Provisional — not recorded.", t)
         self.assertIn("Not recorded", t)

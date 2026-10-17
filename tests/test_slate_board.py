@@ -121,7 +121,9 @@ class TestTheBoard(unittest.TestCase):
         g = doc()["games"][0]["side"]
         self.assertIsNone(g["recommendation"])                                         # -120 / +100: the favourite is about 52% on its own no-vig price
         self.assertIn("coin flip", g["reason"])
-        self.assertEqual(g["puck_line"]["status"], "NOT_ASSESSED")
+        self.assertEqual(g["puck_line"]["status"], "NOT_ON_FILE")                  # no spreads price: said separately from the model and the contract
+        self.assertEqual(g["puck_line"]["model"]["status"], "UNVALIDATED")
+        self.assertEqual(g["puck_line"]["contract"]["status"], "UNCERTIFIED")
         p = product()
         for game in p["games"]["games"]:
             if game["game_id"] == "2026020900":
@@ -390,6 +392,85 @@ class TestMissedWindowsAreShownOnTheBoard(unittest.TestCase):
         reason = [m for m in d["games"][0]["coverage"]["missing"] if m["item"] == "Saves line"][0]["reason"]
         self.assertIn("whether or not a starter is confirmed", reason)
         self.assertIn("still needs a confirmed starter", reason)
+
+
+class TestAnalysisIsSeparatedFromPricedRecommendations(unittest.TestCase):
+    def test_each_scheduled_game_says_whether_it_has_fresh_prices_stale_prices_or_none(self):
+        d = doc()
+        self.assertIn(d["games"][0]["coverage"]["price_state"], ("FRESH_PRICES", "STALE_PRICES"))     # the fixture game has a shots quote
+        none = sb.build_doc(NOW, product(), pool(), {}, avail(shots="BUDGET_BLOCKED"), {}, None)
+        p2 = pool()
+        p2["games"]["2026020900"]["players"] = {}
+        no_prices = sb.build_doc(NOW, product(), p2, {}, avail(shots="BUDGET_BLOCKED"), {}, None)["games"][0]["coverage"]
+        self.assertEqual(no_prices["price_state"], "ANALYSIS_ONLY")
+        self.assertIn("no player prices", no_prices["price_state_word"])
+
+    def test_a_started_game_is_not_applicable(self):
+        p = product()
+        for game in p["games"]["games"]:
+            game["state"] = "FINAL"
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)
+        self.assertEqual(d["games"][0]["coverage"]["price_state"], "NOT_APPLICABLE")
+
+
+class TestShotsPicksDoNotFavourAnUnstableEdge(unittest.TestCase):
+    def player(self, pid, name):
+        return {"player_id": pid, "name": name, "team": "AAA", "position": "C", "projection": {"pricing_eligible": True, "expected": {"toi": 18.0, "shots": 2.4}, "probabilities": {}}, "games_total": 120,
+                "recent_avg": {"shots": 2.3}, "season": {"games": 8}, "prior_season": {"games": 70, "goals_per_game": 0.3, "shots_per_game": 2.4}}
+
+    def pool(self, ladders):
+        return {"players": {pid: {"m": {"SOG": {"q": "2026-10-08T21:58:00Z", "r": "2026-10-08T21:59:00Z", "l": [[k, price, model] for k, price, model, _ in lad],
+                                                  "rec": {str(k): rec for k, _, _, rec in lad}}}} for pid, lad in ladders.items()}}
+
+    def test_a_short_noisy_record_with_a_big_apparent_edge_loses_to_a_stable_one(self):
+        ps = [self.player("stable", "Stable Sam"), self.player("noisy", "Noisy Nate"), self.player("third", "Third Tom")]
+        ladders = {"stable": [(2, -140, 0.60, [20, 30, 0.62, 8])],                       # 20 of 30, estimate 0.62 at -140 (implies 0.58): a small, real edge
+                   "noisy": [(2, 150, 0.33, [5, 10, 0.55, 8])],                          # 5 of 10 games, estimate 0.55 at +150 (implies 0.40): a huge apparent edge from 10 games
+                   "third": [(2, -120, 0.55, [17, 30, 0.56, 8])]}
+        out = sb.shots_picks({"home": "AAA", "away": "BBB"}, ps, self.pool(ladders), 0.03)
+        names = [c["name"] for c in out["picks"]]
+        self.assertEqual(names[0], "Stable Sam")
+        self.assertNotEqual(names[0], "Noisy Nate")
+        noisy = next((c for c in out["picks"] if c["name"] == "Noisy Nate"), None)
+        if noisy:
+            self.assertTrue(noisy["unstable"])
+            self.assertFalse(noisy["has_value"])                                         # never presented as value
+            self.assertIn("unstable", noisy["explanation"])
+
+    def test_value_must_survive_one_standard_error_to_count(self):
+        ps = [self.player("a", "Alpha")]
+        marginal = {"a": [(2, 105, 0.50, [15, 30, 0.50, 8])]}                            # +105 implies 0.488: an edge far inside the noise
+        pick = sb.shots_picks({"home": "AAA", "away": "BBB"}, ps, self.pool(marginal), 0.0)["picks"][0]
+        self.assertGreater(pick["chosen"]["ev_after_haircut"], -0.05)
+        self.assertLessEqual(pick["chosen"]["ev_low"], pick["chosen"]["ev_after_haircut"])
+        self.assertFalse(pick["has_value"])
+
+
+class TestPuckLineIsAssessedInThreeSeparateParts(unittest.TestCase):
+    def game(self, pl):
+        return {"home": "AAA", "away": "BBB", "start_utc": "2026-10-08T23:00:00Z", "puck_line": pl, "moneyline": None, "win_probability": {}}
+
+    def test_a_quoted_spread_is_shown_with_its_price_and_never_recommended(self):
+        pl = {"status": "POSTED", "home_point": -1.5, "home_price": 210, "away_point": 1.5, "away_price": -265, "quote_updated_at_utc": "2026-10-08T21:50:00Z", "quote_captured_at_utc": "2026-10-08T21:51:00Z", "age_min": 9.0}
+        b = sb.puck_line_block(self.game(pl), NOW)
+        self.assertEqual(b["status"], "QUOTED_NOT_ASSESSED")
+        self.assertEqual((b["price"]["home"]["point"], b["price"]["home"]["american"], b["price"]["away"]["american"]), (-1.5, 210, -265))
+        self.assertIn("-1.5", b["text"])
+        self.assertIn("no cover probability is used", b["text"])                            # the model fact
+        self.assertIn("not yet certified", b["text"])                                       # the contract fact, separate from the price
+        self.assertIn("moneyline", b["text"])
+
+    def test_a_missing_price_is_a_price_fact_not_a_model_fact(self):
+        for status, words in (("NOT_POSTED", "no spreads market"), ("NO_STANDARD_LINE", "non-standard"), ("MALFORMED", "could not be read")):
+            b = sb.puck_line_block(self.game({"status": status, "reason": "x"}), NOW)
+            self.assertIsNone(b["price"])
+            self.assertIn(words, b["text"])
+            self.assertEqual(b["model"]["status"], "UNVALIDATED")
+
+    def test_no_pull_yet_says_the_pull_has_not_returned_one(self):
+        b = sb.puck_line_block(self.game(None), NOW)
+        self.assertEqual(b["status"], "NOT_ON_FILE")
+        self.assertIn("has not returned one yet", b["text"])
 
 
 class TestStartedGamesKeepTheirPregameAnalysis(unittest.TestCase):

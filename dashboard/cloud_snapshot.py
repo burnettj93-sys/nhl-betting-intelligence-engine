@@ -118,6 +118,10 @@ def slate_board() -> dict:
     return _optional("slate_board")
 
 
+def day_status() -> dict:
+    return _optional("day_status")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 

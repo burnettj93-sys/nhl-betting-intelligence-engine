@@ -37,12 +37,10 @@ sched = av.get("schedule") or {}
 last = av.get("tomorrow_last_check_utc")
 st.markdown("**Player props for these games**")
 obs = av.get("tomorrow_observations") or []
-checks = ", ".join(sched.get("tomorrow_checks_et") or ["08:10", "20:15"])
 if date == tomorrow and tom.get("games"):
     ui.banner(ui.esc(tom.get("sentence") or ""), "info")
-    st.caption(f"What this shows is what DraftKings had posted **when the engine asked**, not a rule about DraftKings. It asks twice a day ({checks} ET); last check "
-               f"{ui.et_time(last, True) if last else 'not yet'}. Asking about a market that is not posted costs no credit, so a check is nearly free until DraftKings posts. "
-               "From 8:00 AM ET on the game day the normal morning look takes over.")
+    st.caption(f"What this shows is what DraftKings had posted **when the engine last asked** ({ui.et_time(last, True) if last else 'a check has not been made'}), not a rule about DraftKings. "
+               "Player prices for tomorrow are not bought ahead of time; on the game day each selected game gets one coordinated capture about 90 minutes before its wave.")
     ui.availability_table(tom)
     if obs:
         with st.expander(f"Every check on file for these games ({len(obs)})"):
@@ -50,8 +48,8 @@ if date == tomorrow and tom.get("games"):
                            "Hours before puck drop": o.get("hours_to_start"), "Result": ("Posted" + (f" ({o['outcomes']} prices)" if o.get("outcomes") else "")) if o["status"] == "POSTED" else "Not posted"}
                           for o in reversed(obs)], hide_index=True, width="stretch")
 else:
-    st.caption(f"DraftKings has not been asked about these games yet: the checks run twice a day ({checks} ET). Earlier looks at other game days are in the checks table once a day has them "
-               "(docs/MORNING_WORKFLOW.md lists what has been observed so far, with dates and hours).")
+    st.caption("No player prices for these games exist yet, and none are bought a day ahead: the analysis of every game appears on the Slate Board from the morning of the game day, and each "
+               "selected game gets one coordinated capture about 90 minutes before its wave (docs/ODDS_PLAN_DECISION.md).")
 
 st.markdown("**Games and early moneylines**")
 n_stale = 0
@@ -65,5 +63,5 @@ if n_stale:
     ui.banner(f"<b>{n_stale} of {len(day)} early moneyline prices are stale</b> (older than {ui.EARLY_MAX_AGE_MIN / 60:.0f} hours, or fetched on an earlier day). They are shown as the last quote only; "
               "the next league-wide moneyline pull refreshes them.", "warn")
 st.dataframe(rows, hide_index=True, width="stretch")
-st.caption("Early moneylines come from the same league-wide DraftKings pull as today's (one credit, however many games it returns): the morning pull, the display refresh, and the pre-game decision pulls. "
+st.caption("Early moneylines and standard spreads come from the same league-wide DraftKings pull as today's (one call however many games it returns): the 08:00 pull and the shared pregame pull. "
            "A game with no price has not been posted by DraftKings yet. Prices are US-feed quotes, not verified for Ontario, and are never used for a ticket until the day of the game.")

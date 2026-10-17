@@ -46,6 +46,8 @@ if tk.get("label"):
     st.caption(ui.esc(tk["label"]))
 
 ui.morning_strip(tk)
+with st.expander("Today's capture timeline: waves, games priced, games excluded by budget, credits"):
+    ui.day_timeline()
 today = games["et_today"] if games else tk["date_et"]
 todays = [g for g in games["games"] if g["date_et"] == today and g["type"] == "REGULAR" and g["season"] == "20262027"] if games else []
 st.subheader(f"Today's games — {today}")

@@ -37,6 +37,8 @@ def _policy_haircut() -> tuple[float, str | None]:
 
 def _haircut() -> float:
     return _policy_haircut()[0]
+SHOTS_STABLE_GAMES = 25           # fewer recent games than this, or a record more than SHOTS_MODEL_GAP away from the model, marks an estimate unstable
+SHOTS_MODEL_GAP = 0.15
 SHOTS_PICK_FLOOR = 0.45           # a threshold must be at least this likely to be offered as a "balanced" pick; below it the ladder is a longshot, not a value pick
 SHOTS_PICK_MAX_IMPLIED = 0.80     # ...and not priced shorter than about -400: a 1+ at -4000 has almost no upside, so it is not the "balance of likelihood and price" the pick is for
 TOP_SCORERS = 5
@@ -170,13 +172,18 @@ def shots_picks(game: dict, side_players: list[dict], pool_game: dict | None, ha
             n_cur = r[3] if r and len(r) > 3 else None
             if final is None:
                 continue                                              # no record-based estimate for this line: not offered as a pick (the model alone is not the ticket estimate)
+            se = math.sqrt(max(final * (1.0 - final), 0.0) / ((r[1] or 0) + 8))            # the estimate's own sampling error: a record of 30 games cannot support a precise edge
+            unstable = (r[1] or 0) < SHOTS_STABLE_GAMES or (prob is not None and abs(final - prob) > SHOTS_MODEL_GAP)
             ladder.append({"threshold": int(k), "american": price, "model": prob, "recent_hits": r[0], "recent_games": r[1], "games_this_season": n_cur, "estimate": round(final, 4),
                            "implied": round(_implied(price), 4), "ev_estimated": round(_ev(final, price), 4), "ev_after_haircut": round(_ev_haircut(final, price, haircut), 4),
+                           "ev_low": round(_ev_haircut(max(final - se, 0.0), price, haircut), 4), "std_error": round(se, 4), "unstable": unstable,
                            "supported_for_slip": final >= anchor.SHOTS_LEG_FLOOR})
         usable = [x for x in ladder if x["estimate"] >= SHOTS_PICK_FLOOR and x["implied"] <= SHOTS_PICK_MAX_IMPLIED]
         if not usable:
             continue
-        best = max(usable, key=lambda x: (x["ev_after_haircut"], x["estimate"]))
+        # The threshold is chosen on value that SURVIVES the estimate's own sampling error (one standard error lower), not on the point estimate: a marginal player whose small, noisy record produces a large
+        # apparent edge at a high line does not win on that edge alone. Likelihood and value are shown separately; the choice is the best balance, not the biggest number.
+        best = max(usable, key=lambda x: (x["ev_low"], x["estimate"]))
         exp = (p["projection"] or {}).get("expected") or {}
         recent = p.get("recent_avg") or {}
         value_word = (f"value {best['ev_after_haircut']:+.0%} after the 3-point haircut" if best["ev_after_haircut"] > 0 else
@@ -185,9 +192,10 @@ def shots_picks(game: dict, side_players: list[dict], pool_game: dict | None, ha
                f"{best['recent_games']} games" + (f" ({best['games_this_season']} this season)" if best.get("games_this_season") is not None else "") + f", model {_pct(best['model'])}. "
                f"{exp.get('shots', 0):.1f} expected shots on {exp.get('toi', 0):.0f} min; recent average {recent.get('shots', 0):.1f} shots; {_season_line(p)}.")
         cands.append({"player_id": str(p["player_id"]), "name": p["name"], "team": p["team"], "position": p["position"], "chosen": best, "ladder": sorted(ladder, key=lambda x: x["threshold"]),
-                      "quote_updated_utc": sog.get("q"), "retrieved_at_utc": sog.get("r"), "explanation": why, "has_value": best["ev_after_haircut"] > 0, "expected_shots": exp.get("shots"), "expected_toi": exp.get("toi"),
+                      "quote_updated_utc": sog.get("q"), "retrieved_at_utc": sog.get("r"), "explanation": why + (" The record is short or disagrees with the model by more than 15 points, so this estimate is unstable and its apparent value is treated with caution." if best["unstable"] else ""),
+                      "has_value": best["ev_after_haircut"] > 0 and best["ev_low"] > 0 and not best["unstable"], "unstable": best["unstable"], "expected_shots": exp.get("shots"), "expected_toi": exp.get("toi"),
                       "note": _sample_note(p)})
-    cands.sort(key=lambda c: (-c["chosen"]["ev_after_haircut"], -c["chosen"]["estimate"]))
+    cands.sort(key=lambda c: (1 if c["unstable"] else 0, -c["chosen"]["ev_low"], -c["chosen"]["estimate"]))        # stable records first, then value that survives the sampling error
     picks = []
     teams_seen: dict[str, int] = {}
     for c in cands:
@@ -270,14 +278,37 @@ def _quote_fresh(american_row: dict, now: dt.datetime, start_utc: str | None) ->
     return bool(qf.assess(american_row.get("quote_captured_at_utc"), None, now, qf.price_limit_min(hours), require_retrieval=False)["fresh"])
 
 
+def puck_line_block(game: dict, now: dt.datetime) -> dict:
+    """The handicap side of the moneyline-versus-puck-line assessment. Three separate facts, never blurred: (1) the PRICE (quoted spreads, or why none is on file), (2) the PROVIDER CONTRACT (whether the
+    spreads shape is certified for use), (3) the COVER MODEL (whether a validated probability exists). Today (2) and (3) are unsupported, so the handicap is shown as a quoted price and is never recommended."""
+    from research.generic_prop_pricing import provider_adapter
+    contract_ok = provider_adapter.is_contract_verified("draftkings", "PUCK_LINE")
+    model_text = "The cover model (puck-line-direct-v1) has no validated result yet; its prospective sample is still building, so no cover probability is used."
+    contract_text = ("The provider's spreads shape is certified." if contract_ok else
+                     "The spreads market shape is not yet certified for use (one real payload must be archived and reviewed).")
+    pl = game.get("puck_line")
+    base = {"model": {"status": "UNVALIDATED", "text": model_text}, "contract": {"status": "CERTIFIED" if contract_ok else "UNCERTIFIED", "text": contract_text}}
+    if not isinstance(pl, dict):
+        return {**base, "status": "NOT_ON_FILE", "price": None, "text": "No spreads price is on file for this game: the league-wide pull has not returned one yet (it asks for moneylines and standard spreads together, at 08:00 ET "
+                                                                       "and once before the first wave), so the handicap cannot be priced. " + model_text}
+    if pl.get("status") != "POSTED":
+        why = {"NOT_POSTED": "DraftKings returned no spreads market for this game at the last pull.", "NO_STANDARD_LINE": "DraftKings quoted only non-standard spread lines for this game.",
+               "MALFORMED": f"The spreads quote could not be read ({pl.get('reason')})."}.get(pl.get("status"), "No usable spreads quote.")
+        return {**base, "status": pl.get("status") or "UNAVAILABLE", "price": None, "text": why + " " + model_text}
+    home, away = game.get("home"), game.get("away")
+    price = {"home": {"team": home, "point": pl.get("home_point"), "american": pl.get("home_price")}, "away": {"team": away, "point": pl.get("away_point"), "american": pl.get("away_price")},
+             "quote_updated_utc": pl.get("quote_updated_at_utc"), "quote_captured_utc": pl.get("quote_captured_at_utc"), "age_min": pl.get("age_min")}
+    return {**base, "status": "QUOTED_NOT_ASSESSED", "price": price,
+            "text": (f"Quoted: {home} {pl.get('home_point'):+g} ({_fmt_price(pl.get('home_price'))}) / {away} {pl.get('away_point'):+g} ({_fmt_price(pl.get('away_price'))}). "
+                     "Not assessed as a bet: " + model_text + " " + contract_text + " The better-supported market is the moneyline.")}
+
+
 def side_block(game: dict, now: dt.datetime | None = None) -> dict:
     now = now or dt.datetime.now(dt.timezone.utc)
     ml = game.get("moneyline") or {}
     wp = game.get("win_probability") or {}
     home, away = ml.get("home"), ml.get("away")
-    out = {"market": "Moneyline", "puck_line": {"status": "NOT_ASSESSED",
-                                                 "text": ("Puck line (±1.5) not assessed: the cover model (puck-line-direct-v1) has no validated result yet (its prospective sample is still building), and no spreads price is fetched. "
-                                                          "The better-supported market here is the moneyline.")}}
+    out = {"market": "Moneyline", "puck_line": puck_line_block(game, now)}
     if not home or not away or home.get("american") is None or away.get("american") is None:
         out.update(recommendation=None, reason="No moneyline prices on file for this game.")
         return out
@@ -311,19 +342,21 @@ def side_block(game: dict, now: dt.datetime | None = None) -> dict:
 FREEZABLE_STATES = ("STARTED", "LIVE", "FINAL")
 
 
-def _frozen_block(previous_doc: dict | None, today: str, g: dict) -> tuple[dict, dict] | None:
+def _frozen_block(previous_doc: dict | None, today: str, g: dict, recovered: dict | None = None) -> tuple[dict, dict] | None:
     """A game that has started (or finished) keeps the analysis it had before puck drop, labelled as frozen, instead of collapsing to "not scheduled". It comes from the last board built for the same
     Eastern day while the game was still scheduled; it is never recomputed with in-game information and is not a current recommendation."""
     if g.get("state") not in FREEZABLE_STATES:                      # a postponed or cancelled game has no "pregame analysis as of puck drop"
         return None
-    if not isinstance(previous_doc, dict) or previous_doc.get("date_et") != today:
-        return None
-    prev = next((x for x in previous_doc.get("games") or [] if isinstance(x, dict) and x.get("game_id") == g.get("game_id")), None)
+    prev = (recovered or {}).get(str(g.get("game_id")))               # saved (pregame_archive) or recovered from the published-snapshot archive
+    from_doc = False
+    if prev is None and isinstance(previous_doc, dict) and previous_doc.get("date_et") == today:
+        prev = next((x for x in previous_doc.get("games") or [] if isinstance(x, dict) and x.get("game_id") == g.get("game_id")), None)
+        from_doc = True
     if prev is None or not (prev.get("coverage") or {}).get("analysis_available"):
         return None
     import copy
     prev = copy.deepcopy(prev)
-    at = prev.get("frozen_at_utc") or previous_doc.get("generated_at_utc")
+    at = prev.get("frozen_at_utc") or (previous_doc or {}).get("generated_at_utc") if from_doc else prev.get("frozen_at_utc")
     cov = prev["coverage"]
     cov["frozen_at_utc"] = at
     cov["recommended"] = []                                         # nothing on a started game is a current recommendation
@@ -338,7 +371,8 @@ def _frozen_block(previous_doc: dict | None, today: str, g: dict) -> tuple[dict,
         pick["has_value"] = False
         if isinstance(pick.get("chosen"), dict):
             pick["chosen"]["supported_for_slip"] = False
-    entry = {**prev, "state": g.get("state"), "start_et": g.get("start_et") or prev.get("start_et"), "frozen_at_utc": at, "coverage": cov}
+    entry = {**prev, "state": g.get("state"), "start_et": g.get("start_et") or prev.get("start_et"), "frozen_at_utc": at, "coverage": cov,
+             "frozen_source": prev.get("frozen_source") or "PREVIOUS_BOARD"}
     mk = cov.get("markets") or {}
     bump = {"analysed": 1, "shots_priced": 1 if (mk.get("player_shots_on_goal_alternate") or {}).get("status") == "POSTED" else 0,
             "goals_priced": 1 if (mk.get("player_goal_scorer_anytime") or {}).get("status") == "POSTED" else 0,
@@ -348,7 +382,7 @@ def _frozen_block(previous_doc: dict | None, today: str, g: dict) -> tuple[dict,
 
 
 def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict | None, availability: dict | None, saves_by_game: dict | None = None,
-              previous_day: dict | None = None, saves_errors: dict | None = None, previous_doc: dict | None = None) -> dict:
+              previous_day: dict | None = None, saves_errors: dict | None = None, previous_doc: dict | None = None, recovered: dict | None = None) -> dict:
     today = product.get("et_today")
     haircut, policy_error = _policy_haircut()
     games = [g for g in (product.get("games") or {}).get("games", []) if g.get("date_et") == today and g.get("type") == "REGULAR"]
@@ -397,7 +431,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                 sc = top + [{**best, "rank": None, "outside_top": True, "best_value_at_price": best["price"]["ev_after_haircut"] > 0}]
         shots = shots_picks(g, all_players, pg, haircut) if analysis_ok else {"picks": [], "shortfall": "game is not scheduled or has no projected skaters"}
         gblocks = [goalie_block(s, g, goalies, (saves_by_game or {}).get(gid, {}), saves_ok, haircut) for s in ("home", "away")] if scheduled else []
-        side = side_block(g, now) if scheduled else {"market": "Moneyline", "recommendation": None, "reason": "Game not scheduled."}
+        side = side_block(g, now) if scheduled else {"market": "Moneyline", "recommendation": None, "reason": "This game is under way or final; pregame analysis unavailable (none was saved for it)."}
         mk = {key: _market_status(avail_games.get(gid), key, now) for key, _ in MARKETS}
         ml_priced = bool((g.get("moneyline") or {}).get("home"))
         recommended, missing = [], []
@@ -427,7 +461,18 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
         missing.append({"item": "Puck line price", "reason": "not requested (spreads are not part of the capture plan); the cover model is unvalidated"})
         if shots.get("shortfall"):
             missing.append({"item": "Second shots pick" if shots["picks"] else "Shots picks", "reason": shots["shortfall"]})
-        cov = {"analysis_available": analysis_ok, "skaters_projected": sum(1 for p in all_players if (p.get("projection") or {}).get("pricing_eligible")),
+        quote_times = [c.get("quote_updated_utc") for c in shots.get("picks", []) if c.get("quote_updated_utc")]
+        fresh_quotes = [q for q in quote_times if _quote_fresh({"quote_captured_at_utc": q}, now, g.get("start_utc"))]
+        if not scheduled:
+            price_state = "NOT_APPLICABLE"
+        elif fresh_quotes or (mk["player_shots_on_goal_alternate"]["status"] == "POSTED" and _quote_fresh({"quote_captured_at_utc": mk["player_shots_on_goal_alternate"].get("quote_updated_utc")}, now, g.get("start_utc"))):
+            price_state = "FRESH_PRICES"
+        elif mk["player_shots_on_goal_alternate"]["status"] == "POSTED" or quote_times:
+            price_state = "STALE_PRICES"
+        else:
+            price_state = "ANALYSIS_ONLY"
+        price_words = {"FRESH_PRICES": "analysis + fresh prices", "STALE_PRICES": "analysis + stale prices (not a recommendation)", "ANALYSIS_ONLY": "analysis only: no player prices", "NOT_APPLICABLE": "game under way or final"}
+        cov = {"price_state": price_state, "price_state_word": price_words[price_state], "analysis_available": analysis_ok, "skaters_projected": sum(1 for p in all_players if (p.get("projection") or {}).get("pricing_eligible")),
                "skaters_eligible": sum(1 for p in all_players if _eligible(p)), "goalies_projected": sum(1 for b in gblocks if b.get("projection")),
                "team_model": bool((g.get("win_probability") or {}).get("home") is not None),
                "markets": mk, "moneyline_priced": ml_priced, "models": {"skater_shots": "SUPPORTED", "anytime_goal": "SUPPORTED", "goalie_saves": "SUPPORTED_NEEDS_CONFIRMED_STARTER" if saves_ok else "NOT_SUPPORTED",
@@ -452,7 +497,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                               "coverage": {"analysis_available": False, "markets": {}, "recommended": [], "missing": [{"item": "Analysis", "reason": f"failed: {exc.__class__.__name__}: {exc}"}]}})
             continue
         if not (entry.get("coverage") or {}).get("analysis_available") and g.get("state") != "SCHEDULED":
-            frozen = _frozen_block(previous_doc, today, g)
+            frozen = _frozen_block(previous_doc, today, g, recovered)
             if frozen is not None:
                 entry, bump = frozen
         for k, v in bump.items():
@@ -594,6 +639,32 @@ def _previous_day_check(product: dict, today: str) -> dict | None:
         return {"error": f"{exc.__class__.__name__}: {exc}"}
 
 
+def _frozen_sources(product: dict, today: str | None, previous: dict | None) -> dict:
+    """Pregame blocks for games that have started: the block saved before puck drop (operational/pregame_archive.py), else, once per game, the newest published snapshot in which the game was still
+    scheduled and analysed. A game with neither shows "pregame analysis unavailable"."""
+    out: dict = {}
+    if not today:
+        return out
+    try:
+        from operational import pregame_archive
+        started = [g["game_id"] for g in (product.get("games") or {}).get("games", []) if g.get("date_et") == today and g.get("type") == "REGULAR" and g.get("state") in FREEZABLE_STATES]
+        have_prev = {x.get("game_id") for x in (previous or {}).get("games", []) if isinstance(x, dict) and (x.get("coverage") or {}).get("analysis_available")} if (previous or {}).get("date_et") == today else set()
+        missing = set()
+        for gid in started:
+            b = pregame_archive.recall(today, gid)
+            if b:
+                out[str(gid)] = b
+            elif gid not in have_prev:
+                missing.add(str(gid))
+        todo = missing - pregame_archive.attempted(today)
+        if todo:
+            out.update(pregame_archive.recover(today, todo))
+            pregame_archive.mark_attempted(today, todo)
+    except Exception:  # noqa: BLE001 - recovery is best-effort and never blocks the board
+        pass
+    return out
+
+
 def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | None = None) -> dict:
     from operational import builder_pool, daily_tickets, price_availability as pa, product_data
     product = product or product_data.read_state() or {}
@@ -603,7 +674,14 @@ def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | No
     avail = pa.read(today) if today else {}
     saves_errors: dict = {}
     saves = _by_goalie_id(_saves_lines(pool, now, saves_errors), product.get("goalies") or {})
-    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=load())
+    previous = load()
+    recovered = _frozen_sources(product, today, previous)
+    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=previous, recovered=recovered)
+    try:
+        from operational import pregame_archive
+        pregame_archive.remember(doc)                          # the last scheduled block of each analysed game is kept for after puck drop
+    except Exception:  # noqa: BLE001 - keeping the archive must never stop the board
+        pass
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

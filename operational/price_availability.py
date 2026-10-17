@@ -91,9 +91,11 @@ def _save(day_doc: dict) -> None:
         pass
 
 
-def record_missed_window(day: str, game_id: str, window: str, opened: dt.datetime, closed: dt.datetime, now: dt.datetime, *, asleep: bool, detail: str,
-                         matchup: str | None = None, start_utc: str | None = None) -> bool:
-    """Write down, once per (game, window), that the window closed without its capture. Returns True when newly recorded. Never raises."""
+def record_missed_window(day: str, game_id: str, window: str, opened: dt.datetime, closed: dt.datetime, now: dt.datetime, *, asleep: bool = False, detail: str,
+                         tag: str | None = None, matchup: str | None = None, start_utc: str | None = None) -> bool:
+    """Write down, once per (game, window), that the window closed without its capture. `tag` is the evidenced attribution (MACHINE_ASLEEP or ENGINE_OUTAGE_OBSERVED), or None when neither is
+    evidenced; `asleep=True` is the legacy spelling of tag='MACHINE_ASLEEP'. Returns True when newly recorded. Never raises."""
+    tag = tag or ("MACHINE_ASLEEP" if asleep else None)
     try:
         doc = _load(day)
         g = doc["games"].setdefault(str(game_id), {"markets": {}})
@@ -105,7 +107,7 @@ def record_missed_window(day: str, game_id: str, window: str, opened: dt.datetim
         if any(m.get("window") == window for m in missed):
             return False
         missed.append({"window": window, "opened_utc": _stamp(opened), "closed_utc": _stamp(closed), "noted_utc": _stamp(now),
-                       "tags": ["MISSED_WINDOW"] + (["MACHINE_ASLEEP"] if asleep else []), "detail": detail})
+                       "tags": ["MISSED_WINDOW"] + ([tag] if tag else []), "detail": detail})
         _save(doc)
         return True
     except OSError:

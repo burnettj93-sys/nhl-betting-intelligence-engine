@@ -73,6 +73,9 @@ else:
                         f"{' · provisional' if s.get('provisional') else ''}")
     st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
 
+with st.expander("Today's capture timeline: waves, games priced, games excluded by budget, credits"):
+    ui.day_timeline()
+
 # ---------------------------------------------------------------- coverage
 c = board.get("counts") or {}
 st.divider()
@@ -103,16 +106,18 @@ for g in board.get("games", []):
     for key, label in (("player_shots_on_goal_alternate", "shots"), ("player_goal_scorer_anytime", "goals"), ("player_total_saves", "saves")):
         st_ = (cov.get("markets") or {}).get(key, {})
         chips.append(f"{label}: {st_.get('word', '—')}")
-    with st.expander(f"{title}   ·   " + " · ".join(chips), expanded=len(board.get("games", [])) <= 3):
+    state_word = cov.get("price_state_word")
+    with st.expander(f"{title}   ·   " + (f"[{state_word}]   ·   " if state_word else "") + " · ".join(chips), expanded=len(board.get("games", [])) <= 3):
         if g.get("error"):
             st.error(f"The analysis of this game failed and is not shown: {ui.esc(g['error'])}. Other games are unaffected; the engine retries on its next update.")
             continue
         if g.get("state") != "SCHEDULED":
             if g.get("frozen_at_utc"):
-                st.info(f"This game is {str(g.get('state')).lower()}. What follows is the pregame analysis as it stood at {ui.et_time(g['frozen_at_utc'], True)}, kept for reference: "
+                src = {"PUBLISHED_SNAPSHOT_ARCHIVE": " (recovered from the published-snapshot archive: what the hosted board showed then)", "SAVED_PREGAME_BLOCK": ""}.get(g.get("frozen_source"), "")
+                st.info(f"This game is {str(g.get('state')).lower()}. What follows is the pregame analysis as it stood at {ui.et_time(g['frozen_at_utc'], True)}{src}, kept for reference: "
                         "it is not recomputed with in-game information and is not a current recommendation.")
             else:
-                st.info(f"This game is {str(g.get('state')).lower()}; the pregame board applies to scheduled games, and no pregame analysis was saved for it.")
+                st.info(f"This game is {str(g.get('state')).lower()}. Pregame analysis unavailable: none was saved for it before puck drop and no archive holds one.")
                 continue
         t1, t2, t3, t4, t5 = st.tabs(["Goal scorers", "Shots value", "Goalie saves", "Side", "Coverage"])
         with t1:

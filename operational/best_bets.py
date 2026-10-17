@@ -458,26 +458,6 @@ def effective_start(provider_commence_utc: str, official_start_utc: str | None) 
     return min(provider, parse(official_start_utc))
 
 
-def planned_decision(plan: dict, game_id: str | None, hours: float, age_min: float | None, now: dt.datetime) -> tuple[str | None, str]:
-    """(decision, reason) for the PREGAME slot under the day's credit plan. FIRST: one capture per priced game once the slot opens, FIRST_CAPTURE_HOURS before puck
-    drop (a price taken then is still inside the near-game freshness limit at puck drop, so it is the price a ticket is recorded on). REFRESH only with leftover
-    credits. There is no upper bound on how early this OR the morning/midday slots (operational/capture_schedule.py) may buy a price: the old five-hour cut-off was
-    our own policy, not the bookmaker's."""
-    from operational import credit_planner as cp
-    if hours <= 0:
-        return None, "STARTED"
-    if game_id is None or str(game_id) not in set(plan["games_priced"]):
-        return None, "NOT_IN_CREDIT_PLAN"
-    # A capture taken BEFORE the actionable window (a morning pull, an older cadence) is not this game's pregame capture: it will be stale at puck drop.
-    in_window_capture = age_min is not None and (hours + age_min / 60.0) <= cp.FIRST_CAPTURE_HOURS + 0.05
-    if not in_window_capture:
-        return ("FIRST", "OK") if hours <= cp.FIRST_CAPTURE_HOURS else (None, "BEFORE_ACTIONABLE_WINDOW")
-    if capture_decision(hours, age_min) != "REFRESH":
-        return None, "FRESH_ENOUGH"
-    left = plan["allowance"].get(cp.REFRESH, 0.0) - cp.spent_today(now).get(cp.REFRESH, 0.0)
-    return ("REFRESH", "OK") if left >= EST_COST_PER_EVENT else (None, "NO_CREDITS_FOR_REFRESH")
-
-
 def _posted_in(payload: dict, market: str) -> bool:
     for bm in (payload or {}).get("bookmakers") or []:
         if bm.get("key") == "draftkings":
@@ -508,6 +488,13 @@ def _captured_times(event_id: str, markets: list[str], archive_dir: Path | None 
     return out
 
 
+def _posted_context(day: str, game_id: str | None) -> dict:
+    """{market: UTC time of the newest answer today in which DraftKings HAD posted the market} for one game, from the availability record (independent of the archive files)."""
+    from operational import price_availability as pa, quote_freshness as qf
+    g = (pa.read(day).get("games") or {}).get(str(game_id)) or {}
+    return {m: qf.parse_utc(v.get("checked_utc")) for m, v in (g.get("markets") or {}).items() if v.get("status") == pa.POSTED}
+
+
 def _availability_context(day: str, game_id: str | None) -> dict:
     """{market: UTC time of the newest 'we asked and the bookmaker had not posted it' answer today} for one game."""
     from operational import price_availability as pa, quote_freshness as qf
@@ -530,14 +517,15 @@ def _record_answer(day: str, gid, requested: list[str], r, now: dt.datetime, hou
 
 
 def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=None, games: dict | None = None, plan: dict | None = None) -> dict:
-    """Per-game DraftKings prop captures. With a day plan (production) the credit planner decides which games are priced, with which markets and how often, and
-    operational/capture_schedule.py decides WHEN (a morning look from 08:00 ET, a midday look with leftover credits, the pregame capture a ticket is recorded
-    on); every answer, including 'the bookmaker has not posted this', is recorded in operational/price_availability.py. Without a plan (tests, manual use) the
-    legacy cadence and the month rule for the goals market apply."""
+    """Per-game DraftKings prop captures. With a day plan (production) the coordinated WAVE captures run (capture_wave_prices: operational/capture_timeline.py, operational/credit_planner.py); every
+    answer, including 'the bookmaker has not posted this', is recorded in operational/price_availability.py. Without a plan (tests, manual use) the legacy cadence below applies: one capture per
+    event as it nears puck drop, guarded by the quota rule and the job's own daily cap."""
     from operational import odds_quota
     from research.live_sog_pricing import archive as _archive, client as _client
     client = client or _client
     archive_mod = archive_mod or _archive
+    if plan is not None:
+        return capture_wave_prices(now, client=client, archive_mod=archive_mod, games=games, plan=plan)
     guard = guard or (lambda planned: odds_quota.guard(
         planned=planned, now=now, soft_multiplier=odds_quota.PREGAME_SOFT_MULTIPLIER))
     summary = {"events_seen": 0, "events_captured": 0, "credits_spent": 0, "skipped": [], "error": None, "slots": {}}
@@ -547,185 +535,229 @@ def capture_prices(now: dt.datetime, *, client=None, archive_mod=None, guard=Non
         return summary
     spent_today = credits_spent_today_by_this_job(now)
     games = games or {}
-    if plan is None:
-        from operational import credit_allocation
-        goals = credit_allocation.goals_decision(now)
-        legacy_markets = f"{MARKETS},{GOALS_MARKET_KEY}" if goals["allow"] else MARKETS
-        legacy_cost = EST_COST_PER_EVENT + (1 if goals["allow"] else 0)
-        summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
-    else:
-        summary["plan"] = {"day": plan.get("day"), "D": plan["budget"].get("D"), "games_priced": len(plan["games_priced"]),
-                           "games_not_priced": len(plan["games_not_priced"]), "goals_games": len(plan["goals_games"]), "points_games": len(plan.get("points_games") or []),
-                           "morning_games": len(plan.get("morning_games") or []), "morning_markets": plan.get("morning_markets")}
+    from operational import credit_allocation
+    goals = credit_allocation.goals_decision(now)
+    legacy_markets = f"{MARKETS},{GOALS_MARKET_KEY}" if goals["allow"] else MARKETS
+    legacy_cost = EST_COST_PER_EVENT + (1 if goals["allow"] else 0)
+    summary["goals_market"] = {k: goals.get(k) for k in ("allow", "reason", "shortfall", "extra_credits_per_day")}
 
     def start_of(e):
         matched = match_game(e, games)
         return effective_start(e["commence_time"], matched[1]["start_utc"] if matched else None)
 
     upcoming = sorted((e for e in events.data if start_of(e) > now), key=start_of)
-    # Wave-synchronised pregame captures: every game of a wave (puck drops within credit_planner.WAVE_MINUTES of the first) is captured when the FIRST game of the wave reaches its pregame
-    # window, so the selector can compare fresh prices from several games at one evaluation time, before the first of them starts. Bought one at a time at each game's own window, two games an
-    # hour apart are never fresh together (the earlier one has started before the later one is priced).
-    wave_anchor: dict = {}
-    if plan is not None:
-        from operational import credit_planner as _cpw
-        starts_by_gid = {}
-        for _e in upcoming:
-            _m = match_game(_e, games)
-            if _m:
-                starts_by_gid[str(_m[0])] = start_of(_e)
-        for _w in _cpw.waves(starts_by_gid):
-            for _g in _w:
-                wave_anchor[_g] = starts_by_gid[_w[0]]
     for e in upcoming:
         hours = (start_of(e) - now).total_seconds() / 3600.0
-        from operational import credit_planner as _cp
-        matched = match_game(e, games)
-        gid = matched[0] if matched else None
-        if plan is not None and gid is None:
-            continue                                          # not one of today's games (tomorrow's are checked by check_tomorrow)
-        if plan is None:
-            age_min = decision_age_min(e["id"], now, (SOG_MARKET_KEY, POINTS_MARKET_KEY))
-            decision, markets, est_cost, klass = capture_decision(hours, age_min), legacy_markets, legacy_cost, None
-            why, slot = "OK", None
-        else:
-            from operational import capture_schedule as sched, credit_planner as cp, price_availability as pa
-            day, matchup = plan.get("day"), f"{e.get('away_team')} at {e.get('home_team')}"
-            base_list = list(cp.prop_markets())
-            age_min = decision_age_min(e["id"], now, tuple(base_list))
-            gstart = start_of(e)
-            dstart = wave_anchor.get(str(gid)) or gstart                       # the wave's first start (the game's own start when it is the first or alone)
-            dhours = (dstart - now).total_seconds() / 3600.0
-            slot, why = sched.decide(now, dstart, _captured_times(e["id"], base_list), base_list, _availability_context(day, gid))
-            decision, klass, est_cost = None, None, 0
-            if slot == sched.PREGAME:
-                decision, why = planned_decision(plan, gid, dhours, age_min, now)
-                klass = cp.PROPS if decision == "FIRST" else cp.REFRESH
-                with_goals = decision == "FIRST" and str(gid) in set(plan["goals_games"])
-                with_points = (decision == "FIRST" and cp.points_addon_enabled() and str(gid) in set(plan.get("points_games") or []))
-                with_saves = decision == "FIRST" and str(gid) in set(plan.get("saves_games") or [])      # a saves PRICE needs no confirmed starter; recommending or recording a saves leg still does
-                markets = ",".join(base_list + ([POINTS_MARKET_KEY] if with_points else []) + ([GOALS_MARKET_KEY] if with_goals else []) + ([SAVES_MARKET_KEY] if with_saves else []))
-                est_cost = cp.base_cost() + (cp.POINTS_COST if with_points else 0) + (cp.GOALS_COST if with_goals else 0) + (cp.SAVES_COST if with_saves else 0)
-                if decision == "FIRST" and not with_goals:
-                    pa.note_unfetched(day, gid, GOALS_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots are bought first; today's credits did not cover anytime-goal prices for this game",
-                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-                if decision == "FIRST" and not with_saves:
-                    pa.note_unfetched(day, gid, SAVES_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots and goals are bought first; today's credits did not cover goalie-saves prices for this game",
-                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-                if decision == "FIRST" and cp.points_addon_enabled() and not with_points:
-                    pa.note_unfetched(day, gid, POINTS_MARKET_KEY, pa.BUDGET_BLOCKED, now, detail="shots are bought first; today's credits did not cover points for this game",
-                                      matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-                if decision is None and why == "NOT_IN_CREDIT_PLAN":
-                    summary["skipped"].append({"event_id": e["id"], "game_id": gid, "reason": why})
-                    for m in base_list:
-                        pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail="not in today's credit plan (the day's credits did not cover this game)",
-                                          matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-            elif slot in (sched.MORNING, sched.MIDDAY):
-                if slot == sched.MORNING:
-                    if str(gid) in set(plan.get("morning_games") or []):
-                        mk = list(plan.get("morning_markets") or base_list)
-                        decision, klass, markets, est_cost = "FIRST", cp.MORNING, ",".join(mk), len(mk)
-                    else:
-                        for m in base_list:
-                            pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail="no morning credits for this game under today's plan", matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-                        why = "NOT_IN_MORNING_PLAN"
-                else:                                         # midday: only with leftover credits
-                    left = plan["allowance"].get(cp.REFRESH, 0.0) - cp.spent_today(now).get(cp.REFRESH, 0.0)
-                    if left >= cp.base_cost():
-                        decision, klass, markets, est_cost = "REFRESH", cp.REFRESH, ",".join(base_list), cp.base_cost()
-                    else:
-                        why = "NO_CREDITS_FOR_MIDDAY"
-            else:
-                for m in base_list:                           # slot not open yet: say so, once, unless the provider has already answered today
-                    if m not in ((pa.read(day).get("games") or {}).get(str(gid), {}).get("markets") or {}):
-                        pa.note_unfetched(day, gid, m, pa.NOT_FETCHED, now, detail=f"{why}: the morning update opens at 08:00 ET", matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-        summary["slots"][e["id"]] = {"slot": slot, "decision": decision, "why": why}
+        age_min = decision_age_min(e["id"], now, (SOG_MARKET_KEY, POINTS_MARKET_KEY))
+        decision, markets, est_cost = capture_decision(hours, age_min), legacy_markets, legacy_cost
+        summary["slots"][e["id"]] = {"slot": None, "decision": decision, "why": "OK"}
         if decision is None:
             continue
         summary["events_seen"] += 1
-        if plan is None and spent_today + est_cost > DAILY_CREDIT_CAP:
+        if spent_today + est_cost > DAILY_CREDIT_CAP:
             summary["skipped"].append({"event_id": e["id"], "reason": "BEST_BETS_DAILY_CREDIT_CAP"})
             continue
-        if plan is None:
-            gate = guard(est_cost)
-        else:
-            # the goals market is its own class in the plan (its own allowance); a denied goals credit drops the goals market, not the game
-            gate = cp.authorize(klass, est_cost if klass == cp.MORNING else cp.base_cost(), now, plan=plan)
-            if gate.get("allow") and POINTS_MARKET_KEY in markets.split(",") and POINTS_MARKET_KEY not in base_list and not cp.authorize(cp.POINTS_ADDON, cp.POINTS_COST, now, plan=plan).get("allow"):
-                markets = ",".join(m for m in markets.split(",") if m != POINTS_MARKET_KEY)                  # a denied points credit drops the points market, not the game
-                est_cost -= cp.POINTS_COST
-            if gate.get("allow") and GOALS_MARKET_KEY in markets.split(",") and not cp.authorize(cp.GOALS, cp.GOALS_COST, now, plan=plan).get("allow"):
-                markets = ",".join(m for m in markets.split(",") if m != GOALS_MARKET_KEY)
-                est_cost -= cp.GOALS_COST
-            if gate.get("allow") and SAVES_MARKET_KEY in markets.split(",") and not cp.authorize(cp.SAVES, cp.SAVES_COST, now, plan=plan).get("allow"):
-                markets = ",".join(m for m in markets.split(",") if m != SAVES_MARKET_KEY)
-                est_cost -= cp.SAVES_COST
+        gate = guard(est_cost)
         if not gate.get("allow"):
             summary["skipped"].append({"event_id": e["id"], "reason": gate.get("reason")})
-            if plan is not None:
-                for m in markets.split(","):
-                    pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail=str(gate.get("reason")), matchup=matchup, game_date=day, start_utc=gstart.isoformat())
-            if plan is None or gate.get("reason") in ("HARD_RESERVE", "QUOTA_UNKNOWN"):
-                break
-            continue
+            break
         r = client.get_event_odds(e["id"], markets=markets)
         if not r.ok:
             summary["skipped"].append({"event_id": e["id"], "reason": f"API_ERROR: {r.error}"})
-            if plan is not None:
-                _record_answer(day, gid, markets.split(","), r, now, hours, matchup, day, gstart.isoformat())
             continue
         archive_mod.archive_result(r, event_id=e["id"], market_filter=markets, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
-        if plan is not None:
-            _record_answer(day, gid, markets.split(","), r, now, hours, matchup, day, gstart.isoformat())
-            extra = max(cost - cp.base_cost(), 0)                    # a market the bookmaker has not posted costs nothing, so credits above the base are attributed in order: points, then goals
-            points_part = min(cp.POINTS_COST, extra) if (POINTS_MARKET_KEY in markets.split(",") and POINTS_MARKET_KEY not in base_list) else 0
-            goals_part = min(cp.GOALS_COST, extra - points_part) if GOALS_MARKET_KEY in markets.split(",") else 0
-            saves_part = min(cp.SAVES_COST, extra - points_part - goals_part) if SAVES_MARKET_KEY in markets.split(",") else 0
-            cp.record(klass, cost - points_part - goals_part - saves_part, now, event=e["id"], game_id=gid, markets=markets, slot=slot)
-            if points_part:
-                cp.record(cp.POINTS_ADDON, points_part, now, event=e["id"], game_id=gid, markets=markets)
-            if goals_part:
-                cp.record(cp.GOALS, goals_part, now, event=e["id"], game_id=gid, markets=markets)
-            if saves_part:
-                cp.record(cp.SAVES, saves_part, now, event=e["id"], game_id=gid, markets=markets)
         spent_today += cost
         summary["credits_spent"] += cost
         summary["events_captured"] += 1
     return summary
 
 
-def note_missed_pregame_windows(now: dt.datetime, plan: dict, games: dict, *, last_run_utc: dt.datetime | None | str = "lookup") -> dict:
-    """Recovery honesty: a game the day's plan priced whose pregame window (credit_planner.FIRST_CAPTURE_HOURS before puck drop, until puck drop) CLOSED without its capture is written down as a
-    MISSED WINDOW, tagged MACHINE_ASLEEP when the trader itself did not run for more than 30 minutes spanning the end of the window. It is never bought late (a price taken after puck drop is not a
-    pregame price and no ticket may be recorded on it) and never backfilled. Games still upcoming are untouched: the normal slots capture them as soon as the machine is awake again."""
-    from operational import credit_planner as cp, ingestion_health, price_availability as pa, quote_freshness as qf
+WAVE_STATE_NAME = "wave_capture_state.json"
+RETRY_MINUTES = 20.0              # a market that was not posted when asked is asked again after this long (a request that returns nothing costs 0 credits)
+
+
+def _wave_state_path():
+    return state_paths.path(WAVE_STATE_NAME)
+
+
+def _load_wave_state(day: str) -> dict:
+    try:
+        d = json.loads(_wave_state_path().read_text())
+        return d if d.get("day") == day else {"day": day, "waves": {}}
+    except (OSError, json.JSONDecodeError):
+        return {"day": day, "waves": {}}
+
+
+def _save_wave_state(doc: dict) -> None:
+    try:
+        p = _wave_state_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
+def _class_of(market: str) -> str:
+    from operational import credit_planner as cp
+    return {cp.SHOTS_KEY: cp.PROPS, cp.GOALS_KEY: cp.GOALS, cp.SAVES_KEY: cp.SAVES, cp.POINTS_KEY: cp.POINTS_ADDON}.get(market, cp.PROPS)
+
+
+def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, games: dict | None = None, plan: dict | None = None) -> dict:
+    """Coordinated player-odds captures by start-time wave (docs/ODDS_PLAN_DECISION.md, operational/capture_timeline.py).
+
+    For each wave of the day's plan, from its target (90 minutes before its first game) until LAST_CHANCE (15 minutes before it), every SELECTED game gets ONE capture of the markets the plan chose for it
+    (shots ladder + anytime goal + goalie saves; points only from surplus), in the same cycle, so the wave's prices can be compared at one time. A capture after the 60-minute publish deadline is recorded
+    LATE (a sleep or an outage), never skipped; after LAST_CHANCE the window is MISSED (reported by note_missed_pregame_windows) and nothing is bought. Markets already captured today are never bought
+    again; a market DraftKings had not posted when asked is asked again after RETRY_MINUTES (0 credits until it is posted). Each credit is RESERVED before the call and SETTLED to the actual charge."""
+    from operational import capture_timeline as ct, credit_planner as cp, eastern_time as et, odds_quota, price_availability as pa
+    from research.live_sog_pricing import archive as _archive, client as _client
+    client = client or _client
+    archive_mod = archive_mod or _archive
+    games = games or {}
+    summary = {"events_seen": 0, "events_captured": 0, "credits_spent": 0, "skipped": [], "error": None, "slots": {}, "mode": "WAVES",
+               "plan": {"day": plan.get("day"), "games_priced": len(plan.get("games_priced") or []), "games_not_priced": len(plan.get("games_not_priced") or []),
+                        "waves": len(plan.get("waves") or []), "league_pulls_planned": (plan.get("league_pulls") or {}).get("planned")}}
     day = plan.get("day")
-    if not day or not plan.get("games_priced"):
+    selected_all = set(plan.get("games_priced") or [])
+    if not selected_all:
+        return summary
+    events = client.get_nhl_events()                              # free
+    if not events.ok:
+        summary["error"] = events.error
+        return summary
+    by_gid = {}
+    for e in events.data:
+        m = match_game(e, games)
+        if m:
+            by_gid[str(m[0])] = (e, m[1])
+    state = _load_wave_state(day)
+    for wdoc in plan.get("waves") or []:
+        w = ct.Wave(wdoc["index"], _parse_utc(wdoc["first_start_utc"]), tuple(wdoc["games"]))
+        chosen = [g for g in wdoc.get("selected") or [] if g in selected_all]
+        if not chosen or now < w.target or now > w.last_chance:
+            summary["slots"][f"wave{w.index}"] = {"state": ct.NOT_YET if now < w.target else "CLOSED", "selected": len(chosen)}
+            continue
+        wstate = state["waves"].setdefault(str(w.index), {"games": {}})
+        late = now > w.deadline
+        for gid in chosen:
+            if gid not in by_gid:
+                summary["skipped"].append({"game_id": gid, "reason": "EVENT_NOT_LISTED_BY_THE_PROVIDER"})
+                pa.note_unfetched(day, gid, cp.SHOTS_KEY, pa.FETCH_ERROR, now, detail="the provider's event list does not include this game", game_date=day)
+                continue
+            e, g_info = by_gid[gid]
+            start = effective_start(e["commence_time"], g_info["start_utc"])
+            if start <= now:
+                continue
+            wanted = list((plan.get("game_markets") or {}).get(gid) or [])
+            got = _captured_times(e["id"], wanted)
+            for m_, t_ in _posted_context(day, gid).items():
+                if t_ is not None and (got.get(m_) is None or t_ > got[m_]):
+                    got[m_] = t_                                       # the availability record counts too: a capture is a capture even if the archive file cannot be read
+            avail_ctx = _availability_context(day, gid)
+            missing = []
+            for m in wanted:
+                if got.get(m) is not None and got[m] >= w.target - dt.timedelta(minutes=30):
+                    continue                                       # already captured for this wave: never bought again
+                asked = avail_ctx.get(m)
+                if asked is not None and (now - asked).total_seconds() / 60.0 < RETRY_MINUTES and asked >= w.target - dt.timedelta(minutes=30):
+                    continue
+                missing.append(m)
+            matchup = f"{e.get('away_team')} at {e.get('home_team')}"
+            if not missing:
+                summary["slots"][e["id"]] = {"wave": w.index, "decision": None, "why": "ALREADY_CAPTURED_OR_RECHECK_NOT_DUE"}
+                continue
+            summary["events_seen"] += 1
+            reservations = []
+            for m in list(missing):
+                klass = _class_of(m)
+                res = cp.reserve(klass, 1, now, plan=plan, note=f"{gid}:{m}")
+                if not res.get("allow") and res.get("reason") in (f"{klass}_ALLOWANCE",) and not res.get("pending"):
+                    res = cp.reserve(cp.REFRESH, 1, now, plan=plan, note=f"recovery {gid}:{m}")         # the recovery pool covers a market the class allowance no longer does
+                    klass = cp.REFRESH
+                if not res.get("allow"):
+                    missing.remove(m)
+                    pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail=str(res.get("reason")), matchup=matchup, game_date=day, start_utc=start.isoformat())
+                    summary["skipped"].append({"game_id": gid, "market": m, "reason": res.get("reason")})
+                    continue
+                reservations.append((m, klass, res["id"]))
+            if not missing:
+                continue
+            r = client.get_event_odds(e["id"], markets=",".join(missing))
+            if not r.ok:
+                for m, klass, rid in reservations:
+                    cp.release(rid, now)
+                summary["skipped"].append({"event_id": e["id"], "reason": f"API_ERROR: {r.error}"})
+                _record_answer(day, gid, missing, r, now, (start - now).total_seconds() / 3600.0, matchup, day, start.isoformat())
+                continue
+            archive_mod.archive_result(r, event_id=e["id"], market_filter=",".join(missing), bookmaker_filter="draftkings")
+            cost = int(r.requests_last or 0)
+            got_now = _record_answer(day, gid, missing, r, now, (start - now).total_seconds() / 3600.0, matchup, day, start.isoformat())
+            posted = [m for m in missing if (got_now.get(m) or {}).get("status") == pa.POSTED]
+            attributed = {m: (1 if m in posted else 0) for m in missing}
+            diff = cost - sum(attributed.values())
+            if diff and missing:                                  # the provider charged a different amount than one credit per returned market: the difference lands on the first market
+                attributed[missing[0]] += diff
+            for m, klass, rid in reservations:
+                cp.settle(rid, attributed.get(m, 0), now, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late)
+            summary["credits_spent"] += cost
+            summary["events_captured"] += 1
+            wstate["games"][gid] = {"captured_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "markets": missing, "posted": posted, "credits": cost,
+                                    "minutes_before_wave_first_game": round((w.first_start - now).total_seconds() / 60.0, 1), "late": late}
+            summary["slots"][e["id"]] = {"wave": w.index, "decision": "FIRST" if len(missing) == len(wanted) else "RETRY", "why": "OK", "late": late}
+        done = all(g in wstate["games"] or g not in by_gid for g in chosen)
+        wstate["state"] = "CAPTURED" if done and wstate["games"] else wstate.get("state", "PENDING")
+        wstate["target_utc"], wstate["deadline_utc"], wstate["first_game_utc"] = w.target.strftime("%Y-%m-%dT%H:%M:%SZ"), w.deadline.strftime("%Y-%m-%dT%H:%M:%SZ"), w.first_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+        wstate["on_time"] = bool(wstate["games"]) and not any(v.get("late") for v in wstate["games"].values())
+    _save_wave_state(state)
+    summary["wave_state"] = {k: {kk: v for kk, v in w_.items() if kk != "games"} for k, w_ in state["waves"].items()}
+    return summary
+
+
+def note_missed_pregame_windows(now: dt.datetime, plan: dict, games: dict | None = None, *, sleep_fn=None, ran_fn=None, wave_state: dict | None = None) -> dict:
+    """Recovery honesty: a wave whose capture window (target 90 minutes before its first game until LAST_CHANCE 15 minutes before it) CLOSED with a selected game still uncaptured is written down as
+    a MISSED WINDOW for that game. It is never bought late and never backfilled.
+
+    Attribution is by evidence, not by assumption:
+      MACHINE_ASLEEP            the operating system's power log (operational/sleep_evidence.py) shows the machine asleep for at least five minutes of the window;
+      ENGINE_OUTAGE_OBSERVED    no sleep evidence, and the trader did not start a single run inside the window (the job was down, unloaded or crashing);
+      (no extra tag)            the trader ran during the window and still made no capture (credits, an API error or the plan).
+    Games still inside their window are untouched: the normal wave capture takes them as soon as the machine is running again."""
+    from operational import capture_timeline as ct, credit_planner as cp, price_availability as pa, run_heartbeat, sleep_evidence
+    day = plan.get("day")
+    if not day or not plan.get("waves"):
         return {"recorded": 0, "considered": 0}
-    if last_run_utc == "lookup":
-        last_run_utc = qf.parse_utc(ingestion_health.latest_success_utc(["real_parlay_paper_trader"]))
-    captured = {str(r.get("game_id")) for r in cp.read_ledger(day) if r.get("class") in (cp.PROPS, cp.REFRESH) and r.get("game_id") is not None}
+    sleep_fn = sleep_fn or (lambda a, b: sleep_evidence.slept_during(a, b, now))
+    ran_fn = ran_fn or (lambda a, b: run_heartbeat.ran_between("real_parlay_paper_trader", a, b))
+    wave_state = wave_state if wave_state is not None else _load_wave_state(day)
+    captured = {str(r.get("game_id")) for r in cp.read_ledger(day) if r.get("game_id") is not None and r.get("credits", 0) > 0 and r.get("class") in (cp.PROPS, cp.GOALS, cp.SAVES, cp.REFRESH)}
     recorded = considered = 0
-    for gid in plan["games_priced"]:
-        g = games.get(str(gid)) or games.get(gid)
-        if not g or not g.get("start_utc"):
-            continue
-        start = _parse_utc(g["start_utc"])
-        start = start if start.tzinfo else start.replace(tzinfo=dt.timezone.utc)
-        if start > now:
-            continue
-        considered += 1
-        if str(gid) in captured:
-            continue
-        opened = start - dt.timedelta(hours=cp.FIRST_CAPTURE_HOURS)
-        gap = last_run_utc is None or (last_run_utc < start and (now - last_run_utc).total_seconds() > 30 * 60)
-        detail = ("the machine was not running for the end of the capture window (the trader's previous run was "
-                  + ("never recorded" if last_run_utc is None else f"{last_run_utc.strftime('%H:%M')}Z") + "); the game started first. Nothing is bought after puck drop."
-                  if gap else "the job was running but made no capture in the window (credits, an API error or the plan); nothing is bought after puck drop.")
-        if pa.record_missed_window(day, str(gid), "PREGAME", opened, start, now, asleep=gap, detail=detail,
-                                   matchup=(f"{g.get('away')} at {g.get('home')}" if g.get("away") else None), start_utc=start.isoformat()):
-            recorded += 1
+    for wdoc in plan["waves"]:
+        w = ct.Wave(wdoc["index"], _parse_utc(wdoc["first_start_utc"]), tuple(wdoc["games"]))
+        if now <= w.last_chance:
+            continue                                                  # the window is still open
+        for gid in wdoc.get("selected") or []:
+            considered += 1
+            if gid in captured or gid in ((wave_state.get("waves") or {}).get(str(w.index)) or {}).get("games", {}):
+                continue
+            ev = sleep_fn(w.target, w.last_chance)
+            asleep = ev.get("evidence") == "ASLEEP"
+            ran = None if asleep else ran_fn(w.target, w.last_chance)
+            if asleep:
+                tag, detail = "MACHINE_ASLEEP", (f"the Mac was asleep for {ev['slept_minutes']:.0f} of the window's minutes (power log: {', '.join(f'{a}-{b}' for a, b in ev['intervals'][:4])}); "
+                                                   "the game's wave closed before a capture could be made. Nothing is bought after the window.")
+            elif ran is False:
+                tag, detail = "ENGINE_OUTAGE_OBSERVED", ("no sleep evidence, and the 15-minute trader did not start a run between the wave's target and its last chance: an engine outage was observed "
+                                                          "(job unloaded, crashed or blocked). Nothing is bought after the window.")
+            else:
+                tag, detail = None, ("the trader was running during the window but no capture was made (credits, an API error or the plan"
+                                     + ("; the power log was unavailable" if ev.get("evidence") == "UNAVAILABLE" else "") + "); nothing is bought after the window.")
+            g = (games or {}).get(str(gid)) or {}
+            if pa.record_missed_window(day, str(gid), f"WAVE{w.index}", w.target, w.last_chance, now, asleep=False, detail=detail, tag=tag,
+                                       matchup=(f"{g.get('away')} at {g.get('home')}" if g.get("away") else None), start_utc=g.get("start_utc")):
+                recorded += 1
     return {"recorded": recorded, "considered": considered}
 
 
@@ -964,25 +996,25 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
         fmt = lambda t: t.strftime("%b %-d %H:%M") + " UTC"  # noqa: E731
         slots = None
         if _cp_enforced():
-            from operational import capture_schedule as _sched
-            w = _sched.windows(now, dstart)
-            opens = min(v[0] for k, v in w.items() if k != _sched.PREGAME) if len(w) > 1 else w[_sched.PREGAME][0]
-            slots = {k: {"opens_utc": v[0].isoformat().replace("+00:00", "Z"), "closes_utc": v[1].isoformat().replace("+00:00", "Z")} for k, v in w.items()}
-            from operational import credit_planner as _cpl
-            bought = list(_cpl.prop_markets())
-            slot, why = _sched.decide(now, dstart, _captured_times(e["id"], bought), bought)
-            nxt = (f"{slot.lower()} look on the next 15-minute trader cycle ({why})" if slot else
-                   f"{why.replace('_', ' ').lower()}; next window opens {fmt(min((v[0] for v in w.values() if v[0] > now), default=start))}")
-            from operational import eastern_time as _et
-            day_plan = _cpl.load_plan(_et.eastern_today(now))
+            from operational import credit_planner as _cpl, eastern_time as _et
+            day_plan = _cpl.load_plan(_et.eastern_today(now)) or {}
             gid_s = str(matched[0]) if matched else None
-            if day_plan and gid_s:
-                if slot == _sched.PREGAME and gid_s not in set(day_plan.get("games_priced") or []):
-                    nxt = "no pregame look: today's credit plan covers this game's morning look only (it is not one of the games the day's credits price before puck drop)"
-                elif not slot and (day_plan.get("allowance") or {}).get("REFRESH", 0.0) < 1.0 and _sched.MIDDAY in w and w[_sched.MIDDAY][0] > now:
-                    later = (f"the pregame look for this game's wave opens {fmt(w[_sched.PREGAME][0])}" if gid_s in set(day_plan.get("games_priced") or [])
-                             else "no pregame look is planned for this game")
-                    nxt = f"{why.replace('_', ' ').lower()}; the midday look is not funded today (it uses leftover credits and none are left); {later}"
+            wdoc = next((w for w in day_plan.get("waves") or [] if gid_s in w.get("games", [])), None)
+            if wdoc:
+                slots = {"WAVE": {"opens_utc": wdoc["target_utc"], "closes_utc": wdoc["last_chance_utc"], "publish_deadline_utc": wdoc["deadline_utc"]}}
+                opens = _parse_utc(wdoc["target_utc"])
+            if not day_plan or gid_s is None:
+                nxt = "no plan for this game yet"
+            elif gid_s not in (day_plan.get("games_priced") or []):
+                nxt = "no player-odds capture: today's credit plan does not cover this game (excluded by budget); its analysis is on the Slate Board without prices"
+            elif wdoc is None:
+                nxt = "priced by today's plan, but its capture wave is not in the plan document yet"
+            elif now < opens:
+                nxt = f"coordinated capture ({', '.join(m.replace('player_', '') for m in (day_plan.get('game_markets') or {}).get(gid_s, []))}) from {fmt(opens)}, 90 minutes before wave {wdoc['index'] + 1}'s first game"
+            elif now <= _parse_utc(wdoc["last_chance_utc"]):
+                nxt = "coordinated capture is due now (on the next 15-minute trader cycle)"
+            else:
+                nxt = "the capture window has closed: nothing is bought after it"
         elif age is None and now < opens:
             nxt = f"first capture on the first 15-minute trader cycle at or after {fmt(opens)}"
         elif decision:
@@ -1083,14 +1115,21 @@ def current_model(conn, now: dt.datetime, *, upcoming_only: bool = True) -> dict
 
 def _day_plan(conn, now: dt.datetime) -> dict | None:
     """The saved credit plan for today's (ET) games; None outside production so tests and manual runs keep the legacy cadence."""
-    from operational import credit_planner as cp, eastern_time as et, goalie_confirmations, odds_quota
+    from operational import credit_planner as cp, eastern_time as et, goalie_confirmations, odds_quota, product_data
     if not cp.enforced():
         return None
     day = et.eastern_today(now)
     rows = conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ?", (day,)).fetchall()
     starts = {str(r["game_id"]): _parse_utc(r["scheduled_start_utc"] if r["scheduled_start_utc"].endswith("Z") else r["scheduled_start_utc"] + "Z") for r in rows}
-    return cp.day_plan(now, day, starts, remaining=odds_quota.latest_remaining(),
-                       confirmed_games={g for g in goalie_confirmations.confirmed_games(conn, now)})
+    horizon = (dt.date.fromisoformat(day) + dt.timedelta(days=odds_quota.days_left_in_cycle(now.date()))).isoformat()
+    counts_ahead = {r["game_date"]: r["n"] for r in conn.execute("SELECT game_date, COUNT(*) n FROM games WHERE game_date > ? AND game_date < ? GROUP BY game_date", (day, horizon)).fetchall()}
+    try:
+        product = product_data.read_state()
+    except Exception:  # noqa: BLE001 - quality is a tie-breaker; the plan is still made without it
+        product = None
+    quality = {g: cp.game_quality(product, g) for g in starts} if product else None
+    return cp.day_plan(now, day, starts, remaining=odds_quota.latest_remaining(), confirmed_games={g for g in goalie_confirmations.confirmed_games(conn, now)},
+                       counts_ahead=counts_ahead, quality=quality)
 
 
 def _refresh_locked(now, *, conn, capture, client) -> dict:
@@ -1119,7 +1158,10 @@ def _refresh_locked(now, *, conn, capture, client) -> dict:
                 missed_summary = {"error": f"{exc.__class__.__name__}: {exc}"}
         if capture and _cpl.enforced():
             try:
-                tomorrow_summary = check_tomorrow(now, client=client, plan=plan, games=tomorrow_games(conn, now))
+                if ((plan or {}).get("allowance") or {}).get(_cpl.TOMORROW, 0.0) <= 0:
+                    tomorrow_summary = {"ran": False, "reason": "NOT_IN_THE_CORE_ALLOCATION: tomorrow's games are covered by the league-wide pulls (prices and their age); a paid look needs explicit surplus"}
+                else:
+                    tomorrow_summary = check_tomorrow(now, client=client, plan=plan, games=tomorrow_games(conn, now))
             except Exception as exc:  # noqa: BLE001 - a failed look at tomorrow must never stop today's captures or recording
                 tomorrow_summary = {"ran": False, "reason": f"{exc.__class__.__name__}: {exc}"}
             if capture_summary is not None:
