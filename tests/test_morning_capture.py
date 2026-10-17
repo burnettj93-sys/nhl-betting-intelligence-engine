@@ -193,6 +193,65 @@ class TestCaptureUnderThePlan(IsolatedState):
         self.assertEqual(len(client.calls), 1)
 
 
+    def test_the_pregame_capture_carries_goals_and_saves_prices_in_one_call_without_a_confirmed_starter(self):
+        plan = {**self.PLAN, "goals_games": ["1"], "saves_games": ["1"], "points_games": [],
+                "allowance": {cp.PROPS: 1.0, cp.MORNING: 1.0, cp.GOALS: 1.0, cp.SAVES: 1.0, cp.REFRESH: 0.0}}
+        payload = {"bookmakers": [{"key": "draftkings", "markets": [
+            {"key": cp.SHOTS_KEY, "outcomes": [{"name": "Over"}] * 40}, {"key": bb.GOALS_MARKET_KEY, "outcomes": [{"name": "Yes"}] * 30},
+            {"key": bb.SAVES_MARKET_KEY, "outcomes": [{"name": "Over"}] * 2}]}]}
+        client = FakeClient(self.EVENT, payload, 3)
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}):
+            out, rec = self.run_capture(at(17, 30), client, plan=plan)
+        self.assertEqual(client.calls, [",".join([cp.SHOTS_KEY, bb.GOALS_MARKET_KEY, bb.SAVES_MARKET_KEY])])      # one call, three markets
+        self.assertEqual(sorted((c.args[0], c.args[1]) for c in rec.call_args_list), sorted([(cp.PROPS, 1), (cp.GOALS, 1), (cp.SAVES, 1)]))   # each credit attributed to its own class
+        mk = pa.read("2026-10-09")["games"]["1"]["markets"]
+        self.assertEqual({mk[k]["status"] for k in (cp.SHOTS_KEY, bb.GOALS_MARKET_KEY, bb.SAVES_MARKET_KEY)}, {pa.POSTED})
+
+    def test_a_game_without_saves_budget_is_budget_blocked_for_saves_not_silently_missing(self):
+        client = FakeClient(self.EVENT, {"bookmakers": []}, 0)
+        with mock.patch.dict("os.environ", {cp.PROP_MARKETS_ENV: cp.SHOTS_KEY}):
+            out, _ = self.run_capture(at(17, 30), client)
+        self.assertEqual(client.calls, [cp.SHOTS_KEY])
+        self.assertEqual(pa.read("2026-10-09")["games"]["1"]["markets"][bb.SAVES_MARKET_KEY]["status"], pa.BUDGET_BLOCKED)
+
+
+
+class TestMissedWindowsAreReportedNeverBackfilled(IsolatedState):
+    GAMES = {"1": {"home": "BOS", "away": "UTA", "start_utc": "2026-10-09T23:10:00Z"}}
+    PLAN = {"day": "2026-10-09", "games_priced": ["1"]}
+
+    def note(self, now, last_run, ledger=()):
+        with mock.patch.object(cp, "read_ledger", return_value=list(ledger)):
+            return bb.note_missed_pregame_windows(now, self.PLAN, self.GAMES, last_run_utc=last_run)
+
+    def test_a_planned_game_whose_window_closed_without_a_capture_is_recorded_once_as_machine_asleep(self):
+        out = self.note(at(19, 40), at(16, 0))                                     # the trader's last run was 3.7 h earlier, before puck drop
+        self.assertEqual(out, {"recorded": 1, "considered": 1})
+        mw = pa.missed_windows("2026-10-09")
+        self.assertEqual(len(mw), 1)
+        self.assertIn("MACHINE_ASLEEP", mw[0]["tags"])
+        self.assertIn("Nothing is bought after puck drop", mw[0]["detail"])
+        self.assertEqual(self.note(at(19, 55), at(19, 40))["recorded"], 0)          # written down once, not on every later run
+
+    def test_a_running_job_that_made_no_capture_is_a_missed_window_but_not_machine_asleep(self):
+        self.note(at(19, 40), at(19, 30))
+        mw = pa.missed_windows("2026-10-09")
+        self.assertEqual(mw[0]["tags"], ["MISSED_WINDOW"])
+
+    def test_a_captured_game_and_a_game_still_upcoming_are_not_missed(self):
+        self.assertEqual(self.note(at(19, 40), at(16, 0), ledger=[{"class": cp.PROPS, "game_id": "1"}])["recorded"], 0)
+        self.assertEqual(self.note(at(17, 0), at(16, 0))["recorded"], 0)            # the normal pregame slot will still capture it
+        self.assertEqual(pa.missed_windows("2026-10-09"), [])
+
+    def test_the_watchdog_counts_missed_windows_in_the_last_day_as_a_warning(self):
+        from operational import watchdog as wd
+        self.assertEqual(wd.check_missed_windows(at(19, 50))["status"], wd.OK)
+        self.note(at(19, 40), at(16, 0))
+        got = wd.check_missed_windows(at(19, 50))
+        self.assertEqual(got["status"], wd.WARN)
+        self.assertIn("1 with the machine asleep", got["detail"])
+
+
 class TestTomorrowCheck(IsolatedState):
     EVENT = {"id": "t1", "home_team": "Boston Bruins", "away_team": "Utah Mammoth", "commence_time": "2026-10-10T23:10:00Z"}
 

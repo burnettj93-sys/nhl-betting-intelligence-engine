@@ -9,6 +9,10 @@ Price availability: for every game and market, WHY there is (or is not) a DraftK
   BUDGET_BLOCKED  we did not ask because the day's credit plan did not cover it. Whether the bookmaker has posted it is then unknown.
   FETCH_ERROR     we asked and the request failed (network, rate limit, bad response)
 
+A separate per-game record, MISSED WINDOWS, says that a planned capture window closed (the game started) without the capture being made, and why (the machine was asleep or
+the job was not running, or it ran and still did not capture). It is a statement about our own execution: nothing is ever bought late for a game that has started, and no ticket is
+ever recorded on an expired price.
+
 State is one small document per Eastern day (`price_availability.json`, newest check per game and market) plus an append-only history
 (`price_availability_history.jsonl`: every check with hours to puck drop), which is the evidence for "how early does DraftKings post each market".
 Nothing here spends a credit or changes what any ticket may use; it only records and explains.
@@ -85,6 +89,36 @@ def _save(day_doc: dict) -> None:
         tmp.replace(p)
     except OSError:
         pass
+
+
+def record_missed_window(day: str, game_id: str, window: str, opened: dt.datetime, closed: dt.datetime, now: dt.datetime, *, asleep: bool, detail: str,
+                         matchup: str | None = None, start_utc: str | None = None) -> bool:
+    """Write down, once per (game, window), that the window closed without its capture. Returns True when newly recorded. Never raises."""
+    try:
+        doc = _load(day)
+        g = doc["games"].setdefault(str(game_id), {"markets": {}})
+        if matchup:
+            g["matchup"] = matchup
+        if start_utc:
+            g["start_utc"] = start_utc
+        missed = g.setdefault("missed_windows", [])
+        if any(m.get("window") == window for m in missed):
+            return False
+        missed.append({"window": window, "opened_utc": _stamp(opened), "closed_utc": _stamp(closed), "noted_utc": _stamp(now),
+                       "tags": ["MISSED_WINDOW"] + (["MACHINE_ASLEEP"] if asleep else []), "detail": detail})
+        _save(doc)
+        return True
+    except OSError:
+        return False
+
+
+def missed_windows(day: str) -> list[dict]:
+    """Every missed window recorded for the Eastern day, with its game."""
+    out = []
+    for gid, g in (_load(day).get("games") or {}).items():
+        for m in g.get("missed_windows") or []:
+            out.append({"game_id": gid, "matchup": g.get("matchup"), **m})
+    return out
 
 
 def tomorrow_last_check() -> dt.datetime | None:

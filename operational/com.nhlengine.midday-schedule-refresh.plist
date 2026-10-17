@@ -8,7 +8,7 @@
     <!-- Intraday Refresh Architecture (P0.1, docs/INTRADAY_REFRESH_SCHEDULE.md
          Part C): a free schedule-only recheck for today, catching a
          same-day postponement or start-time change. Deliberately does
-         NOT resweep rosters for the whole league a second time -- see
+         NOT resweep rosters for the whole league a second time — see
          operational/nhl_sync.py::run_midday_refresh()'s own docstring. -->
     <key>ProgramArguments</key>
     <array>

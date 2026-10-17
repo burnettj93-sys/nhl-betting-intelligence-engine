@@ -793,7 +793,7 @@ def find_unresolved_past_event_bets(conn: sqlite3.Connection, track: str | None 
 
 
 def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None = None,
-                                    is_combo: bool | None = None) -> list[dict]:
+                                    is_combo: bool | None = None, now: dt.datetime | None = None) -> list[dict]:
     """Bet Re-Validation block (2026-10-01): the complement of
     find_unresolved_past_event_bets() above -- PENDING bets whose event has
     NOT started yet, i.e. still cancellable before any real money (paper or
@@ -802,7 +802,7 @@ def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None =
     against the CURRENT real state (schedule, roster, goalie, identity)
     before its game starts -- never to re-settle or re-price a bet whose
     event has already begun."""
-    now_iso = _utcnow_iso()
+    now_iso = _utcnow_iso() if now is None else now.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")      # the caller's clock when it has one (revalidation passes its own `now`)
     clauses = ["result_status = 'PENDING'", "event_start_utc IS NOT NULL", "event_start_utc >= ?", "origin = 'AUTOMATIC'"]
     params: list = [now_iso]
     if track is not None:

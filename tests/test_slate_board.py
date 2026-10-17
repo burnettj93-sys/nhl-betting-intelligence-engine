@@ -375,6 +375,23 @@ class TestArchivedRealPayloads(unittest.TestCase):
         self.assertAlmostEqual(row["price"]["ev_estimated"], 0.31 * 2.35 - 1.0, places=3)
 
 
+class TestMissedWindowsAreShownOnTheBoard(unittest.TestCase):
+    def test_a_missed_pregame_window_is_listed_as_missing_with_its_reason(self):
+        a = avail()
+        a["games"]["2026020900"]["missed_windows"] = [{"window": "PREGAME", "tags": ["MISSED_WINDOW", "MACHINE_ASLEEP"], "detail": "the machine was not running for the end of the capture window"}]
+        d = sb.build_doc(NOW, product(), pool(), {}, a, {}, None)
+        miss = [m for m in d["games"][0]["coverage"]["missing"] if m["item"] == "Pregame price capture"]
+        self.assertEqual(len(miss), 1)
+        self.assertIn("window missed", miss[0]["reason"])
+        self.assertIn("MACHINE_ASLEEP", miss[0]["tags"])
+
+    def test_a_saves_line_that_is_missing_says_prices_are_collected_without_a_confirmed_starter(self):
+        d = doc()
+        reason = [m for m in d["games"][0]["coverage"]["missing"] if m["item"] == "Saves line"][0]["reason"]
+        self.assertIn("whether or not a starter is confirmed", reason)
+        self.assertIn("still needs a confirmed starter", reason)
+
+
 class TestThePage(unittest.TestCase):
     def snap(self, **kw) -> dict:
         s = snapshot()

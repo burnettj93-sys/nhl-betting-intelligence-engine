@@ -380,7 +380,9 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
         if (saves_errors or {}).get(gid):
             missing.append({"item": "Saves line", "reason": f"the archived saves capture could not be read: {saves_errors[gid]}"})
         elif mk["player_total_saves"]["status"] != "POSTED":
-            missing.append({"item": "Saves line", "reason": mk["player_total_saves"]["word"] + " (a line is only fetched for a confirmed starter)"})
+            missing.append({"item": "Saves line", "reason": mk["player_total_saves"]["word"] + " (a price is collected whether or not a starter is confirmed, credits permitting; a saves selection still needs a confirmed starter)"})
+        for mw in (avail_games.get(gid) or {}).get("missed_windows") or []:
+            missing.append({"item": "Pregame price capture", "reason": f"window missed ({mw.get('window', '').lower()}): " + str(mw.get("detail") or ""), "tags": mw.get("tags") or []})
         if not ml_priced:
             missing.append({"item": "Moneyline price", "reason": "no moneyline on file"})
         missing.append({"item": "Puck line price", "reason": "not requested (spreads are not part of the capture plan); the cover model is unvalidated"})

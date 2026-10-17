@@ -576,7 +576,7 @@ def _et_today(now: dt.datetime) -> str:
 
 
 def _planned_saves_candidates(candidates: list[dict], now: dt.datetime, summary: dict) -> tuple[list[dict], dict]:
-    """Under the credit plan: only events whose game has a confirmed starter and is in today's saves allocation."""
+    """Under the credit plan, the fallback purchase: a game with a confirmed starter, in today's saves allocation, whose saves line is not already on file (it normally rides on the pregame capture)."""
     import db
     from operational import best_bets, credit_planner as cp, goalie_confirmations
     conn = db.get_conn()
@@ -594,6 +594,9 @@ def _planned_saves_candidates(candidates: list[dict], now: dt.datetime, summary:
         m = best_bets.match_game(e, games)
         gid = m[0] if m else None
         if gid is not None and str(gid) in confirmed and str(gid) in allowed:
+            have = best_bets.latest_capture(e["id"], market="player_total_saves")           # the saves line normally rides on the pregame capture: no second purchase while that one is recent
+            if have is not None and (now - have[0]).total_seconds() < 150 * 60:
+                continue
             keep.append(e)
             event_game[e["id"]] = str(gid)
     summary["saves_candidates_confirmed_and_planned"] = len(keep)

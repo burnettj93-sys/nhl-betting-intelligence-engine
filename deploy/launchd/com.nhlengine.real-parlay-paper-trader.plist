@@ -7,11 +7,11 @@
 
     <!-- Platform Recovery block (2026-09-29): the missing link between "a real,
          qualifying cross-game parlay exists" and "a real $10 paper bet is
-         actually staked, tracked, and later settled" -- see
+         actually staked, tracked, and later settled" — see
          operational/real_parlay_paper_trader.py's own module docstring.
          Makes ZERO new sportsbook API calls (reads only already-synced nhl.db
          and already-retained archive files, exactly like the prop-sweep jobs'
-         own already-captured data) -- safe to run every 15 minutes alongside
+         own already-captured data) — safe to run every 15 minutes alongside
          prop-sweep-second. Staking is idempotent per Eastern calendar day;
          settlement runs every invocation across every paper_bets track. -->
     <key>ProgramArguments</key>

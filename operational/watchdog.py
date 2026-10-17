@@ -12,6 +12,7 @@ Persistent self-check (launchd, every 30 minutes; deploy/launchd/com.nhlengine.w
       source_freshness      the sources the engine depends on (schedule, results, player logs) are inside their own freshness policies;
       quote_freshness       prop and moneyline prices are inside their rules (a price stale only because the credit budget forbids a refresh is readiness, not failure);
       publishing_enabled    publication to the hosted app is switched ON (a demonstration that left it OFF is a FAIL).
+      missed_windows        capture windows that closed without a capture in the last 24 h (reported, never bought late; WARN)
   PRODUCT READINESS -- which user-facing features actually work end to end, and which are blocked, limited or unverified, with the owner action each needs.
 
 An operational "OK" means the machinery is running and the books agree. It does NOT mean a blocked feature works: readiness is reported on its own and
@@ -396,6 +397,33 @@ def check_prediction_log(now: dt.datetime) -> dict:
     return {"name": "prediction_log", "status": OK, "detail": f"the frozen-prediction log was checked {age:.0f} min ago (last change {st.get('written_at_utc') or 'n/a'})"}
 
 
+def check_missed_windows(now: dt.datetime) -> dict:
+    """Capture windows that CLOSED without their capture in the last 24 hours: the moneyline T-35 pulls (operational/moneyline_pregame.py audit) and the planned pregame prop captures
+    (operational/price_availability.py). A missed window is reported, never bought late and never backfilled; MACHINE_ASLEEP means the Mac (not the code) was not running."""
+    from operational import eastern_time as et, moneyline_pregame, price_availability as pa, quote_freshness as qf
+    cutoff = now - dt.timedelta(hours=24)
+    ml_missed = ml_asleep = prop_missed = prop_asleep = 0
+    audit = moneyline_pregame.load_audit().get("records") or {}
+    for rec in audit.values():
+        t = qf.parse_utc((rec.get("scheduled_starts") or [None])[0])
+        if rec.get("outcome") == "MISSED_WINDOW" and t is not None and cutoff <= t <= now:
+            ml_missed += 1
+            ml_asleep += int("MACHINE_ASLEEP" in (rec.get("tags") or []))
+    for day in {et.eastern_today(now), et.eastern_today(cutoff)}:
+        for m in pa.missed_windows(day):
+            t = qf.parse_utc(m.get("closed_utc"))
+            if t is not None and cutoff <= t <= now:
+                prop_missed += 1
+                prop_asleep += int("MACHINE_ASLEEP" in (m.get("tags") or []))
+    total = ml_missed + prop_missed
+    if not total:
+        return {"name": "missed_windows", "status": OK, "detail": "no capture window closed without its capture in the last 24 hours"}
+    asleep = ml_asleep + prop_asleep
+    return {"name": "missed_windows", "status": WARN,
+            "detail": f"{total} capture window(s) closed without a capture in the last 24 h ({ml_missed} moneyline pull(s), {prop_missed} pregame prop capture(s); {asleep} with the machine asleep). "
+                      "They are not bought late: a price taken after puck drop is not a pregame price. Keep the Mac plugged in with the lid open from 7:50 AM to the last puck drop, or move the engine to an always-on host."}
+
+
 def check_publishing_enabled() -> dict:
     """Publication to the hosted app must be ON. A demonstration that turned it off and was never restored is a FAIL, not a quiet gap."""
     try:
@@ -455,6 +483,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
+    checks.append(check_missed_windows(now))
     ready = None
     if deep:
         try:

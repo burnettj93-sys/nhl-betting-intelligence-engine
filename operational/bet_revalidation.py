@@ -171,7 +171,7 @@ def revalidate_pending_real_market_bets(bankroll_conn, nhl_conn, now: dt.datetim
     except Exception:  # noqa: BLE001 -- revalidation must never block staking/settlement
         player_index = None
 
-    bets = pb.find_pending_future_event_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True)
+    bets = pb.find_pending_future_event_bets(bankroll_conn, track="REAL_MARKET_PAPER", is_combo=True, now=now)
     for bet in bets:
         summary["checked"] += 1
         legs = json.loads(bet.get("legs_json") or "[]")
