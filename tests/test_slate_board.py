@@ -258,6 +258,56 @@ class TestTheLivePath(unittest.TestCase):
         self.assertEqual(b["line"]["line"], 25.5)
         self.assertIsNone(b["line"]["ev_under"])                                               # no under price: no under value is invented
 
+    def test_a_line_posted_only_for_the_alternate_goalie_is_shown_as_a_conditional_view_with_the_note(self):
+        """2026-10-17 PIT at VGK: DraftKings priced Adin Hill (our 36% alternate) and no one else; the board showed no saves line at all."""
+        from tests.product_fixture import goalie
+        p = product()
+        game = p["games"]["games"][0]
+        game["goalies"]["home"].append({"player_id": "G3", "name": "Test Goalie Three", "start_probability": 0.3, "status": "UNCONFIRMED"})
+        p["goalies"]["G3"] = goalie("G3", "Test Goalie Three", "AAA", opp="BBB")
+        saves = {"2026020900": {"G3": {"name": "Test Goalie Three", "line": 25.5, "over": -105.0, "under": -130.0, "quote_updated_utc": Q}}}
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), saves, None)
+        b = [x for x in d["games"][0]["goalies"] if x["team"] == "AAA"][0]
+        self.assertIsNone(b["line"])                                                           # the expected starter has no line
+        alt = b["alternate"]
+        self.assertEqual((alt["name"], alt["status"]), ("Test Goalie Three", "UNCONFIRMED"))
+        self.assertEqual(alt["line"]["line"], 25.5)
+        self.assertEqual(alt["line"]["p_over"], 0.5)                                           # his own projection ladder (saves>=26)
+        self.assertEqual(alt["line"]["ev_under"], round(sb._ev_haircut(0.5, -130.0, d["haircut"]), 4))
+        self.assertEqual(alt["projection"]["expected_saves"], 26.2)
+        self.assertTrue(alt["recommendation"]["conditional"])
+        self.assertIsNone(alt["recommendation"]["side"])                                       # no selection while no start is confirmed
+        self.assertIn("DraftKings posted a saves line for Test Goalie Three", b["book_line_note"])
+        self.assertIn("nothing is recommended until a start is confirmed", b["book_line_note"])
+
+    def test_a_confirmed_alternate_still_gets_only_a_conditional_view(self):
+        from tests.product_fixture import goalie
+        p = product()
+        p["games"]["games"][0]["goalies"]["home"].append({"player_id": "G3", "name": "Test Goalie Three", "start_probability": 0.3, "status": "CONFIRMED"})
+        g3 = goalie("G3", "Test Goalie Three", "AAA", opp="BBB")
+        g3["confirmation"] = {"status": "CONFIRMED", "source": "team", "checked_at_utc": Q, "note": "x"}
+        g3["projection"]["saves_probabilities"]["saves>=26"] = 0.9
+        p["goalies"]["G3"] = g3
+        p["model_health"]["models"] = [{"id": "goalie-saves", "validation": {"summary": {"markets_scored": 16, "beating_baselines": 16}}}]
+        saves = {"2026020900": {"G3": {"name": "Test Goalie Three", "line": 25.5, "over": 150.0, "under": -190.0, "quote_updated_utc": Q}}}
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), saves, None)
+        alt = [x for x in d["games"][0]["goalies"] if x["team"] == "AAA"][0]["alternate"]
+        self.assertIsNone(alt["recommendation"]["side"])                                       # the page cannot show a side that the slip does not use
+
+    def test_the_alternate_line_renders_on_the_hosted_page(self):
+        from tests.product_fixture import goalie
+        p = product()
+        p["games"]["games"][0]["goalies"]["home"].append({"player_id": "G3", "name": "Test Goalie Three", "start_probability": 0.3, "status": "UNCONFIRMED"})
+        p["goalies"]["G3"] = goalie("G3", "Test Goalie Three", "AAA", opp="BBB")
+        saves = {"2026020900": {"G3": {"name": "Test Goalie Three", "line": 25.5, "over": -105.0, "under": -130.0, "quote_updated_utc": Q}}}
+        s = snapshot()
+        s["slate_board"] = sb.build_doc(NOW, p, pool(), {}, avail(), saves, None)
+        at = run_page("41_Slate_Board.py", s)
+        self.assertEqual(len(at.exception), 0, [str(e.value)[:300] for e in at.exception])
+        blob = " ".join([m.value for m in at.markdown] + [c.value for c in at.caption] + [i.value for i in at.info])
+        self.assertIn("DraftKings line for Test Goalie Three", blob)
+        self.assertIn("DraftKings posted a saves line for Test Goalie Three", blob)
+
     def test_refresh_reads_the_published_inputs_writes_the_board_and_reports_a_failed_game(self):
         import json, tempfile
         from pathlib import Path
