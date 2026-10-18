@@ -10,7 +10,10 @@ from unittest import mock
 
 from operational import best_bets as bb
 from operational import credit_planner as cp
+from operational import odds_quota as _odds_quota
 from operational import price_availability as pa
+
+_REAL_LATEST_REMAINING = _odds_quota.latest_remaining
 
 U = dt.timezone.utc
 ET = dt.timezone(dt.timedelta(hours=-4))
@@ -41,7 +44,7 @@ FULL = payload(**{cp.SHOTS_KEY: 40, cp.GOALS_KEY: 30, cp.SAVES_KEY: 2})
 
 class FakeClient:
     def __init__(self, answers=None, cost=None, ok=True):
-        self.calls, self.answers, self.cost, self.ok = [], answers or {}, cost, ok
+        self.calls, self.answers, self.cost, self.ok, self.remaining = [], answers or {}, cost, ok, 187
 
     def get_nhl_events(self):
         return mock.Mock(ok=True, data=[{"id": e["id"], "home_team": e["home_team"], "away_team": e["away_team"], "commence_time": iso(at(*e["start"]))} for e in EVENTS])
@@ -55,7 +58,7 @@ class FakeClient:
         got = [m for m in wanted if any(x["key"] == m and x.get("outcomes") for b in data["bookmakers"] for x in b["markets"])]
         last = self.cost if self.cost is not None else len(got)
         return mock.Mock(ok=True, data={"bookmakers": [{"key": "draftkings", "markets": [x for b in data["bookmakers"] for x in b["markets"] if x["key"] in wanted]}]},
-                         requests_last=last, error=None)
+                         requests_last=last, requests_remaining=self.remaining, error=None)
 
 
 class Isolated(unittest.TestCase):
@@ -206,6 +209,20 @@ class TestMissedWindows(Isolated):
         self.assertEqual(self.note(at(13, 5), asleep=True)["recorded"], 0)
         cp.record(cp.PROPS, 1, at(12, 55), game_id="2", markets=cp.SHOTS_KEY)
         self.assertEqual(pa.missed_windows(DAY)[0]["game_id"], "1")
+
+
+class TestRemainingHeader(Isolated):
+    def test_a_wave_capture_records_the_providers_remaining_balance_and_latest_remaining_uses_it(self):
+        from operational import odds_quota
+        self.capture(at(11, 35), FakeClient())
+        rows = [r for r in cp.read_ledger(DAY) if r.get("game_id") == "1"]
+        self.assertTrue(rows and all(r["remaining_header"] == 187 for r in rows))
+        stale = {"last_updated_utc": "2026-10-17T12:00:00Z", "credits_remaining": 191}
+        with mock.patch("operational.system_health.odds_collection_status", return_value=stale), mock.patch.object(odds_quota, "latest_remaining", _REAL_LATEST_REMAINING):
+            self.assertEqual(odds_quota.latest_remaining(), 187)                    # the capture is newer than the cached 191
+        newer = {"last_updated_utc": "2099-01-01T00:00:00Z", "credits_remaining": 150}
+        with mock.patch("operational.system_health.odds_collection_status", return_value=newer), mock.patch.object(odds_quota, "latest_remaining", _REAL_LATEST_REMAINING):
+            self.assertEqual(odds_quota.latest_remaining(), 150)                    # a newer collector value still wins
 
 
 class TestReviewFixes(Isolated):

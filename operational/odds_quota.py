@@ -86,13 +86,26 @@ def evaluate_spend(remaining: int | None, spent_today: int, days_left: int, plan
 
 
 def latest_remaining() -> int | None:
-    """The newest real `x-requests-remaining` any job cached (never a guess)."""
+    """The newest real `x-requests-remaining` any job recorded (never a guess): the newer of the collectors' cached summaries and the credit ledger, whose settled rows carry the provider's remaining-credit
+    header from the same call that was charged. Without the ledger a wave capture would leave the balance at its last pull's value and every later check would believe credits it had already spent."""
     from operational import system_health as sh
+    best: tuple[str, int] | None = None
     try:
-        value = sh.odds_collection_status().get("credits_remaining")
+        status = sh.odds_collection_status()
+        value = status.get("credits_remaining")
+        if isinstance(value, (int, float)):
+            best = (str(status.get("last_updated_utc") or ""), int(value))
     except Exception:  # noqa: BLE001
-        return None
-    return int(value) if isinstance(value, (int, float)) else None
+        pass
+    try:
+        from operational import credit_planner as cp
+        for row in cp.read_ledger():
+            h = row.get("remaining_header")
+            if h not in (None, "") and (best is None or row["at"] >= best[0]):
+                best = (row["at"], int(float(h)))
+    except Exception:  # noqa: BLE001
+        pass
+    return best[1] if best else None
 
 
 def credits_spent_today(now: dt.datetime | None = None) -> int:

@@ -715,7 +715,7 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
                 if not any(attributed.values()) and cost:
                     attributed[missing[0]] = cost
                 for m, klass, rid in reservations:
-                    cp.settle(rid, attributed.get(m, 0), now, klass=klass, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late)
+                    cp.settle(rid, attributed.get(m, 0), now, klass=klass, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late, remaining_header=(r.requests_remaining if isinstance(r.requests_remaining, (int, float)) else None))
             summary["credits_spent"] += cost
             summary["events_captured"] += 1
             entry = {"captured_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "markets": missing, "posted": posted, "credits": cost,
