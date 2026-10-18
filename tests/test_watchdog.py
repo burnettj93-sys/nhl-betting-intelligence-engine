@@ -48,7 +48,8 @@ class TestRun(unittest.TestCase):
         raise AssertionError(cmd)
 
     def test_run_writes_state_and_view_reages_it(self):
-        state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
+        with mock.patch("operational.keep_awake.battery_state", return_value={"on_ac": True, "percent": 100, "known": True}):
+            state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
         self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "power", "morning_update"})
         stored = wd.load_state()
@@ -289,6 +290,13 @@ class PowerCheckTests(unittest.TestCase):
         r = wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=self.windows())
         self.assertEqual(r["status"], wd.OK)
         self.assertIn("bridges", r["detail"])
+
+    def test_on_ac_but_further_than_the_bridge_is_a_warning(self):
+        r = wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=self.windows())
+        from operational import keep_awake as ka
+        far = [dict(w, assert_from_utc=self.NOW + dt.timedelta(hours=ka.AC_BRIDGE_H + 4), hold_from_utc=self.NOW + dt.timedelta(hours=ka.AC_BRIDGE_H + 4)) for w in self.windows()]
+        self.assertEqual(wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=far)["status"], wd.WARN)
+        self.assertEqual(r["status"], wd.OK)
 
     def test_on_battery_warns_with_the_exact_owner_actions_and_fails_when_low(self):
         warn = wd.check_power(self.NOW, power={"on_ac": False, "percent": 60}, windows=self.windows())

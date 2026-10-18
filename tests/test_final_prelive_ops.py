@@ -31,7 +31,7 @@ def local_ts(y, mo, d, h, mi=0):
 # --------------------------------------------------------------------------------------- wake planning
 class TestWakePlan(unittest.TestCase):
     def w(self):
-        return [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave0")][0]
+        return [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave@")][0]
 
     def test_wake_is_ahead_of_the_capture_window_and_inside_the_assertion_window(self):
         w = self.w()
@@ -80,7 +80,7 @@ class TestPmsetSchedParsing(unittest.TestCase):
 
 class TestWakeCoverage(unittest.TestCase):
     def setUp(self):
-        self.w = [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave0")][0]
+        self.w = [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave@")][0]
 
     def ev(self, when):
         return [{"type": "wake", "when_utc": when, "owner": "o"}]

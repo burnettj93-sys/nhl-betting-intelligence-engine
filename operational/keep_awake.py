@@ -43,7 +43,9 @@ WAKE_BEFORE_HOLD_MIN = 5              # suggested one-time wake: hold_from - 5 m
 PLAN_HORIZON_H = 72
 GUARD_POLL_S = 5                      # wake-guard poll period: after a wake it reacts within ~5 s, far inside the 1-minute idle timer
 GUARD_MAX_AGE_H = 36
-AC_BRIDGE_H = 10                      # on AC power the Mac is held awake through to the next window when that window opens within this many hours (e.g. from late evening to the 07:45 refresh)
+AC_BRIDGE_H = 16                      # on AC power the Mac is held awake through to the next window when that window opens within this many hours (the last wave ends about 19:05 ET and the 07:45 prep window opens 12.3 h later)
+CHAIN_GAP_MIN = 30                    # windows closer together than this are held as one block (no hand-over that depends on a callback at the exact second an assertion ends)
+GUARD_REV = "2026-10-18-capture-waves"   # stamped into the guard's state: a guard started by older code (retired cluster windows) is replaced once
 BATTERY_FLOOR_PCT = 30                # on battery an assertion is held only inside a window and only above this charge: an empty battery shuts the Mac down, which is worse than sleeping
 
 
@@ -66,7 +68,7 @@ def windows(now: dt.datetime, starts: list, horizon_h: float = PLAN_HORIZON_H, l
         rows = [{"cluster": f"prep:{day}", "games": len(day_starts), "lo": prep["refresh_at"] - dt.timedelta(minutes=10), "hi": prep["analysis_at"] + dt.timedelta(minutes=25),
                  "capture_window": (prep["refresh_at"], prep["analysis_at"]), "anchor": prep["analysis_at"]}]
         for w in ct.waves(day_starts):
-            rows.append({"cluster": f"wave{w.index}:{day}", "games": len(w.games), "lo": w.target - dt.timedelta(minutes=10), "hi": w.last_chance + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN),
+            rows.append({"cluster": f"wave@{w.first_start:%Y-%m-%dT%H:%MZ}", "games": len(w.games), "lo": w.target - dt.timedelta(minutes=10), "hi": w.last_chance + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN),
                          "capture_window": (w.target, w.last_chance), "anchor": w.deadline})
         for r in rows:
             if r["hi"] < now or r["lo"] > now + dt.timedelta(hours=horizon_h):
@@ -121,22 +123,53 @@ def battery_state(runner: Callable | None = None) -> dict:
     return {"on_ac": "AC Power" in text, "percent": int(m.group(1)) if m else None, "known": True}
 
 
+def blocks(ws: list[dict]) -> list[dict]:
+    """Windows that overlap or lie within CHAIN_GAP_MIN of each other, merged into one block (hold_from of the first .. hold_until of the last). A block is held with ONE assertion."""
+    out: list[dict] = []
+    for w in sorted(ws, key=lambda x: x["hold_from_utc"]):
+        if out and w["hold_from_utc"] <= out[-1]["hold_until_utc"] + dt.timedelta(minutes=CHAIN_GAP_MIN):
+            last = out[-1]
+            last["hold_until_utc"] = max(last["hold_until_utc"], w["hold_until_utc"])
+            last["members"].append(w["cluster"])
+            last["games"] += w["games"]
+        else:
+            out.append({**w, "members": [w["cluster"]], "cluster": w["cluster"]})
+    for blk in out:
+        blk["cluster"] = "+".join(blk["members"])
+    return out
+
+
 def hold_target(now: dt.datetime, ws: list[dict], power: dict) -> dict | None:
-    """Which window (if any) the machine should be held awake for right now, and why.
-      * inside a window: hold to its end, unless on battery below BATTERY_FLOOR_PCT;
-      * on AC and the next window opens within AC_BRIDGE_H: hold now, through that window (the Mac cannot be woken by software, so the bridge is what keeps it awake overnight);
-      * on battery outside a window: nothing (sleeping saves the charge; the watchdog says the windows cannot be guaranteed)."""
-    inside = next((w for w in ws if w["assert_from_utc"] <= now <= w["hold_until_utc"]), None)
+    """Which block of windows (if any) the machine should be held awake for right now, and why.
+      * inside a block: hold to the END of the block, unless on battery below BATTERY_FLOOR_PCT;
+      * on AC and the next block opens within AC_BRIDGE_H: hold now, through that block (the Mac cannot be woken by software, so the bridge is what keeps it awake overnight);
+      * on battery outside a block: nothing (sleeping saves the charge; the watchdog says the windows cannot be guaranteed)."""
+    bl = blocks(ws)
+    inside = next((b for b in bl if b["assert_from_utc"] <= now <= b["hold_until_utc"]), None)
     on_ac, pct = power.get("on_ac", True), power.get("percent")
     if inside is not None:
         if not on_ac and pct is not None and pct < BATTERY_FLOOR_PCT:
             return {"skip": "BATTERY_TOO_LOW", "window": inside}
         return {"window": inside, "why": "IN_WINDOW"}
     if on_ac:
-        nxt = next((w for w in ws if w["assert_from_utc"] > now), None)
+        nxt = next((b for b in bl if b["assert_from_utc"] > now), None)
         if nxt is not None and nxt["assert_from_utc"] - now <= dt.timedelta(hours=AC_BRIDGE_H):
             return {"window": nxt, "why": "AC_BRIDGE_TO_NEXT_WINDOW"}
     return None
+
+
+def _stop_holding(state: dict, state_path: Path | None, alive_fn: Callable) -> bool:
+    """End OUR assertion (caffeinate) when it should no longer be held: AC power was lost or the charge fell below the floor. Only a live process that really is caffeinate is signalled."""
+    pid = state.get("pid")
+    if not pid or not alive_fn(pid):
+        return False
+    try:
+        os.kill(int(pid), 15)
+    except (OSError, ValueError):
+        return False
+    state.update(pid=None, stopped_utc=dt.datetime.now(dt.timezone.utc).isoformat())
+    _save(state, state_path)
+    return True
 
 
 def ensure_holding(now: dt.datetime | None = None, *, starts_fn: Callable | None = None,
@@ -164,9 +197,13 @@ def ensure_holding(now: dt.datetime | None = None, *, starts_fn: Callable | None
         state = _load(state_path)
         if target is None:
             out["reason"] = "OUTSIDE_HOLD_WINDOW" + ("" if power.get("on_ac", True) else "_ON_BATTERY")
+            if not power.get("on_ac", True) and _stop_holding(state, state_path, alive_fn):
+                out["action"] = "STOPPED_ON_BATTERY"                  # a bridge started on AC does not outlive the charger
             return out
         if target.get("skip"):
             out.update(action="SKIPPED", reason=target["skip"], power=power)
+            if _stop_holding(state, state_path, alive_fn):
+                out["action"] = "STOPPED_BATTERY_TOO_LOW"
             return out
         w = target["window"]
         if alive_fn(state.get("pid")) and state.get("cluster") == w["cluster"]:
@@ -343,10 +380,16 @@ def ensure_guard(now: dt.datetime | None = None, *, starts_fn: Callable | None =
         path = state_path or _guard_state_path()
         st = _load(path)
         if st.get("pid") and alive_fn(st["pid"]):
-            out.update(guard="ALREADY_RUNNING", pid=st["pid"])
-            return out
+            if st.get("rev") == GUARD_REV:
+                out.update(guard="ALREADY_RUNNING", pid=st["pid"])
+                return out
+            try:                                         # a guard started by older code watches the retired cluster windows: replace it once with one that knows the capture waves
+                os.kill(int(st["pid"]), 15)
+            except (OSError, ValueError):
+                pass
+            out["replaced_pid"] = st["pid"]
         pid = spawn()
-        _save({"pid": pid, "started_utc": now.isoformat()}, path)
+        _save({"pid": pid, "started_utc": now.isoformat(), "rev": GUARD_REV}, path)
         out.update(guard="STARTED", pid=pid)
     except Exception as exc:  # noqa: BLE001
         out.update(guard="ERROR", reason=f"{type(exc).__name__}: {str(exc)[:100]}")

@@ -36,7 +36,7 @@ class TestHoldWindows(unittest.TestCase):
 
     def test_a_day_has_a_prep_window_and_one_window_per_wave(self):
         prep, wave = ka.windows(D(10), [D(21)])
-        self.assertEqual((prep["cluster"], wave["cluster"]), ("prep:2026-09-29", "wave0:2026-09-29"))
+        self.assertEqual((prep["cluster"], wave["cluster"]), ("prep:2026-09-29", "wave@2026-09-29T21:00Z"))
         self.assertEqual((prep["hold_from_utc"], prep["hold_until_utc"]), (D(11, 35), D(12, 25)))             # the 07:45 ET refresh - 10 min .. the 08:00 ET analysis + 25 min
         self.assertEqual(wave["capture_window"], (D(19, 30), D(20, 45)))                                       # target T-90 .. last chance T-15
         self.assertEqual((wave["hold_from_utc"], wave["hold_until_utc"]), (D(19, 20), D(21, 5)))               # from 100 minutes before the first game until its capture could still be published
@@ -45,7 +45,7 @@ class TestHoldWindows(unittest.TestCase):
 
     def test_games_far_apart_get_their_own_waves_and_windows(self):
         ws = ka.windows(D(10), [D(17), D(23)])
-        self.assertEqual([w["cluster"] for w in ws], ["prep:2026-09-29", "wave0:2026-09-29", "wave1:2026-09-29"])
+        self.assertEqual([w["cluster"] for w in ws], ["prep:2026-09-29", "wave@2026-09-29T17:00Z", "wave@2026-09-29T23:00Z"])
         self.assertLess(ws[1]["hold_until_utc"], ws[2]["hold_from_utc"])                                       # the afternoon wave is not folded into the evening one
 
     def test_an_early_first_game_moves_the_prep_window_earlier(self):
@@ -93,17 +93,50 @@ class TestEnsureHolding(unittest.TestCase):
         again = self.run_at(D(19, 54))
         self.assertEqual((again["action"], len(self.spawned)), ("ALREADY_HOLDING", 1))
 
-    def test_on_ac_it_bridges_to_the_next_window_when_it_opens_within_ten_hours(self):
+    def test_on_ac_it_bridges_to_the_next_window_when_it_opens_within_the_bridge_limit(self):
         r = self.run_at(D(2, day=29))                                                                          # 22:00 ET the evening before: the prep window opens at 07:25 ET, 9.4 h away
         self.assertEqual((r["action"], r["why"]), ("STARTED", "AC_BRIDGE_TO_NEXT_WINDOW"))
         self.assertEqual(self.spawned, [int((D(12, 25) - D(2)).total_seconds())])
         self.assertEqual(self.run_at(D(2, 30))["action"], "ALREADY_HOLDING")
-        far = self.run_at(D(0, day=29), state_path=Path(tempfile.mkdtemp()) / "x.json") if False else None   # (the 10-hour limit is exercised below)
-        self.assertIsNone(far)
 
-    def test_on_ac_it_does_not_bridge_more_than_ten_hours_ahead(self):
-        r = self.run_at(D(0, day=29))                                                                          # the prep window's assertion starts 11.4 h away
+    def test_the_bridge_reaches_from_the_last_wave_of_one_day_to_the_next_mornings_prep(self):
+        """Review of PR 158: the last window ended 19:05 ET and the next one opened 12.3 h later: a 10-hour bridge never started and the Mac slept overnight."""
+        r = self.run_at(D(23, day=28), starts_fn=lambda n: [D(17, day=28), D(21, day=28), D(14, day=29)])             # 19:00 ET the evening before a 10:00 ET game
+        self.assertEqual(r["why"], "AC_BRIDGE_TO_NEXT_WINDOW")
+        self.assertGreater(self.spawned[0], 12 * 3600)                                                         # held to the end of the next block, through the night
+
+    def test_on_ac_it_does_not_bridge_more_than_the_limit_ahead(self):
+        r = self.run_at(D(0, day=28))                                                                          # the prep window's assertion starts about 35 h away
         self.assertEqual((r["holding"], r["reason"], self.spawned), (False, "OUTSIDE_HOLD_WINDOW", []))
+
+    def test_overlapping_windows_are_one_block_with_one_assertion(self):
+        ws = ka.windows(D(10), [D(21), D(22, 5)])
+        blk = ka.blocks(ws)
+        self.assertEqual(len(blk), 2)                                                                          # prep + one merged evening block
+        self.assertEqual(len(blk[1]["members"]), 2)
+        r = self.run_at(D(19, 52), starts_fn=lambda n: [D(21), D(22, 5)])
+        self.assertEqual(self.spawned, [int((blk[1]["hold_until_utc"] - D(19, 52)).total_seconds())])           # to the END of the chain: no hand-over needed
+
+    def test_an_assertion_started_on_ac_is_ended_when_the_charger_is_removed(self):
+        self.run_at(D(23, day=28), starts_fn=lambda n: [D(14, day=29)])
+        self.assertTrue(self.alive)
+        killed = []
+        with mock.patch("os.kill", side_effect=lambda pid, sig: killed.append((pid, sig))):
+            r = self.run_at(D(23, 30, day=28), starts_fn=lambda n: [D(14, day=29)], power_fn=BATTERY(80))
+        self.assertEqual((r["action"], killed), ("STOPPED_ON_BATTERY", [(4242, 15)]))
+        with mock.patch("os.kill", side_effect=lambda pid, sig: killed.append((pid, sig))):
+            low = self.run_at(D(12, 30, day=29), starts_fn=lambda n: [D(14, day=29)], power_fn=BATTERY(20))
+        self.assertIn(low["action"], ("SKIPPED", "STOPPED_BATTERY_TOO_LOW"))
+
+    def test_a_guard_started_by_older_code_is_replaced_once(self):
+        gstate = Path(tempfile.mkdtemp()) / "guard.json"
+        gstate.write_text(json.dumps({"pid": 777, "started_utc": "2026-10-16T22:31:00Z"}))                      # no rev: the retired-cluster guard
+        spawned, killed = [], []
+        with mock.patch("os.kill", side_effect=lambda pid, sig: killed.append((pid, sig))):
+            r = ka.ensure_guard(D(10), starts_fn=lambda n: [D(21)], spawn=lambda: spawned.append(1) or 888, alive_fn=lambda pid: True, state_path=gstate, active_fn=lambda: True)
+        self.assertEqual((r["guard"], r["replaced_pid"], spawned, killed), ("STARTED", 777, [1], [(777, 15)]))
+        again = ka.ensure_guard(D(10, 5), starts_fn=lambda n: [D(21)], spawn=lambda: spawned.append(1) or 999, alive_fn=lambda pid: True, state_path=gstate, active_fn=lambda: True)
+        self.assertEqual((again["guard"], len(spawned)), ("ALREADY_RUNNING", 1))
 
     def test_on_battery_it_holds_inside_a_window_only_above_the_charge_floor(self):
         low = self.run_at(D(19, 52), power_fn=BATTERY(21))

@@ -557,6 +557,9 @@ def check_power(now: dt.datetime, *, power: dict | None = None, windows: list | 
     nxt = min(windows, key=lambda w: w["hold_from_utc"])
     when = nxt["hold_from_utc"].astimezone().strftime("%a %H:%M")
     if power.get("on_ac", True):
+        gap_h = (nxt["assert_from_utc"] - now).total_seconds() / 3600.0
+        if gap_h > ka.AC_BRIDGE_H:
+            return {"name": "power", "status": WARN, "detail": f"on AC power, but the next window ({nxt['cluster']}) opens {when}, {gap_h:.0f} h away: further than the {ka.AC_BRIDGE_H} h the engine holds the Mac awake across, so it may sleep before then (an owner `pmset` wake event would cover it)."}
         return {"name": "power", "status": OK, "detail": f"on AC power; the next window ({nxt['cluster']}) opens {when} and an idle-sleep assertion bridges to it. The Mac must stay logged in and online with the lid open."}
     pct = power.get("percent")
     steps = "plug in the charger, keep the lid open, and (optional, needs sudo) `sudo pmset -c sleep 0`; `sudo pmset repeat wakeorpoweron MTWRFSU 07:40:00`"
