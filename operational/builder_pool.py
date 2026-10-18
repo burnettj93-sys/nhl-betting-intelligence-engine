@@ -60,22 +60,28 @@ def _roster_index(conn, team: str, now_iso: str) -> dict:
     from features import point_in_time as pit
     from operational import best_bets as bb
     out = {}
+    clash = set()
     for pid in pit.roster_ids_for_team(conn, team, now_iso):
         r = conn.execute("SELECT full_name, position FROM players WHERE player_id = ?", (pid,)).fetchone()
         if r and r["full_name"]:
-            out[bb.norm_name(r["full_name"])] = (str(pid), r["position"])
+            key = bb.norm_name(r["full_name"])
+            if key in out:
+                clash.add(key)                          # two players share this name on the team: a price carrying only the name cannot be matched to either
+            out[key] = (str(pid), r["position"])
+    for key in clash:
+        out.pop(key, None)
     return out
 
 
 def build(nhl_conn, now: dt.datetime) -> dict:
     from features import point_in_time as pit
-    from operational import best_bets as bb, goalie_confirmations
+    from operational import best_bets as bb, goalie_confirmations, player_integrity
     snap = bb.current_model(nhl_conn, now)
     games, model = snap["games"], snap["model"]
     now_iso = now.strftime("%Y-%m-%dT%H:%M:%S")
     events = bb._latest_events_listing()
     doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": snap["date"], "model_version": MODEL_VERSION, "games": {},
-           "skipped": {"unmatched_prices": 0, "not_active": 0, "saves_unconfirmed": 0}, "families": {k: v[2] for k, v in FAMILIES.items()}}
+           "skipped": {"unmatched_prices": 0, "not_active": 0, "saves_unconfirmed": 0, "integrity": 0}, "families": {k: v[2] for k, v in FAMILIES.items()}}
     rosters: dict[str, dict] = {}
     for e in events:
         m = bb.match_game(e, games)
@@ -115,16 +121,21 @@ def build(nhl_conn, now: dt.datetime) -> dict:
                         continue
                     nm = bb.norm_name(o["description"])
                     pid = team = pos = None
-                    for t in (g["home"], g["away"]):
-                        hit = rosters.get(t, {}).get(nm)
-                        if hit:
-                            pid, pos, team = hit[0], hit[1], t
-                            break
+                    hits = [(t, rosters.get(t, {}).get(nm)) for t in (g["home"], g["away"]) if rosters.get(t, {}).get(nm)]
+                    if len(hits) > 1:                                        # the same name on BOTH teams of the game (two Sebastian Ahos): the price cannot be matched to one of them
+                        doc["skipped"]["integrity"] += 1
+                        continue
+                    if hits:
+                        team, (pid, pos) = hits[0][0], hits[0][1]
                     if pid is None:
                         doc["skipped"]["unmatched_prices"] += 1
                         continue
                     if (code == "SAVES") != (pos == "G"):
                         continue                                             # saves are goalies' lines; every other market is a skater's
+                    iv = player_integrity.verdict(pid, team, now, name=o["description"])
+                    if player_integrity.blocking(iv["status"]):
+                        doc["skipped"]["integrity"] += 1                    # not on the team's current official roster (or another person under that id): never offered
+                        continue
                     try:
                         status = pit.roster_status(nhl_conn, pid, now_iso)
                     except Exception:  # noqa: BLE001

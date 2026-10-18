@@ -189,6 +189,26 @@ def _dressed_and_current_team(conn, teams, as_of_utc: str | None = None) -> tupl
     return dressed, pit.latest_team_by_player_since(conn, "2026-09-01", as_of)
 
 
+def _put_player(model: dict, collisions: dict, key: str, entry: dict) -> None:
+    """Add a player to the pricing model; a SECOND player under the same name|team key (two Elias Pettersons on Vancouver) is a collision, not an overwrite: the name cannot be matched to one person."""
+    if key in model or key in collisions:
+        collisions.setdefault(key, []).append(entry)
+        if key in model:
+            collisions[key].append(model.pop(key))
+        return
+    model[key] = entry
+
+
+def _withdraw_collisions(model: dict, collisions: dict, date: str) -> None:
+    """Record the withdrawn ambiguous names (shown on the board and in the audit) and keep them out of every join."""
+    from operational import player_integrity
+    items = [{"team": v[0]["team"], "name": v[0]["name"], "ids": sorted({str(e["player_id"]) for e in v})} for v in collisions.values()]
+    try:
+        player_integrity.record_ambiguous(date, items)
+    except OSError:
+        pass
+
+
 def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, date: str) -> dict:
     """{ "<norm name>|<TEAM>": {name, team, opp, home, probs: {"SOG1":..,"PTS1":..}} }"""
     from research.player_points import features as ptf
@@ -230,6 +250,7 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
             latest[r["player_id"]] = (r["game_date"], r["team"], r["player_name"], r["position"])
     season = int(date[:4]) * 10000 + int(date[:4]) + 1 if int(date[5:7]) >= 8 else (int(date[:4]) - 1) * 10000 + int(date[:4])
     model: dict = {}
+    collisions: dict = {}
     for pid, (_d, team, name, pos) in latest.items():
         team = curteam.get(pid, team)
         if team not in today or pos == "G" or pid not in dressed.get(team, set()):
@@ -255,8 +276,8 @@ def compute_model(rows: list[dict], today: dict, dressed: dict, curteam: dict, d
             emp = lambda n: sum(1 for r in l60 if r["points"] >= n) / len(l60)  # noqa: E731
             probs["PTS1"] = 0.5 * tp_pts(mu, palpha, 1) + 0.5 * emp(1)
             probs["PTS2"] = 0.5 * tp_pts(mu, palpha, 2) + 0.5 * emp(2)
-        model[f"{norm_name(name)}|{team}"] = {"player_id": str(pid), "name": name, "team": team, "opp": opp,
-                                              "home": is_home, "probs": probs}
+        _put_player(model, collisions, f"{norm_name(name)}|{team}", {"player_id": str(pid), "name": name, "team": team, "opp": opp, "home": is_home, "probs": probs})
+    _withdraw_collisions(model, collisions, date)
     return model
 
 
@@ -295,7 +316,11 @@ def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, ro
         from research.product_models import history
         state["shot_freq"] = live.shot_frequencies(list(rows if rows is not None else history.skater_games()) + extra)
     model: dict = {}
+    collisions: dict = {}
+    from operational import player_integrity
+    nhl_names = player_integrity.official_names(conn) if conn is not None else {}
     for pid, p in state["players"].items():
+        p = {**p, "name": nhl_names.get(str(pid)) or p["name"]}          # the NHL's spelling, not MoneyPuck's accent-stripped one: otherwise the provider's name never matches
         team = curteam.get(pid, p["team"])
         if team not in today or p["position"] == "G" or pid not in dressed.get(team, set()):
             continue
@@ -309,8 +334,8 @@ def compute_model_v2(today: dict, dressed: dict, curteam: dict, date: str, *, ro
         probs["GOAL1"] = pr["goals>=1"]["calibrated"]
         freq = state.get("shot_freq", {}).get(pid) or {}
         emp = {f"SOG{k}": {"p": c["p"], "hits": c["hits"], "n": c["n"], "n_current": c.get("n_current")} for k, c in freq.items() if k in SOG_K}
-        model[f"{norm_name(p['name'])}|{team}"] = {"player_id": str(pid), "name": p["name"], "team": team, "opp": opp,
-                                                    "home": is_home, "probs": probs, "emp": emp}
+        _put_player(model, collisions, f"{norm_name(p['name'])}|{team}", {"player_id": str(pid), "name": p["name"], "team": team, "opp": opp, "home": is_home, "probs": probs, "emp": emp})
+    _withdraw_collisions(model, collisions, date)
     return model
 
 
@@ -874,6 +899,7 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
     the rolling-form model covers (dressed in their team's last game, 40+ games
     of history). Both contracts are certified against real archived payloads
     (provider_adapter.VERIFIED_CONTRACTS)."""
+    from operational import player_integrity
     from research.generic_prop_pricing import provider_adapter
     from research.generic_prop_pricing.line_mapping import SOG_ACTIONABLE_THRESHOLDS
     from research.live_sog_pricing import event_mapping
@@ -885,6 +911,11 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
     if game_id is None:
         return []
     game = snapshot["games"][game_id]
+    try:                                    # the provider's event must be THIS game: the same two teams on another night (a home-and-home) is a different event
+        if abs((_parse_utc(payload["commence_time"]) - _parse_utc(game["start_utc"])).total_seconds()) > 12 * 3600:
+            return []
+    except (KeyError, ValueError, TypeError):
+        pass
     # Cutoffs use the earlier of the provider's and the official start (see effective_start); the leg
     # displays and stores the official start, and also keeps the provider's.
     hours = (effective_start(payload.get("commence_time") or game["start_utc"], game["start_utc"]) - now
@@ -935,11 +966,11 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     continue
                 else:
                     k = int(o["point"] + 0.5)
-                entry = None
-                for team in (home, away):
-                    entry = snapshot["model"].get(f"{norm_name(o.get('description', ''))}|{team}")
-                    if entry:
-                        break
+                found = [snapshot["model"].get(f"{norm_name(o.get('description', ''))}|{team}") for team in (home, away)]
+                found = [e for e in found if e]
+                if len(found) > 1:                                  # the same name on BOTH teams of the game (two Sebastian Ahos): the price carries only the name, so it matches neither
+                    continue
+                entry = found[0] if found else None
                 if not entry or f"{prob_prefix}{k}" not in entry["probs"] or not entry.get("player_id"):
                     continue
                 legs.append(ParlayLeg(
@@ -950,7 +981,8 @@ def _legs_from_payload(payload: dict, captured_at: dt.datetime, snapshot: dict, 
                     retrieved_at_utc=quote["retrieved_at_utc"], quote_updated_utc=quote["quote_updated_utc"],
                     quote_age_min=quote["quote_age_min"], freshness_status=status, provisional=provisional, early=early,
                     provider_contract_verified=verified[family], model_threshold_eligible=k in thresholds,
-                    identity_resolved=True, price_fresh=fresh, event_not_started=hours > 0,
+                    identity_resolved=not player_integrity.blocking(player_integrity.check_selection(entry["player_id"], entry["name"], entry["team"], {"home": home, "away": away}, snapshot.get("date") or "", now)["status"]),
+                    price_fresh=fresh, event_not_started=hours > 0,
                     team=entry["team"], opponent=entry["opp"], game_start_utc=game["start_utc"],
                     provider_start_utc=payload.get("commence_time"), model_version=MODEL_VERSION,
                     **_evidence(entry, family, prob_prefix, k)))

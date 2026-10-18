@@ -294,9 +294,14 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
     """Reasons a selected ticket may NOT be recorded right now, judged on the clock at the moment of recording (a cycle can spend minutes capturing prices after it
     selected). Every leg must be a fresh price: not provisional (aged), the provider's own quote time inside the limit that applies at this distance from puck drop, and
     the game not started. A morning price that is still fresh may be used (subject to EARLY_TICKET_CAP); one that has aged out is not, however good the ticket looked."""
-    from operational import best_bets, quote_freshness
+    from operational import best_bets, player_integrity, quote_freshness
     reasons = []
     for l in combo.legs:
+        if player_integrity.recording_gate_enabled():          # nothing is staked on a player who is not VERIFIED on his team's current official roster (a stale roster is a withdrawn leg, an unreachable one a held ticket)
+            iv = player_integrity.verdict(l.participant_id, l.team, now, name=l.participant_name)
+            if iv["status"] != player_integrity.OK:
+                reasons.append(f"{rmp.leg_label(l)}: player identity not verified ({iv['status']}: {iv['detail']})")
+                continue
         if getattr(l, "provisional", False):
             reasons.append(f"{rmp.leg_label(l)}: price is provisional (from an earlier look); it is re-checked on a pregame price first")
             continue
