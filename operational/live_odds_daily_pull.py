@@ -497,9 +497,9 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
     summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
     summary["captured_at_utc"] = r_odds.retrieved_at_utc
     if reservation:
-        _cp.settle(reservation["id"], cost, now, label=snapshot_label, markets=markets)      # the actual charge replaces the reservation
+        _cp.settle(reservation["id"], cost, now, klass=_cp.MONEYLINE_UI, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining)      # the actual charge replaces the reservation
     else:
-        _cp.record(_cp.MONEYLINE_UI, cost, now, label=snapshot_label, markets=markets)
+        _cp.record(_cp.MONEYLINE_UI, cost, now, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining)
 
     future_event_ids = {e["id"] for e in future_events}
     rows = []

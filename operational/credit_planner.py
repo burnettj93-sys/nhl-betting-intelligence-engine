@@ -69,8 +69,21 @@ def _ledger():
     return state_paths.path(LEDGER_NAME)
 
 
+def parse_header(value) -> int | None:
+    """The provider's x-requests-remaining header (a STRING such as "187" on a real response) as a non-negative integer; None for anything else (a missing header, NaN, a negative, a bool, a mock)."""
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None
+    try:
+        n = float(value)
+    except ValueError:
+        return None
+    return int(n) if math.isfinite(n) and n >= 0 else None
+
+
 def record(klass: str, credits: float, now: dt.datetime, **extra) -> None:
     """Append a paid call after it happened. Never raises: accounting must not break a job."""
+    if "remaining_header" in extra:
+        extra["remaining_header"] = parse_header(extra["remaining_header"])
     try:
         p = _ledger()
         p.parent.mkdir(parents=True, exist_ok=True)

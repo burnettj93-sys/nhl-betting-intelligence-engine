@@ -85,14 +85,45 @@ def evaluate_spend(remaining: int | None, spent_today: int, days_left: int, plan
             "spent_today": spent_today}
 
 
-def latest_remaining() -> int | None:
-    """The newest real `x-requests-remaining` any job cached (never a guess)."""
-    from operational import system_health as sh
+def _as_utc(stamp) -> dt.datetime | None:
     try:
-        value = sh.odds_collection_status().get("credits_remaining")
-    except Exception:  # noqa: BLE001
+        t = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+    except ValueError:
         return None
-    return int(value) if isinstance(value, (int, float)) else None
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def latest_remaining() -> int | None:
+    """The newest real `x-requests-remaining` any job recorded (never a guess): the newer of the collectors' cached summaries and the credit ledger, whose settled rows carry the provider's remaining-credit
+    header from the same call that was charged. Without the ledger a wave capture would leave the balance at its last pull's value and every later check would believe credits it had already spent.
+    Timestamps are parsed (the cache and the ledger spell UTC differently); a row that cannot be read is skipped, never fatal."""
+    from operational import system_health as sh
+    best: tuple[dt.datetime, int] | None = None
+    try:
+        status = sh.odds_collection_status()
+        value = status.get("credits_remaining")
+        when = _as_utc(status.get("last_updated_utc"))
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            best = (when or dt.datetime.min.replace(tzinfo=dt.timezone.utc), int(value))
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from operational import credit_planner as cp
+        rows = cp.read_ledger()
+    except Exception:  # noqa: BLE001
+        rows = []
+    now = dt.datetime.now(dt.timezone.utc)
+    for row in rows:
+        try:
+            h = cp.parse_header(row.get("remaining_header"))
+            t = _as_utc(row.get("at"))
+            if h is None or t is None or t > now + dt.timedelta(minutes=5):        # unreadable, or dated in the future (clock skew): never trusted
+                continue
+            if best is None or t >= best[0]:
+                best = (t, h)
+        except Exception:  # noqa: BLE001
+            continue
+    return best[1] if best else None
 
 
 def credits_spent_today(now: dt.datetime | None = None) -> int:
