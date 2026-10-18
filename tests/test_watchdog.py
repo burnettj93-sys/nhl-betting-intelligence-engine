@@ -48,9 +48,10 @@ class TestRun(unittest.TestCase):
         raise AssertionError(cmd)
 
     def test_run_writes_state_and_view_reages_it(self):
-        state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
+        with mock.patch("operational.keep_awake.battery_state", return_value={"on_ac": True, "percent": 100, "known": True}):
+            state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
-        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "morning_update"})
+        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "power", "morning_update"})
         stored = wd.load_state()
         self.assertEqual(stored["checked_at_utc"], "2026-10-09T12:00:00Z")
         self.assertEqual(wd.view(stored, NOW + dt.timedelta(minutes=20))["status"], stored["status"])
@@ -276,3 +277,34 @@ class NoGameDayTests(unittest.TestCase):
         self.assertIn("no games", r["detail"])
         with mock.patch.object(day_status, "build", return_value={"plan_present": False}), mock.patch.object(morning_refresh, "first_start_today", return_value=now):
             self.assertEqual(wd.check_morning_update(now)["status"], wd.FAIL)                  # games exist and no plan was made: still reported
+
+
+class PowerCheckTests(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 18, 3, 50, tzinfo=dt.timezone.utc)
+
+    def windows(self):
+        from operational import keep_awake as ka
+        return ka.windows(self.NOW, [dt.datetime(2026, 10, 18, 22, 0, tzinfo=dt.timezone.utc)], horizon_h=24)
+
+    def test_on_ac_power_is_ok_and_says_the_assertion_bridges(self):
+        r = wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=self.windows())
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("bridges", r["detail"])
+
+    def test_on_ac_but_further_than_the_bridge_is_a_warning(self):
+        r = wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=self.windows())
+        from operational import keep_awake as ka
+        far = [dict(w, assert_from_utc=self.NOW + dt.timedelta(hours=ka.AC_BRIDGE_H + 4), hold_from_utc=self.NOW + dt.timedelta(hours=ka.AC_BRIDGE_H + 4)) for w in self.windows()]
+        self.assertEqual(wd.check_power(self.NOW, power={"on_ac": True, "percent": 100}, windows=far)["status"], wd.WARN)
+        self.assertEqual(r["status"], wd.OK)
+
+    def test_on_battery_warns_with_the_exact_owner_actions_and_fails_when_low(self):
+        warn = wd.check_power(self.NOW, power={"on_ac": False, "percent": 60}, windows=self.windows())
+        self.assertEqual(warn["status"], wd.WARN)
+        self.assertIn("plug in the charger", warn["detail"])
+        fail = wd.check_power(self.NOW, power={"on_ac": False, "percent": 21}, windows=self.windows())
+        self.assertEqual(fail["status"], wd.FAIL)
+        self.assertIn("21%", fail["detail"])
+
+    def test_no_window_ahead_is_not_a_problem(self):
+        self.assertEqual(wd.check_power(self.NOW, power={"on_ac": False, "percent": 21}, windows=[])["status"], wd.OK)

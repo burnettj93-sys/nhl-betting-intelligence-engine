@@ -92,9 +92,8 @@ def main(argv=None) -> int:
         print("No provider-listed cluster within 10 days: nothing to schedule.")
         return 0
     w = nxt["window"]
-    print(f"Next provider-listed cluster: {w['cluster']} ({w['games']} game(s))")
-    print(f"  T-40 window opens {w['capture_window'][0].astimezone():%Y-%m-%d %H:%M %Z}  ·  T-35 target {(w['anchor'] - dt.timedelta(minutes=5)).astimezone():%H:%M %Z}"
-          f"  ·  T-30 decision {w['anchor'].astimezone():%H:%M %Z}")
+    print(f"Next capture window: {w['cluster']} ({w['games']} game(s))")
+    print(f"  capture opens {w['capture_window'][0].astimezone():%Y-%m-%d %H:%M %Z}  ·  publish deadline {w['anchor'].astimezone():%H:%M %Z}  ·  last chance {w['capture_window'][1].astimezone():%H:%M %Z}")
     print(f"  keep-awake assertion {w['assert_from_utc'].astimezone():%H:%M} .. {w['hold_until_utc'].astimezone():%H:%M %Z}")
     print(f"  proposed wake:        {nxt['wake_local']}  ({int((w['capture_window'][0] - nxt['wake_utc']).total_seconds() // 60)} min before the window opens)")
     print("\nRun this yourself (needs your password):\n  " + nxt["command"])

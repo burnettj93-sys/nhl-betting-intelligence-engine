@@ -31,7 +31,6 @@ import sys
 from pathlib import Path
 from typing import Callable
 
-from operational import live_odds_daily_pull as lodp
 from operational import moneyline_pregame as mp
 from operational import state_paths as _sp
 
@@ -44,38 +43,39 @@ WAKE_BEFORE_HOLD_MIN = 5              # suggested one-time wake: hold_from - 5 m
 PLAN_HORIZON_H = 72
 GUARD_POLL_S = 5                      # wake-guard poll period: after a wake it reacts within ~5 s, far inside the 1-minute idle timer
 GUARD_MAX_AGE_H = 36
+AC_BRIDGE_H = 16                      # on AC power the Mac is held awake through to the next window when that window opens within this many hours (the last wave ends about 19:05 ET and the 07:45 prep window opens 12.3 h later)
+CHAIN_GAP_MIN = 30                    # windows closer together than this are held as one block (no hand-over that depends on a callback at the exact second an assertion ends)
+GUARD_REV = "2026-10-18-capture-waves"   # stamped into the guard's state: a guard started by older code (retired cluster windows) is replaced once
+BATTERY_FLOOR_PCT = 30                # on battery an assertion is held only inside a window and only above this charge: an empty battery shuts the Mac down, which is worse than sleeping
 
 
-def windows(now: dt.datetime, starts: list, horizon_h: float = PLAN_HORIZON_H,
-            listing_fn: Callable | None = None) -> list[dict]:
-    """Hold windows for clusters the provider LISTS (a cluster it does not list gets no pull, so the machine need
-    not be held awake for it). Unknown listing (no archived events) is treated as listed -- the safe side.
+def windows(now: dt.datetime, starts: list, horizon_h: float = PLAN_HORIZON_H, listing_fn: Callable | None = None) -> list[dict]:
+    """The moments the machine must be awake, from the day's own capture timeline (operational/capture_timeline.py), per Eastern day with games:
 
-    Production Gap Closure sprint (2026-10-01): this previously anchored BOTH ends of the hold window to
-    moneyline_pregame.py's own narrow T-40..T-30 decision math (c.window/c.anchor), which has nothing to do
-    with when the SEPARATE prop-sweep-first/-second launchd jobs (operational/live_odds_daily_pull.py) need
-    the machine awake. Confirmed by the formula itself (not a one-off): the resulting window --
-    [c.smax-70min, c.smin-10min] -- structurally never overlaps prop-sweep-first's real T-270..T-180
-    capture window at all, and ends 10+ minutes BEFORE the EARLIEST real game in the cluster even starts
-    (every later game in a multi-game cluster loses additional margin on top of that). Both ends are now
-    anchored to the cluster's own REAL puck-drop times (smin/smax) and the real sweep windows those other
-    jobs actually use, not to moneyline's own decision anchor: the hold starts early enough for
-    prop-sweep-first's furthest-out real capture need, and ends only after the LATEST real game in the
-    cluster has actually started."""
-    out = []
-    listing_fn = listing_fn or mp.archived_listing
-    first_sweep_lead_h = lodp.FIRST_SWEEP_WINDOW_HOURS[1]  # the earlier (larger-hours-out) edge, e.g. 4.5h
-    for c in mp.plan_clusters(starts):
-        if listing_fn(c) is False:
-            continue
-        lo = c.smin - dt.timedelta(hours=first_sweep_lead_h) - dt.timedelta(minutes=LEAD_BEFORE_WINDOW_MIN)
-        hi = c.smax + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN)
-        if hi < now or lo > now + dt.timedelta(hours=horizon_h):
-            continue
-        out.append({"cluster": c.key, "games": c.games, "hold_from_utc": lo, "hold_until_utc": hi,
-                    "assert_from_utc": lo - dt.timedelta(minutes=ASSERT_LEAD_MIN),
-                    "capture_window": c.window, "anchor": c.anchor})
-    return out
+      prep:<day>      the 07:45 ET refresh and the 08:00 ET analysis and league pull (earlier on an early day): [refresh - 10 min, analysis + 25 min]
+      wave<i>:<day>   one coordinated player-odds capture per start-time wave: [target - 10 min, last chance + 20 min], i.e. from 100 minutes before the wave's first game until after its
+                      capture could still be made and published
+
+    (Until 2026-10-17 these were built from the retired T-35 per-cluster pulls and the retired prop sweeps; nothing held the Mac awake for the waves.) `listing_fn` is accepted for
+    compatibility and ignored: a wave's game list comes from the schedule, and a priced-or-not decision is the credit plan's, not the power plan's."""
+    from operational import capture_timeline as ct, eastern_time as et
+    out: list[dict] = []
+    by_day: dict[str, dict[str, dt.datetime]] = {}
+    for i, t in enumerate(sorted(starts)):
+        by_day.setdefault(et.eastern_today(t), {})[f"{i}"] = t
+    for day, day_starts in sorted(by_day.items()):
+        prep = ct.prep_times(dt.date.fromisoformat(day), min(day_starts.values()))
+        rows = [{"cluster": f"prep:{day}", "games": len(day_starts), "lo": prep["refresh_at"] - dt.timedelta(minutes=10), "hi": prep["analysis_at"] + dt.timedelta(minutes=25),
+                 "capture_window": (prep["refresh_at"], prep["analysis_at"]), "anchor": prep["analysis_at"]}]
+        for w in ct.waves(day_starts):
+            rows.append({"cluster": f"wave@{w.first_start:%Y-%m-%dT%H:%MZ}", "games": len(w.games), "lo": w.target - dt.timedelta(minutes=10), "hi": w.last_chance + dt.timedelta(minutes=TAIL_AFTER_ANCHOR_MIN),
+                         "capture_window": (w.target, w.last_chance), "anchor": w.deadline})
+        for r in rows:
+            if r["hi"] < now or r["lo"] > now + dt.timedelta(hours=horizon_h):
+                continue
+            out.append({"cluster": r["cluster"], "games": r["games"], "hold_from_utc": r["lo"], "hold_until_utc": r["hi"], "assert_from_utc": r["lo"] - dt.timedelta(minutes=ASSERT_LEAD_MIN),
+                        "capture_window": r["capture_window"], "anchor": r["anchor"]})
+    return sorted(out, key=lambda w: w["hold_from_utc"])
 
 
 def active_window(now: dt.datetime, starts: list) -> dict | None:
@@ -114,10 +114,68 @@ def _save(state: dict, path: Path | None = None) -> None:
     tmp.replace(path)
 
 
+def battery_state(runner: Callable | None = None) -> dict:
+    """{"on_ac": bool, "percent": int | None} from `pmset -g batt` (read-only). An unreadable answer is treated as AC with unknown charge (the permissive reading the old code had)."""
+    text = (runner or _run)(["pmset", "-g", "batt"])
+    if not text:
+        return {"on_ac": True, "percent": None, "known": False}
+    m = re.search(r"(\d{1,3})%", text)
+    return {"on_ac": "AC Power" in text, "percent": int(m.group(1)) if m else None, "known": True}
+
+
+def blocks(ws: list[dict]) -> list[dict]:
+    """Windows that overlap or lie within CHAIN_GAP_MIN of each other, merged into one block (hold_from of the first .. hold_until of the last). A block is held with ONE assertion."""
+    out: list[dict] = []
+    for w in sorted(ws, key=lambda x: x["hold_from_utc"]):
+        if out and w["hold_from_utc"] <= out[-1]["hold_until_utc"] + dt.timedelta(minutes=CHAIN_GAP_MIN):
+            last = out[-1]
+            last["hold_until_utc"] = max(last["hold_until_utc"], w["hold_until_utc"])
+            last["members"].append(w["cluster"])
+            last["games"] += w["games"]
+        else:
+            out.append({**w, "members": [w["cluster"]], "cluster": w["cluster"]})
+    for blk in out:
+        blk["cluster"] = "+".join(blk["members"])
+    return out
+
+
+def hold_target(now: dt.datetime, ws: list[dict], power: dict) -> dict | None:
+    """Which block of windows (if any) the machine should be held awake for right now, and why.
+      * inside a block: hold to the END of the block, unless on battery below BATTERY_FLOOR_PCT;
+      * on AC and the next block opens within AC_BRIDGE_H: hold now, through that block (the Mac cannot be woken by software, so the bridge is what keeps it awake overnight);
+      * on battery outside a block: nothing (sleeping saves the charge; the watchdog says the windows cannot be guaranteed)."""
+    bl = blocks(ws)
+    inside = next((b for b in bl if b["assert_from_utc"] <= now <= b["hold_until_utc"]), None)
+    on_ac, pct = power.get("on_ac", True), power.get("percent")
+    if inside is not None:
+        if not on_ac and pct is not None and pct < BATTERY_FLOOR_PCT:
+            return {"skip": "BATTERY_TOO_LOW", "window": inside}
+        return {"window": inside, "why": "IN_WINDOW"}
+    if on_ac:
+        nxt = next((b for b in bl if b["assert_from_utc"] > now), None)
+        if nxt is not None and nxt["assert_from_utc"] - now <= dt.timedelta(hours=AC_BRIDGE_H):
+            return {"window": nxt, "why": "AC_BRIDGE_TO_NEXT_WINDOW"}
+    return None
+
+
+def _stop_holding(state: dict, state_path: Path | None, alive_fn: Callable) -> bool:
+    """End OUR assertion (caffeinate) when it should no longer be held: AC power was lost or the charge fell below the floor. Only a live process that really is caffeinate is signalled."""
+    pid = state.get("pid")
+    if not pid or not alive_fn(pid):
+        return False
+    try:
+        os.kill(int(pid), 15)
+    except (OSError, ValueError):
+        return False
+    state.update(pid=None, stopped_utc=dt.datetime.now(dt.timezone.utc).isoformat())
+    _save(state, state_path)
+    return True
+
+
 def ensure_holding(now: dt.datetime | None = None, *, starts_fn: Callable | None = None,
                    spawn: Callable | None = None, alive_fn: Callable = _alive, state_path: Path | None = None,
-                   active_fn: Callable[[], bool] | None = None) -> dict:
-    """Idempotent: at most one live assertion, only inside a hold window. Never raises."""
+                   active_fn: Callable[[], bool] | None = None, power_fn: Callable[[], dict] | None = None) -> dict:
+    """Idempotent: at most one live assertion. Held inside a hold window, and on AC power also across the gap to the next window (see hold_target). Never raises."""
     now = now or dt.datetime.now(dt.timezone.utc)
     out = {"holding": False, "action": "NONE", "reason": None}
     try:
@@ -133,11 +191,21 @@ def ensure_holding(now: dt.datetime | None = None, *, starts_fn: Callable | None
             out.update(action="SKIPPED", reason="STANDBY")
             return out
         starts = (starts_fn or (lambda n: mp.scheduled_starts(n, hours=PLAN_HORIZON_H, back_hours=1)))(now)
-        w = active_window(now, starts)
+        ws = windows(now, starts, horizon_h=PLAN_HORIZON_H)
+        power = (power_fn or battery_state)()
+        target = hold_target(now, ws, power)
         state = _load(state_path)
-        if w is None:
-            out["reason"] = "OUTSIDE_HOLD_WINDOW"
+        if target is None:
+            out["reason"] = "OUTSIDE_HOLD_WINDOW" + ("" if power.get("on_ac", True) else "_ON_BATTERY")
+            if not power.get("on_ac", True) and _stop_holding(state, state_path, alive_fn):
+                out["action"] = "STOPPED_ON_BATTERY"                  # a bridge started on AC does not outlive the charger
             return out
+        if target.get("skip"):
+            out.update(action="SKIPPED", reason=target["skip"], power=power)
+            if _stop_holding(state, state_path, alive_fn):
+                out["action"] = "STOPPED_BATTERY_TOO_LOW"
+            return out
+        w = target["window"]
         if alive_fn(state.get("pid")) and state.get("cluster") == w["cluster"]:
             out.update(holding=True, action="ALREADY_HOLDING", pid=state.get("pid"), until=state.get("until_utc"))
             return out
@@ -146,9 +214,9 @@ def ensure_holding(now: dt.datetime | None = None, *, starts_fn: Callable | None
             out["reason"] = "WINDOW_ENDED"
             return out
         pid = spawn(seconds)
-        state.update(pid=pid, cluster=w["cluster"], started_utc=now.isoformat(), until_utc=w["hold_until_utc"].isoformat())
+        state.update(pid=pid, cluster=w["cluster"], started_utc=now.isoformat(), until_utc=w["hold_until_utc"].isoformat(), why=target["why"])
         _save(state, state_path)
-        out.update(holding=True, action="STARTED", pid=pid, until=w["hold_until_utc"].isoformat(), seconds=seconds)
+        out.update(holding=True, action="STARTED", pid=pid, until=w["hold_until_utc"].isoformat(), seconds=seconds, why=target["why"], power=power)
     except Exception as exc:  # noqa: BLE001 -- best effort; never affects the pull or the job
         out.update(action="ERROR", reason=f"{type(exc).__name__}: {str(exc)[:120]}")
     return out
@@ -312,10 +380,16 @@ def ensure_guard(now: dt.datetime | None = None, *, starts_fn: Callable | None =
         path = state_path or _guard_state_path()
         st = _load(path)
         if st.get("pid") and alive_fn(st["pid"]):
-            out.update(guard="ALREADY_RUNNING", pid=st["pid"])
-            return out
+            if st.get("rev") == GUARD_REV:
+                out.update(guard="ALREADY_RUNNING", pid=st["pid"])
+                return out
+            try:                                         # a guard started by older code watches the retired cluster windows: replace it once with one that knows the capture waves
+                os.kill(int(st["pid"]), 15)
+            except (OSError, ValueError):
+                pass
+            out["replaced_pid"] = st["pid"]
         pid = spawn()
-        _save({"pid": pid, "started_utc": now.isoformat()}, path)
+        _save({"pid": pid, "started_utc": now.isoformat(), "rev": GUARD_REV}, path)
         out.update(guard="STARTED", pid=pid)
     except Exception as exc:  # noqa: BLE001
         out.update(guard="ERROR", reason=f"{type(exc).__name__}: {str(exc)[:100]}")
@@ -339,6 +413,7 @@ def guard_loop(*, clock: Callable = lambda: dt.datetime.now(dt.timezone.utc), sl
     started = clock()
     ws: list[dict] = []
     last_refresh = None
+    last_ensure = None
     i = 0
     while max_iterations is None or i < max_iterations:
         i += 1
@@ -351,8 +426,10 @@ def guard_loop(*, clock: Callable = lambda: dt.datetime.now(dt.timezone.utc), sl
             last_refresh = now
         if not ws or all(w["hold_until_utc"] < now for w in ws):
             return "NO_WINDOW_AHEAD"
-        if any(w["assert_from_utc"] <= now <= w["hold_until_utc"] for w in ws):
-            ensure(now)
+        inside = any(w["assert_from_utc"] <= now <= w["hold_until_utc"] for w in ws)
+        if inside or last_ensure is None or now - last_ensure >= dt.timedelta(seconds=60) or now < last_ensure:
+            ensure(now)                                 # inside a window every poll (reacts within seconds of a wake); otherwise once a minute (the AC bridge to the next window)
+            last_ensure = now
         sleep(GUARD_POLL_S)
     return "MAX_ITERATIONS"
 

@@ -20,7 +20,7 @@ from operational import schedule_next_wake as snw
 REPO = Path(__file__).resolve().parent.parent
 D = lambda h, m=0, s=0, day=29: dt.datetime(2026, 9, day, h, m, s, tzinfo=dt.timezone.utc)
 LISTED = lambda c: True
-SCHED = ("Scheduled power events:\n [0]  wake at 09/29/2026 15:45:00 by 'nhl-engine'\n"
+SCHED = ("Scheduled power events:\n [0]  wake at 09/29/2026 15:15:00 by 'nhl-engine'\n"
          " [1]  wake at 09/25/2026 17:00:00 by 'com.apple.alarm.user-visible-com.apple.donotdisturb.server.ScheduleLifetimeMonitor.timer' User visible: true\n")
 
 
@@ -31,14 +31,13 @@ def local_ts(y, mo, d, h, mi=0):
 # --------------------------------------------------------------------------------------- wake planning
 class TestWakePlan(unittest.TestCase):
     def w(self):
-        (w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
-        return w
+        return [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave@")][0]
 
-    def test_wake_is_at_least_30_minutes_before_the_capture_window_and_inside_the_assertion_window(self):
+    def test_wake_is_ahead_of_the_capture_window_and_inside_the_assertion_window(self):
         w = self.w()
         t = ka.wake_time(w)
-        self.assertEqual(t, D(15, 55))                                           # hold_from_utc(16:00) - 5min
-        self.assertGreaterEqual((w["capture_window"][0] - t), dt.timedelta(minutes=30))
+        self.assertEqual(t, D(19, 15))                                           # hold_from_utc(19:20) - 5min
+        self.assertGreaterEqual((w["capture_window"][0] - t), dt.timedelta(minutes=10))     # the capture target is 19:30
         self.assertGreaterEqual(t, w["assert_from_utc"])                          # the guard holds it immediately after the wake
 
     def test_command_syntax_matches_man_pmset(self):
@@ -49,16 +48,13 @@ class TestWakePlan(unittest.TestCase):
         self.assertIn(local.strftime("%m/%d/%y %H:%M:%S"), cmd)
 
     def test_only_future_wakes_are_planned_and_unlisted_clusters_get_none(self):
-        with mock.patch.object(mp, "archived_listing", return_value=False):
-            self.assertEqual(ka.wake_commands(D(12), [D(21)]), [])
-        with mock.patch.object(mp, "archived_listing", return_value=True):
-            self.assertEqual(len(ka.wake_commands(D(12), [D(21)], horizon_h=240)), 1)
-            self.assertEqual(ka.wake_commands(D(20), [D(21)], horizon_h=240), [])          # the wake time already passed
+        self.assertEqual(len(ka.wake_commands(D(12), [D(21)], horizon_h=240)), 1)          # the 07:45 prep wake has passed; the wave's has not
+        self.assertEqual(ka.wake_commands(D(20), [D(21)], horizon_h=240), [])              # that wake time already passed
 
     def test_next_wake_reports_the_cluster_times(self):
         n = snw.next_wake(D(12), starts_fn=lambda now: [D(21)], listing_fn=LISTED)
-        self.assertEqual(n["wake_utc"], D(15, 55))
-        self.assertEqual(n["window"]["capture_window"][0], D(20, 20))                     # T-40
+        self.assertEqual(n["wake_utc"], D(19, 15))
+        self.assertEqual(n["window"]["capture_window"][0], D(19, 30))                     # the wave's capture target, T-90
         self.assertIn("sudo pmset schedule wake", n["command"])
 
     def test_the_planner_never_changes_a_power_setting(self):
@@ -74,7 +70,7 @@ class TestPmsetSchedParsing(unittest.TestCase):
         ev = ka.parse_sched(SCHED)
         self.assertEqual(len(ev), 2)
         self.assertEqual((ev[0]["type"], ev[0]["owner"]), ("wake", "nhl-engine"))
-        self.assertEqual(ev[0]["when_utc"], local_ts(2026, 9, 29, 15, 45))
+        self.assertEqual(ev[0]["when_utc"], local_ts(2026, 9, 29, 15, 15))
 
     def test_two_digit_years_and_garbage(self):
         ev = ka.parse_sched(" [0]  wake at 09/29/26 15:45:00 by 'x'\n[1] wake at 99/99/26 aa by 'y'")
@@ -84,17 +80,17 @@ class TestPmsetSchedParsing(unittest.TestCase):
 
 class TestWakeCoverage(unittest.TestCase):
     def setUp(self):
-        (self.w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
+        self.w = [w for w in ka.windows(D(12), [D(21)]) if w["cluster"].startswith("wave@")][0]
 
     def ev(self, when):
         return [{"type": "wake", "when_utc": when, "owner": "o"}]
 
     def test_an_event_in_the_right_span_covers_the_cluster(self):
-        for when in (D(19, 20), D(19, 45), D(20, 0), D(20, 20)):
+        for when in (D(18, 55), D(19, 0), D(19, 15), D(19, 30)):
             self.assertIsNotNone(ka.wake_covers(self.w, self.ev(when)), when)
 
     def test_too_early_or_after_the_window_opens_does_not(self):
-        for when in (D(15, 0), D(15, 29), D(20, 21), D(23, 0)):
+        for when in (D(15, 0), D(18, 49), D(19, 31), D(23, 0)):
             self.assertIsNone(ka.wake_covers(self.w, self.ev(when)), when)
 
     def test_verify_reads_the_os_listing_not_an_exit_code(self):
@@ -111,7 +107,7 @@ class TestWakeCoverage(unittest.TestCase):
         os_event = SCHED.replace("nhl-engine", "com.apple.alarm.user-visible-com.apple.donotdisturb.server.ScheduleLifetimeMonitor.timer")
         got = snw.verify(D(12), nxt=nxt, runner=lambda cmd: os_event)
         self.assertEqual(got["state"], "OWNER_ACTION_REQUIRED")                                # the Mac's own timer is not a commitment to wake for the engine
-        self.assertIsNotNone(ka.wake_covers(self.w, [{"type": "wake", "when_utc": D(19, 45), "owner": "other"}]))     # the generic check still sees any event
+        self.assertIsNotNone(ka.wake_covers(self.w, [{"type": "wake", "when_utc": D(19, 15), "owner": "other"}]))     # the generic check still sees any event
 
     def test_no_cluster_ahead_is_waiting_for_event(self):
         with mock.patch.object(snw, "next_wake", return_value=None):
