@@ -58,26 +58,51 @@ RETRY_GAP_MIN = 60
 MAX_ATTEMPTS = 4                # a failed step is retried at most this many times a day
 
 
-def due(now: dt.datetime, first_start: dt.datetime | None) -> dict:
+def network_up(host: str = "api-web.nhle.com", port: int = 443, timeout: float = 4.0) -> bool:
+    """Can this machine reach the NHL API host right now (DNS + TCP)? Used to tell 'the network was not back yet' from 'the source failed'."""
+    import socket
+    if state_paths.under_test():
+        return True                                  # a unit test never probes the network (tests that need an offline machine inject `connectivity`)
+    try:
+        socket.create_connection((host, port), timeout=timeout).close()
+        return True
+    except OSError:
+        return False
+
+
+def _failed_steps(doc: dict) -> list[str]:
+    return [k for k, v in (doc.get("steps") or {}).items() if str((v or {}).get("status")) in ("ERROR", "FAILED")]
+
+
+def due(now: dt.datetime, first_start: dt.datetime | None, *, connectivity=None) -> dict:
+    """Is the refresh (or a retry of its failed components) due? DONE ends the day's work. PARTIAL and FAILED are INCOMPLETE: the failed components are retried, bounded by MAX_ATTEMPTS real
+    attempts a day. If the last failure was a lost connection the retry is due the moment the connection is back (no waiting gap); any other failure waits RETRY_GAP_MIN."""
     from operational import capture_timeline as ct, eastern_time as et
     day = et.eastern_today(now)
     at = ct.prep_times(dt.date.fromisoformat(day), first_start)["refresh_at"]
+    at_s = at.strftime("%Y-%m-%dT%H:%M:%SZ")
     st = read() or {}
-    failed_steps = [k for k, v in (st.get("steps") or {}).items() if str((v or {}).get("status")) in ("ERROR", "FAILED")] if st.get("day") == day else []
-    if st.get("day") == day and st.get("status") == "DONE":
-        return {"due": False, "reason": "DONE_TODAY", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
-    if st.get("day") == day and st.get("status") == "PARTIAL" and not (failed_steps and int(st.get("attempts") or 1) < MAX_ATTEMPTS):
-        return {"due": False, "reason": "DONE_TODAY" if not failed_steps else "RETRIES_EXHAUSTED", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}   # a PARTIAL with a failed step is retried (2026-10-18: the network was not up when the Mac woke)
+    same_day = st.get("day") == day
+    if same_day and st.get("status") == "DONE":
+        return {"due": False, "reason": "DONE_TODAY", "due_at_utc": at_s}
     if now < at:
-        return {"due": False, "reason": "NOT_YET", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
-    tried = st.get("finished_utc") if st.get("day") == day else None
-    if tried and (now - dt.datetime.fromisoformat(tried.replace("Z", "+00:00"))).total_seconds() < RETRY_GAP_MIN * 60:
-        return {"due": False, "reason": "RETRY_GAP", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}    # a failed refresh is retried, not every cycle
-    return {"due": True, "reason": "DUE", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ"), "late_min": round((now - at).total_seconds() / 60.0, 1)}
+        return {"due": False, "reason": "NOT_YET", "due_at_utc": at_s}
+    if same_day and st.get("status") in ("PARTIAL", "FAILED"):
+        if int(st.get("attempts") or 1) >= MAX_ATTEMPTS:
+            return {"due": False, "reason": "RETRIES_EXHAUSTED", "due_at_utc": at_s, "failed": _failed_steps(st)}
+        if st.get("network_down"):
+            if (connectivity or network_up)():
+                return {"due": True, "reason": "RETRY_NETWORK_BACK", "due_at_utc": at_s, "failed": _failed_steps(st)}
+            return {"due": False, "reason": "WAITING_FOR_NETWORK", "due_at_utc": at_s, "failed": _failed_steps(st)}
+        tried = st.get("finished_utc")
+        if tried and (now - dt.datetime.fromisoformat(tried.replace("Z", "+00:00"))).total_seconds() < RETRY_GAP_MIN * 60:
+            return {"due": False, "reason": "RETRY_GAP", "due_at_utc": at_s, "failed": _failed_steps(st)}
+        return {"due": True, "reason": "RETRY_FAILED_STEPS", "due_at_utc": at_s, "failed": _failed_steps(st)}
+    return {"due": True, "reason": "DUE", "due_at_utc": at_s, "late_min": round((now - at).total_seconds() / 60.0, 1)}
 
 
-def run_if_due(now: dt.datetime | None = None, *, first_start: dt.datetime | None | str = "lookup", sync=None, starters=None, force: bool = False) -> dict:
-    """Run the refresh when it is due (or `force`). `sync` and `starters` are injectable for tests."""
+def run_if_due(now: dt.datetime | None = None, *, first_start: dt.datetime | None | str = "lookup", sync=None, starters=None, force: bool = False, connectivity=None) -> dict:
+    """Run the refresh when it is due (or `force`). `sync`, `starters` and `connectivity` are injectable for tests."""
     from operational import eastern_time as et
     now = now or dt.datetime.now(dt.timezone.utc)
     if first_start == "lookup":
@@ -93,39 +118,70 @@ def run_if_due(now: dt.datetime | None = None, *, first_start: dt.datetime | Non
             fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             return {"status": "SKIPPED", "reason": "ANOTHER_REFRESH_IS_RUNNING"}     # the launchd job and the trader never run the refresh at the same time
-        return _run_locked(now, first_start, sync, starters, force)
+        return _run_locked(now, first_start, sync, starters, force, connectivity or network_up)
 
 
-def _run_locked(now, first_start, sync, starters, force) -> dict:
+def _stamp(t: dt.datetime) -> str:
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _run_locked(now, first_start, sync, starters, force, connectivity) -> dict:
+    """One attempt at the day's components, each with its own timestamps. A component that already succeeded today (OK or DISABLED) is carried over as it was, never re-run; only failed or
+    never-run components are attempted. If the network is down nothing is attempted and no attempt is used up: the failure is recorded as a network failure and the retry is due when it returns."""
     from operational import eastern_time as et
-    d = due(now, first_start)
+    d = due(now, first_start, connectivity=connectivity)
     if not d["due"] and not force:
         return {"status": "SKIPPED", **d}
-    _t0 = dt.datetime.now(dt.timezone.utc)
+    day = et.eastern_today(now)
     prev = read() or {}
-    attempts = (int(prev.get("attempts") or 1) + 1) if prev.get("day") == et.eastern_today(now) else 1
-    doc = {"attempts": attempts, "day": et.eastern_today(now), "started_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "due": d, "steps": {}}
-    try:
-        import sync_daily
-        rc = (sync or sync_daily.run)()
-        doc["steps"]["statistics"] = {"status": "OK" if rc == 0 else "FAILED", "exit_code": rc}
-    except Exception as exc:  # noqa: BLE001
-        doc["steps"]["statistics"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
-    try:
-        def _starters():
-            import db
-            from operational import dailyfaceoff
-            conn = db.get_conn()
-            try:
-                st = dailyfaceoff.refresh(now)
-                return {"status": st.get("status"), "last_error": st.get("last_error")}
-            finally:
-                conn.close()
-        doc["steps"]["starters"] = (starters or _starters)()
-    except Exception as exc:  # noqa: BLE001
-        doc["steps"]["starters"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
-    doc["finished_utc"] = (now + (dt.datetime.now(dt.timezone.utc) - _t0)).strftime("%Y-%m-%dT%H:%M:%SZ")      # `now` plus the real elapsed time (a test clock stays consistent)
-    bad = [k for k, v in doc["steps"].items() if str(v.get("status")) in ("ERROR", "FAILED")]
+    carried = {k: v for k, v in (prev.get("steps") or {}).items() if prev.get("day") == day and str((v or {}).get("status")) in ("OK", "DISABLED")}
+    attempts = int(prev.get("attempts") or 0) if prev.get("day") == day else 0
+    t0 = dt.datetime.now(dt.timezone.utc)
+
+    def clock() -> dt.datetime:                       # `now` plus the real elapsed time (a test clock stays consistent)
+        return now + (dt.datetime.now(dt.timezone.utc) - t0)
+
+    doc = {"day": day, "started_utc": _stamp(now), "due": d, "steps": dict(carried), "attempts": attempts}
+    online = connectivity()
+    if not online:
+        for name in ("statistics", "starters"):
+            if name not in carried:
+                doc["steps"][name] = {"status": "FAILED", "reason": "NO_CONNECTIVITY", "started_utc": _stamp(now), "finished_utc": _stamp(now)}
+        doc["network_down"] = True
+        doc["finished_utc"] = _stamp(now)
+        doc["status"] = "FAILED" if len(doc["steps"]) and not carried else "PARTIAL"
+        _write(doc)
+        return doc
+    doc["attempts"] = attempts + 1
+    if "statistics" not in carried:
+        started = clock()
+        try:
+            import sync_daily
+            rc = (sync or sync_daily.run)()
+            step = {"status": "OK" if rc == 0 else "FAILED", "exit_code": rc}
+        except Exception as exc:  # noqa: BLE001
+            step = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+        doc["steps"]["statistics"] = {**step, "started_utc": _stamp(started), "finished_utc": _stamp(clock())}
+    if "starters" not in carried:
+        started = clock()
+        try:
+            def _starters():
+                import db
+                from operational import dailyfaceoff
+                conn = db.get_conn()
+                try:
+                    st = dailyfaceoff.refresh(now)
+                    return {"status": st.get("status"), "last_error": st.get("last_error")}
+                finally:
+                    conn.close()
+            step = (starters or _starters)()
+        except Exception as exc:  # noqa: BLE001
+            step = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+        doc["steps"]["starters"] = {**step, "started_utc": _stamp(started), "finished_utc": _stamp(clock())}
+    doc["finished_utc"] = _stamp(clock())
+    bad = _failed_steps(doc)
+    if bad and not connectivity():
+        doc["network_down"] = True                      # the sources failed because the connection dropped: retry when it is back
     doc["status"] = "DONE" if not bad else ("PARTIAL" if len(bad) < len(doc["steps"]) else "FAILED")
     _write(doc)
     try:

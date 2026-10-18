@@ -111,7 +111,12 @@ def run(now: dt.datetime | None = None) -> dict:
         # by operational/capture_timeline.py and by credit reservations, so a late cycle after a sleep or an outage still takes the pull that is due.
         try:
             from operational import moneyline_freshness
-            league_summary = {k: v for k, v in moneyline_freshness.run_if_due(now, label=None).items() if k in ("action", "reason", "ran", "credits_spent_this_run", "api_error", "due_detail")}
+            _league = moneyline_freshness.run_if_due(now, label=None)
+            league_summary = {k: v for k, v in _league.items() if k in ("action", "reason", "ran", "credits_spent_this_run", "api_error", "due_detail")}
+            if _league.get("real_odds_bridge") is not None:         # the pull's prices were carried into odds_snapshots (and the recommendations evaluated) by the same workflow
+                _b = _league["real_odds_bridge"]
+                league_summary["bridge"] = {k: _b.get(k) for k in ("status", "rows_seen", "rows_written", "rows_skipped_unmatched", "error")}
+                league_summary["recommendations"] = {k: (_league.get("real_recommendation_orchestrator") or {}).get(k) for k in ("status", "games_evaluated", "recommendations_recorded", "error")}
         except Exception as exc:  # noqa: BLE001
             league_summary = {"action": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
 

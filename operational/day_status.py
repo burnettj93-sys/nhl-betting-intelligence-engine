@@ -47,6 +47,9 @@ def build(now: dt.datetime) -> dict:
     board_at = _utc(board.get("generated_at_utc")) if board.get("date_et") == day else None
     out["prep"] = {"refresh_due_utc": prep.get("refresh_at"), "refresh_status": refresh.get("status") if refresh.get("day") == day else "NOT_RUN_YET",
                    "refresh_finished_utc": refresh.get("finished_utc") if refresh.get("day") == day else None,
+                   "refresh_attempts": refresh.get("attempts") if refresh.get("day") == day else None, "refresh_network_down": bool(refresh.get("network_down")) if refresh.get("day") == day else False,
+                   "refresh_steps": ({k: {"status": v.get("status"), "reason": v.get("reason"), "started_utc": v.get("started_utc"), "finished_utc": v.get("finished_utc")} for k, v in (refresh.get("steps") or {}).items()}
+                                     if refresh.get("day") == day else {}),
                    "analysis_due_utc": prep.get("analysis_at"), "analysis_published_utc": board_at.strftime("%Y-%m-%dT%H:%M:%SZ") if board_at else None,
                    "analysis_games": (board.get("counts") or {}).get("analysed"), "slate_games": plan.get("games_today")}
     pulls = [r for r in cp.read_ledger(day) if r["class"] == cp.MONEYLINE_UI]

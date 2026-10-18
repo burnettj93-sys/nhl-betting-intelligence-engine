@@ -30,6 +30,14 @@ class TestProductionLedgersAreNeverOpenedByATest(unittest.TestCase):
         pl.init_db().close()
         self.assertEqual({p: digest(Path(p)) for p in (pb.DB_PATH, pl.DB_PATH)}, before)
 
+    def test_a_direct_read_write_open_of_a_production_ledger_is_refused_but_read_only_is_allowed(self):
+        import sqlite3
+        with self.assertRaises(AssertionError):
+            sqlite3.connect(str(pb.DB_PATH))
+        with self.assertRaises(AssertionError):
+            sqlite3.connect(f"file:{pl.DB_PATH}?mode=rwc", uri=True)
+        sqlite3.connect(f"file:{pb.DB_PATH}?mode=ro", uri=True).close()                       # reading is fine
+
     def test_a_real_temporary_path_is_not_redirected_and_memory_is_untouched(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:

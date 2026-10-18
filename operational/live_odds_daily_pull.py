@@ -782,8 +782,8 @@ def run_props(now: dt.datetime | None = None) -> dict:
 
 
 def _moneyline_downstream(result: dict) -> None:
-    """The unchanged chain that follows a real moneyline pull: bridge -> orchestrator (see _main)."""
-    if result.get("ran"):
+    """The chain that follows a real moneyline pull: bridge -> orchestrator (see _main). A pull that already ran it inside moneyline_freshness.run_if_due is not run twice."""
+    if result.get("ran") and "real_odds_bridge" not in result:
         from operational import real_odds_bridge
         from operational import real_recommendation_orchestrator as orchestrator
         result["real_odds_bridge"] = real_odds_bridge.sync_moneyline_odds_to_snapshots()
@@ -878,13 +878,8 @@ def _main() -> None:
         # idempotency key) is already independently idempotent, so an
         # overlapping/duplicate scheduler run can re-execute this safely
         # without ever duplicating a logical prediction or paper bet.
-        if result.get("ran"):
-            from operational import real_odds_bridge
-            from operational import real_recommendation_orchestrator as orchestrator
-            bridge_result = real_odds_bridge.sync_moneyline_odds_to_snapshots()
-            orchestrator_result = orchestrator.run_real_moneyline_recommendations()
-            result["real_odds_bridge"] = bridge_result
-            result["real_recommendation_orchestrator"] = orchestrator_result
+        if result.get("ran") and "real_odds_bridge" not in result:          # run_if_due already ran the chain (moneyline_freshness.post_pull_chain); a path that did not, runs it here
+            result.update(moneyline_freshness.post_pull_chain(result))
     elif args.mode in ("sweep-first", "sweep-second"):
         result = run_targeted_prop_sweep("first" if args.mode == "sweep-first" else "second")
         # Live SOG + Saves Production Certification block (2026-09-24),

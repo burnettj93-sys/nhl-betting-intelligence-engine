@@ -480,7 +480,9 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
             missing.append({"item": "Pregame price capture", "reason": f"window missed ({mw.get('window', '').lower()}): " + str(mw.get("detail") or ""), "tags": mw.get("tags") or []})
         if not ml_priced:
             missing.append({"item": "Moneyline price", "reason": "no moneyline on file"})
-        missing.append({"item": "Puck line price", "reason": "not requested (spreads are not part of the capture plan); the cover model is unvalidated"})
+        pl_block = (side.get("puck_line") or {})
+        if scheduled and pl_block.get("price") is None:        # a quoted spread is a price we HAVE: the unsupported contract/model are stated separately (side.puck_line), not as a missing price
+            missing.append({"item": "Puck line price", "reason": (pl_block.get("text") or "no spreads price is on file").split(" The cover model")[0].strip()})
         if shots.get("shortfall"):
             missing.append({"item": "Second shots pick" if shots["picks"] else "Shots picks", "reason": shots["shortfall"]})
         quote_times = [c.get("quote_updated_utc") for c in shots.get("picks", []) if c.get("quote_updated_utc")]
