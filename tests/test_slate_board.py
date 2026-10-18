@@ -280,6 +280,20 @@ class TestTheLivePath(unittest.TestCase):
         self.assertIn("DraftKings posted a saves line for Test Goalie Three", b["book_line_note"])
         self.assertIn("nothing is recommended until a start is confirmed", b["book_line_note"])
 
+    def test_a_confirmed_alternate_still_gets_only_a_conditional_view(self):
+        from tests.product_fixture import goalie
+        p = product()
+        p["games"]["games"][0]["goalies"]["home"].append({"player_id": "G3", "name": "Test Goalie Three", "start_probability": 0.3, "status": "CONFIRMED"})
+        g3 = goalie("G3", "Test Goalie Three", "AAA", opp="BBB")
+        g3["confirmation"] = {"status": "CONFIRMED", "source": "team", "checked_at_utc": Q, "note": "x"}
+        g3["projection"]["saves_probabilities"]["saves>=26"] = 0.9
+        p["goalies"]["G3"] = g3
+        p["model_health"]["models"] = [{"id": "goalie-saves", "validation": {"summary": {"markets_scored": 16, "beating_baselines": 16}}}]
+        saves = {"2026020900": {"G3": {"name": "Test Goalie Three", "line": 25.5, "over": 150.0, "under": -190.0, "quote_updated_utc": Q}}}
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), saves, None)
+        alt = [x for x in d["games"][0]["goalies"] if x["team"] == "AAA"][0]["alternate"]
+        self.assertIsNone(alt["recommendation"]["side"])                                       # the page cannot show a side that the slip does not use
+
     def test_the_alternate_line_renders_on_the_hosted_page(self):
         from tests.product_fixture import goalie
         p = product()

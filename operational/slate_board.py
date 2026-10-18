@@ -278,7 +278,7 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
         aproj = ag.get("projection") or {}
         aconf = ag.get("confirmation") or {}
         alt_confirmed = (aconf.get("status") or alt.get("status")) == "CONFIRMED"
-        aline, arec = _assess_saves_line((saves_lines or {}).get(str(alt["player_id"])), aproj, alt_confirmed, saves_verdict_ok, haircut)
+        aline, arec = _assess_saves_line((saves_lines or {}).get(str(alt["player_id"])), aproj, False, saves_verdict_ok, haircut)      # always a conditional view: the page never shows a side the slip cannot use (a confirmed alternate is ranked by start probability; the starter block is the one that can recommend)
         out["alternate"] = {"name": ag.get("name") or alt.get("name"), "start_probability": alt.get("start_probability"), "status": aconf.get("status") or alt.get("status") or "UNCONFIRMED",
                             "projection": _projection_view(aproj, ag.get("season")) if aproj else None, "line": aline, "recommendation": arec if aline else None}
         if aline and not out["line"]:
