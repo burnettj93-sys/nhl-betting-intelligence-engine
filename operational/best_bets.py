@@ -708,6 +708,9 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
                     klass = cp.REFRESH
                 if not res.get("allow"):
                     missing.remove(m)
+                    if res.get("reason") == "DUPLICATE":
+                        summary["skipped"].append({"game_id": gid, "market": m, "reason": "ALREADY_BOUGHT_FOR_THIS_WAVE"})      # a restart lost the wave file: the ledger still knows it was paid for
+                        continue
                     pa.note_unfetched(day, gid, m, pa.BUDGET_BLOCKED, now, detail=str(res.get("reason")), matchup=matchup, game_date=day, start_utc=start.isoformat())
                     summary["skipped"].append({"game_id": gid, "market": m, "reason": res.get("reason")})
                     continue

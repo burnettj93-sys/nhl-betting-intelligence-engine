@@ -1,0 +1,67 @@
+"""The live acceptance audit's own checks, on doctored snapshots (the audit itself runs on production data)."""
+from __future__ import annotations
+
+import copy
+import datetime as dt
+import unittest
+
+import operational.system_health  # noqa: F401
+from operational import live_audit as la
+from operational import player_integrity as pi
+
+NOW = dt.datetime(2026, 10, 18, 23, 30, tzinfo=dt.timezone.utc)
+
+
+def snap():
+    q = "2026-10-18T23:20:00Z"
+    return {"slate_board": {"date_et": "2026-10-18", "generated_at_utc": "2026-10-18T23:27:32Z", "games": [{
+        "game_id": "1", "away": "CBJ", "home": "MIN", "state": "SCHEDULED",
+        "scorers": [{"name": "Kirill Kaprizov", "team": "MIN", "player_id": "8478864", "price": {"american": -115.0, "quote_updated_utc": q}}],
+        "shots": {"picks": [{"name": "Blake Coleman", "team": "MIN", "player_id": "8476399", "chosen": {"quote_updated_utc": q}, "ladder": [{"threshold": 2, "american": -175.0}]}]},
+        "coverage": {"price_state": "FRESH_PRICES", "integrity": {"withdrawn": [], "unverified_players": 0}}}]},
+        "builder_pool": {"generated_at_utc": "2026-10-18T23:27:32Z", "games": {"1": {"players": {
+            "8478864": {"m": {"GOAL": {"q": q, "l": [[1, -115.0, 0.4]]}}}, "8476399": {"m": {"SOG": {"q": q, "l": [[2, -175.0, 0.6]]}}}}}}},
+        "tickets": {"generated_at_utc": "2026-10-18T23:27:32Z", "options": {"options": []}}, "metadata": {"generated_at": "2026-10-18T23:27:00Z"}}
+
+
+class TestAuditChecks(unittest.TestCase):
+    def rosters(self, mp=True):
+        pi._save(pi.ROSTER_STATE, {"MIN": {"fetched_at_utc": "2026-10-18T22:00:00Z", "players": {"8478864": "Kirill Kaprizov", "8476399": "Blake Coleman"} if mp else {}, "error": None},
+                                   "CBJ": {"fetched_at_utc": "2026-10-18T22:00:00Z", "players": {"1": "X Y"}, "error": None}})
+
+    def test_correct_selections_pass_and_a_wrong_player_fails(self):
+        self.rosters()
+        ok = la.check_integrity(snap(), NOW)
+        self.assertEqual([c["status"] for c in ok], [la.PASS, la.PASS])
+        bad = snap()
+        bad["slate_board"]["games"][0]["scorers"].append({"name": "Matthew Knies", "team": "TOR", "player_id": "8482720", "price": None})
+        res = la.check_integrity(bad, NOW)
+        self.assertEqual(res[0]["status"], la.FAIL)
+        self.assertIn("WRONG_GAME", res[0]["detail"])
+
+    def test_a_player_missing_from_the_official_roster_fails(self):
+        self.rosters(mp=False)
+        self.assertEqual(la.check_integrity(snap(), NOW)[0]["status"], la.PASS)                  # an empty roster is UNVERIFIED (reported as a warning), not a wrong player
+        self.assertEqual(la.check_integrity(snap(), NOW)[1]["status"], la.WARN)
+        pi._save(pi.ROSTER_STATE, {"MIN": {"fetched_at_utc": "2026-10-18T22:00:00Z", "players": {"5": "Someone Else"}, "error": None}})
+        self.assertEqual(la.check_integrity(snap(), NOW)[0]["status"], la.FAIL)
+
+    def test_the_surfaces_check_catches_a_price_that_differs_between_the_board_and_the_builder(self):
+        self.assertEqual(la.check_surfaces(snap())[0]["status"], la.PASS)
+        s = copy.deepcopy(snap())
+        s["builder_pool"]["games"]["1"]["players"]["8478864"]["m"]["GOAL"]["l"][0][1] = 105.0
+        res = la.check_surfaces(s)[0]
+        self.assertEqual(res["status"], la.FAIL)
+        self.assertIn("Kaprizov", res["detail"])
+        s2 = copy.deepcopy(snap())
+        s2["builder_pool"]["games"]["1"]["players"]["8476399"]["m"]["SOG"]["q"] = "x"
+        self.assertEqual(la.check_surfaces(s2)[0]["status"], la.PASS)                              # shots are compared by price per threshold
+
+    def test_an_old_quote_labelled_fresh_fails_the_freshness_check(self):
+        s = snap()
+        s["slate_board"]["games"][0]["scorers"][0]["price"]["quote_updated_utc"] = "2026-10-17T10:00:00Z"
+        self.assertEqual(la.check_freshness(s, NOW)[0]["status"], la.FAIL)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -226,6 +226,41 @@ class TestRemainingHeader(Isolated):
             self.assertEqual(odds_quota.latest_remaining(), 150)                    # a newer collector value still wins
 
 
+class TestRestartAndRecovery(Isolated):
+    def test_after_a_restart_that_lost_the_wave_and_availability_files_the_ledger_still_prevents_a_second_purchase(self):
+        c = FakeClient()
+        self.capture(at(11, 35), c)
+        self.assertEqual(len(c.calls), 1)
+        for name in ("wave_capture_state.json", "price_availability.json"):
+            (self.dir / name).unlink(missing_ok=True)                                         # the process restarted and its working files are gone
+        c2 = FakeClient()
+        out = self.capture(at(11, 50), c2)
+        self.assertEqual(c2.calls, [])
+        self.assertEqual(out["credits_spent"], 0)
+        self.assertTrue(any(x.get("reason") == "ALREADY_BOUGHT_FOR_THIS_WAVE" for x in out["skipped"]))
+        self.assertEqual(pa.read(DAY)["games"].get("1", {}).get("markets", {}).get(cp.SHOTS_KEY, {}).get("status"), None)   # and it is not mislabelled as a budget block
+
+    def test_a_network_failure_leaves_the_wave_open_and_the_next_cycle_captures_within_the_window(self):
+        out = self.capture(at(11, 35), FakeClient(ok=False))                                   # the provider call failed (no network)
+        self.assertEqual(out["credits_spent"], 0)
+        self.assertEqual(cp.pending_reserved(at(11, 36)), {})
+        c = FakeClient()
+        out2 = self.capture(at(11, 50), c)                                                     # the next 15-minute cycle, network back
+        self.assertEqual(len(c.calls), 1)
+        self.assertEqual(out2["credits_spent"], 3)
+        self.assertTrue(out2["wave_state"]["0"]["on_time"])                                    # still before the 12:00 publish deadline
+
+    def test_a_machine_that_slept_through_the_target_captures_late_and_a_miss_is_reported_honestly(self):
+        c = FakeClient()
+        late = self.capture(at(12, 20), c)                                                    # woke at 12:20: after the 12:00 deadline, before the 12:45 last chance
+        self.assertFalse(late["wave_state"]["0"]["on_time"])
+        self.assertTrue(late["slots"]["e1"]["late"])
+        missed = FakeClient()
+        closed = self.capture(at(12, 55), missed)                                              # woke after the last chance: nothing is bought
+        self.assertEqual(missed.calls, [])
+        self.assertEqual(closed["slots"]["wave0"]["state"], "CLOSED")
+
+
 class TestHeaderParsing(unittest.TestCase):
     def test_only_real_non_negative_numbers_are_accepted(self):
         for good, want in (("187", 187), (187, 187), ("0", 0), (187.0, 187)):
