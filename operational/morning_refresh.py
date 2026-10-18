@@ -58,16 +58,34 @@ RETRY_GAP_MIN = 60
 MAX_ATTEMPTS = 4                # a failed step is retried at most this many times a day
 
 
+_NET_CACHE: dict = {"at": None, "up": None}
+
+
 def network_up(host: str = "api-web.nhle.com", port: int = 443, timeout: float = 4.0) -> bool:
-    """Can this machine reach the NHL API host right now (DNS + TCP)? Used to tell 'the network was not back yet' from 'the source failed'."""
+    """Can this machine reach the NHL API host right now (DNS + TCP)? Tells 'the network was not back yet' from 'the source failed'. The whole probe (including name resolution, which a socket
+    timeout does not bound) is cut off after `timeout` + 2 s, and an answer is reused for 60 s so a slow resolver cannot stall every cycle."""
     import socket
+    import threading
+    import time
     if state_paths.under_test():
         return True                                  # a unit test never probes the network (tests that need an offline machine inject `connectivity`)
-    try:
-        socket.create_connection((host, port), timeout=timeout).close()
-        return True
-    except OSError:
-        return False
+    now = time.monotonic()
+    if _NET_CACHE["at"] is not None and now - _NET_CACHE["at"] < 60 and _NET_CACHE["up"] is not None:
+        return bool(_NET_CACHE["up"])
+    result = {"up": False}
+
+    def probe():
+        try:
+            socket.create_connection((host, port), timeout=timeout).close()
+            result["up"] = True
+        except OSError:
+            result["up"] = False
+
+    t = threading.Thread(target=probe, daemon=True)
+    t.start()
+    t.join(timeout + 2.0)
+    _NET_CACHE.update(at=now, up=result["up"])
+    return result["up"]
 
 
 def _failed_steps(doc: dict) -> list[str]:
@@ -143,6 +161,8 @@ def _run_locked(now, first_start, sync, starters, force, connectivity) -> dict:
 
     doc = {"day": day, "started_utc": _stamp(now), "due": d, "steps": dict(carried), "attempts": attempts}
     online = connectivity()
+    if not online and carried.keys() >= {"statistics", "starters"}:
+        return {"status": "SKIPPED", **d, "reason": "ALL_COMPONENTS_ALREADY_DONE"}        # a forced run on a finished day changes nothing, offline or not
     if not online:
         for name in ("statistics", "starters"):
             if name not in carried:
@@ -198,7 +218,7 @@ def main() -> int:
         return 0
     out = run_if_due()
     print(json.dumps(out, indent=1, default=str))
-    return 0 if out.get("status") in ("DONE", "PARTIAL", "SKIPPED") else 1
+    return 0 if out.get("status") in ("DONE", "PARTIAL", "SKIPPED") or out.get("network_down") else 1       # waiting for the network is not a job failure
 
 
 if __name__ == "__main__":

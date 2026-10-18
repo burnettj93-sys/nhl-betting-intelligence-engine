@@ -109,6 +109,19 @@ class TestMorningRefresh(Isolated):
         state["up"] = True
         self.assertEqual(morning_refresh.run_if_due(at(8, 0), first_start=at(13), sync=lambda: 0, connectivity=lambda: True)["status"], "DONE")
 
+    def test_a_forced_run_on_a_finished_day_changes_nothing_even_offline(self):
+        morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: 0, starters=lambda: {"status": "DISABLED"})
+        before = morning_refresh.read()
+        out = morning_refresh.run_if_due(at(9, 0), first_start=at(13), force=True, sync=lambda: self.fail("done"), connectivity=lambda: False)
+        self.assertEqual(out["reason"], "ALL_COMPONENTS_ALREADY_DONE")
+        self.assertEqual(morning_refresh.read(), before)
+
+    def test_waiting_for_the_network_is_not_a_job_failure(self):
+        from unittest import mock
+        with mock.patch.object(morning_refresh, "run_if_due", return_value={"status": "FAILED", "network_down": True}), mock.patch("builtins.print"), \
+                mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True):
+            self.assertEqual(morning_refresh.main(), 0)
+
     def test_two_runners_never_refresh_at_the_same_time(self):
         import fcntl
         with open(self.dir / "morning_refresh.lock", "w") as held:

@@ -87,7 +87,7 @@ def guard_database(db_path) -> Path:
     test state directory, so a test that opens a ledger by its default path can no longer migrate, write to or lock the real one. (2026-10-17: a branch test run opened the real
     paper_bankroll.db through the dashboard's default path and migrated it to a newer schema.) Outside tests, and for any non-production path, the path is returned unchanged."""
     p = Path(db_path)
-    redirected = state_dir()
+    redirected = state_dir() if under_test() else None                  # only a unit-test run (NHL_ENGINE_STATE_DIR alone is an operator override of STATE FILES, never of the ledgers)
     if redirected is None or str(db_path) == ":memory:" or p.suffix != ".db" or not is_production_path(p):
         return p
     target = redirected / "operational" / p.name

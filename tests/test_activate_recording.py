@@ -12,6 +12,7 @@ from deploy import activate_recording as ar
 from operational import paper_bankroll as pb
 from operational import recording_pause, state_paths, ticket_policy
 from operational import watchdog as wd
+from operational import watchdog as wd
 
 
 class TestSafeguards(unittest.TestCase):
@@ -75,6 +76,24 @@ class TestApply(unittest.TestCase):
         with self.passing(), mock.patch("builtins.print"):
             self.assertEqual(ar.main(["--apply"]), 0)                                   # a second run: already on, nothing more is logged
         self.assertEqual(len(state_paths.path(ar.LOG_NAME).read_text().splitlines()), 1)
+
+    def test_the_log_is_written_before_the_approval_and_an_unreadable_pause_is_refused(self):
+        order = []
+        orig_approve = ticket_policy.approve
+        with self.passing(), mock.patch("builtins.print"), mock.patch.object(ticket_policy, "approve", side_effect=lambda *a, **k: order.append(("approve", state_paths.path(ar.LOG_NAME).exists())) or orig_approve(*a, **k)):
+            ar.main(["--apply"])
+        self.assertEqual(order, [("approve", True)])                                    # the activation record already existed when the approval was written
+        recording_pause.pause("x")
+        state_paths.path(recording_pause.NAME).write_text("{not json")
+        with self.passing(), mock.patch("builtins.print"), mock.patch("sys.stderr"):
+            self.assertEqual(ar.main(["--apply"]), 1)
+        self.assertTrue(state_paths.path(recording_pause.NAME).exists())                 # nothing deleted
+
+    def test_a_stale_watchdog_state_fails_the_safeguards(self):
+        stale = {"checked_at_utc": "2026-01-01T00:00:00Z", "checks": []}
+        with mock.patch.object(wd, "load_state", return_value=stale):
+            bad = {c["name"] for c in ar.checks() if not c["ok"]}
+        self.assertIn("watchdog_state_is_fresh", bad)
 
     def test_a_failing_check_blocks_activation(self):
         with mock.patch.object(ar, "checks", return_value=[{"name": "reconciliation_agrees_three_ways", "ok": False, "detail": "x"}]), mock.patch("builtins.print"), mock.patch("sys.stderr"):

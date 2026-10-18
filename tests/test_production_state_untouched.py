@@ -44,6 +44,11 @@ class TestProductionLedgersAreNeverOpenedByATest(unittest.TestCase):
             self.assertEqual(state_paths.guard_database(Path(d) / "x.db"), Path(d) / "x.db")
         self.assertEqual(str(state_paths.guard_database(":memory:")), ":memory:")
 
+    def test_the_operator_state_dir_override_alone_never_redirects_a_ledger(self):
+        from unittest import mock
+        with mock.patch.object(state_paths, "under_test", return_value=False), mock.patch.dict("os.environ", {"NHL_ENGINE_STATE_DIR": "/tmp/somewhere"}):
+            self.assertEqual(state_paths.guard_database(pb.DB_PATH), Path(pb.DB_PATH))
+
     def test_outside_a_test_run_the_path_is_unchanged(self):
         from unittest import mock
         with mock.patch.object(state_paths, "state_dir", return_value=None):
