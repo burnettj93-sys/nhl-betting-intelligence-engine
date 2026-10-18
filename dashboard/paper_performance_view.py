@@ -21,6 +21,9 @@ def read_dashboard_state(conn, *, max_bets: int | None = None) -> dict:
            "answer": pb.answer_theoretical_bankroll_question(conn, TRACK), "origins": pb.origin_performance(conn, TRACK),
            "breakdowns": {"ALL": pb.performance_breakdowns(conn, TRACK)}, "bets": bets}
     out["breakdowns"]["AUTOMATIC"] = out["breakdowns"]["ALL"]
+    out["experiment"] = out["account"].get("experiment")
+    # Archived experiments, each read from its OWN rows (never mixed into the numbers above): the page shows them apart.
+    out["previous_experiments"] = [pb.experiment_report(conn, e["experiment_id"]) for e in pb.experiments(conn) if e["status"] == "ARCHIVED"]
     return out
 
 

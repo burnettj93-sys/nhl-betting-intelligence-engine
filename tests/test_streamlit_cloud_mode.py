@@ -477,7 +477,7 @@ class TestPaperPerformanceInCloudComesFromTheSnapshot(unittest.TestCase):
             state = ppv.read_dashboard_state(conn, max_bets=5)
             conn.close()
             self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), before)
-        self.assertEqual(set(state), {"account", "summary", "answer", "origins", "breakdowns", "bets"})
+        self.assertEqual(set(state), {"account", "summary", "answer", "origins", "breakdowns", "bets", "experiment", "previous_experiments"})
         self.assertEqual(set(state["origins"]), {"AUTOMATIC", "ALL", "PARLAY_TICKETS", "SINGLE_BETS", "RECONCILIATION"})
 
 

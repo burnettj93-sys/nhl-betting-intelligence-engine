@@ -21,7 +21,7 @@ class TestReconciliation(unittest.TestCase):
     def test_the_model_account_disagreeing_with_its_rows_fails(self):
         self.assertEqual(wd.check_reconciliation(self.ledger)["status"], wd.OK)
         orig = pb.account_state
-        pb.account_state = lambda conn, track: {**orig(conn, track), "available_cash": 1.0}
+        pb.account_state = lambda conn, track, *a, **k: {**orig(conn, track, *a, **k), "available_cash": 1.0}
         try:
             r = wd.check_reconciliation(self.ledger)
         finally:

@@ -16,7 +16,14 @@ from dashboard import ui
 
 ui.header("Ticket History", "Every recorded ticket with the prices and probabilities frozen when it was recorded.")
 perf = ui.load(ps.performance, "Ticket history")
-bets = list(reversed(perf["bets"]))
+_prev = perf.get("previous_experiments") or []
+_choices = {f"Current: {(perf.get('experiment') or {}).get('label', 'experiment')}": perf["bets"]}
+for _rep in _prev:
+    _choices[f"Archived: {_rep['experiment']['label']}"] = _rep["bets"]
+_pick = st.selectbox("Experiment", list(_choices), key="th_experiment") if len(_choices) > 1 else next(iter(_choices))
+if _pick.startswith("Archived"):
+    st.caption("This is an archived experiment: its tickets and results are kept exactly as recorded and are not part of the current bankroll.")
+bets = list(reversed(_choices[_pick]))
 f = st.columns(2)
 status = f[0].selectbox("Status", ["All", "Open", "Won", "Lost", "Void", "Unresolved"], key="th_status")
 q = f[1].text_input("Find a player", key="th_q")

@@ -17,6 +17,9 @@ ui.header("Paper Performance", "What the model's paper book has done: cash, resu
 perf = ui.load(ps.performance, "Paper performance")
 acct, summ, origins = perf["account"], perf["summary"], perf["origins"]
 
+exp = perf.get("experiment") or {}
+if exp.get("label"):
+    st.caption(f"**Current experiment: {ui.esc(exp['label'])}** · started {ui.et_time(exp.get('started_at_utc'), True)} · every number below is this experiment only.")
 a = st.columns(5)
 a[0].metric("Available cash", ui.money(acct["available_cash"]))
 a[1].metric("Open stakes", ui.money(acct["open_stakes"]), f"{acct['open_tickets']} open", delta_color="off")
@@ -58,4 +61,18 @@ for key in ("ALL",):
         with c2:
             st.markdown("**By price range**")
             st.dataframe([{"Odds range": k, **v} for k, v in bd.get("by_odds_range", {}).items()], hide_index=True, width="stretch")
+prev = perf.get("previous_experiments") or []
+if prev:
+    st.subheader("Previous experiments (archived, not included above)")
+    st.caption("Kept exactly as they were: tickets, results, balance and the policy versions in force. They never count toward the current experiment's cash, results or reconciliation.")
+    for rep in prev:
+        e, pa_, ps_ = rep["experiment"], rep["account"], rep["summary"]
+        with st.expander(f"{e['label']} · {ui.et_time(e.get('started_at_utc'), True)} to {ui.et_time(e.get('ended_at_utc'), True)} · final cash {ui.money(pa_['available_cash'])}"):
+            c = st.columns(5)
+            c[0].metric("Final cash", ui.money(pa_["available_cash"]))
+            c[1].metric("Open stakes", ui.money(pa_["open_stakes"]), f"{pa_['open_tickets']} open", delta_color="off")
+            c[2].metric("Settled P&L", ui.signed_money(pa_["settled_pnl"]))
+            c[3].metric("ROI on settled", ui.pct(ps_["roi"], 1) if ps_.get("roi") is not None else "—")
+            c[4].metric("Tickets", pa_["tickets"])
+            st.caption(f"Started with {ui.money(pa_['starting_bankroll'])}. Closed {ui.et_time(e.get('ended_at_utc'), True)} when the corrected workflow's bankroll began. Ticket-by-ticket detail: Ticket History, experiment selector.")
 st.caption("Full ticket-by-ticket detail, including legs, prices and postmortems, is on Ticket History.")

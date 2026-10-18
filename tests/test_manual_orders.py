@@ -265,7 +265,7 @@ class TestMigration(unittest.TestCase):
         after = [dict(r) for r in conn.execute("SELECT * FROM paper_bets ORDER BY paper_bet_id")]
         self.assertEqual(len(after), 3)
         for b, a in zip(before, after):
-            self.assertEqual((a.pop("origin"), a.pop("provenance_json")), ("AUTOMATIC", None))
+            self.assertEqual((a.pop("origin"), a.pop("provenance_json"), a.pop("experiment_id")), ("AUTOMATIC", None, "EXP-1"))      # existing tickets become experiment 1; nothing else about them changes
             self.assertEqual(a, b)
         self.assertEqual(conn.execute("SELECT version FROM schema_version").fetchone()[0], pb.SCHEMA_VERSION)
         with self.assertRaises(sqlite3.DatabaseError):
