@@ -55,6 +55,7 @@ def first_start_today(now: dt.datetime) -> dt.datetime | None:
 
 
 RETRY_GAP_MIN = 60
+MAX_ATTEMPTS = 4                # a failed step is retried at most this many times a day
 
 
 def due(now: dt.datetime, first_start: dt.datetime | None) -> dict:
@@ -62,8 +63,11 @@ def due(now: dt.datetime, first_start: dt.datetime | None) -> dict:
     day = et.eastern_today(now)
     at = ct.prep_times(dt.date.fromisoformat(day), first_start)["refresh_at"]
     st = read() or {}
-    if st.get("day") == day and st.get("status") in ("DONE", "PARTIAL"):
+    failed_steps = [k for k, v in (st.get("steps") or {}).items() if str((v or {}).get("status")) in ("ERROR", "FAILED")] if st.get("day") == day else []
+    if st.get("day") == day and st.get("status") == "DONE":
         return {"due": False, "reason": "DONE_TODAY", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if st.get("day") == day and st.get("status") == "PARTIAL" and not (failed_steps and int(st.get("attempts") or 1) < MAX_ATTEMPTS):
+        return {"due": False, "reason": "DONE_TODAY" if not failed_steps else "RETRIES_EXHAUSTED", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}   # a PARTIAL with a failed step is retried (2026-10-18: the network was not up when the Mac woke)
     if now < at:
         return {"due": False, "reason": "NOT_YET", "due_at_utc": at.strftime("%Y-%m-%dT%H:%M:%SZ")}
     tried = st.get("finished_utc") if st.get("day") == day else None
@@ -98,7 +102,9 @@ def _run_locked(now, first_start, sync, starters, force) -> dict:
     if not d["due"] and not force:
         return {"status": "SKIPPED", **d}
     _t0 = dt.datetime.now(dt.timezone.utc)
-    doc = {"day": et.eastern_today(now), "started_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "due": d, "steps": {}}
+    prev = read() or {}
+    attempts = (int(prev.get("attempts") or 1) + 1) if prev.get("day") == et.eastern_today(now) else 1
+    doc = {"attempts": attempts, "day": et.eastern_today(now), "started_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "due": d, "steps": {}}
     try:
         import sync_daily
         rc = (sync or sync_daily.run)()

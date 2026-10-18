@@ -63,6 +63,20 @@ class TestMorningRefresh(Isolated):
         self.assertEqual(morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["reason"], "RETRY_GAP")
         self.assertEqual(morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["status"], "DONE")
 
+    def test_a_partial_refresh_with_a_failed_step_is_retried_after_the_gap_up_to_the_limit(self):
+        out = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: 1, starters=lambda: {"status": "DISABLED"})      # the network was not up: statistics FAILED, starters fine
+        self.assertEqual(out["status"], "PARTIAL")
+        self.assertEqual(morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["reason"], "RETRY_GAP")
+        retry = morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {"status": "DISABLED"})
+        self.assertEqual((retry["status"], retry["attempts"]), ("DONE", 2))
+        self.assertEqual(morning_refresh.run_if_due(at(12, 5), first_start=at(13), sync=lambda: self.fail("done: no more runs"), starters=lambda: {})["reason"], "DONE_TODAY")
+
+    def test_retries_stop_at_the_limit(self):
+        for hour in (7, 9, 11, 13):
+            morning_refresh.run_if_due(at(hour, 50), first_start=at(18), sync=lambda: 1, starters=lambda: {"status": "DISABLED"})
+        self.assertEqual(morning_refresh.read()["attempts"], morning_refresh.MAX_ATTEMPTS)
+        self.assertEqual(morning_refresh.run_if_due(at(16, 5), first_start=at(18), sync=lambda: self.fail("no more"), starters=lambda: {})["reason"], "RETRIES_EXHAUSTED")
+
     def test_two_runners_never_refresh_at_the_same_time(self):
         import fcntl
         with open(self.dir / "morning_refresh.lock", "w") as held:
