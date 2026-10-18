@@ -88,6 +88,14 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             refresh_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
 
+        # Keep the Mac awake for the day's capture timeline (prep 07:45/08:00 and every wave): an idle-sleep assertion inside each window, and on AC power across the gap to the next one. The Mac cannot be
+        # woken by software; this only stops it from going to sleep while this job can still run. Never raises, never touches a credit.
+        try:
+            from operational import keep_awake
+            keep_awake_summary = {**{k: v for k, v in keep_awake.ensure_holding(now).items() if k in ("action", "reason", "why", "until", "holding")}, "guard": keep_awake.ensure_guard(now).get("guard")}
+        except Exception as exc:  # noqa: BLE001
+            keep_awake_summary = {"action": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
+
         revalidation_summary = bet_revalidation.revalidate_pending_real_market_bets(
             bankroll_conn, nhl_conn, now)
 
@@ -159,7 +167,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

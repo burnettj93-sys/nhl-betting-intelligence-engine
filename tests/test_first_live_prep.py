@@ -32,51 +32,37 @@ ARMED_DEPS = dict(
 
 # ------------------------------------------------------------------------------------------ keep-awake
 class TestHoldWindows(unittest.TestCase):
-    def test_window_starts_before_the_first_sweep_and_ends_after_the_latest_real_puck_drop(self):
-        """Production Gap Closure sprint (2026-10-01): the hold window is now anchored to the cluster's
-        own REAL puck-drop time(s) and the real prop-sweep-first window (operational/live_odds_daily_pull.py's
-        FIRST_SWEEP_WINDOW_HOURS, 3.0-4.5h pre-puck-drop) -- not to moneyline_pregame.py's own narrow
-        T-40..T-30 decision math, which structurally never overlapped prop-sweep-first's real capture
-        window at all and ended before the game itself even started. capture_window/anchor (moneyline's
-        own T-40/T-30 values) are unchanged and still reported for wake_covers()'s own, separate purpose."""
-        (w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
-        self.assertEqual(w["capture_window"][0], D(20, 20))                       # T-40 (unchanged)
-        self.assertEqual(w["anchor"], D(20, 30))                                  # T-30 decision (unchanged)
-        self.assertEqual(w["hold_from_utc"], D(16, 0))                            # smin(21:00) - 4.5h - 30min
-        self.assertLess(w["hold_from_utc"], w["capture_window"][0])
-        self.assertEqual(w["hold_until_utc"], D(21, 20))                          # smax(21:00) + 20min -- AFTER puck drop
-        self.assertGreater(w["hold_until_utc"], D(21, 0))                         # strictly after the real game start
+    """Hold windows now follow the day's own capture timeline (operational/capture_timeline.py): a prep window and one window per start-time wave. D(h) is 2026-09-29 at h:00 UTC (EDT: ET = UTC - 4)."""
 
-    def test_clusters_the_provider_does_not_list_never_hold_the_machine_awake(self):
-        self.assertEqual(ka.windows(D(12), [D(21)], listing_fn=lambda c: False), [])
-        self.assertEqual(len(ka.windows(D(12), [D(21)], listing_fn=lambda c: None)), 1)   # unknown -> safe side
+    def test_a_day_has_a_prep_window_and_one_window_per_wave(self):
+        prep, wave = ka.windows(D(10), [D(21)])
+        self.assertEqual((prep["cluster"], wave["cluster"]), ("prep:2026-09-29", "wave0:2026-09-29"))
+        self.assertEqual((prep["hold_from_utc"], prep["hold_until_utc"]), (D(11, 35), D(12, 25)))             # the 07:45 ET refresh - 10 min .. the 08:00 ET analysis + 25 min
+        self.assertEqual(wave["capture_window"], (D(19, 30), D(20, 45)))                                       # target T-90 .. last chance T-15
+        self.assertEqual((wave["hold_from_utc"], wave["hold_until_utc"]), (D(19, 20), D(21, 5)))               # from 100 minutes before the first game until its capture could still be published
+        self.assertEqual(wave["anchor"], D(20, 0))                                                             # the publish deadline, T-60
+        self.assertGreater(wave["hold_until_utc"], D(21))
+
+    def test_games_far_apart_get_their_own_waves_and_windows(self):
+        ws = ka.windows(D(10), [D(17), D(23)])
+        self.assertEqual([w["cluster"] for w in ws], ["prep:2026-09-29", "wave0:2026-09-29", "wave1:2026-09-29"])
+        self.assertLess(ws[1]["hold_until_utc"], ws[2]["hold_from_utc"])                                       # the afternoon wave is not folded into the evening one
+
+    def test_an_early_first_game_moves_the_prep_window_earlier(self):
+        prep = ka.windows(D(5), [D(14)])[0]                                                                    # a 10:00 ET game
+        self.assertLess(prep["hold_from_utc"], D(11, 35))
 
     def test_past_and_far_future_windows_are_dropped(self):
-        self.assertEqual(ka.windows(D(23), [D(21)], listing_fn=LISTED), [])
-        self.assertEqual(ka.windows(D(1, day=25), [D(21)], horizon_h=24, listing_fn=LISTED), [])
-
-    def test_hold_window_covers_the_real_first_sweep_capture_window(self):
-        """Regression for the confirmed defect: the OLD window [smax-70min, smin-10min] structurally never
-        overlapped prop-sweep-first's real T-270..T-180 (4.5h..3h pre-puck-drop) capture window at all."""
-        from operational import live_odds_daily_pull as lodp
-        (w,) = ka.windows(D(12), [D(21)], listing_fn=LISTED)
-        first_sweep_open = D(21) - dt.timedelta(hours=lodp.FIRST_SWEEP_WINDOW_HOURS[1])   # 16:30
-        first_sweep_close = D(21) - dt.timedelta(hours=lodp.FIRST_SWEEP_WINDOW_HOURS[0])  # 18:00
-        self.assertLessEqual(w["hold_from_utc"], first_sweep_open)
-        self.assertLessEqual(first_sweep_close, w["hold_until_utc"])
-
-    def test_multi_game_cluster_hold_extends_past_the_latest_real_puck_drop(self):
-        """Regression for the confirmed defect: a multi-game cluster's hold used to end at
-        smin-10min -- BEFORE every game had even started, with later games in the cluster losing
-        additional margin on top of that. It must now extend past the LATEST real game's own start."""
-        (w,) = ka.windows(D(12), [D(21), D(21, 3)], listing_fn=LISTED)  # two games 3 min apart -> one cluster
-        self.assertGreater(w["hold_until_utc"], D(21, 3))                # strictly after the LATER game's start
-        self.assertGreaterEqual(w["hold_until_utc"], D(21, 23))          # smax(21:03) + 20min
+        self.assertEqual(ka.windows(D(23), [D(21)]), [])
+        self.assertEqual(ka.windows(D(1, day=25), [D(21)], horizon_h=24), [])
 
     def test_active_window_bounds(self):
-        with mock.patch.object(mp, "archived_listing", return_value=True):
-            for now, expected in ((D(15, 49), False), (D(15, 50), True), (D(16, 0), True), (D(20, 30), True), (D(21, 20), True), (D(21, 21), False)):
-                self.assertEqual(ka.active_window(now, [D(21)]) is not None, expected, now)
+        for now, expected in ((D(19, 9), False), (D(19, 10), True), (D(20, 0), True), (D(21, 5), True), (D(21, 6), False)):
+            self.assertEqual(ka.active_window(now, [D(21)]) is not None, expected, now)
+
+
+AC = lambda: {"on_ac": True, "percent": 100, "known": True}
+BATTERY = lambda pct: (lambda: {"on_ac": False, "percent": pct, "known": True})
 
 
 class TestEnsureHolding(unittest.TestCase):
@@ -94,24 +80,48 @@ class TestEnsureHolding(unittest.TestCase):
         kw.setdefault("alive_fn", lambda pid: self.alive)
         kw.setdefault("active_fn", lambda: True)
         kw.setdefault("starts_fn", lambda n: [D(21)])
-        with mock.patch.object(mp, "archived_listing", return_value=True):
-            return ka.ensure_holding(now, state_path=self.state, **kw)
+        kw.setdefault("power_fn", AC)
+        return ka.ensure_holding(now, state_path=self.state, **kw)
 
-    def test_outside_a_window_it_does_nothing(self):
-        r = self.run_at(D(15))
-        self.assertEqual((r["holding"], r["reason"], self.spawned), (False, "OUTSIDE_HOLD_WINDOW", []))
+    def test_outside_a_window_on_battery_it_does_nothing(self):
+        r = self.run_at(D(15), power_fn=BATTERY(80))
+        self.assertEqual((r["holding"], r["reason"], self.spawned), (False, "OUTSIDE_HOLD_WINDOW_ON_BATTERY", []))
 
     def test_inside_the_window_it_holds_until_the_window_ends_and_only_once(self):
         r = self.run_at(D(19, 52))
-        self.assertEqual((r["action"], r["holding"], self.spawned), ("STARTED", True, [int((D(21, 20) - D(19, 52)).total_seconds())]))
+        self.assertEqual((r["action"], r["holding"], self.spawned), ("STARTED", True, [int((D(21, 5) - D(19, 52)).total_seconds())]))
         again = self.run_at(D(19, 54))
         self.assertEqual((again["action"], len(self.spawned)), ("ALREADY_HOLDING", 1))
+
+    def test_on_ac_it_bridges_to_the_next_window_when_it_opens_within_ten_hours(self):
+        r = self.run_at(D(2, day=29))                                                                          # 22:00 ET the evening before: the prep window opens at 07:25 ET, 9.4 h away
+        self.assertEqual((r["action"], r["why"]), ("STARTED", "AC_BRIDGE_TO_NEXT_WINDOW"))
+        self.assertEqual(self.spawned, [int((D(12, 25) - D(2)).total_seconds())])
+        self.assertEqual(self.run_at(D(2, 30))["action"], "ALREADY_HOLDING")
+        far = self.run_at(D(0, day=29), state_path=Path(tempfile.mkdtemp()) / "x.json") if False else None   # (the 10-hour limit is exercised below)
+        self.assertIsNone(far)
+
+    def test_on_ac_it_does_not_bridge_more_than_ten_hours_ahead(self):
+        r = self.run_at(D(0, day=29))                                                                          # the prep window's assertion starts 11.4 h away
+        self.assertEqual((r["holding"], r["reason"], self.spawned), (False, "OUTSIDE_HOLD_WINDOW", []))
+
+    def test_on_battery_it_holds_inside_a_window_only_above_the_charge_floor(self):
+        low = self.run_at(D(19, 52), power_fn=BATTERY(21))
+        self.assertEqual((low["action"], low["reason"], self.spawned), ("SKIPPED", "BATTERY_TOO_LOW", []))
+        ok = self.run_at(D(19, 52), power_fn=BATTERY(55))
+        self.assertEqual((ok["action"], ok["why"]), ("STARTED", "IN_WINDOW"))
+
+    def test_battery_state_reads_pmset(self):
+        self.assertEqual(ka.battery_state(lambda c: "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1)\t21%; discharging; 2:58 remaining present: true\n"),
+                         {"on_ac": False, "percent": 21, "known": True})
+        self.assertEqual(ka.battery_state(lambda c: "Now drawing from 'AC Power'\n -InternalBattery-0\t100%; charged\n")["on_ac"], True)
+        self.assertFalse(ka.battery_state(lambda c: "")["known"])
 
     def test_a_dead_assertion_is_replaced_within_the_window(self):
         self.run_at(D(19, 52))
         self.alive = False
         self.assertEqual(self.run_at(D(20, 10))["action"], "STARTED")
-        self.assertEqual(self.spawned[-1], int((D(21, 20) - D(20, 10)).total_seconds()))
+        self.assertEqual(self.spawned[-1], int((D(21, 5) - D(20, 10)).total_seconds()))
 
     def test_standby_and_tests_never_spawn(self):
         self.assertEqual(self.run_at(D(19, 52), active_fn=lambda: False)["reason"], "STANDBY")

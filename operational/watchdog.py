@@ -541,6 +541,30 @@ def check_jobs_ran(now: dt.datetime, *, definitions: dict | None = None, mtime=N
             "detail": f"all {len(rows)} scheduled jobs started on schedule and produced timely output" + (f" ({len(running)} running now)" if running else "")}
 
 
+def check_power(now: dt.datetime, *, power: dict | None = None, windows: list | None = None) -> dict:
+    """Can the Mac actually be awake for the next windows (the 07:45/08:00 prep and each wave capture)? On battery it cannot be guaranteed: WARN with the exact owner actions, FAIL when the charge is
+    low enough that it may shut down before the next window. On AC the engine's assertion bridges overnight; only an unreadable power state or no upcoming window is not a problem."""
+    from operational import keep_awake as ka
+    try:
+        power = power or ka.battery_state()
+        if windows is None:
+            from operational import moneyline_pregame as mp
+            windows = ka.windows(now, mp.scheduled_starts(now, hours=ka.PLAN_HORIZON_H, back_hours=1), horizon_h=24)
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "power", "status": WARN, "detail": f"could not read the power state: {type(exc).__name__}"}
+    if not windows:
+        return {"name": "power", "status": OK, "detail": "no capture window in the next 24 hours"}
+    nxt = min(windows, key=lambda w: w["hold_from_utc"])
+    when = nxt["hold_from_utc"].astimezone().strftime("%a %H:%M")
+    if power.get("on_ac", True):
+        return {"name": "power", "status": OK, "detail": f"on AC power; the next window ({nxt['cluster']}) opens {when} and an idle-sleep assertion bridges to it. The Mac must stay logged in and online with the lid open."}
+    pct = power.get("percent")
+    steps = "plug in the charger, keep the lid open, and (optional, needs sudo) `sudo pmset -c sleep 0`; `sudo pmset repeat wakeorpoweron MTWRFSU 07:40:00`"
+    if pct is not None and pct < ka.BATTERY_FLOOR_PCT:
+        return {"name": "power", "status": FAIL, "detail": f"on battery at {pct}%: the Mac may shut down before the next window ({nxt['cluster']}, {when}) and no capture can be made while it sleeps. Owner action: {steps}."}
+    return {"name": "power", "status": WARN, "detail": f"on battery ({pct}%): the next window ({nxt['cluster']}, {when}) cannot be guaranteed; the Mac idle-sleeps after 1 minute unless an assertion holds it. Owner action: {steps}."}
+
+
 def check_missed_windows(now: dt.datetime) -> dict:
     """Planned wave capture windows that CLOSED without their capture in the last 24 hours (operational/price_availability.py). A missed window is reported, never bought late and never
     backfilled. It is attributed to machine sleep only when the operating system's power log shows sleep inside the window (MACHINE_ASLEEP); with no sleep evidence and no trader run in the window
@@ -623,7 +647,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
-    for fn in (check_jobs_ran, check_missed_windows):
+    for fn in (check_jobs_ran, check_missed_windows, check_power):
         try:
             checks.append(fn(now))
         except Exception as exc:  # noqa: BLE001 - one broken check must not stop the watchdog from writing its state
