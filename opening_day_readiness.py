@@ -200,8 +200,9 @@ def check_real_recommendation_pipeline() -> dict:
             "SELECT COUNT(*) c FROM predictions WHERE market_id = 'MONEYLINE'").fetchone()["c"]
         pl_conn.close()
         bankroll_conn = pb.init_db()
+        _clause, _params = pb.experiment_filter(bankroll_conn)
         real_market_paper_bets_placed = bankroll_conn.execute(
-            "SELECT COUNT(*) c FROM paper_bets WHERE track = 'REAL_MARKET_PAPER'").fetchone()["c"]
+            "SELECT COUNT(*) c FROM paper_bets WHERE track = 'REAL_MARKET_PAPER'" + _clause, _params).fetchone()["c"]
         bankroll_conn.close()
     except Exception as exc:  # noqa: BLE001
         query_error = f"{exc.__class__.__name__}: {exc}"

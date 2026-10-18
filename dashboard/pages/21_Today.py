@@ -35,7 +35,9 @@ cols[2].metric("Equity", ui.money(acct["equity"]), help="Cash plus open stakes a
 cols[3].metric("Settled P&L", ui.signed_money(acct["settled_pnl"]))
 cols[4].metric("ROI on settled", ui.pct(roi, 1) if roi is not None else "—", help="Settled profit divided by settled stakes.")
 cols[5].metric("Tickets", acct["tickets"], help="Every automatic bet ever recorded in this account: parlay tickets plus any single bets (the moneyline pre-game job records those). Personal bets are never here.")
-st.caption(f"Model book (automatic tickets only) · \\$500 start, \\$10 per ticket · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
+_exp = acct.get("experiment") or {}
+_exp_text = (f"{_exp.get('label')} (started {ui.et_time(_exp.get('started_at_utc'), True)})" if _exp.get("started_at_utc") else "the model book")
+st.caption(f"Model book (automatic tickets only) · {ui.esc(_exp_text)} · \\${acct.get('starting_bankroll', 500):,.0f} start, \\$10 per ticket · earlier experiments are archived on Paper Performance · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")

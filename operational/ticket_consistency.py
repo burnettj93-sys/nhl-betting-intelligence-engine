@@ -47,6 +47,10 @@ def audit(bankroll_conn, state: dict | None, published: dict | None = None, *, p
         if not doc or "account" not in doc:
             problems.append(f"{name}: no ticket board document")
             continue
+        doc_exp = ((doc.get("account") or {}).get("experiment") or {}).get("experiment_id")
+        led_exp = (account.get("experiment") or {}).get("experiment_id")
+        if doc_exp != led_exp:
+            problems.append(f"{name}: board is for experiment {doc_exp} but the ledger's active experiment is {led_exp}")
         for field in ("available_cash", "open_stakes", "equity", "settled_pnl"):
             if abs(doc["account"][field] - account[field]) > 0.005:
                 problems.append(f"{name}: account {field} {doc['account'][field]} != ledger {account[field]}")

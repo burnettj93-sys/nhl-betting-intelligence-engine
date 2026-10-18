@@ -59,7 +59,11 @@ CREATE TABLE IF NOT EXISTS paper_bets (
     -- v4: where the ticket came from. Existing rows are AUTOMATIC (the column default; nothing was rewritten).
     -- MANUALLY_ADDED tickets carry the exact details the user accepted in provenance_json, frozen like every entry field.
     origin                                TEXT NOT NULL DEFAULT 'AUTOMATIC' CHECK (origin IN ('AUTOMATIC', 'MANUALLY_ADDED')),
-    provenance_json                       TEXT
+    provenance_json                       TEXT,
+
+    -- v5: which experiment (bankroll) the ticket belongs to. Existing rows are EXP-1 through the column default (nothing is rewritten);
+    -- new rows get the ACTIVE experiment. Immutable after insert, like every entry field.
+    experiment_id                         TEXT NOT NULL DEFAULT 'EXP-1'
 );
 
 CREATE TRIGGER IF NOT EXISTS paper_bets_immutability
@@ -81,7 +85,8 @@ WHEN
     NEW.idempotency_key IS NOT OLD.idempotency_key OR
     NEW.legs_json IS NOT OLD.legs_json OR
     NEW.origin IS NOT OLD.origin OR
-    NEW.provenance_json IS NOT OLD.provenance_json
+    NEW.provenance_json IS NOT OLD.provenance_json OR
+    NEW.experiment_id IS NOT OLD.experiment_id
 BEGIN
     SELECT RAISE(ABORT, 'paper_bets: entry fields are immutable after creation -- only settlement columns may change');
 END;
@@ -150,3 +155,43 @@ CREATE TABLE IF NOT EXISTS ontario_verifications (
     where_seen         TEXT NOT NULL,
     notes              TEXT
 );
+
+-- v5: experiments. One bankroll experiment is ACTIVE at a time (the unique partial index enforces it); every account, performance, reconciliation and
+-- slot query reads the active one by default. An archived experiment keeps all of its tickets, results and policy versions exactly where they were
+-- (paper_bets rows are never moved, deleted or edited): it is reported separately, from its own rows and from the summary frozen when it was closed.
+CREATE TABLE IF NOT EXISTS paper_experiments (
+    experiment_id      TEXT PRIMARY KEY,
+    number             INTEGER NOT NULL UNIQUE,
+    label              TEXT NOT NULL,
+    status             TEXT NOT NULL CHECK (status IN ('ACTIVE', 'ARCHIVED')),
+    starting_bankroll  REAL NOT NULL,
+    started_at_utc     TEXT NOT NULL,
+    ended_at_utc       TEXT,
+    reason             TEXT,
+    final_summary_json TEXT,
+    archive_path       TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS paper_experiments_one_active ON paper_experiments (status) WHERE status = 'ACTIVE';
+
+-- v5: every reset, once. reset_id is the idempotency key: a restart, a redeploy or a second run of the reset command with the same id changes nothing.
+CREATE TABLE IF NOT EXISTS paper_experiment_resets (
+    reset_id                    TEXT PRIMARY KEY,
+    from_experiment_id          TEXT NOT NULL,
+    to_experiment_id            TEXT NOT NULL,
+    performed_at_utc            TEXT NOT NULL,
+    reason                      TEXT,
+    open_tickets_in_previous    INTEGER NOT NULL,
+    previous_available_cash     REAL,
+    archive_path                TEXT,
+    backup_path                 TEXT
+);
+
+-- v5: a ticket can only be inserted into the ACTIVE experiment. A writer that does not know about experiments (an older checkout, a raw INSERT) lands in the column default, EXP-1; once EXP-1 is
+-- archived that INSERT is refused loudly instead of silently adding a ticket to a closed experiment where no account would ever see it.
+CREATE TRIGGER IF NOT EXISTS paper_bets_experiment_must_be_active
+BEFORE INSERT ON paper_bets
+FOR EACH ROW
+WHEN NEW.experiment_id IS NOT (SELECT experiment_id FROM paper_experiments WHERE status = 'ACTIVE')
+BEGIN
+    SELECT RAISE(ABORT, 'paper_bets: a ticket can only be recorded in the ACTIVE experiment');
+END;

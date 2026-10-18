@@ -42,12 +42,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = REPO_ROOT / "operational" / "paper_bankroll.db"
 SCHEMA_PATH = REPO_ROOT / "operational" / "paper_bankroll_schema.sql"
-SCHEMA_VERSION = 4  # v4: origin (AUTOMATIC / MANUALLY_ADDED) + provenance_json; additive, no row rewritten.
+SCHEMA_VERSION = 5  # v5: experiments (paper_experiments, experiment_id on every ticket); additive, no row rewritten.
+                    # v4: origin (AUTOMATIC / MANUALLY_ADDED) + provenance_json; additive, no row rewritten.
                     # v3: settlement_json column + ticket_alerts table (alerts-only revalidation).
                     # v2: Live Odds/Parlay/Post-Mortem activation sprint,
                     # Part 49 -- added the GAME_PARLAY_PAPER track.
 
-PAPER_STARTING_BANKROLL = 500.00
+PAPER_STARTING_BANKROLL = 500.00           # the opening balance of a NEW experiment (an existing experiment keeps its own starting_bankroll)
+FIRST_EXPERIMENT_ID = "EXP-1"
 PAPER_BET_STAKE = 10.00  # 2% of the default starting bankroll -- fixed, never dynamic/Kelly
 
 TRACKS = ("REAL_MARKET_PAPER", "DEMO_PAPER", "GAME_PARLAY_PAPER")
@@ -179,10 +181,11 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     conn = get_conn(db_path)
     with open(SCHEMA_PATH) as f:
         conn.executescript(f.read())
-    if "origin" not in {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}:
-        # An older table: the schema file's trigger names columns it does not have yet, which breaks the table
-        # rebuilds below. It is dropped here and re-created by the schema file once the columns exist.
+    if not {"origin", "experiment_id"} <= {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}:
+        # An older table: the schema file's triggers name columns it does not have yet, which breaks the table
+        # rebuilds below. They are dropped here and re-created by the schema file once the columns exist.
         conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+        conn.execute("DROP TRIGGER IF EXISTS paper_bets_experiment_must_be_active")
         conn.commit()
     row = conn.execute("SELECT version FROM schema_version").fetchone()
     if row is None:
@@ -193,10 +196,12 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     if row is not None and row["version"] < SCHEMA_VERSION:
         _migrate_to_v3(conn)
         _migrate_to_v4(conn)
+        _migrate_to_v5(conn)
         with open(SCHEMA_PATH) as f:     # re-create any trigger that a table rebuild dropped (all are IF NOT EXISTS)
             conn.executescript(f.read())
         conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
         conn.commit()
+    _ensure_first_experiment(conn)
     return conn
 
 
@@ -218,6 +223,27 @@ def _migrate_to_v4(conn: sqlite3.Connection) -> None:
     if "provenance_json" not in columns:
         conn.execute("ALTER TABLE paper_bets ADD COLUMN provenance_json TEXT")
     conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+    conn.commit()
+
+
+def _migrate_to_v5(conn: sqlite3.Connection) -> None:
+    """Additive only: every existing ticket becomes EXP-1 through the column default (SQLite does not rewrite the rows). The immutability trigger is dropped here and re-created by the
+    schema file with the new column."""
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
+    if "experiment_id" not in columns:
+        conn.execute(f"ALTER TABLE paper_bets ADD COLUMN experiment_id TEXT NOT NULL DEFAULT '{FIRST_EXPERIMENT_ID}'")
+    conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+    conn.execute("DROP TRIGGER IF EXISTS paper_bets_experiment_must_be_active")
+    conn.commit()
+
+
+def _ensure_first_experiment(conn: sqlite3.Connection) -> None:
+    """A database with no experiment record gets EXP-1, ACTIVE, from its first ticket (or now). It never creates a second one: only start_new_experiment() does."""
+    if conn.execute("SELECT 1 FROM paper_experiments LIMIT 1").fetchone():
+        return
+    first = conn.execute("SELECT MIN(created_at_utc) m FROM paper_bets").fetchone()["m"]
+    conn.execute("INSERT OR IGNORE INTO paper_experiments (experiment_id, number, label, status, starting_bankroll, started_at_utc) VALUES (?, 1, ?, 'ACTIVE', ?, ?)",
+                 (FIRST_EXPERIMENT_ID, "Experiment 1: the original model book", PAPER_STARTING_BANKROLL, first or _utcnow_iso()))
     conn.commit()
 
 
@@ -273,28 +299,88 @@ _COLUMNS = [
     "market_id", "market_family", "threshold", "side", "price_source", "legs_json",
     "entry_odds", "model_probability", "conservative_probability", "market_no_vig_probability",
     "edge", "ev", "confidence", "model_version", "prediction_checkpoint",
-    "stake", "created_at_utc", "event_start_utc", "origin", "provenance_json",
+    "stake", "created_at_utc", "event_start_utc", "origin", "provenance_json", "experiment_id",
 ]
 
 
-def account_state(conn: sqlite3.Connection, track: str) -> dict:
+# ----------------------------------------------------------------------------------------------------------------- experiments
+# One bankroll experiment is ACTIVE; every read below defaults to it (experiment="ACTIVE"), so an archived experiment can never leak into the current account, performance, reconciliation or
+# slot counts. experiment="EXP-1" (or any id) reads that experiment on its own; experiment="ALL" (or None) reads every row (audit exports only).
+
+def _has_experiments(conn: sqlite3.Connection) -> bool:
+    if not conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='paper_experiments'").fetchone():
+        return False
+    return "experiment_id" in {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}
+
+
+def experiments(conn: sqlite3.Connection) -> list[dict]:
+    if not _has_experiments(conn):
+        return []
+    return [dict(r) for r in conn.execute("SELECT * FROM paper_experiments ORDER BY number")]
+
+
+def active_experiment(conn: sqlite3.Connection) -> dict | None:
+    if not _has_experiments(conn):
+        return None
+    row = conn.execute("SELECT * FROM paper_experiments WHERE status = 'ACTIVE'").fetchone()
+    return dict(row) if row else None
+
+
+def resolve_experiment(conn: sqlite3.Connection, experiment) -> dict | None:
+    """The experiment record an `experiment` argument names, or None when it means 'every row' (or the database predates experiments)."""
+    if experiment in (None, "ALL") or not _has_experiments(conn):
+        return None
+    if experiment == "ACTIVE":
+        active = active_experiment(conn)
+        if active is None:
+            raise InvalidPaperBetError("this database has experiments but none is ACTIVE: refusing to read every experiment as the current account")      # fail closed, never fail open
+        return active
+    row = conn.execute("SELECT * FROM paper_experiments WHERE experiment_id = ?", (experiment,)).fetchone()
+    if row is None:
+        raise InvalidPaperBetError(f"no experiment {experiment!r}")
+    return dict(row)
+
+
+def _scope(conn: sqlite3.Connection, experiment) -> tuple[str, list, float]:
+    """(extra WHERE clause starting with ' AND', its parameters, starting bankroll) for one experiment argument."""
+    exp = resolve_experiment(conn, experiment)
+    if exp is None:
+        return "", [], PAPER_STARTING_BANKROLL
+    return " AND experiment_id = ?", [exp["experiment_id"]], float(exp["starting_bankroll"])
+
+
+def experiment_filter(conn: sqlite3.Connection, experiment="ACTIVE") -> tuple[str, list]:
+    """(" AND experiment_id = ?", [id]) for callers that write their own SQL against paper_bets; ("", []) when the experiment means 'every row' or the database predates experiments."""
+    clause, params, _ = _scope(conn, experiment)
+    return clause, params
+
+
+def experiment_brief(exp: dict | None) -> dict | None:
+    if exp is None:
+        return None
+    return {k: exp.get(k) for k in ("experiment_id", "number", "label", "status", "starting_bankroll", "started_at_utc", "ended_at_utc")}
+
+
+def account_state(conn: sqlite3.Connection, track: str, experiment="ACTIVE") -> dict:
     """The paper account for one track, derived only from stored rows.
     cash = starting bankroll + realized P&L - stakes still open
     (PENDING or UNRESOLVED: money is committed until a ticket settles).
-    equity = cash + open stakes at cost (nothing is marked to market)."""
+    equity = cash + open stakes at cost (nothing is marked to market).
+    Only the named experiment's tickets count (the ACTIVE one by default) and its own starting bankroll."""
+    clause, params, start = _scope(conn, experiment)
     row = conn.execute(
         """SELECT
              COALESCE(SUM(CASE WHEN result_status IN ('WIN','LOSS','VOID') THEN COALESCE(profit_loss, 0) END), 0) AS realized,
              COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN stake END), 0) AS open_stakes,
              COALESCE(SUM(CASE WHEN result_status IN ('PENDING','UNRESOLVED') THEN 1 END), 0) AS open_tickets,
              COUNT(*) AS tickets
-           FROM paper_bets WHERE track = ? AND origin = 'AUTOMATIC'""", (track,)).fetchone()
+           FROM paper_bets WHERE track = ? AND origin = 'AUTOMATIC'""" + clause, [track] + params).fetchone()
     realized, open_stakes = float(row["realized"]), float(row["open_stakes"])
-    cash = PAPER_STARTING_BANKROLL + realized - open_stakes
-    return {"track": track, "starting_bankroll": PAPER_STARTING_BANKROLL, "available_cash": round(cash, 2),
+    cash = start + realized - open_stakes
+    return {"track": track, "starting_bankroll": start, "available_cash": round(cash, 2),
             "open_stakes": round(open_stakes, 2), "open_tickets": int(row["open_tickets"]),
             "equity": round(cash + open_stakes, 2), "settled_pnl": round(realized, 2),
-            "tickets": int(row["tickets"])}
+            "tickets": int(row["tickets"]), "experiment": experiment_brief(resolve_experiment(conn, experiment))}
 
 
 def _validate_stake_and_odds(track: str, stake, entry_odds) -> None:
@@ -390,11 +476,16 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         conn.commit()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        existing = conn.execute("SELECT paper_bet_id FROM paper_bets WHERE idempotency_key = ? OR paper_bet_id = ?",
+        existing = conn.execute("SELECT paper_bet_id, experiment_id FROM paper_bets WHERE idempotency_key = ? OR paper_bet_id = ?",
                                  (idempotency_key, paper_bet_id)).fetchone()
+        active = active_experiment(conn)
         if existing:
             conn.rollback()
+            if active and existing["experiment_id"] != active["experiment_id"]:
+                # the same ticket (same date and legs) exists in an ARCHIVED experiment: it is not "already recorded" in this one, and it cannot be recorded twice under the same id
+                return {"status": "ARCHIVED_EXPERIMENT_DUPLICATE", "paper_bet_id": existing["paper_bet_id"], "experiment_id": existing["experiment_id"]}
             return {"status": "DUPLICATE", "paper_bet_id": existing["paper_bet_id"]}
+        row["experiment_id"] = active["experiment_id"] if active else FIRST_EXPERIMENT_ID
         account = account_state(conn, track)
         if account["available_cash"] + 1e-9 < stake:
             conn.rollback()
@@ -691,9 +782,10 @@ def todays_real_parlay_usage(conn: sqlite3.Connection, stake_date: str) -> dict:
 
     Returns {"count": int, "used_game_ids": set[str],
              "used_leg_keys": set[(game_id, participant_id, market_family, threshold)]}."""
+    clause, params, _ = _scope(conn, "ACTIVE")
     rows = conn.execute(
         "SELECT legs_json FROM paper_bets WHERE track = 'REAL_MARKET_PAPER' AND is_combo = 1 AND origin = 'AUTOMATIC' "
-        "AND market_id LIKE ?", (f"REAL_MARKET_PARLAY:{stake_date}:%",)).fetchall()
+        "AND market_id LIKE ?" + clause, [f"REAL_MARKET_PARLAY:{stake_date}:%"] + params).fetchall()
     used_game_ids: set[str] = set()
     used_leg_keys: set[tuple] = set()
     for row in rows:
@@ -816,9 +908,13 @@ def find_pending_future_event_bets(conn: sqlite3.Connection, track: str | None =
 
 
 def query_paper_bets(conn: sqlite3.Connection, track: str | None = None, is_combo: bool | None = None,
-                      result_status: str | None = None, origin: str | None = MODEL_BOOK_ORIGIN) -> list[dict]:
-    """The model book's tickets by default (origin AUTOMATIC). Pass origin=None to read every row, including a legacy MANUALLY_ADDED record (audit only)."""
+                      result_status: str | None = None, origin: str | None = MODEL_BOOK_ORIGIN, experiment="ACTIVE") -> list[dict]:
+    """The model book's tickets by default (origin AUTOMATIC) in the ACTIVE experiment. Pass origin=None to read every row, including a legacy MANUALLY_ADDED record (audit only);
+    experiment="EXP-1" for one archived experiment, experiment="ALL" for every experiment."""
     clauses, params = [], []
+    exp = resolve_experiment(conn, experiment)
+    if exp is not None:
+        clauses.append("experiment_id = ?"); params.append(exp["experiment_id"])
     if origin is not None:
         clauses.append("origin = ?"); params.append(origin)
     if track is not None:
@@ -832,7 +928,7 @@ def query_paper_bets(conn: sqlite3.Connection, track: str | None = None, is_comb
     return [dict(r) for r in rows]
 
 
-def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
+def bankroll_summary(conn: sqlite3.Connection, track: str, experiment="ACTIVE") -> dict:
     """Parts 34-40, 49: the theoretical bankroll for one track, computed
     ONLY from immutable stored rows -- never recomputed from today's
     current odds (Part 49). Straight and combo bets are tracked
@@ -840,7 +936,8 @@ def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
     combo" breakdown) but share one running P&L line per track, since
     Part 26 only requires the THREE top-level tracks to stay separate,
     not a fourth split within a track."""
-    rows = query_paper_bets(conn, track=track)
+    rows = query_paper_bets(conn, track=track, experiment=experiment)
+    start = _scope(conn, experiment)[2]
     settled = [r for r in rows if r["result_status"] in ("WIN", "LOSS", "VOID")]
     settled_ordered = sorted(settled, key=lambda r: r["settled_at_utc"] or "")
     pending_rows = [r for r in rows if r["result_status"] in ("PENDING", "UNRESOLVED")]
@@ -871,11 +968,11 @@ def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
     decided = wins + losses
     hit_rate = (wins / decided) if decided > 0 else None
     roi = (net_profit / total_staked) if total_staked > 0 else None
-    current_bankroll = PAPER_STARTING_BANKROLL + net_profit
+    current_bankroll = start + net_profit
 
     # Bankroll history / peak / trough / drawdown / streaks -- replay
     # settled bets in settlement order (Part 37).
-    running = PAPER_STARTING_BANKROLL
+    running = start
     peak = running
     history = [{"paper_bet_id": None, "settled_at_utc": None, "bankroll": running,
                 "cumulative_pnl": 0.0, "cumulative_roi": None, "cumulative_hit_rate": None}]
@@ -908,13 +1005,13 @@ def bankroll_summary(conn: sqlite3.Connection, track: str) -> dict:
         run_decided = run_wins + run_losses
         history.append({
             "paper_bet_id": r["paper_bet_id"], "settled_at_utc": r["settled_at_utc"], "bankroll": running,
-            "cumulative_pnl": running - PAPER_STARTING_BANKROLL,
-            "cumulative_roi": ((running - PAPER_STARTING_BANKROLL) / run_staked) if run_staked > 0 else None,
+            "cumulative_pnl": running - start,
+            "cumulative_roi": ((running - start) / run_staked) if run_staked > 0 else None,
             "cumulative_hit_rate": (run_wins / run_decided) if run_decided > 0 else None,
         })
 
     return {
-        "track": track, "starting_bankroll": PAPER_STARTING_BANKROLL, "current_bankroll": current_bankroll,
+        "track": track, "starting_bankroll": start, "current_bankroll": current_bankroll,
         "peak_bankroll": peak, "lowest_bankroll": min(h["bankroll"] for h in history),
         "total_staked": total_staked, "total_return": total_return, "net_profit": net_profit, "roi": roi,
         "placed_stakes_total": placed_stakes_total, "pending_exposure": pending_exposure,
@@ -950,10 +1047,10 @@ def _breakdown(rows: list[dict], key_fn) -> dict:
     return out
 
 
-def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | None = MODEL_BOOK_ORIGIN) -> dict:
+def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | None = MODEL_BOOK_ORIGIN, experiment="ACTIVE") -> dict:
     """Part 38: results by market family, confidence, edge bucket, odds
     range, Top Conviction status, straight vs combo (optionally for one origin)."""
-    rows = query_paper_bets(conn, track=track, origin=origin)
+    rows = query_paper_bets(conn, track=track, origin=origin, experiment=experiment)
 
     def edge_bucket(r):
         e = r.get("edge")
@@ -977,10 +1074,10 @@ def performance_breakdowns(conn: sqlite3.Connection, track: str, origin: str | N
     }
 
 
-def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -> dict:
+def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER", experiment="ACTIVE") -> dict:
     """The model book's results, in the shape the pages already use: AUTOMATIC and ALL are the same set. Hand-added bets are not in this ledger's
     accounting at all (see MODEL_BOOK_ORIGIN); their records are in operational/personal_logs.py, one log at a time."""
-    rows = query_paper_bets(conn, track=track)
+    rows = query_paper_bets(conn, track=track, experiment=experiment)
 
     def block(subset: list[dict]) -> dict:
         settled = [r for r in subset if r["result_status"] in ("WIN", "LOSS", "VOID")]
@@ -1000,13 +1097,14 @@ def origin_performance(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER
 
     parlays, singles = [r for r in rows if r["is_combo"]], [r for r in rows if not r["is_combo"]]
     return {"AUTOMATIC": block(rows), "ALL": block(rows), "PARLAY_TICKETS": block(parlays), "SINGLE_BETS": block(singles),
-            "RECONCILIATION": book_breakdown(conn, track)["reconciliation"]}
+            "RECONCILIATION": book_breakdown(conn, track, experiment)["reconciliation"]}
 
 
-def book_breakdown(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -> dict:
+def book_breakdown(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER", experiment="ACTIVE") -> dict:
     """The model account read three ways, with the arithmetic that ties them together. Nothing is reset or moved: the account is the combined one (cash $500 + every settled result - open
     stakes), and its parlay tickets and its earlier single bets (moneyline, props) are reported apart so the parlay experiment's own result is visible and the two add up to the whole."""
-    rows = query_paper_bets(conn, track=track)
+    rows = query_paper_bets(conn, track=track, experiment=experiment)
+    start = _scope(conn, experiment)[2]
 
     def block(subset: list[dict]) -> dict:
         settled = [r for r in subset if r["result_status"] in ("WIN", "LOSS", "VOID")]
@@ -1022,22 +1120,22 @@ def book_breakdown(conn: sqlite3.Connection, track: str = "REAL_MARKET_PAPER") -
     props = [r for r in singles if r.get("market_family") != "MONEYLINE"]
     out = {"combined": block(rows), "parlay_tickets": block(parlays), "single_bets": block(singles),
            "single_bets_by_kind": {"moneyline": block(money), "props": block(props)}}
-    acct = account_state(conn, track)
+    acct = account_state(conn, track, experiment)
     c, p, sb = out["combined"], out["parlay_tickets"], out["single_bets"]
     checks = {"pnl": round(p["settled_pnl"] + sb["settled_pnl"], 2) == c["settled_pnl"], "bets": p["bets"] + sb["bets"] == c["bets"],
               "settled_stake": round(p["settled_stake"] + sb["settled_stake"], 2) == c["settled_stake"], "open_stake": round(p["open_stake"] + sb["open_stake"], 2) == c["open_stake"],
-              "cash": round(PAPER_STARTING_BANKROLL + c["settled_pnl"] - c["open_stake"], 2) == acct["available_cash"]}
-    out["reconciliation"] = {"starting_bankroll": PAPER_STARTING_BANKROLL, "parlay_pnl": p["settled_pnl"], "single_bets_pnl": sb["settled_pnl"], "combined_pnl": c["settled_pnl"],
+              "cash": round(start + c["settled_pnl"] - c["open_stake"], 2) == acct["available_cash"]}
+    out["reconciliation"] = {"starting_bankroll": start, "parlay_pnl": p["settled_pnl"], "single_bets_pnl": sb["settled_pnl"], "combined_pnl": c["settled_pnl"],
                              "open_stakes": c["open_stake"], "available_cash": acct["available_cash"], "checks": checks, "all_agree": all(checks.values()),
-                             "sentence": (f"Cash ${acct['available_cash']:,.2f} = ${PAPER_STARTING_BANKROLL:,.0f} start {p['settled_pnl']:+,.2f} parlay tickets {sb['settled_pnl']:+,.2f} single bets "
+                             "sentence": (f"Cash ${acct['available_cash']:,.2f} = ${start:,.0f} start {p['settled_pnl']:+,.2f} parlay tickets {sb['settled_pnl']:+,.2f} single bets "
                                           f"- ${c['open_stake']:,.2f} open")}
     return out
 
 
-def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str) -> str:
+def answer_theoretical_bankroll_question(conn: sqlite3.Connection, track: str, experiment="ACTIVE") -> str:
     """Part 49: the exact owner question, answered in one sentence from
     immutable stored data."""
-    s = bankroll_summary(conn, track)
+    s = bankroll_summary(conn, track, experiment)
     if s["bets"] == 0:
         # Production Gap Closure sprint (2026-09-30): this used to say
         # "WAITING FOR SETTLED REAL RECOMMENDATIONS" for EVERY track with
@@ -1071,7 +1169,7 @@ def _window_stats(rows: list[dict], since_iso: str | None) -> dict:
     }
 
 
-def windowed_performance(conn: sqlite3.Connection, track: str, now_utc: str | None = None) -> dict:
+def windowed_performance(conn: sqlite3.Connection, track: str, now_utc: str | None = None, experiment="ACTIVE") -> dict:
     """Completion sprint Part 47: yesterday / 7-day / 30-day / season
     windows, for operational/daily_model_review.py's daily report to
     read (additively -- this function only reads paper_bets, it never
@@ -1079,11 +1177,11 @@ def windowed_performance(conn: sqlite3.Connection, track: str, now_utc: str | No
     Season = all settled bets on this track, no date filter."""
     now_utc = now_utc or _utcnow_iso()
     now_dt = dt.datetime.fromisoformat(now_utc.replace("Z", "+00:00"))
-    rows = query_paper_bets(conn, track=track)
+    rows = query_paper_bets(conn, track=track, experiment=experiment)
     yesterday = (now_dt - dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     d7 = (now_dt - dt.timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
     d30 = (now_dt - dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    summary = bankroll_summary(conn, track)
+    summary = bankroll_summary(conn, track, experiment)
     return {
         "track": track, "current_bankroll": summary["current_bankroll"],
         "max_drawdown": summary["max_drawdown"],
@@ -1092,3 +1190,92 @@ def windowed_performance(conn: sqlite3.Connection, track: str, now_utc: str | No
         "last_30_days": _window_stats(rows, d30),
         "season_to_date": _window_stats(rows, None),
     }
+
+
+# ----------------------------------------------------------------------------------------------------------------- starting a new experiment
+MODEL_TRACK = "REAL_MARKET_PAPER"
+
+
+def experiment_report(conn: sqlite3.Connection, experiment_id: str) -> dict:
+    """One experiment read on its own, from its own rows (live, so a ticket that settles later is reflected)."""
+    exp = resolve_experiment(conn, experiment_id)
+    if exp is None:
+        raise InvalidPaperBetError(f"no experiment {experiment_id!r}")
+    return {"experiment": experiment_brief(exp), "account": account_state(conn, MODEL_TRACK, exp["experiment_id"]), "summary": bankroll_summary(conn, MODEL_TRACK, exp["experiment_id"]),
+            "origins": origin_performance(conn, MODEL_TRACK, exp["experiment_id"]), "breakdowns": performance_breakdowns(conn, MODEL_TRACK, experiment=exp["experiment_id"]),
+            "bets": query_paper_bets(conn, track=MODEL_TRACK, experiment=exp["experiment_id"]), "frozen_at_close": json.loads(exp["final_summary_json"]) if exp.get("final_summary_json") else None}
+
+
+def start_new_experiment(conn: sqlite3.Connection, *, reset_id: str, label: str, reason: str, now_iso: str | None = None, archive_dir: Path | None = None,
+                         backup_dir: Path | None = None, policies: dict | None = None) -> dict:
+    """Close the ACTIVE experiment and open a new one with a fresh $500 (PAPER_STARTING_BANKROLL), $0 open stakes and $0 P&L. Nothing already stored is deleted or rewritten:
+      * the previous experiment's tickets stay in paper_bets under their own experiment_id (they are not copied or moved), and every account / performance / reconciliation read defaults to the
+        ACTIVE experiment, so they no longer count; tickets still open stay open IN THE PREVIOUS experiment and settle there without touching the new bankroll;
+      * a byte-for-byte copy of the database as it was before the reset, a JSON archive (tickets, results, balance, audit log, policy versions) and a summary frozen into the experiment row are written first;
+      * `reset_id` is the idempotency key: applying the same id again changes nothing (no second archive, no second reset), so a restart, a redeploy or a repeated command cannot reset the bankroll again.
+    Returns {"status": "RESET" | "ALREADY_APPLIED", ...}."""
+    done = conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone()
+    if done:
+        return {"status": "ALREADY_APPLIED", **dict(done)}
+    if active_experiment(conn) is None:
+        raise InvalidPaperBetError("no active experiment to close")
+    now_iso = now_iso or _utcnow_iso()
+    stamp = now_iso.replace(":", "").replace("-", "").replace(".", "")[:15]
+    backup_path = None
+    if backup_dir is not None:                    # the database exactly as it is BEFORE anything changes (taken first, outside the write lock: it can take a moment)
+        backup_dir = Path(backup_dir)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        number_now = active_experiment(conn)["number"]
+        backup_path = backup_dir / f"paper_bankroll_experiment_{number_now}_final_{stamp}.db"
+        if conn.in_transaction:
+            conn.commit()
+        dest = sqlite3.connect(backup_path)
+        try:
+            conn.backup(dest)
+        finally:
+            dest.close()
+    if conn.in_transaction:
+        conn.commit()
+    conn.execute("BEGIN IMMEDIATE")                # from here the write lock is held: no settlement or ticket can land between reading the old experiment and closing it
+    try:
+        again = conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone()
+        if again:                                  # a concurrent run applied it first
+            conn.rollback()
+            return {"status": "ALREADY_APPLIED", **dict(again)}
+        prev = active_experiment(conn)
+        if prev is None:
+            raise InvalidPaperBetError("no active experiment to close")
+        report = experiment_report(conn, prev["experiment_id"])
+        account = report["account"]
+        frozen = {"closed_at_utc": now_iso, "reason": reason, "account": account, "summary": {k: v for k, v in report["summary"].items() if k != "bankroll_history"}, "origins": report["origins"],
+                  "open_tickets": account["open_tickets"], "open_stakes": account["open_stakes"]}
+        archive_path = None
+        if archive_dir is not None:
+            archive_dir = Path(archive_dir)
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_path = archive_dir / f"model_book_experiment_{prev['number']}_{stamp}.json"
+            ids = [b["paper_bet_id"] for b in query_paper_bets(conn, origin=None, experiment=prev["experiment_id"])]
+            audit = [dict(r) for r in conn.execute(f"SELECT * FROM paper_audit_log WHERE paper_bet_id IN ({','.join('?' for _ in ids) or 'NULL'}) ORDER BY id", ids)]
+            archive_path.write_text(json.dumps({"experiment": experiment_brief(prev), "frozen_summary": frozen, "tickets": query_paper_bets(conn, origin=None, experiment=prev["experiment_id"]),
+                                                "audit_log": audit, "policy_versions": policies or {}, "bankroll_history": report["summary"].get("bankroll_history")}, indent=1, sort_keys=True, default=str))
+            archive_path.chmod(0o444)              # an archive is read-only
+        number = int(conn.execute("SELECT MAX(number) m FROM paper_experiments").fetchone()["m"]) + 1
+        new_id = f"EXP-{number}"
+        closed = conn.execute("UPDATE paper_experiments SET status = 'ARCHIVED', ended_at_utc = ?, reason = ?, final_summary_json = ?, archive_path = ? WHERE experiment_id = ? AND status = 'ACTIVE'",
+                              (now_iso, reason, json.dumps(frozen, sort_keys=True, default=str), str(archive_path) if archive_path else None, prev["experiment_id"]))
+        if closed.rowcount != 1:
+            raise InvalidPaperBetError("the active experiment changed while resetting")
+        conn.execute("INSERT INTO paper_experiments (experiment_id, number, label, status, starting_bankroll, started_at_utc, reason) VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?)",
+                     (new_id, number, label, PAPER_STARTING_BANKROLL, now_iso, reason))
+        conn.execute("INSERT INTO paper_experiment_resets (reset_id, from_experiment_id, to_experiment_id, performed_at_utc, reason, open_tickets_in_previous, previous_available_cash, archive_path, backup_path) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     (reset_id, prev["experiment_id"], new_id, now_iso, reason, account["open_tickets"], account["available_cash"], str(archive_path) if archive_path else None,
+                      str(backup_path) if backup_path else None))
+        conn.commit()
+    except Exception:
+        if conn.in_transaction:
+            conn.rollback()
+        raise
+    return {"status": "RESET", "reset_id": reset_id, "from_experiment_id": prev["experiment_id"], "to_experiment_id": new_id, "performed_at_utc": now_iso,
+            "open_tickets_in_previous": account["open_tickets"], "previous_available_cash": account["available_cash"], "archive_path": str(archive_path) if archive_path else None,
+            "backup_path": str(backup_path) if backup_path else None}

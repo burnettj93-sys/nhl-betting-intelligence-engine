@@ -126,13 +126,18 @@ CORE_SOURCES = ("nhl_schedule", "nhl_results", "moneypuck_skater", "moneypuck_go
 
 
 def _independent_model_book(ledger) -> dict:
-    rows = [dict(r) for r in ledger.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC'")]
+    """The ACTIVE experiment's book re-derived from raw rows, by a route that does not use the account helper: its own rows (by experiment_id) and its own starting bankroll."""
+    from operational import paper_bankroll as pb
+    clause, params = pb.experiment_filter(ledger)
+    active = pb.active_experiment(ledger)
+    start = float(active["starting_bankroll"]) if active else 500.0
+    rows = [dict(r) for r in ledger.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC'" + clause, params)]
     settled = [r for r in rows if r["result_status"] in ("WIN", "LOSS", "VOID")]
     open_ = [r for r in rows if r["result_status"] in ("PENDING", "UNRESOLVED")]
     pnl = round(sum(r["profit_loss"] or 0 for r in settled), 2)
     staked = round(sum(r["stake"] for r in rows), 2)
     returned = round(sum(r["stake"] + (r["profit_loss"] or 0) for r in settled if r["result_status"] != "LOSS"), 2)
-    return {"cash_by_pnl": round(500 + pnl - sum(r["stake"] for r in open_), 2), "cash_by_flows": round(500 - staked + returned, 2), "settled_pnl": pnl,
+    return {"cash_by_pnl": round(start + pnl - sum(r["stake"] for r in open_), 2), "cash_by_flows": round(start - staked + returned, 2), "settled_pnl": pnl,
             "open_stakes": round(sum(r["stake"] for r in open_), 2), "tickets": len(rows)}
 
 
@@ -141,6 +146,14 @@ def check_reconciliation(ledger) -> dict:
     database is an inactive archive and is not part of any check.)"""
     from operational import paper_bankroll as pb
     problems = []
+    exps = pb.experiments(ledger)
+    if exps:
+        actives = [e for e in exps if e["status"] == "ACTIVE"]
+        if len(actives) != 1:
+            problems.append(f"{len(actives)} ACTIVE experiments (exactly one is required)")
+        strays = ledger.execute("SELECT COUNT(*) c FROM paper_bets WHERE experiment_id NOT IN (SELECT experiment_id FROM paper_experiments)").fetchone()["c"]
+        if strays:
+            problems.append(f"{strays} ticket(s) belong to an unknown experiment")
     ind = _independent_model_book(ledger)
     helper = pb.account_state(ledger, "REAL_MARKET_PAPER")
     for k, ik in (("available_cash", "cash_by_pnl"), ("settled_pnl", "settled_pnl"), ("open_stakes", "open_stakes"), ("tickets", "tickets")):
@@ -153,7 +166,7 @@ def check_reconciliation(ledger) -> dict:
         problems.append("model account split does not add up: " + ", ".join(k for k, v in split["checks"].items() if not v))
     if problems:
         return {"name": "reconciliation", "status": FAIL, "detail": "; ".join(problems)[:300]}
-    return {"name": "reconciliation", "status": OK, "detail": f"model book ${helper['available_cash']:.2f} agrees three ways and splits into parlay tickets ({split['parlay_pnl']:+.2f}) and single bets ({split['single_bets_pnl']:+.2f})"}
+    return {"name": "reconciliation", "status": OK, "detail": f"model book ({(helper.get('experiment') or {}).get('label', 'experiment')}) ${helper['available_cash']:.2f} agrees three ways and splits into parlay tickets ({split['parlay_pnl']:+.2f}) and single bets ({split['single_bets_pnl']:+.2f})"}
 
 
 def check_settlement_backlog(ledger, now: dt.datetime) -> dict:

@@ -258,9 +258,10 @@ def wave_policy(waves: list[dict], now: dt.datetime, recorded_game_sets: list[se
 def recorded_today(bankroll_conn, et_date: str, origin: str = "AUTOMATIC") -> list[dict]:
     """Tickets recorded for this Eastern day by one origin. The five daily automatic slots are counted from
     AUTOMATIC rows only: a ticket added by hand never takes one."""
+    clause, params = pb.experiment_filter(bankroll_conn)                 # the ACTIVE experiment's slots only
     rows = bankroll_conn.execute(
-        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND market_id LIKE ? AND origin = ? "
-        "ORDER BY created_at_utc", (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", origin)).fetchall()
+        "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND market_id LIKE ? AND origin = ?" + clause +
+        " ORDER BY created_at_utc", [TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", origin] + params).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -544,7 +545,8 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
         stub = [type("L", (), {"game_id": l["game_id"], "participant_id": l["participant_id"], "market_family": l["market_family"],
                                "threshold": l["threshold"], "side": l["side"]}) for l in legs]
         for tid in (pb.compute_ticket_id(et_date, stub),):
-            row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?", (tid,)).fetchone()
+            ex_clause, ex_params = pb.experiment_filter(bankroll_conn)
+            row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?" + ex_clause, [tid] + ex_params).fetchone()
             if row:
                 opt["on_book"] = {"ticket_id": row["paper_bet_id"], "origin": row["origin"], "status": row["result_status"]}
                 break
@@ -574,13 +576,14 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
                   f"no new ticket can be recorded. Tickets marked Recommended are not paper bets.")
         if empty:
             empty_reason = notice
+    exp_clause, exp_params = pb.experiment_filter(bankroll_conn)
     settled = [dict(r) for r in bankroll_conn.execute(
         "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND origin = 'AUTOMATIC' AND result_status IN ('WIN','LOSS','VOID') "
-        "AND market_id NOT LIKE ? ORDER BY settled_at_utc DESC LIMIT ?",
-        (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%", RECENT_SETTLED_LIMIT)).fetchall()]
+        "AND market_id NOT LIKE ?" + exp_clause + " ORDER BY settled_at_utc DESC LIMIT ?",
+        [TRACK, f"REAL_MARKET_PARLAY:{et_date}:%"] + exp_params + [RECENT_SETTLED_LIMIT]).fetchall()]
     open_rows = [dict(r) for r in bankroll_conn.execute(
         "SELECT * FROM paper_bets WHERE track = ? AND is_combo = 1 AND origin = 'AUTOMATIC' AND result_status IN ('PENDING','UNRESOLVED') "
-        "AND market_id NOT LIKE ? ORDER BY created_at_utc", (TRACK, f"REAL_MARKET_PARLAY:{et_date}:%")).fetchall()]
+        "AND market_id NOT LIKE ?" + exp_clause + " ORDER BY created_at_utc", [TRACK, f"REAL_MARKET_PARLAY:{et_date}:%"] + exp_params).fetchall()]
     other_alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in settled + open_rows])
     return {
         "date_et": et_date, "generated_at_utc": now.isoformat(),

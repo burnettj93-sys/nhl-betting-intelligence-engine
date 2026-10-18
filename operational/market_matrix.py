@@ -26,7 +26,9 @@ def live_leg_stats(ledger: sqlite3.Connection | None) -> dict[str, dict]:
     if ledger is None:
         return out
     try:
-        rows = ledger.execute("SELECT legs_json, settlement_json FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC' AND legs_json IS NOT NULL").fetchall()
+        from operational import paper_bankroll as pb
+        clause, params = pb.experiment_filter(ledger)                 # the ACTIVE experiment's tickets: an archived experiment's legs are not part of the current statistics
+        rows = ledger.execute("SELECT legs_json, settlement_json FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC' AND legs_json IS NOT NULL" + clause, params).fetchall()
     except sqlite3.Error:
         return out
     for r in rows:
