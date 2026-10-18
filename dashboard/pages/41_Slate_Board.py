@@ -172,8 +172,21 @@ for g in board.get("games", []):
                                 f"({l_age}){' · STALE: no recommendation from this line' if l_stale else ''}")
                 rec = b.get("recommendation") or {}
                 st.caption(ui.esc(rec.get("text") or ""))
-                if b.get("alternate"):
-                    st.caption(f"Alternate: {ui.esc(b['alternate']['name'])} ({ui.pct(b['alternate'].get('start_probability'))}).")
+                if b.get("book_line_note"):
+                    st.info(ui.esc(b["book_line_note"]))
+                alt = b.get("alternate")
+                if alt:
+                    st.caption(f"Alternate: {ui.esc(alt['name'])} ({ui.pct(alt.get('start_probability'))} to start; {'confirmed' if alt.get('status') == 'CONFIRMED' else 'unconfirmed'}).")
+                    apr, aln = alt.get("projection"), alt.get("line")
+                    if apr and apr.get("expected_saves") is not None and apr.get("saves_range_80"):
+                        lo, hi = apr["saves_range_80"]
+                        st.caption(f"If {ui.esc(alt['name'])} starts: expected saves {apr['expected_saves']:.0f} (80% range {lo}–{hi}).")
+                    if aln:
+                        a_stale, a_age = stale_now(aln.get("quote_updated_utc"), g.get("start_utc"))
+                        chance = (f" · model over {ui.pct(aln['p_over'])} / under {ui.pct(aln['p_under'])}" if aln.get("p_over") is not None else "")
+                        st.markdown(f"DraftKings line for {ui.esc(alt['name'])} **{aln['line']}** · over {ui.american(aln.get('over'))} · under {ui.american(aln.get('under'))}{chance} · quote {ui.et_time(aln.get('quote_updated_utc'), True)} "
+                                    f"({a_age}){' · STALE' if a_stale else ''}")
+                        st.caption(ui.esc((alt.get("recommendation") or {}).get("text") or ""))
         with t4:
             sd = g.get("side") or {}
             rec = sd.get("recommendation")

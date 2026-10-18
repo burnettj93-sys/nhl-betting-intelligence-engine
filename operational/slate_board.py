@@ -220,6 +220,36 @@ def _saves_over_probability(proj: dict | None, line: float) -> float | None:
     return (proj.get("saves_probabilities") or {}).get(f"saves>={need}")
 
 
+def _projection_view(proj: dict, season: dict | None) -> dict:
+    season = season or {}
+    return {"expected_saves": proj.get("expected_saves"), "saves_range_80": proj.get("saves_range_80"), "expected_shots_against": proj.get("expected_shots_against"),
+            "save_pct_used": proj.get("save_pct_used"), "expected_goals_against": proj.get("expected_goals_against"), "opponent": proj.get("opponent"),
+            "season_save_pct": season.get("save_pct"), "season_games": season.get("games"), "model_version": proj.get("model_version"),
+            "explanation": (f"{proj.get('opponent')} are expected to put about {_n(proj.get('expected_shots_against'), 0)} shots on him; at a "
+                            f"{_n(None if proj.get('save_pct_used') is None else proj['save_pct_used'] * 100, 1)}% save rate that is about {_n(proj.get('expected_saves'), 0)} saves "
+                            f"(80% range {(proj.get('saves_range_80') or ['?', '?'])[0]}–{(proj.get('saves_range_80') or ['?', '?'])[1]}) and "
+                            f"{_n(proj.get('expected_goals_against'), 1)} goals against. Saves are not shots faced: the range covers shot volume and goals conceded.")}
+
+
+def _assess_saves_line(line: dict | None, proj: dict, confirmed: bool, saves_verdict_ok: bool, haircut: float | None) -> tuple[dict | None, dict]:
+    """(line with the model's over/under chance and value, recommendation) for ONE goalie's posted line. A line is always shown with its probabilities; a selection needs the goalie CONFIRMED
+    and the saves model validated: otherwise the assessment is conditional and nothing is recommended or slipped."""
+    if not line:
+        return None, {"side": None, "conditional": not confirmed, "text": ("No saves line is on file for this goalie. " + ("A projection is shown, conditional on the start." if not confirmed else ""))}
+    p_over = _saves_over_probability(proj, line["line"])
+    entry = {**line, "p_over": p_over, "p_under": (None if p_over is None else round(1 - p_over, 4)),
+             "ev_over": (None if p_over is None or line.get("over") is None else round(_ev_haircut(p_over, line["over"], haircut), 4)),
+             "ev_under": (None if p_over is None or line.get("under") is None else round(_ev_haircut(1 - p_over, line["under"], haircut), 4))}
+    if not confirmed:
+        return entry, {"side": None, "conditional": True, "text": "Conditional on the start: the starter is unconfirmed, so no saves selection is made and none goes in the slip."}
+    if not saves_verdict_ok or p_over is None:
+        return entry, {"side": None, "conditional": False, "text": "No recommendation: the model does not support this line (outside its modelled ladder or not validated)."}
+    ev_o, ev_u = entry["ev_over"], entry["ev_under"]
+    best = max((("OVER", ev_o), ("UNDER", ev_u)), key=lambda t: (t[1] if t[1] is not None else -9))
+    return entry, ({"side": best[0], "conditional": False, "ev_after_haircut": best[1], "text": f"{best[0].title()} {line['line']}: value {best[1]:+.0%} after the haircut"} if best[1] and best[1] > 0
+                   else {"side": None, "conditional": False, "text": "No recommendation: neither side has value after the haircut."})
+
+
 def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_verdict_ok: bool, haircut: float | None = None) -> dict:
     cands = ((game.get("goalies") or {}).get(side)) or []
     if isinstance(cands, dict) or not cands:
@@ -230,40 +260,32 @@ def goalie_block(side: str, game: dict, goalies: dict, saves_lines: dict, saves_
     proj = g.get("projection") or {}
     conf = g.get("confirmation") or {}
     confirmed = (conf.get("status") or top.get("status")) == "CONFIRMED"
-    line = (saves_lines or {}).get(str(top["player_id"]))
     out = {"side": side, "team": game[side], "starter": {"player_id": str(top["player_id"]), "name": g.get("name") or top.get("name"),
                                                          "start_probability": top.get("start_probability"), "status": conf.get("status") or top.get("status") or "UNCONFIRMED",
                                                          "source": conf.get("source"), "checked_at_utc": conf.get("checked_at_utc"),
                                                          "note": conf.get("note")},
-           "alternate": ({"name": (goalies.get(str(ranked[1]["player_id"])) or {}).get("name") or ranked[1].get("name"), "start_probability": ranked[1].get("start_probability")} if len(ranked) > 1 else None),
-           "projection": None, "line": None, "recommendation": None}
+           "alternate": None, "projection": None, "line": None, "recommendation": None}
     if not proj:
         out["projection_unavailable"] = "No projection is available for this goalie yet (too few starts logged); nothing is estimated."
     if proj:
-        season = g.get("season") or {}
-        out["projection"] = {"expected_saves": proj.get("expected_saves"), "saves_range_80": proj.get("saves_range_80"), "expected_shots_against": proj.get("expected_shots_against"),
-                             "save_pct_used": proj.get("save_pct_used"), "expected_goals_against": proj.get("expected_goals_against"), "opponent": proj.get("opponent"),
-                             "season_save_pct": season.get("save_pct"), "season_games": season.get("games"), "model_version": proj.get("model_version"),
-                             "explanation": (f"{proj.get('opponent')} are expected to put about {_n(proj.get('expected_shots_against'), 0)} shots on him; at a "
-                                             f"{_n(None if proj.get('save_pct_used') is None else proj['save_pct_used'] * 100, 1)}% save rate that is about {_n(proj.get('expected_saves'), 0)} saves "
-                                             f"(80% range {(proj.get('saves_range_80') or ['?', '?'])[0]}–{(proj.get('saves_range_80') or ['?', '?'])[1]}) and "
-                                             f"{_n(proj.get('expected_goals_against'), 1)} goals against. Saves are not shots faced: the range covers shot volume and goals conceded.")}
-    if line:
-        p_over = _saves_over_probability(proj, line["line"])
-        out["line"] = {**line, "p_over": p_over, "p_under": (None if p_over is None else round(1 - p_over, 4)),
-                       "ev_over": (None if p_over is None or line.get("over") is None else round(_ev_haircut(p_over, line["over"], haircut), 4)),
-                       "ev_under": (None if p_over is None or line.get("under") is None else round(_ev_haircut(1 - p_over, line["under"], haircut), 4))}
-        if not confirmed:
-            out["recommendation"] = {"side": None, "conditional": True, "text": "Conditional on the start: the starter is unconfirmed, so no saves selection is made and none goes in the slip."}
-        elif not saves_verdict_ok or p_over is None:
-            out["recommendation"] = {"side": None, "conditional": False, "text": "No recommendation: the model does not support this line (outside its modelled ladder or not validated)."}
-        else:
-            ev_o, ev_u = out["line"]["ev_over"], out["line"]["ev_under"]
-            best = max((("OVER", ev_o), ("UNDER", ev_u)), key=lambda t: (t[1] if t[1] is not None else -9))
-            out["recommendation"] = ({"side": best[0], "conditional": False, "ev_after_haircut": best[1], "text": f"{best[0].title()} {line['line']}: value {best[1]:+.0%} after the haircut"} if best[1] and best[1] > 0
-                                     else {"side": None, "conditional": False, "text": "No recommendation: neither side has value after the haircut."})
-    else:
-        out["recommendation"] = {"side": None, "conditional": not confirmed, "text": ("No saves line is on file for this goalie. " + ("A projection is shown, conditional on the start." if not confirmed else ""))}
+        out["projection"] = _projection_view(proj, g.get("season"))
+    out["line"], out["recommendation"] = _assess_saves_line((saves_lines or {}).get(str(top["player_id"])), proj, confirmed, saves_verdict_ok, haircut)
+    if len(ranked) > 1:
+        # The book may price the OTHER goalie (it expects him to start, or priced the backup): his line is collected and assessed exactly like the expected starter's, as a CONDITIONAL view on his
+        # own start probability. It never becomes a selection while no start is confirmed.
+        alt = ranked[1]
+        ag = goalies.get(str(alt["player_id"])) or {}
+        aproj = ag.get("projection") or {}
+        aconf = ag.get("confirmation") or {}
+        alt_confirmed = (aconf.get("status") or alt.get("status")) == "CONFIRMED"
+        aline, arec = _assess_saves_line((saves_lines or {}).get(str(alt["player_id"])), aproj, alt_confirmed, saves_verdict_ok, haircut)
+        out["alternate"] = {"name": ag.get("name") or alt.get("name"), "start_probability": alt.get("start_probability"), "status": aconf.get("status") or alt.get("status") or "UNCONFIRMED",
+                            "projection": _projection_view(aproj, ag.get("season")) if aproj else None, "line": aline, "recommendation": arec if aline else None}
+        if aline and not out["line"]:
+            who = out["alternate"]["name"] or "the alternate"
+            out["book_line_note"] = (f"DraftKings posted a saves line for {who} (our alternate, {_n((alt.get('start_probability') or 0) * 100, 0)}% to start) and none for {out['starter']['name']}, "
+                                     f"our expected starter ({_n((top.get('start_probability') or 0) * 100, 0)}%): the book may expect {who} to start. The line is shown as a conditional view; "
+                                     "nothing is recommended until a start is confirmed.")
     return out
 
 
