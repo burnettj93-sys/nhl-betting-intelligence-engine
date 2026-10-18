@@ -93,37 +93,59 @@ def _as_utc(stamp) -> dt.datetime | None:
     return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
 
 
-def latest_remaining() -> int | None:
-    """The newest real `x-requests-remaining` any job recorded (never a guess): the newer of the collectors' cached summaries and the credit ledger, whose settled rows carry the provider's remaining-credit
-    header from the same call that was charged. Without the ledger a wave capture would leave the balance at its last pull's value and every later check would believe credits it had already spent.
-    Timestamps are parsed (the cache and the ledger spell UTC differently); a row that cannot be read is skipped, never fatal."""
+CONCURRENT_WINDOW_MIN = 15       # responses this close together may arrive out of order: the lowest balance among them is the safe one
+
+
+def balance_detail(now: dt.datetime | None = None) -> dict:
+    """The credit balance the spending guard should believe, and how it was reached.
+
+    BASELINE   the newest provider `x-requests-remaining` anything recorded: the collectors' cached summary or a settled ledger row (which carries the header of the call that was charged).
+               Responses within CONCURRENT_WINDOW_MIN of the newest may have arrived out of order, so the LOWEST of them is used (a balance can only fall inside a cycle; too low is safe).
+    DEDUCTIONS every ledger row WITHOUT its own header, stamped after the baseline: a charge the baseline cannot have seen. A row stamped at or before the baseline is already inside it, and a
+               row with its own header IS a baseline: nothing is counted twice, and the next response replaces every deduction.
+    Reservations still pending are not here: reserve() subtracts them itself. Unreadable or future-dated rows are skipped, never fatal."""
     from operational import system_health as sh
-    best: tuple[dt.datetime, int] | None = None
+    now = now or dt.datetime.now(dt.timezone.utc)
+    points: list[tuple[dt.datetime, int, str]] = []
     try:
         status = sh.odds_collection_status()
         value = status.get("credits_remaining")
         when = _as_utc(status.get("last_updated_utc"))
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            best = (when or dt.datetime.min.replace(tzinfo=dt.timezone.utc), int(value))
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and when is not None:
+            points.append((when, int(value), "collector cache"))
     except Exception:  # noqa: BLE001
         pass
+    rows: list[dict] = []
     try:
         from operational import credit_planner as cp
         rows = cp.read_ledger()
     except Exception:  # noqa: BLE001
-        rows = []
-    now = dt.datetime.now(dt.timezone.utc)
+        cp = None
+    unheadered: list[tuple[dt.datetime, float]] = []
     for row in rows:
         try:
-            h = cp.parse_header(row.get("remaining_header"))
             t = _as_utc(row.get("at"))
-            if h is None or t is None or t > now + dt.timedelta(minutes=5):        # unreadable, or dated in the future (clock skew): never trusted
+            if t is None or t > now + dt.timedelta(minutes=5):
                 continue
-            if best is None or t >= best[0]:
-                best = (t, h)
+            h = cp.parse_header(row.get("remaining_header"))
+            if h is not None:
+                points.append((t, h, "ledger header"))
+            else:
+                unheadered.append((t, float(row.get("credits") or 0.0)))
         except Exception:  # noqa: BLE001
             continue
-    return best[1] if best else None
+    if not points:
+        return {"remaining": None, "baseline_value": None, "baseline_at": None, "deducted": 0.0, "source": None}
+    newest = max(p[0] for p in points)
+    near = [p for p in points if p[0] >= newest - dt.timedelta(minutes=CONCURRENT_WINDOW_MIN)]
+    base_t, base_v, source = min(near, key=lambda p: (p[1], -p[0].timestamp()))
+    deducted = sum(c for t, c in unheadered if t > newest)
+    return {"remaining": max(int(base_v - deducted), 0), "baseline_value": base_v, "baseline_at": base_t.strftime("%Y-%m-%dT%H:%M:%SZ"), "deducted": deducted, "source": source}
+
+
+def latest_remaining() -> int | None:
+    """The balance the spending guard uses (never a guess): the newest real provider header minus every charge recorded after it (see balance_detail)."""
+    return balance_detail()["remaining"]
 
 
 def credits_spent_today(now: dt.datetime | None = None) -> int:

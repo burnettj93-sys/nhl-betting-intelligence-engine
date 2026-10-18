@@ -140,6 +140,14 @@ class TestDayStatus(Isolated):
         self.assertTrue(any("assumed to cost" in n for n in d["budget"]["notes"]))
         self.assertIn("1", {g["game_id"] for g in d["waves"][0]["games"] if g["selected"]})
 
+    def test_it_carries_the_balance_the_guard_believes(self):
+        self.plan()
+        cp.record(cp.PROPS, 1, at(11, 35), game_id="1", markets=cp.SHOTS_KEY, planned=1, remaining_header="149")
+        cp.record(cp.GOALS, 1, at(11, 36), game_id="1", markets=cp.GOALS_KEY, planned=1)
+        with mock.patch("operational.system_health.odds_collection_status", return_value={"last_updated_utc": None, "credits_remaining": None}):
+            d = day_status.build(at(11, 40))
+        self.assertEqual((d["balance"]["baseline_value"], d["balance"]["deducted"], d["balance"]["remaining"]), (149, 1.0, 148))
+
     def test_a_captured_wave_shows_on_time_with_its_credits_and_a_reconciliation(self):
         self.plan()
         (self.dir / "wave_capture_state.json").write_text(json.dumps({"day": DAY, "waves": {"0": {"games": {"1": {"captured_at_utc": "x"}}, "on_time": True}}}))

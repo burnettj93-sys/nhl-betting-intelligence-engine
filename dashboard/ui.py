@@ -396,7 +396,12 @@ def day_timeline(ds: dict | None = None) -> None:
     if ex:
         st.caption("Excluded by the credit budget (analysis only, no player prices): " + esc("; ".join(f"{e.get('matchup') or e['game_id']} (wave {e['wave'] + 1})" for e in ex)))
     b = ds.get("budget") or {}
-    line = (f"Credits: {b.get('remaining_header_now') if b.get('remaining_header_now') is not None else b.get('remaining_header')} remaining on the provider's last header · "
+    bal = ds.get("balance") or {}
+    if bal.get("remaining") is not None:
+        seen = f"{bal['remaining']} credits remaining (provider header {bal['baseline_value']} at {et_time(bal['baseline_at'], True)}" + (f", minus {bal['deducted']:g} charged since" if bal.get("deducted") else "") + ")"
+    else:
+        seen = f"{b.get('remaining_header_now') if b.get('remaining_header_now') is not None else b.get('remaining_header')} remaining on the provider's last header"
+    line = (f"Credits: {seen} · "
             f"today's player-odds share {b.get('player_today')} · league pulls reserved {b.get('league_total')} · recovery pool {b.get('recovery_pool')} · reserve {b.get('reserve')} · "
             f"{b.get('days_left')} day(s) to the assumed reset.")
     st.caption(esc(line))

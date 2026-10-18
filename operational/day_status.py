@@ -100,6 +100,8 @@ def build(now: dt.datetime) -> dict:
                                            "reset_verified", "reset_assumption", "reserve")}
     out["budget"]["surplus_credits"] = plan.get("surplus_credits")
     out["budget"]["notes"] = plan.get("notes") or []
+    from operational import odds_quota
+    out["balance"] = odds_quota.balance_detail(now)                 # what the spending guard believes: the newest provider header minus every later charge
     out["reconciliation"] = cp.reconciliation(day)
     out["spent_today"] = cp.spent_today(now)
     return out

@@ -276,7 +276,14 @@ def cycle_budget(now: dt.datetime, remaining: int | None, spent_all_today: float
     weights = {d: min(counts_by_day.get(d, 0), DAY_WEIGHT_CAP) for d in days}
     w_total = sum(weights.values())
     w_today = weights.get(today, 0)
-    player_today = player_pool * (w_today / w_total) if w_total else 0.0
+    # Every game day gets at least one FULL bundle (shots + goals + saves) when the pool can give one to every remaining game day: a light slate would otherwise be handed a fraction of a bundle
+    # (two games = 2 of 73 weight units = under 3 credits) and no goalie-saves price at all. The floor is carved out of the same pool before the weighted split, so the total is unchanged.
+    floor = float(len(BUNDLE_MARKETS))
+    n_game_days = len(game_days)
+    if w_total and n_game_days and w_today and player_pool >= floor * n_game_days:
+        player_today = floor + (player_pool - floor * n_game_days) * (w_today / w_total)
+    else:
+        player_today = player_pool * (w_today / w_total) if w_total else 0.0
     return {**base, "reason": "OK", "remaining_header": remaining, "spent_today_at_plan": round(spent_all_today, 1), "usable_at_start_of_day": round(usable, 1),
             "league_total": round(league_total, 1), "recovery_pool": recovery, "player_pool": round(player_pool, 1), "weight_today": w_today, "weight_total": w_total,
             "player_today": round(player_today, 2), "game_days_remaining": len(game_days), "D": round(usable / max(len(game_days), 1), 2)}
