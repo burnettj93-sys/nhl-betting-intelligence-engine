@@ -278,3 +278,33 @@ class TestPlanRebuiltAfterWindowsClosed(Isolated):
         self.assertNotIn("a", plan["games_priced"])
         self.assertIn("b", plan["games_priced"])
         self.assertEqual([w["selected"] for w in plan["waves"]], [[], ["b"]])
+
+
+class TestLightSlateFloor(Isolated):
+    AHEAD = {f"2026-10-{d}": n for d, n in zip(range(19, 32), (4, 11, 2, 12, 2, 12, 5, 3, 11, 4, 11, 3, 10))}
+
+    def test_a_two_game_day_still_gets_one_full_bundle_and_the_second_game_shots(self):
+        plan = cp.build_day_plan(at(8, day=18), "2026-10-18", {"a": at(18, day=18), "b": at(20, day=18)}, remaining=187, counts_ahead=self.AHEAD)
+        self.assertEqual(plan["games_priced"], ["a", "b"])
+        self.assertEqual(plan["game_markets"]["a"], [cp.SHOTS_KEY, cp.GOALS_KEY, cp.SAVES_KEY])      # saves are priced even on a light day
+        self.assertEqual(plan["game_markets"]["b"], [cp.SHOTS_KEY])
+        self.assertGreaterEqual(plan["budget"]["player_today"], 3.0)
+
+    def test_the_floor_is_carved_out_of_the_pool_so_the_days_still_sum_to_it(self):
+        days = {"2026-10-18": 2, **self.AHEAD}
+        total = 0.0
+        for d in sorted(days):
+            b = cp.cycle_budget(at(8, day=int(d[-2:])), 187, 0.0, {k: v for k, v in days.items() if k >= d}, d, league_cost=2, league_cost_observed=False)
+            if d == "2026-10-18":
+                pool, w_total = b["player_pool"], b["weight_total"]
+                first = b["player_today"]
+        n = len(days)
+        weights = {d: min(c, cp.DAY_WEIGHT_CAP) for d, c in days.items()}
+        total = sum(3.0 + (pool - 3.0 * n) * w / sum(weights.values()) for w in weights.values())
+        self.assertAlmostEqual(total, pool, places=6)                                                  # every day's share, added up, is exactly the pool: nothing is created
+        self.assertGreater(first, pool * weights["2026-10-18"] / sum(weights.values()))
+
+    def test_when_the_pool_cannot_give_every_game_day_a_bundle_the_floor_is_not_applied(self):
+        b = cp.cycle_budget(at(8, day=18), 60, 0.0, {"2026-10-18": 2, **self.AHEAD}, "2026-10-18", league_cost=2, league_cost_observed=False)
+        w = min(2, cp.DAY_WEIGHT_CAP)
+        self.assertAlmostEqual(b["player_today"], b["player_pool"] * w / b["weight_total"], places=6)

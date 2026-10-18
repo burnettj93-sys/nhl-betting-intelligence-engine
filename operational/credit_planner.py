@@ -84,6 +84,8 @@ def record(klass: str, credits: float, now: dt.datetime, **extra) -> None:
     """Append a paid call after it happened. Never raises: accounting must not break a job."""
     if "remaining_header" in extra:
         extra["remaining_header"] = parse_header(extra["remaining_header"])
+    if "header_at" in extra and not isinstance(extra["header_at"], str):
+        del extra["header_at"]                       # only a real response timestamp is kept (the time the provider answered, which can differ from the job's start stamp `at`)
     try:
         p = _ledger()
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -276,7 +278,14 @@ def cycle_budget(now: dt.datetime, remaining: int | None, spent_all_today: float
     weights = {d: min(counts_by_day.get(d, 0), DAY_WEIGHT_CAP) for d in days}
     w_total = sum(weights.values())
     w_today = weights.get(today, 0)
-    player_today = player_pool * (w_today / w_total) if w_total else 0.0
+    # Every game day gets at least one FULL bundle (shots + goals + saves) when the pool can give one to every remaining game day: a light slate would otherwise be handed a fraction of a bundle
+    # (two games = 2 of 73 weight units = under 3 credits) and no goalie-saves price at all. The floor is carved out of the same pool before the weighted split, so the total is unchanged.
+    floor = float(len(BUNDLE_MARKETS))
+    n_game_days = len(game_days)
+    if w_total and n_game_days and w_today and player_pool >= floor * n_game_days:
+        player_today = floor + (player_pool - floor * n_game_days) * (w_today / w_total)
+    else:
+        player_today = player_pool * (w_today / w_total) if w_total else 0.0
     return {**base, "reason": "OK", "remaining_header": remaining, "spent_today_at_plan": round(spent_all_today, 1), "usable_at_start_of_day": round(usable, 1),
             "league_total": round(league_total, 1), "recovery_pool": recovery, "player_pool": round(player_pool, 1), "weight_today": w_today, "weight_total": w_total,
             "player_today": round(player_today, 2), "game_days_remaining": len(game_days), "D": round(usable / max(len(game_days), 1), 2)}
@@ -439,11 +448,11 @@ def reserve(klass: str, planned: float, now: dt.datetime, *, plan: dict | None =
     """Reserve `planned` credits for `klass` BEFORE a paid call. Under a file lock it checks the real balance minus every pending reservation (so a concurrent job cannot spend the same
     credits), the hard reserve and the class's allowance for today. `key` names WHAT is being bought (day, game, market, wave): a second reservation with the same key while the first is pending, or
     after a paid call with that key was ledgered, is refused as DUPLICATE, so two jobs that both saw "missing" cannot buy the same price twice. Returns {"allow": True, "id": ...} or {"allow": False, "reason": ...}. Settle it with settle() after the call."""
-    if remaining is None:
-        remaining = odds_quota.latest_remaining()
-    if remaining is None:
-        return {"allow": False, "reason": "QUOTA_UNKNOWN"}
     with _Lock():
+        if remaining is None:
+            remaining = odds_quota.latest_remaining()          # read INSIDE the lock: a job that settled while this one waited is in the ledger, not lost between a stale read and the pending list
+        if remaining is None:
+            return {"allow": False, "reason": "QUOTA_UNKNOWN"}
         rows = _load_reservations(now)
         if key is not None:
             if any(r.get("key") == key for r in rows):

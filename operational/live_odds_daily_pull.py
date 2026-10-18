@@ -357,7 +357,7 @@ def run_daily_pull(cycle_reset_day: int | None = None,
         cost = int(r_odds.requests_last or 0)
         spent_today += cost
         summary["credits_spent_this_run"] += cost
-        summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        summary["remaining_quota_last_seen"] = _header(r_odds.requests_remaining)      # None when the header is missing: never cached as 0
         r_odds.data["_retrieved_at_utc"] = r_odds.retrieved_at_utc
         quotes = _parse_event_odds_generic(event, r_odds.data)
         summary["quotes_captured"] += len(quotes)
@@ -421,6 +421,12 @@ def _spreads_row(event_payload: dict) -> dict | None:
     return {"status": "POSTED", "home_point": r["home_point"], "home_price": r["home_price"], "away_point": r["away_point"], "away_price": r["away_price"], "last_update": r["last_update"]}
 
 
+def _header(value):
+    """The provider's x-requests-remaining header as an integer, or None when it is missing or unreadable (never cached as 0)."""
+    from operational import credit_planner
+    return credit_planner.parse_header(value)
+
+
 def run_moneyline_snapshot(snapshot_label: str | None = None,
                             max_events: int = MONEYLINE_MAX_EVENTS_PER_SNAPSHOT) -> dict:
     """League-wide moneyline snapshot. `snapshot_label` is operational
@@ -458,7 +464,7 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
         return summary
     archive.archive_result(r_events, event_id=None, market_filter=None, bookmaker_filter=None)
     summary["ran"] = True
-    summary["remaining_quota_last_seen"] = int(r_events.requests_remaining or 0)
+    summary["remaining_quota_last_seen"] = _header(r_events.requests_remaining)      # None when the header is missing: never cached as 0
 
     events = r_events.data
     summary["events_seen"] = len(events)
@@ -494,12 +500,12 @@ def run_moneyline_snapshot(snapshot_label: str | None = None,
                             bookmaker_filter="draftkings")
     cost = int(r_odds.requests_last or 0)
     summary["credits_spent_this_run"] = cost
-    summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+    summary["remaining_quota_last_seen"] = _header(r_odds.requests_remaining)      # None when the header is missing: never cached as 0
     summary["captured_at_utc"] = r_odds.retrieved_at_utc
     if reservation:
-        _cp.settle(reservation["id"], cost, now, klass=_cp.MONEYLINE_UI, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining)      # the actual charge replaces the reservation
+        _cp.settle(reservation["id"], cost, now, klass=_cp.MONEYLINE_UI, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining, header_at=r_odds.retrieved_at_utc)      # the actual charge replaces the reservation
     else:
-        _cp.record(_cp.MONEYLINE_UI, cost, now, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining)
+        _cp.record(_cp.MONEYLINE_UI, cost, now, label=snapshot_label, markets=markets, remaining_header=r_odds.requests_remaining, header_at=r_odds.retrieved_at_utc)
 
     future_event_ids = {e["id"] for e in future_events}
     rows = []
@@ -669,7 +675,7 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
         return summary
     archive.archive_result(r_events, event_id=None, market_filter=None, bookmaker_filter=None)
     summary["ran"] = True
-    summary["remaining_quota_last_seen"] = int(r_events.requests_remaining or 0)
+    summary["remaining_quota_last_seen"] = _header(r_events.requests_remaining)      # None when the header is missing: never cached as 0
 
     window = FIRST_SWEEP_WINDOW_HOURS if sweep == "first" else SECOND_SWEEP_WINDOW_HOURS
     candidates = _events_in_window(r_events.data, now, window)
@@ -729,9 +735,9 @@ def run_targeted_prop_sweep(sweep: str) -> dict:
                                 bookmaker_filter="draftkings")
         cost = int(r_odds.requests_last or 0)
         if planned:
-            cp.record(cp.SAVES, cost, now, event=event["id"], game_id=event_game.get(event["id"]), markets=markets)
+            cp.record(cp.SAVES, cost, now, event=event["id"], game_id=event_game.get(event["id"]), markets=markets, remaining_header=r_odds.requests_remaining, header_at=r_odds.retrieved_at_utc)
         summary["credits_spent_this_run"] += cost
-        summary["remaining_quota_last_seen"] = int(r_odds.requests_remaining or 0)
+        summary["remaining_quota_last_seen"] = _header(r_odds.requests_remaining)      # None when the header is missing: never cached as 0
         # Recorded in every mode now (previously DISCOVERY-only) -- the shared,
         # durable prop_discovery state file is what makes the new
         # VERIFIED_PRODUCTION_DAILY_BUDGET check above real: both prop-sweep-first
