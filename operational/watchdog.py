@@ -336,9 +336,11 @@ def check_morning_update(now: dt.datetime) -> dict:
     def late_min(due):
         return None if not due else (now - dt.datetime.fromisoformat(due.replace("Z", "+00:00"))).total_seconds() / 60.0
     r_late = late_min(p.get("refresh_due_utc"))
-    if r_late is not None and r_late >= MORNING_WARN_MIN and p.get("refresh_status") not in ("DONE", "PARTIAL"):
-        problems.append(f"the refresh (due {p['refresh_due_utc']}) has not completed ({p.get('refresh_status')})")
-        worst = max(worst, r_late)
+    if r_late is not None and r_late >= MORNING_WARN_MIN and p.get("refresh_status") != "DONE":
+        failed = [f"{k} {v.get('status')}" + (f" ({v['reason']})" if v.get("reason") else "") for k, v in (p.get("refresh_steps") or {}).items() if v.get("status") not in ("OK", "DISABLED")]
+        stats_ok = ((p.get("refresh_steps") or {}).get("statistics") or {}).get("status") == "OK"
+        problems.append(f"the refresh (due {p['refresh_due_utc']}) has not completed ({p.get('refresh_status')}" + (f": {', '.join(failed)}; attempts {p.get('refresh_attempts')}" if failed else "") + ")")
+        worst = max(worst, 0.0 if stats_ok else r_late)         # only the optional starters component failing is a warning, never a failure: the statistics are fresh
     a_late = late_min(p.get("analysis_due_utc"))
     published = p.get("analysis_published_utc")
     if a_late is not None and a_late >= MORNING_WARN_MIN and not (published and published >= p["analysis_due_utc"]):
@@ -349,7 +351,7 @@ def check_morning_update(now: dt.datetime) -> dict:
         worst = max(worst, a_late * 0.0 + MORNING_WARN_MIN)
     if problems:
         return {"name": "morning_update", "status": FAIL if worst >= MORNING_FAIL_MIN else WARN, "detail": "; ".join(problems)}
-    if a_late is not None and a_late >= 0 and p.get("refresh_status") in ("DONE", "PARTIAL") and published:
+    if a_late is not None and a_late >= 0 and p.get("refresh_status") == "DONE" and published:
         _log_morning_evidence({"day": ds["day"], "state": "DONE", "refresh_finished_utc": p.get("refresh_finished_utc"), "analysis_published_utc": published,
                                "analysis_games": p.get("analysis_games"), "slate_games": p.get("slate_games"), "league_pulls_made": len(lp.get("made") or []),
                                "analysis_due_utc": p.get("analysis_due_utc"), "first_look_utc": published, "starts_at_utc": p.get("analysis_due_utc"),

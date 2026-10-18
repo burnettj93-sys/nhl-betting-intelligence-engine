@@ -347,8 +347,9 @@ def morning_strip(tk: dict, now: dt.datetime | None = None) -> None:
         st.caption("Today's capture plan has not been made yet: the first 15-minute engine cycle of the day makes it.")
         return
     p, lp = ds.get("prep") or {}, ds.get("league_pulls") or {}
+    comps = ", ".join(f"{k} {str(v.get('status')).lower()}" + (f" {et_time(v['finished_utc'], True)}" if v.get("finished_utc") else "") for k, v in (p.get("refresh_steps") or {}).items())
     parts = [f"07:45 refresh: {str(p.get('refresh_status') or '—').replace('_', ' ').lower()}"
-             + (f" ({et_time(p['refresh_finished_utc'], True)})" if p.get("refresh_finished_utc") else ""),
+             + (f" ({et_time(p['refresh_finished_utc'], True)})" if p.get("refresh_finished_utc") else "") + (f" [{comps}]" if comps else "") + (" · waiting for the network" if p.get("refresh_network_down") and p.get("refresh_status") != "DONE" else ""),
              f"whole-slate analysis: {p.get('analysis_games') or 0} of {p.get('slate_games') or 0} games"
              + (f", published {et_time(p['analysis_published_utc'], True)}" if p.get("analysis_published_utc") else ", not published yet"),
              f"league moneyline + spread pulls: {len(lp.get('made') or [])} made of {lp.get('planned') if lp.get('planned') is not None else '—'} planned"]

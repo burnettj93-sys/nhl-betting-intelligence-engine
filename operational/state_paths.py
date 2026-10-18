@@ -80,3 +80,16 @@ def is_production_path(p: Path) -> bool:
     except OSError:
         return False
     return PRODUCTION_RUNTIME_DIR.resolve() in p.parents or p.parent == PRODUCTION_OPERATIONAL_DIR.resolve()
+
+
+def guard_database(db_path) -> Path:
+    """Under a unit-test run a PRODUCTION database file (a `.db` directly in operational/ or in operational/runtime/) is never opened: the request is redirected to a throw-away file in the
+    test state directory, so a test that opens a ledger by its default path can no longer migrate, write to or lock the real one. (2026-10-17: a branch test run opened the real
+    paper_bankroll.db through the dashboard's default path and migrated it to a newer schema.) Outside tests, and for any non-production path, the path is returned unchanged."""
+    p = Path(db_path)
+    redirected = state_dir() if under_test() else None                  # only a unit-test run (NHL_ENGINE_STATE_DIR alone is an operator override of STATE FILES, never of the ledgers)
+    if redirected is None or str(db_path) == ":memory:" or p.suffix != ".db" or not is_production_path(p):
+        return p
+    target = redirected / "operational" / p.name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return target

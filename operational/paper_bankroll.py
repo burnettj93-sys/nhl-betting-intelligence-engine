@@ -72,6 +72,8 @@ class InvalidPaperBetError(Exception):
 
 
 def get_conn(db_path: Path = DB_PATH) -> sqlite3.Connection:
+    from operational import state_paths
+    db_path = state_paths.guard_database(db_path)                  # a test never opens the production file
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")

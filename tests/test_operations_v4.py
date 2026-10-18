@@ -63,6 +63,65 @@ class TestMorningRefresh(Isolated):
         self.assertEqual(morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["reason"], "RETRY_GAP")
         self.assertEqual(morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["status"], "DONE")
 
+    def test_a_partial_refresh_with_a_failed_step_is_retried_after_the_gap_up_to_the_limit(self):
+        out = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: 1, starters=lambda: {"status": "DISABLED"})      # the network was not up: statistics FAILED, starters fine
+        self.assertEqual(out["status"], "PARTIAL")
+        self.assertEqual(morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {})["reason"], "RETRY_GAP")
+        retry = morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: 0, starters=lambda: {"status": "DISABLED"})
+        self.assertEqual((retry["status"], retry["attempts"]), ("DONE", 2))
+        self.assertEqual(morning_refresh.run_if_due(at(12, 5), first_start=at(13), sync=lambda: self.fail("done: no more runs"), starters=lambda: {})["reason"], "DONE_TODAY")
+
+    def test_retries_stop_at_the_limit(self):
+        for hour in (7, 9, 11, 13):
+            morning_refresh.run_if_due(at(hour, 50), first_start=at(18), sync=lambda: 1, starters=lambda: {"status": "DISABLED"})
+        self.assertEqual(morning_refresh.read()["attempts"], morning_refresh.MAX_ATTEMPTS)
+        self.assertEqual(morning_refresh.run_if_due(at(16, 5), first_start=at(18), sync=lambda: self.fail("no more"), starters=lambda: {})["reason"], "RETRIES_EXHAUSTED")
+
+    def test_a_partial_refresh_keeps_the_successful_component_and_retries_only_the_failed_one(self):
+        calls = []
+        first = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: calls.append("stats") or 1, starters=lambda: calls.append("starters") or {"status": "OK"})
+        self.assertEqual(first["status"], "PARTIAL")
+        self.assertEqual({k: v["status"] for k, v in first["steps"].items()}, {"statistics": "FAILED", "starters": "OK"})
+        ok_stamp = first["steps"]["starters"]["finished_utc"]
+        self.assertTrue(first["steps"]["statistics"]["started_utc"] and first["steps"]["statistics"]["finished_utc"])      # visible component timestamps
+        calls.clear()
+        retry = morning_refresh.run_if_due(at(9, 5), first_start=at(13), sync=lambda: calls.append("stats") or 0, starters=lambda: calls.append("starters") or {"status": "OK"})
+        self.assertEqual(calls, ["stats"])                                                                     # the component that worked is NOT run again
+        self.assertEqual((retry["status"], retry["attempts"]), ("DONE", 2))
+        self.assertEqual(retry["steps"]["starters"]["finished_utc"], ok_stamp)                                 # and its original timestamp is preserved
+
+    def test_with_the_network_down_nothing_is_attempted_no_attempt_is_used_and_the_retry_is_due_when_it_returns(self):
+        down = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: self.fail("no attempt while offline"), starters=lambda: self.fail("no attempt"), connectivity=lambda: False)
+        self.assertEqual((down["status"], down["network_down"], down["attempts"]), ("FAILED", True, 0))
+        self.assertEqual(down["steps"]["statistics"]["reason"], "NO_CONNECTIVITY")
+        waiting = morning_refresh.run_if_due(at(8, 5), first_start=at(13), sync=lambda: self.fail("still offline"), connectivity=lambda: False)
+        self.assertEqual(waiting["reason"], "WAITING_FOR_NETWORK")
+        back = morning_refresh.run_if_due(at(8, 20), first_start=at(13), sync=lambda: 0, starters=lambda: {"status": "DISABLED"}, connectivity=lambda: True)    # 15 minutes later, no 60-minute gap
+        self.assertEqual((back["status"], back["attempts"]), ("DONE", 1))
+
+    def test_a_failure_that_coincides_with_a_dropped_connection_is_a_network_failure(self):
+        state = {"up": True}
+        def sync():
+            state["up"] = False
+            return 1
+        out = morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=sync, starters=lambda: {"status": "DISABLED"}, connectivity=lambda: state["up"])
+        self.assertEqual((out["status"], out["network_down"], out["attempts"]), ("PARTIAL", True, 1))
+        state["up"] = True
+        self.assertEqual(morning_refresh.run_if_due(at(8, 0), first_start=at(13), sync=lambda: 0, connectivity=lambda: True)["status"], "DONE")
+
+    def test_a_forced_run_on_a_finished_day_changes_nothing_even_offline(self):
+        morning_refresh.run_if_due(at(7, 50), first_start=at(13), sync=lambda: 0, starters=lambda: {"status": "DISABLED"})
+        before = morning_refresh.read()
+        out = morning_refresh.run_if_due(at(9, 0), first_start=at(13), force=True, sync=lambda: self.fail("done"), connectivity=lambda: False)
+        self.assertEqual(out["reason"], "ALL_COMPONENTS_ALREADY_DONE")
+        self.assertEqual(morning_refresh.read(), before)
+
+    def test_waiting_for_the_network_is_not_a_job_failure(self):
+        from unittest import mock
+        with mock.patch.object(morning_refresh, "run_if_due", return_value={"status": "FAILED", "network_down": True}), mock.patch("builtins.print"), \
+                mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True):
+            self.assertEqual(morning_refresh.main(), 0)
+
     def test_two_runners_never_refresh_at_the_same_time(self):
         import fcntl
         with open(self.dir / "morning_refresh.lock", "w") as held:
