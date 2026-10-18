@@ -78,7 +78,7 @@ class TestMigration(unittest.TestCase):
         before = dict(con.execute("SELECT * FROM paper_bets WHERE paper_bet_id='OLD1'").fetchone())
         # simulate a v4 file: no experiment column, no experiment tables, schema_version 4
         cols = ", ".join(r["name"] for r in con.execute("PRAGMA table_info(paper_bets)") if r["name"] != "experiment_id")
-        con.executescript("DROP TRIGGER IF EXISTS paper_bets_immutability; DROP TRIGGER IF EXISTS paper_bets_valid_stake_and_odds; DROP INDEX IF EXISTS paper_experiments_one_active;"
+        con.executescript("DROP TRIGGER IF EXISTS paper_bets_immutability; DROP TRIGGER IF EXISTS paper_bets_experiment_must_be_active; DROP TRIGGER IF EXISTS paper_bets_valid_stake_and_odds; DROP INDEX IF EXISTS paper_experiments_one_active;"
                           f"DROP TABLE paper_experiments; DROP TABLE paper_experiment_resets; ALTER TABLE paper_bets RENAME TO paper_bets_v5; CREATE TABLE paper_bets AS SELECT {cols} FROM paper_bets_v5;"
                           "DROP TABLE paper_bets_v5; UPDATE schema_version SET version = 4;")
         con.commit()
@@ -202,6 +202,65 @@ class TestReset(Base):
         r = wd.check_reconciliation(self.conn)
         self.assertEqual(r["status"], wd.FAIL)
         self.assertIn("unknown experiment", r["detail"])
+
+
+class TestReviewFixes(Base):
+    def test_a_writer_that_does_not_know_about_experiments_cannot_add_a_ticket_to_an_archived_one(self):
+        self.old_book()
+        self.reset()
+        with self.assertRaises(sqlite3.DatabaseError):                        # lands in the column default EXP-1, now archived: refused loudly
+            self.conn.execute("INSERT INTO paper_bets (paper_bet_id, idempotency_key, track, market_id, price_source, entry_odds, stake, created_at_utc) "
+                              "VALUES ('RAW', 'rawk', 'REAL_MARKET_PAPER', 'm', 'LIVE_DRAFTKINGS', 150, 10, '2026-10-19T00:00:00Z')")
+
+    def test_the_same_ticket_as_an_archived_one_is_reported_as_that_not_as_already_recorded(self):
+        self.ticket(1, day="2026-10-12")
+        self.reset()
+        r = pb.record_paper_bet(self.conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id="REAL_MARKET_PARLAY:2026-10-12:1", entry_odds=200, is_combo=True,
+                                legs_json="[]", idempotency_key="k1-2026-10-12", paper_bet_id="T1")
+        self.assertEqual(r["status"], "ARCHIVED_EXPERIMENT_DUPLICATE")
+        self.assertEqual(pb.account_state(self.conn, "REAL_MARKET_PAPER")["tickets"], 0)
+
+    def test_reads_fail_closed_when_no_experiment_is_active(self):
+        self.conn.execute("PRAGMA ignore_check_constraints = ON")
+        self.conn.execute("UPDATE paper_experiments SET status = 'ARCHIVED'")
+        self.conn.commit()
+        with self.assertRaises(pb.InvalidPaperBetError):
+            pb.account_state(self.conn, "REAL_MARKET_PAPER")
+        self.assertEqual(pb.query_paper_bets(self.conn, experiment="ALL"), [])                   # an explicit ALL read is still allowed
+
+    def test_the_archive_is_read_only_and_describes_the_book_as_it_was_when_the_lock_was_taken(self):
+        self.old_book()
+        out = self.reset()
+        self.assertEqual(Path(out["archive_path"]).stat().st_mode & 0o222, 0)
+        frozen = json.loads(Path(out["archive_path"]).read_text())["frozen_summary"]
+        self.assertEqual(frozen["account"]["available_cash"], out["previous_available_cash"])
+
+
+class TestResetCommand(Base):
+    def test_dry_run_changes_nothing_and_does_not_migrate_the_file(self):
+        import subprocess, sys
+        self.conn.close()
+        before = self.db.read_bytes()
+        repo = Path(__file__).resolve().parent.parent
+        out = subprocess.run([sys.executable, "-m", "deploy.reset_model_bankroll", "--reset-id", RESET_ID, "--db", str(self.db), "--dry-run"], cwd=repo, capture_output=True, text=True)
+        self.assertEqual(out.returncode, 0, out.stderr[-500:])
+        self.assertIn("DRY_RUN", out.stdout)
+        self.assertEqual(self.db.read_bytes(), before)
+
+    def test_the_command_resets_once_and_a_second_run_reports_already_applied(self):
+        import subprocess, sys
+        self.old_book()
+        self.conn.close()
+        repo = Path(__file__).resolve().parent.parent
+        args = [sys.executable, "-m", "deploy.reset_model_bankroll", "--reset-id", RESET_ID, "--db", str(self.db), "--archive-dir", str(self.dir / "a"), "--backup-dir", str(self.dir / "b")]
+        first = subprocess.run(args, cwd=repo, capture_output=True, text=True)
+        self.assertEqual(first.returncode, 0, first.stderr[-500:])
+        self.assertEqual(json.loads(first.stdout)["status"], "RESET")
+        self.assertEqual(json.loads(first.stdout)["account_after"]["available_cash"], 500.0)
+        second = subprocess.run(args, cwd=repo, capture_output=True, text=True)
+        self.assertEqual(json.loads(second.stdout)["status"], "ALREADY_APPLIED")
+        self.assertEqual(len(list((self.dir / "a").glob("*.json"))), 1)
+        self.assertEqual(len(list((self.dir / "b").glob("*.db"))), 2)                         # the untouched pre-migration copy and the experiment-1 final copy; the repeat added none
 
 
 class TestHostedPages(unittest.TestCase):

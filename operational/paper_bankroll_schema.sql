@@ -185,3 +185,13 @@ CREATE TABLE IF NOT EXISTS paper_experiment_resets (
     archive_path                TEXT,
     backup_path                 TEXT
 );
+
+-- v5: a ticket can only be inserted into the ACTIVE experiment. A writer that does not know about experiments (an older checkout, a raw INSERT) lands in the column default, EXP-1; once EXP-1 is
+-- archived that INSERT is refused loudly instead of silently adding a ticket to a closed experiment where no account would ever see it.
+CREATE TRIGGER IF NOT EXISTS paper_bets_experiment_must_be_active
+BEFORE INSERT ON paper_bets
+FOR EACH ROW
+WHEN NEW.experiment_id IS NOT (SELECT experiment_id FROM paper_experiments WHERE status = 'ACTIVE')
+BEGIN
+    SELECT RAISE(ABORT, 'paper_bets: a ticket can only be recorded in the ACTIVE experiment');
+END;

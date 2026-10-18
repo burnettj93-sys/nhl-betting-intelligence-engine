@@ -545,7 +545,8 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
         stub = [type("L", (), {"game_id": l["game_id"], "participant_id": l["participant_id"], "market_family": l["market_family"],
                                "threshold": l["threshold"], "side": l["side"]}) for l in legs]
         for tid in (pb.compute_ticket_id(et_date, stub),):
-            row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?", (tid,)).fetchone()
+            ex_clause, ex_params = pb.experiment_filter(bankroll_conn)
+            row = bankroll_conn.execute("SELECT paper_bet_id, origin, result_status FROM paper_bets WHERE paper_bet_id = ?" + ex_clause, [tid] + ex_params).fetchone()
             if row:
                 opt["on_book"] = {"ticket_id": row["paper_bet_id"], "origin": row["origin"], "status": row["result_status"]}
                 break

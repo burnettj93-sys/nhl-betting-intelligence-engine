@@ -45,20 +45,47 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--backup-dir", default=None)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
+    import datetime as dt
+    import shutil
+    import sqlite3
     from operational import paper_bankroll as pb
     db = Path(args.db) if args.db else pb.DB_PATH
+    if args.dry_run:                                   # strictly read-only: no migration, no experiment record created, nothing written
+        ro = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        ro.row_factory = sqlite3.Row
+        try:
+            has = bool(ro.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='paper_experiments'").fetchone())
+            done = ro.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (args.reset_id,)).fetchone() if has else None
+            print(json.dumps({"status": "ALREADY_APPLIED" if done else "DRY_RUN", "reset": dict(done) if done else None,
+                              "database_has_experiments": has, "note": None if has else "the database predates experiments: the first normal open migrates it (EXP-1, nothing rewritten), then this command can run",
+                              "tickets": ro.execute("SELECT COUNT(*) c FROM paper_bets").fetchone()["c"], "open_tickets": ro.execute("SELECT COUNT(*) c FROM paper_bets WHERE result_status IN ('PENDING','UNRESOLVED')").fetchone()["c"]},
+                             indent=1, default=str))
+        finally:
+            ro.close()
+        return 0
+    backup_dir = Path(args.backup_dir) if args.backup_dir else REPO / "operational" / "backups"
+    if db.exists():                                    # already applied? then nothing is copied, opened for writing or changed
+        probe = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        probe.row_factory = sqlite3.Row
+        try:
+            has = bool(probe.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='paper_experiment_resets'").fetchone())
+            applied = probe.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (args.reset_id,)).fetchone() if has else None
+        finally:
+            probe.close()
+        if applied:
+            print(json.dumps({"status": "ALREADY_APPLIED", "reset": dict(applied)}, indent=1, default=str))
+            return 0
+    if db.exists():                                    # a byte-for-byte copy of the file as it is, BEFORE the first open can migrate it
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(db, backup_dir / f"paper_bankroll_before_reset_{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.db")
     conn = pb.init_db(db)
     try:
         done = conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (args.reset_id,)).fetchone()
-        prev = pb.active_experiment(conn)
-        acct = pb.account_state(conn, pb.MODEL_TRACK)
-        if args.dry_run or done:
-            print(json.dumps({"status": "ALREADY_APPLIED" if done else "DRY_RUN", "reset": dict(done) if done else None, "active_experiment": pb.experiment_brief(prev),
-                              "account_now": acct}, indent=1, default=str))
+        if done:
+            print(json.dumps({"status": "ALREADY_APPLIED", "reset": dict(done), "account_now": pb.account_state(conn, pb.MODEL_TRACK)}, indent=1, default=str))
             return 0
         out = pb.start_new_experiment(conn, reset_id=args.reset_id, label=args.label, reason=args.reason, policies=policy_versions(),
-                                      archive_dir=Path(args.archive_dir) if args.archive_dir else REPO / "operational" / "archive",
-                                      backup_dir=Path(args.backup_dir) if args.backup_dir else REPO / "operational" / "backups")
+                                      archive_dir=Path(args.archive_dir) if args.archive_dir else REPO / "operational" / "archive", backup_dir=backup_dir)
         out["account_after"] = pb.account_state(conn, pb.MODEL_TRACK)
         print(json.dumps(out, indent=1, default=str))
         return 0

@@ -96,8 +96,10 @@ def ledger_export() -> str:
     from operational import paper_bankroll as pb
     account = pb.account_state(conn, "REAL_MARKET_PAPER")
     origins = pb.origin_performance(conn, "REAL_MARKET_PAPER")
+    experiments = pb.experiments(conn)
     conn.close()
     return json.dumps({"exported_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(), "account": account, "performance_by_origin": origins,
+                       "note": "tickets cover EVERY experiment (each row carries experiment_id); account and performance_by_origin are the ACTIVE experiment's", "experiments": experiments,
                        "real_market_paper_tickets": rows, "ticket_alerts": alerts, "paper_audit_log": audit,
                        "manual_orders": orders, "ontario_verifications": ontario}, indent=1, default=str)
 
@@ -143,16 +145,19 @@ def model_book_reconciliation() -> str:
     from operational import paper_bankroll as pb
     led = sqlite3.connect(f"file:{REPO / 'operational' / 'paper_bankroll.db'}?mode=ro", uri=True)
     led.row_factory = sqlite3.Row
-    auto = [dict(r) for r in led.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC'")]
+    clause, params = pb.experiment_filter(led)                       # the ACTIVE experiment: the helper below reads it too
+    active = pb.active_experiment(led)
+    start = float(active["starting_bankroll"]) if active else 500.0
+    auto = [dict(r) for r in led.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='AUTOMATIC'" + clause, params)]
     legacy = [dict(r) for r in led.execute("SELECT * FROM paper_bets WHERE track='REAL_MARKET_PAPER' AND origin='MANUALLY_ADDED'")]
     settled = [r for r in auto if r["result_status"] in ("WIN", "LOSS", "VOID")]
     open_ = [r for r in auto if r["result_status"] in ("PENDING", "UNRESOLVED")]
     pnl = round(sum(r["profit_loss"] or 0 for r in settled), 2)
     payouts = round(sum((r["stake"] + (r["profit_loss"] or 0)) for r in settled if r["result_status"] != "LOSS"), 2)
     staked = round(sum(r["stake"] for r in auto), 2)
-    independent = {"cash": round(500 + pnl - sum(r["stake"] for r in open_), 2), "open_stakes": round(sum(r["stake"] for r in open_), 2), "settled_pnl": pnl,
+    independent = {"cash": round(start + pnl - sum(r["stake"] for r in open_), 2), "open_stakes": round(sum(r["stake"] for r in open_), 2), "settled_pnl": pnl,
                    "tickets": len(auto), "total_staked": staked, "total_returned_to_cash": payouts,
-                   "cash_by_flows": round(500 - staked + payouts, 2)}
+                   "cash_by_flows": round(start - staked + payouts, 2)}
     helper = pb.account_state(led, "REAL_MARKET_PAPER")
     problems = []
     for k, ik in (("available_cash", "cash"), ("open_stakes", "open_stakes"), ("settled_pnl", "settled_pnl"), ("tickets", "tickets")):

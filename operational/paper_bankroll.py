@@ -181,10 +181,11 @@ def init_db(db_path: Path = DB_PATH) -> sqlite3.Connection:
     conn = get_conn(db_path)
     with open(SCHEMA_PATH) as f:
         conn.executescript(f.read())
-    if "origin" not in {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}:
-        # An older table: the schema file's trigger names columns it does not have yet, which breaks the table
-        # rebuilds below. It is dropped here and re-created by the schema file once the columns exist.
+    if not {"origin", "experiment_id"} <= {r["name"] for r in conn.execute("PRAGMA table_info(paper_bets)")}:
+        # An older table: the schema file's triggers name columns it does not have yet, which breaks the table
+        # rebuilds below. They are dropped here and re-created by the schema file once the columns exist.
         conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+        conn.execute("DROP TRIGGER IF EXISTS paper_bets_experiment_must_be_active")
         conn.commit()
     row = conn.execute("SELECT version FROM schema_version").fetchone()
     if row is None:
@@ -232,6 +233,7 @@ def _migrate_to_v5(conn: sqlite3.Connection) -> None:
     if "experiment_id" not in columns:
         conn.execute(f"ALTER TABLE paper_bets ADD COLUMN experiment_id TEXT NOT NULL DEFAULT '{FIRST_EXPERIMENT_ID}'")
     conn.execute("DROP TRIGGER IF EXISTS paper_bets_immutability")
+    conn.execute("DROP TRIGGER IF EXISTS paper_bets_experiment_must_be_active")
     conn.commit()
 
 
@@ -329,7 +331,10 @@ def resolve_experiment(conn: sqlite3.Connection, experiment) -> dict | None:
     if experiment in (None, "ALL") or not _has_experiments(conn):
         return None
     if experiment == "ACTIVE":
-        return active_experiment(conn)
+        active = active_experiment(conn)
+        if active is None:
+            raise InvalidPaperBetError("this database has experiments but none is ACTIVE: refusing to read every experiment as the current account")      # fail closed, never fail open
+        return active
     row = conn.execute("SELECT * FROM paper_experiments WHERE experiment_id = ?", (experiment,)).fetchone()
     if row is None:
         raise InvalidPaperBetError(f"no experiment {experiment!r}")
@@ -471,12 +476,15 @@ def record_paper_bet(conn: sqlite3.Connection, *, track: str, price_source: str,
         conn.commit()
     conn.execute("BEGIN IMMEDIATE")
     try:
-        existing = conn.execute("SELECT paper_bet_id FROM paper_bets WHERE idempotency_key = ? OR paper_bet_id = ?",
+        existing = conn.execute("SELECT paper_bet_id, experiment_id FROM paper_bets WHERE idempotency_key = ? OR paper_bet_id = ?",
                                  (idempotency_key, paper_bet_id)).fetchone()
+        active = active_experiment(conn)
         if existing:
             conn.rollback()
+            if active and existing["experiment_id"] != active["experiment_id"]:
+                # the same ticket (same date and legs) exists in an ARCHIVED experiment: it is not "already recorded" in this one, and it cannot be recorded twice under the same id
+                return {"status": "ARCHIVED_EXPERIMENT_DUPLICATE", "paper_bet_id": existing["paper_bet_id"], "experiment_id": existing["experiment_id"]}
             return {"status": "DUPLICATE", "paper_bet_id": existing["paper_bet_id"]}
-        active = active_experiment(conn)
         row["experiment_id"] = active["experiment_id"] if active else FIRST_EXPERIMENT_ID
         account = account_state(conn, track)
         if account["available_cash"] + 1e-9 < stake:
@@ -1209,28 +1217,16 @@ def start_new_experiment(conn: sqlite3.Connection, *, reset_id: str, label: str,
     done = conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone()
     if done:
         return {"status": "ALREADY_APPLIED", **dict(done)}
-    prev = active_experiment(conn)
-    if prev is None:
+    if active_experiment(conn) is None:
         raise InvalidPaperBetError("no active experiment to close")
     now_iso = now_iso or _utcnow_iso()
     stamp = now_iso.replace(":", "").replace("-", "").replace(".", "")[:15]
-    report = experiment_report(conn, prev["experiment_id"])
-    account = report["account"]
-    frozen = {"closed_at_utc": now_iso, "reason": reason, "account": account, "summary": {k: v for k, v in report["summary"].items() if k != "bankroll_history"}, "origins": report["origins"],
-              "open_tickets": account["open_tickets"], "open_stakes": account["open_stakes"]}
-    ids = [b["paper_bet_id"] for b in query_paper_bets(conn, origin=None, experiment=prev["experiment_id"])]
-    archive_path = backup_path = None
-    if archive_dir is not None:
-        archive_dir = Path(archive_dir)
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        archive_path = archive_dir / f"model_book_experiment_{prev['number']}_{stamp}.json"
-        audit = [dict(r) for r in conn.execute(f"SELECT * FROM paper_audit_log WHERE paper_bet_id IN ({','.join('?' for _ in ids) or 'NULL'}) ORDER BY id", ids)]
-        archive_path.write_text(json.dumps({"experiment": experiment_brief(prev), "frozen_summary": frozen, "tickets": query_paper_bets(conn, origin=None, experiment=prev["experiment_id"]),
-                                            "audit_log": audit, "policy_versions": policies or {}, "bankroll_history": report["summary"].get("bankroll_history")}, indent=1, sort_keys=True, default=str))
-    if backup_dir is not None:
+    backup_path = None
+    if backup_dir is not None:                    # the database exactly as it is BEFORE anything changes (taken first, outside the write lock: it can take a moment)
         backup_dir = Path(backup_dir)
         backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_path = backup_dir / f"paper_bankroll_experiment_{prev['number']}_final_{stamp}.db"
+        number_now = active_experiment(conn)["number"]
+        backup_path = backup_dir / f"paper_bankroll_experiment_{number_now}_final_{stamp}.db"
         if conn.in_transaction:
             conn.commit()
         dest = sqlite3.connect(backup_path)
@@ -1240,15 +1236,35 @@ def start_new_experiment(conn: sqlite3.Connection, *, reset_id: str, label: str,
             dest.close()
     if conn.in_transaction:
         conn.commit()
-    conn.execute("BEGIN IMMEDIATE")
+    conn.execute("BEGIN IMMEDIATE")                # from here the write lock is held: no settlement or ticket can land between reading the old experiment and closing it
     try:
-        if conn.execute("SELECT 1 FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone():      # a concurrent run applied it first
+        again = conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone()
+        if again:                                  # a concurrent run applied it first
             conn.rollback()
-            return {"status": "ALREADY_APPLIED", **dict(conn.execute("SELECT * FROM paper_experiment_resets WHERE reset_id = ?", (reset_id,)).fetchone())}
+            return {"status": "ALREADY_APPLIED", **dict(again)}
+        prev = active_experiment(conn)
+        if prev is None:
+            raise InvalidPaperBetError("no active experiment to close")
+        report = experiment_report(conn, prev["experiment_id"])
+        account = report["account"]
+        frozen = {"closed_at_utc": now_iso, "reason": reason, "account": account, "summary": {k: v for k, v in report["summary"].items() if k != "bankroll_history"}, "origins": report["origins"],
+                  "open_tickets": account["open_tickets"], "open_stakes": account["open_stakes"]}
+        archive_path = None
+        if archive_dir is not None:
+            archive_dir = Path(archive_dir)
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_path = archive_dir / f"model_book_experiment_{prev['number']}_{stamp}.json"
+            ids = [b["paper_bet_id"] for b in query_paper_bets(conn, origin=None, experiment=prev["experiment_id"])]
+            audit = [dict(r) for r in conn.execute(f"SELECT * FROM paper_audit_log WHERE paper_bet_id IN ({','.join('?' for _ in ids) or 'NULL'}) ORDER BY id", ids)]
+            archive_path.write_text(json.dumps({"experiment": experiment_brief(prev), "frozen_summary": frozen, "tickets": query_paper_bets(conn, origin=None, experiment=prev["experiment_id"]),
+                                                "audit_log": audit, "policy_versions": policies or {}, "bankroll_history": report["summary"].get("bankroll_history")}, indent=1, sort_keys=True, default=str))
+            archive_path.chmod(0o444)              # an archive is read-only
         number = int(conn.execute("SELECT MAX(number) m FROM paper_experiments").fetchone()["m"]) + 1
         new_id = f"EXP-{number}"
-        conn.execute("UPDATE paper_experiments SET status = 'ARCHIVED', ended_at_utc = ?, reason = ?, final_summary_json = ?, archive_path = ? WHERE experiment_id = ?",
-                     (now_iso, reason, json.dumps(frozen, sort_keys=True, default=str), str(archive_path) if archive_path else None, prev["experiment_id"]))
+        closed = conn.execute("UPDATE paper_experiments SET status = 'ARCHIVED', ended_at_utc = ?, reason = ?, final_summary_json = ?, archive_path = ? WHERE experiment_id = ? AND status = 'ACTIVE'",
+                              (now_iso, reason, json.dumps(frozen, sort_keys=True, default=str), str(archive_path) if archive_path else None, prev["experiment_id"]))
+        if closed.rowcount != 1:
+            raise InvalidPaperBetError("the active experiment changed while resetting")
         conn.execute("INSERT INTO paper_experiments (experiment_id, number, label, status, starting_bankroll, started_at_utc, reason) VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?)",
                      (new_id, number, label, PAPER_STARTING_BANKROLL, now_iso, reason))
         conn.execute("INSERT INTO paper_experiment_resets (reset_id, from_experiment_id, to_experiment_id, performed_at_utc, reason, open_tickets_in_previous, previous_available_cash, archive_path, backup_path) "
