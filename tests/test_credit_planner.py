@@ -269,3 +269,12 @@ class TestGameQuality(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPlanRebuiltAfterWindowsClosed(Isolated):
+    def test_a_game_whose_wave_window_has_closed_takes_no_budget(self):
+        # 19:46 ET: the 8 PM game's window (target 18:30, last chance 19:45) has closed; the 10 PM game's has not
+        plan = cp.build_day_plan(at(19, 46), "2026-10-17", starts(a=(20,), b=(22,)), remaining=150, quality={"a": 9, "b": 1})
+        self.assertNotIn("a", plan["games_priced"])
+        self.assertIn("b", plan["games_priced"])
+        self.assertEqual([w["selected"] for w in plan["waves"]], [[], ["b"]])

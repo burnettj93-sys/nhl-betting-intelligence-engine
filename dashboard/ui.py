@@ -337,7 +337,7 @@ def availability_block(tk: dict) -> dict:
 
 
 WAVE_STATE_WORDS = {"PENDING": "Not yet due", "DUE": "Due now", "CAPTURED_ON_TIME": "Captured on time", "CAPTURED_LATE": "Captured late (after the 60-minute publish deadline)",
-                    "PARTIAL": "Partly captured", "MISSED": "Missed: nothing is bought after the window", "NONE_SELECTED": "No game selected (budget)", "CLOSED": "Window closed"}
+                    "PARTIAL": "Partly captured", "MISSED": "Missed: nothing is bought after the window", "NONE_SELECTED": "No game selected (budget)", "CLOSED": "Window closed", "CAPTURED_EARLIER": "Priced earlier today (under the earlier plan)"}
 
 
 def morning_strip(tk: dict, now: dt.datetime | None = None) -> None:

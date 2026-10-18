@@ -15,6 +15,7 @@ from operational import state_paths
 NAME = "day_status.json"
 
 PENDING, DUE, ON_TIME, LATE, PARTIAL, MISSED, NONE_SELECTED, CLOSED = "PENDING", "DUE", "CAPTURED_ON_TIME", "CAPTURED_LATE", "PARTIAL", "MISSED", "NONE_SELECTED", "CLOSED"
+CAPTURED_EARLIER = "CAPTURED_EARLIER"       # priced today under an earlier version of the plan (the plan was rebuilt): the ledger shows the credits, the wave state does not
 
 
 def _utc(v):
@@ -71,10 +72,12 @@ def build(now: dt.datetime) -> dict:
             mk = {k.replace("player_", ""): (v or {}).get("status") for k, v in (a.get("markets") or {}).items()}
             rows.append({"game_id": gid, "matchup": a.get("matchup"), "selected": gid in sel, "markets_planned": [m.replace("player_", "") for m in (plan.get("game_markets") or {}).get(gid, [])],
                          "market_status": mk, "credits": games_info.get(gid, 0.0), "missed": a.get("missed_windows") or [], "start_utc": a.get("start_utc")})
-            if gid not in sel:
+            if gid not in sel and not games_info.get(gid):
                 excluded.append({"game_id": gid, "matchup": a.get("matchup"), "wave": w["index"], "reason": "not selected: the day's player-odds share did not reach this game (credit budget)"})
         captured = [r for r in rows if r["selected"] and ((ws.get("games") or {}).get(r["game_id"]) is not None)]
-        if not sel:
+        if not sel and any(games_info.get(r["game_id"]) for r in rows):
+            st = CAPTURED_EARLIER
+        elif not sel:
             st = NONE_SELECTED
         elif len(captured) == len(sel):
             st = ON_TIME if ws.get("on_time") else LATE

@@ -280,7 +280,8 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     budget = cycle_budget(now, remaining, spent_all, counts, day, league_cost=lc, league_cost_observed=observed)
     wave_list = capture_timeline.waves(starts)
     done = set(done_games or ())
-    eligible = {g for g, t in starts.items() if t > now and g not in done and (quality is None or quality.get(g, 1.0) > 0)}
+    open_windows = {g for w in wave_list if w.last_chance >= now for g in w.games}               # a game whose wave window has already closed can no longer be captured: it takes no budget
+    eligible = {g for g, t in starts.items() if t > now and g in open_windows and g not in done and (quality is None or quality.get(g, 1.0) > 0)}
     quality = quality or {}
     spent_player = sum(spent.get(k, 0.0) for k in (PROPS, GOALS, SAVES, POINTS_ADDON, MORNING, REFRESH))
     avail = max(budget["player_today"] - spent_player, 0.0)

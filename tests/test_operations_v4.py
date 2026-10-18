@@ -150,6 +150,17 @@ class TestDayStatus(Isolated):
         self.assertEqual(d["waves"][0]["credits"], 2.0)
         self.assertEqual(d["reconciliation"][cp.PROPS], {"calls": 1, "planned": 1.0, "actual": 1.0})
 
+    def test_a_wave_priced_under_an_earlier_plan_shows_as_captured_earlier_not_as_excluded(self):
+        p = cp.build_day_plan(at(8), DAY, {"1": at(13), "2": at(19), "3": at(19, 20)}, remaining=52, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4})
+        for w in p["waves"]:
+            w["selected"] = []                                                                    # the plan was rebuilt later and no longer selects the games already priced
+        p["games_priced"] = []
+        cp._persist(p)
+        cp.record(cp.PROPS, 1, at(11, 35), game_id="1", markets=cp.SHOTS_KEY, planned=1)
+        d = day_status.build(at(15))
+        self.assertEqual(d["waves"][0]["state"], "CAPTURED_EARLIER")
+        self.assertNotIn("1", {e["game_id"] for e in d["excluded_by_budget"]})
+
     def test_a_wave_past_its_last_chance_with_nothing_captured_is_closed_or_missed(self):
         self.plan()
         d = day_status.build(at(12, 50))
