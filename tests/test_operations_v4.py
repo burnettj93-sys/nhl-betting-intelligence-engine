@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import operational.system_health  # noqa: F401  (imported before any test patches state_paths, so no module captures a temporary path)
 from operational import credit_planner as cp
 from operational import day_status, morning_refresh, run_heartbeat, sleep_evidence
 

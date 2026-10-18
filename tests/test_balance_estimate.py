@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import operational.system_health  # noqa: F401  (imported before any test patches state_paths, so no module captures a temporary path)
 from operational import credit_planner as cp
 from operational import odds_quota as q
 
@@ -70,6 +71,20 @@ class Balance(unittest.TestCase):
     def test_a_much_older_higher_header_does_not_beat_a_newer_lower_one(self):
         cp.record(cp.PROPS, 1, t(20, 0), remaining_header="195")
         self.assertEqual(self.detail()["baseline_value"], 191)                 # the newer cache wins; the 20:00 value is outside the concurrent window
+
+    def test_a_quota_reset_is_not_held_down_by_a_pre_reset_reading(self):
+        self.cache = {"last_updated_utc": None, "credits_remaining": None}
+        cp.record(cp.PROPS, 1, t(23, 55), remaining_header="25")               # end of the old cycle
+        cp.record(cp.MONEYLINE_UI, 2, t(0, 5, day=18), remaining_header="498")  # first call of the new cycle: the counter jumped UP by 473, far more than any charge
+        self.assertEqual(self.detail(t(0, 10, day=18))["remaining"], 498)
+
+    def test_the_time_the_provider_answered_orders_responses_not_the_job_start_stamp(self):
+        cp.record(cp.PROPS, 1, t(23, 40, 0), remaining_header="189", header_at="2026-10-17T23:40:20Z")
+        cp.record(cp.PROPS, 1, t(23, 40, 5), remaining_header="190", header_at="2026-10-17T23:40:10Z")     # started later, ANSWERED earlier: it is the older reading
+        d = self.detail()
+        self.assertEqual((d["baseline_value"], d["remaining"]), (189, 189))
+        cp.record(cp.TOMORROW, 1, t(23, 40, 15))                                # headerless, stamped between the two job starts
+        self.assertEqual(self.detail()["remaining"], 189)                       # not deducted: stamped before the newest answer, so inside it
 
     def test_future_dated_rows_never_count(self):
         cp.record(cp.PROPS, 1, dt.datetime(2099, 1, 1, tzinfo=U), remaining_header="3")

@@ -35,7 +35,7 @@ def main() -> int:
         print("API error:", r.error)
         return 1
     archive.archive_result(r, event_id=None, market_filter="spreads", bookmaker_filter="draftkings")
-    cp.record("CONTRACT_CERTIFICATION", int(r.requests_last or 0), dt.datetime.now(dt.timezone.utc), market="spreads")
+    cp.record("CONTRACT_CERTIFICATION", int(r.requests_last or 0), dt.datetime.now(dt.timezone.utc), market="spreads", remaining_header=r.requests_remaining, header_at=r.retrieved_at_utc)
     checks = [plc.validate_spreads_event(e) for e in r.data]
     ok = [e for e, c in zip(r.data, checks) if c["status"] == "SHAPE_OK"]
     print(f"{len(r.data)} events; {len(ok)} with a valid draftkings spreads shape; credits charged {r.requests_last}, remaining {r.requests_remaining}")

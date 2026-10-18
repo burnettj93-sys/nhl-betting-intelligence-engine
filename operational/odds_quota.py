@@ -111,8 +111,8 @@ def balance_detail(now: dt.datetime | None = None) -> dict:
         status = sh.odds_collection_status()
         value = status.get("credits_remaining")
         when = _as_utc(status.get("last_updated_utc"))
-        if isinstance(value, (int, float)) and not isinstance(value, bool) and when is not None:
-            points.append((when, int(value), "collector cache"))
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            points.append((when or dt.datetime.min.replace(tzinfo=dt.timezone.utc), int(value), "collector cache"))
     except Exception:  # noqa: BLE001
         pass
     rows: list[dict] = []
@@ -122,23 +122,34 @@ def balance_detail(now: dt.datetime | None = None) -> dict:
     except Exception:  # noqa: BLE001
         cp = None
     unheadered: list[tuple[dt.datetime, float]] = []
+    every_charge: list[tuple[dt.datetime, float]] = []
     for row in rows:
         try:
             t = _as_utc(row.get("at"))
             if t is None or t > now + dt.timedelta(minutes=5):
                 continue
+            every_charge.append((t, float(row.get("credits") or 0.0)))
             h = cp.parse_header(row.get("remaining_header"))
             if h is not None:
-                points.append((t, h, "ledger header"))
+                answered = _as_utc(row.get("header_at")) if row.get("header_at") else None      # when the provider ANSWERED; `at` is when the job started
+                points.append((answered or t, h, "ledger header"))
             else:
                 unheadered.append((t, float(row.get("credits") or 0.0)))
         except Exception:  # noqa: BLE001
             continue
     if not points:
         return {"remaining": None, "baseline_value": None, "baseline_at": None, "deducted": 0.0, "source": None}
-    newest = max(p[0] for p in points)
+    newest_point = max(points, key=lambda p: p[0])
+    newest = newest_point[0]
     near = [p for p in points if p[0] >= newest - dt.timedelta(minutes=CONCURRENT_WINDOW_MIN)]
-    base_t, base_v, source = min(near, key=lambda p: (p[1], -p[0].timestamp()))
+    # Out-of-order responses: the lowest of the near-simultaneous ones, but only when the spread is EXPLAINED by credits charged inside that window (+2 for rounding and an unrecorded retry).
+    # A larger gap is not ordering noise: a jump UP is a quota reset, and the newest reading is the truth, not a stale low one from before it.
+    window_charges = sum(c for t, c in every_charge if newest - dt.timedelta(minutes=CONCURRENT_WINDOW_MIN) <= t <= newest)
+    lowest = min(near, key=lambda p: (p[1], -p[0].timestamp()))
+    if lowest is not newest_point and newest_point[1] - lowest[1] > window_charges + 2:
+        base_t, base_v, source = newest_point
+    else:
+        base_t, base_v, source = lowest
     deducted = sum(c for t, c in unheadered if t > newest)
     return {"remaining": max(int(base_v - deducted), 0), "baseline_value": base_v, "baseline_at": base_t.strftime("%Y-%m-%dT%H:%M:%SZ"), "deducted": deducted, "source": source}
 

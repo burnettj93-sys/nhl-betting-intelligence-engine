@@ -715,7 +715,7 @@ def capture_wave_prices(now: dt.datetime, *, client=None, archive_mod=None, game
                 if not any(attributed.values()) and cost:
                     attributed[missing[0]] = cost
                 for m, klass, rid in reservations:
-                    cp.settle(rid, attributed.get(m, 0), now, klass=klass, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late, remaining_header=r.requests_remaining)
+                    cp.settle(rid, attributed.get(m, 0), now, klass=klass, event=e["id"], game_id=gid, markets=m, wave=w.index, slot="WAVE", late=late, remaining_header=r.requests_remaining, header_at=getattr(r, "retrieved_at_utc", None))
             summary["credits_spent"] += cost
             summary["events_captured"] += 1
             entry = {"captured_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "markets": missing, "posted": posted, "credits": cost,
@@ -846,7 +846,7 @@ def check_tomorrow(now: dt.datetime, *, client=None, archive_mod=None, plan: dic
         archive_mod.archive_result(r, event_id=e["id"], market_filter=mk, bookmaker_filter="draftkings")
         cost = int(r.requests_last or 0)
         if cost:
-            cp.record(cp.TOMORROW, cost, now, event=e["id"], markets=mk)
+            cp.record(cp.TOMORROW, cost, now, event=e["id"], markets=mk, remaining_header=r.requests_remaining, header_at=getattr(r, "retrieved_at_utc", None))
         if any((v or {}).get("status") == pa.POSTED for v in got.values()):
             out["posted"] += 1
     pa.mark_tomorrow_checked(now)
