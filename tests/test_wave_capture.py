@@ -44,7 +44,7 @@ FULL = payload(**{cp.SHOTS_KEY: 40, cp.GOALS_KEY: 30, cp.SAVES_KEY: 2})
 
 class FakeClient:
     def __init__(self, answers=None, cost=None, ok=True):
-        self.calls, self.answers, self.cost, self.ok, self.remaining = [], answers or {}, cost, ok, 187
+        self.calls, self.answers, self.cost, self.ok, self.remaining = [], answers or {}, cost, ok, "187"          # the provider's header is a STRING
 
     def get_nhl_events(self):
         return mock.Mock(ok=True, data=[{"id": e["id"], "home_team": e["home_team"], "away_team": e["away_team"], "commence_time": iso(at(*e["start"]))} for e in EVENTS])
@@ -217,12 +217,29 @@ class TestRemainingHeader(Isolated):
         self.capture(at(11, 35), FakeClient())
         rows = [r for r in cp.read_ledger(DAY) if r.get("game_id") == "1"]
         self.assertTrue(rows and all(r["remaining_header"] == 187 for r in rows))
-        stale = {"last_updated_utc": "2026-10-17T12:00:00Z", "credits_remaining": 191}
+        stale = {"last_updated_utc": "2026-10-17T12:00:00+00:00", "credits_remaining": 191}
         with mock.patch("operational.system_health.odds_collection_status", return_value=stale), mock.patch.object(odds_quota, "latest_remaining", _REAL_LATEST_REMAINING):
             self.assertEqual(odds_quota.latest_remaining(), 187)                    # the capture is newer than the cached 191
         newer = {"last_updated_utc": "2099-01-01T00:00:00Z", "credits_remaining": 150}
         with mock.patch("operational.system_health.odds_collection_status", return_value=newer), mock.patch.object(odds_quota, "latest_remaining", _REAL_LATEST_REMAINING):
             self.assertEqual(odds_quota.latest_remaining(), 150)                    # a newer collector value still wins
+
+
+class TestHeaderParsing(unittest.TestCase):
+    def test_only_real_non_negative_numbers_are_accepted(self):
+        for good, want in (("187", 187), (187, 187), ("0", 0), (187.0, 187)):
+            self.assertEqual(cp.parse_header(good), want)
+        for bad in (None, "", "abc", "nan", "-3", -3, True, mock.Mock(), float("nan")):
+            self.assertIsNone(cp.parse_header(bad))
+
+    def test_unreadable_or_future_dated_ledger_rows_never_decide_the_balance(self):
+        from operational import odds_quota
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(cp.state_paths, "path", side_effect=lambda name, **kw: Path(tmp) / name), \
+                mock.patch("operational.system_health.odds_collection_status", return_value={"last_updated_utc": "2026-10-17T12:00:00Z", "credits_remaining": 191}):
+            cp.record(cp.PROPS, 1, dt.datetime(2099, 1, 1, tzinfo=U), remaining_header="5")                 # future-dated
+            cp.record(cp.PROPS, 1, at(15), remaining_header="nan")                                          # unreadable
+            cp.record(cp.PROPS, 1, at(16), remaining_header="188")
+            self.assertEqual(_REAL_LATEST_REMAINING(), 188)
 
 
 class TestReviewFixes(Isolated):
