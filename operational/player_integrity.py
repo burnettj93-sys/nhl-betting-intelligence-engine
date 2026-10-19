@@ -21,6 +21,7 @@ from operational import state_paths
 ROSTER_URL = "https://api-web.nhle.com/v1/roster/{team}/current"
 ROSTER_STATE = "official_rosters.json"
 AMBIGUOUS_STATE = "player_integrity.json"
+FAILED_BACKOFF_MIN = 15
 MAX_FETCHES_PER_CALL = 10     # the NHL API rate-limits bursts (HTTP 429): at most this many teams per cycle, paced; the rest are fetched on the next cycle
 ROSTER_MAX_AGE_MIN = 180        # re-fetch a team's official roster when the copy is older than this
 USABLE_MAX_AGE_H = 36           # an official roster older than this is not evidence
@@ -71,19 +72,19 @@ def _save(name: str, doc: dict) -> None:
 def fetch_roster(team: str, *, timeout: float = 10.0) -> dict[str, str]:
     """{player_id: full name} from the NHL's current roster for one team. Raises on any failure (the caller keeps its last good copy)."""
     import requests
-    last = None
-    for _ in range(2):
-        try:
-            r = requests.get(ROSTER_URL.format(team=team), timeout=timeout)
-            r.raise_for_status()
-            d = r.json()
-            out = {str(p["id"]): f"{p['firstName']['default']} {p['lastName']['default']}" for g in ("forwards", "defensemen", "goalies") for p in d.get(g, [])}
-            if not out:
-                raise ValueError("empty roster")
-            return out
-        except Exception as exc:  # noqa: BLE001
-            last = exc
-    raise RuntimeError(f"{type(last).__name__}: {last}")
+    r = requests.get(ROSTER_URL.format(team=team), timeout=min(timeout, 8.0))
+    if r.status_code == 429:
+        raise RateLimited("HTTP 429 from the NHL API")
+    r.raise_for_status()
+    d = r.json()
+    out = {str(p["id"]): f"{p['firstName']['default']} {p['lastName']['default']}" for g in ("forwards", "defensemen", "goalies") for p in d.get(g, [])}
+    if not out:
+        raise ValueError("empty roster")
+    return out
+
+
+class RateLimited(RuntimeError):
+    """The NHL API answered HTTP 429: the burst stops and the teams wait for a later cycle."""
 
 
 def refresh_official(teams, now: dt.datetime | None = None, *, fetch: Callable | None = None, max_age_min: float = ROSTER_MAX_AGE_MIN, max_fetches: int = MAX_FETCHES_PER_CALL, pause_s: float | None = None) -> dict:
@@ -97,8 +98,10 @@ def refresh_official(teams, now: dt.datetime | None = None, *, fetch: Callable |
     doc = _load(ROSTER_STATE)
     out = {}
     fetched = 0
+    stop = False
+    consecutive_failures = 0
     # the stalest copies first, so a rate-limited burst never starves the same teams
-    for t in sorted(set(teams), key=lambda x: (doc.get(x) or {}).get("fetched_at_utc") or ""):
+    for t in sorted(set(teams), key=lambda x: ((doc.get(x) or {}).get("fetched_at_utc") or "", x)):
         cur = doc.get(t) or {}
         try:
             age = (now - dt.datetime.fromisoformat(cur["fetched_at_utc"].replace("Z", "+00:00"))).total_seconds() / 60.0 if cur.get("fetched_at_utc") else None
@@ -106,6 +109,16 @@ def refresh_official(teams, now: dt.datetime | None = None, *, fetch: Callable |
             age = None
         if age is not None and age < max_age_min and not cur.get("error"):
             out[t] = "CURRENT"
+            continue
+        try:                                                    # a team whose last attempt failed is not retried for FAILED_BACKOFF_MIN: a hung or rate-limiting API must not be hit every cycle
+            since_fail = (now - dt.datetime.fromisoformat(cur["error_at_utc"].replace("Z", "+00:00"))).total_seconds() / 60.0 if cur.get("error_at_utc") else None
+        except ValueError:
+            since_fail = None
+        if cur.get("error") and since_fail is not None and since_fail < FAILED_BACKOFF_MIN:
+            out[t] = "BACKOFF"
+            continue
+        if stop:
+            out[t] = "DEFERRED_AFTER_FAILURES"
             continue
         if fetched >= max_fetches:
             out[t] = "DEFERRED_TO_NEXT_CYCLE"
@@ -116,9 +129,13 @@ def refresh_official(teams, now: dt.datetime | None = None, *, fetch: Callable |
         try:
             doc[t] = {"fetched_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "players": fetch(t), "error": None}
             out[t] = "FETCHED"
+            consecutive_failures = 0
         except Exception as exc:  # noqa: BLE001
             doc[t] = {**cur, "error": f"{type(exc).__name__}: {str(exc)[:120]}", "error_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
             out[t] = "FAILED_KEPT_LAST_GOOD" if cur.get("players") else "FAILED_NO_COPY"
+            consecutive_failures += 1
+            if isinstance(exc, RateLimited) or consecutive_failures >= 2:
+                stop = True                                     # the rest wait for a later cycle
     _save(ROSTER_STATE, doc)
     return out
 
@@ -143,6 +160,18 @@ def verdict(player_id, team: str, now: dt.datetime | None = None, *, name: str |
     return {"status": OK, "detail": f"on the official {team} roster ({stamp})"}
 
 
+def verdict_any_team(player_id, now: dt.datetime | None = None, *, name: str | None = None, rosters: dict | None = None) -> dict:
+    """For a leg that carries no team (a goalie-saves leg): OK if ANY team's current official roster holds the id (and the name agrees); MISMATCH if every usable roster lacks it; else UNVERIFIED."""
+    rosters = rosters if rosters is not None else _load(ROSTER_STATE)
+    seen_usable = False
+    for team in rosters:
+        v = verdict(player_id, team, now, name=name, rosters=rosters)
+        if v["status"] == OK:
+            return v
+        seen_usable = seen_usable or v["status"] != UNVERIFIED
+    return {"status": MISMATCH if seen_usable else UNVERIFIED, "detail": f"id {player_id} is on no current official roster" if seen_usable else "no usable official rosters"}
+
+
 def duplicate_names(names_by_id: dict) -> dict[str, list[str]]:
     """{normalised name: [ids]} for every name held by more than one id in a team's roster map {id: full name}."""
     seen: dict[str, list[str]] = {}
@@ -151,9 +180,16 @@ def duplicate_names(names_by_id: dict) -> dict[str, list[str]]:
     return {k: v for k, v in seen.items() if len(v) > 1}
 
 
-def record_ambiguous(date: str, items: list[dict]) -> None:
-    """Names withdrawn because two players share them on one team: [{"team", "name", "ids"}], kept for the board and the audit (one list per day, replaced at each model build)."""
+def record_ambiguous(date: str, items: list[dict], *, merge: bool = False) -> None:
+    """Names withdrawn because two players share them on one team: [{"team", "name", "ids"}], kept for the board and the audit. With merge=True the day's list only grows (a team whose game has
+    started drops out of the model, but its twin names stay withdrawn for the day)."""
     doc = _load(AMBIGUOUS_STATE)
+    if merge:
+        seen = {(a["team"], norm(a["name"])): a for a in doc.get(date) or []}
+        for a in items:
+            k = (a["team"], norm(a["name"]))
+            seen[k] = {**a, "ids": sorted(set(a["ids"]) | set((seen.get(k) or {}).get("ids") or []))}
+        items = list(seen.values())
     doc[date] = items
     for old in sorted(k for k in doc if k < date)[:-3]:
         del doc[old]

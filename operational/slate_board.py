@@ -381,7 +381,8 @@ def _frozen_block(previous_doc: dict | None, today: str, g: dict, recovered: dic
     at = prev.get("frozen_at_utc") or (previous_doc or {}).get("generated_at_utc") if from_doc else prev.get("frozen_at_utc")
     cov = prev["coverage"]
     cov["frozen_at_utc"] = at
-    cov["price_state_word"] = f"pregame view frozen at puck drop (prices as of then; not current): {cov.get('price_state_word') or 'analysis'}"
+    if not str(cov.get("price_state_word") or "").startswith("pregame view frozen"):        # idempotent: a block that was already frozen keeps its label as it is
+        cov["price_state_word"] = f"pregame view frozen at puck drop (prices as of then; not current): {cov.get('price_state_word') or 'analysis'}"
     cov["recommended"] = []                                         # nothing on a started game is a current recommendation
     # The frozen block is for reference: every recommendation-shaped field is made inert so no page path can show it as a current pick.
     note = "The game has started: the pregame view is kept for reference and is not a current recommendation."

@@ -114,21 +114,83 @@ class TestTheBoardWithdrawsWrongPlayers(unittest.TestCase):
 
 
 class TestTheRecordingGate(unittest.TestCase):
-    def combo(self, pid="P1", team="AAA", name="Test Skater One"):
-        leg = mock.Mock(participant_id=pid, team=team, participant_name=name, provisional=False, provider_start_utc=None, game_start_utc="2026-10-09T23:00:00Z", quote_updated_utc=None,
-                        retrieved_at_utc=None, captured_at_utc=None)
-        return mock.Mock(legs=[leg])
+    def combo(self, *legs):
+        return mock.Mock(legs=list(legs))
 
-    def test_an_unverified_or_mismatched_leg_is_never_recorded_when_the_gate_is_on(self):
+    def leg(self, pid="8001", team="AAA", name="Test Skater One", family="PLAYER_SOG_ALTERNATE"):
+        return mock.Mock(participant_id=pid, team=team, participant_name=name, market_family=family, provisional=False, provider_start_utc=None, game_start_utc="2026-10-09T23:00:00Z",
+                         quote_updated_utc=None, retrieved_at_utc=None, captured_at_utc=None)
+
+    def roster(self):
+        pi._save(pi.ROSTER_STATE, {"AAA": {"fetched_at_utc": "2026-10-08T21:00:00Z", "players": {"8001": "Test Skater One", "8100": "Test Goalie"}, "error": None}})
+
+    def run_gate(self, *legs):
         from operational import daily_tickets as dtk
-        pi._save(pi.ROSTER_STATE, {"AAA": {"fetched_at_utc": "2026-10-08T21:00:00Z", "players": {"P1": "Test Skater One"}, "error": None}})
-        with mock.patch.dict(os.environ, {pi.ENV_GATE: "on"}), mock.patch("research.real_market_parlay.engine.leg_label", return_value="Test Skater One 2+"):
-            ok = dtk.revalidate_before_recording(self.combo(), NOW)
-            bad = dtk.revalidate_before_recording(self.combo(pid="P9"), NOW)
-            none = dtk.revalidate_before_recording(self.combo(team="CCC", pid="P1"), NOW)
-        self.assertFalse([r for r in ok if "identity" in r])
-        self.assertTrue(any("MISMATCH" in r for r in bad))
-        self.assertTrue(any("UNVERIFIED" in r for r in none))
+        with mock.patch.dict(os.environ, {pi.ENV_GATE: "on"}), mock.patch("research.real_market_parlay.engine.leg_label", return_value="leg"):
+            return [r for r in dtk.revalidate_before_recording(self.combo(*legs), NOW) if "identity" in r]
+
+    def test_a_verified_player_leg_passes_and_a_mismatched_or_unverifiable_one_is_held(self):
+        self.roster()
+        self.assertEqual(self.run_gate(self.leg()), [])
+        self.assertTrue(any("MISMATCH" in r for r in self.run_gate(self.leg(pid="8999"))))
+        self.assertTrue(any("UNVERIFIED" in r for r in self.run_gate(self.leg(team="CCC"))))
+
+    def test_a_moneyline_leg_is_not_a_player_and_is_never_blocked_by_the_player_gate(self):
+        """Review of PR 162: the gate treated a team code as a player id and would have blocked every ticket with a moneyline leg."""
+        self.roster()
+        pi._save(pi.ROSTER_STATE, {})                                                          # even with no official roster at all
+        self.assertEqual(self.run_gate(self.leg(pid="BOS", team="BOS", name="BOS", family="MONEYLINE")), [])
+
+    def test_a_saves_leg_with_no_team_is_checked_against_every_official_roster(self):
+        self.roster()
+        self.assertEqual(self.run_gate(self.leg(pid="8100", team=None, name="Test Goalie", family="PLAYER_GOALIE_SAVES")), [])
+        self.assertTrue(any("MISMATCH" in r for r in self.run_gate(self.leg(pid="8777", team=None, name="Nobody", family="PLAYER_GOALIE_SAVES"))))
+
+
+class TestReviewFixes(unittest.TestCase):
+    def test_the_frozen_label_is_idempotent(self):
+        p = product()
+        d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)
+        cov = d["games"][0]["coverage"]
+        word = cov["price_state_word"]
+        prev = {**d, "games": [{**d["games"][0], "state": "STARTED", "frozen_at_utc": "2026-10-08T21:00:00Z"}]}
+        for _ in range(3):
+            frozen = sb._frozen_block(prev, "2026-10-08", {**p["games"]["games"][0], "state": "FINAL"})[0]
+            prev = {**prev, "games": [frozen]}
+        self.assertEqual(frozen["coverage"]["price_state_word"].count("frozen at puck drop"), 1)
+        self.assertTrue(frozen["coverage"]["price_state_word"].endswith(word))
+
+    def test_the_model_cache_schema_was_bumped_so_a_stale_model_is_not_served(self):
+        self.assertGreaterEqual(bb.MODEL_CACHE_SCHEMA, 5)
+
+    def test_a_twin_who_does_not_qualify_for_pricing_still_withdraws_the_name(self):
+        import sqlite3
+        from unittest import mock as m
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE players (player_id TEXT, full_name TEXT)")
+        conn.executemany("INSERT INTO players VALUES (?, ?)", [("1", "Elias Pettersson"), ("2", "Elias Pettersson"), ("3", "Quinn Hughes")])
+        with m.patch("features.point_in_time.roster_ids_for_team", return_value=["1", "2", "3"]):
+            dups = bb.roster_duplicate_keys(conn, ["VAN"], "2026-10-20T00:00:00")
+        self.assertEqual(dups, {"elias pettersson|VAN": ["1", "2"]})
+
+    def test_the_ambiguous_list_for_a_day_only_grows(self):
+        pi.record_ambiguous("2026-10-21", [{"team": "VAN", "name": "Elias Pettersson", "ids": ["1", "2"]}], merge=True)
+        pi.record_ambiguous("2026-10-21", [{"team": "CAR", "name": "Sebastian Aho", "ids": ["3", "4"]}], merge=True)
+        self.assertEqual({a["team"] for a in pi.ambiguous_for("2026-10-21")}, {"VAN", "CAR"})
+
+    def test_a_rate_limit_stops_the_burst_and_a_failed_team_backs_off(self):
+        calls = []
+
+        def fetch(t):
+            calls.append(t)
+            raise pi.RateLimited("429")
+        out = pi.refresh_official(["RL1", "RL2", "RL3"], OFFICIAL_AT, fetch=fetch)
+        self.assertEqual(calls, ["RL1"])                                                       # the first 429 ends the burst
+        self.assertEqual(sorted(out.values()), ["DEFERRED_AFTER_FAILURES", "DEFERRED_AFTER_FAILURES", "FAILED_NO_COPY"])
+        again = pi.refresh_official(["RL1"], OFFICIAL_AT + dt.timedelta(minutes=5), fetch=lambda t: self.fail("backing off"))
+        self.assertEqual(again, {"RL1": "BACKOFF"})                                            # not hit every cycle
+        later = pi.refresh_official(["RL1"], OFFICIAL_AT + dt.timedelta(minutes=20), fetch=lambda t: {"1": "A B"})
+        self.assertEqual(later, {"RL1": "FETCHED"})
 
 
 if __name__ == "__main__":

@@ -344,7 +344,7 @@ def morning_strip(tk: dict, now: dt.datetime | None = None) -> None:
     """One banner on today's timeline: the 07:45 refresh, the 08:00 analysis and league pull, and the next capture, from the published day status."""
     ds = day_status_or_none()
     if not ds or not ds.get("plan_present"):
-        st.caption("Today's capture plan has not been made yet: the first 15-minute engine cycle of the day makes it.")
+        st.caption("Today's capture plan has not been made yet: the first 10-minute engine cycle of the day makes it.")
         return
     p, lp = ds.get("prep") or {}, ds.get("league_pulls") or {}
     comps = ", ".join(f"{k} {str(v.get('status')).lower()}" + (f" {et_time(v['finished_utc'], True)}" if v.get("finished_utc") else "") for k, v in (p.get("refresh_steps") or {}).items())

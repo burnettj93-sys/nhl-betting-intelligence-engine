@@ -31,7 +31,7 @@ def stale_now(quoted_at, start_utc) -> tuple[bool, str]:
 ui.header("Slate Board", "Every game today, analysed, and one primary parlay built from the strongest supported selections.")
 board = ui.load(ps.slate_board, "The slate board")
 if not board.get("games") and not board.get("generated_at_utc"):
-    ui.unavailable("The board has not been written yet; the engine writes it with every 15-minute update.", "The slate board")
+    ui.unavailable("The board has not been written yet; the engine writes it with every 10-minute update.", "The slate board")
     st.stop()
 
 if board.get("policy_error"):

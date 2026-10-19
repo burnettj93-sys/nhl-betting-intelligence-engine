@@ -20,7 +20,7 @@ def snap():
         "shots": {"picks": [{"name": "Blake Coleman", "team": "MIN", "player_id": "8476399", "chosen": {"quote_updated_utc": q}, "ladder": [{"threshold": 2, "american": -175.0}]}]},
         "coverage": {"price_state": "FRESH_PRICES", "integrity": {"withdrawn": [], "unverified_players": 0}}}]},
         "builder_pool": {"generated_at_utc": "2026-10-18T23:27:32Z", "games": {"1": {"players": {
-            "8478864": {"m": {"GOAL": {"q": q, "l": [[1, -115.0, 0.4]]}}}, "8476399": {"m": {"SOG": {"q": q, "l": [[2, -175.0, 0.6]]}}}}}}},
+            "8478864": {"n": "Kirill Kaprizov", "t": "MIN", "m": {"GOAL": {"q": q, "l": [[1, -115.0, 0.4]]}}}, "8476399": {"n": "Blake Coleman", "t": "MIN", "m": {"SOG": {"q": q, "l": [[2, -175.0, 0.6]]}}}}}}},
         "tickets": {"generated_at_utc": "2026-10-18T23:27:32Z", "options": {"options": []}}, "metadata": {"generated_at": "2026-10-18T23:27:00Z"}}
 
 
@@ -38,6 +38,27 @@ class TestAuditChecks(unittest.TestCase):
         res = la.check_integrity(bad, NOW)
         self.assertEqual(res[0]["status"], la.FAIL)
         self.assertIn("WRONG_GAME", res[0]["detail"])
+
+    def test_builder_players_and_slip_legs_are_checked_too_and_unverifiable_is_never_a_pass(self):
+        self.rosters()
+        s = snap()
+        s["builder_pool"]["games"]["1"]["players"]["8478864"].update(n="Kirill Kaprizov", t="MIN")
+        s["builder_pool"]["games"]["1"]["players"]["999"] = {"n": "Not A Minnesota Player", "t": "MIN", "m": {}}
+        res = la.check_integrity(s, NOW)
+        self.assertEqual(res[0]["status"], la.FAIL)
+        self.assertIn("Not A Minnesota Player", res[0]["detail"])
+        s2 = snap()
+        s2["tickets"]["options"] = {"options": [{"legs": [{"participant_id": "8482720", "participant_name": "Matthew Knies", "team": "MIN"}, {"participant_id": "BOS", "participant_name": "BOS", "team": "BOS"}]}]}
+        res2 = la.check_integrity(s2, NOW)
+        self.assertEqual(res2[0]["status"], la.FAIL)                                                  # Knies is not on MIN's roster; the team-code leg is not a player and is skipped
+        pi._save(pi.ROSTER_STATE, {})
+        res3 = la.check_integrity(snap(), NOW)
+        self.assertEqual(res3[1]["status"], la.WARN)                                                  # nothing could be verified: a warning, not a pass
+
+    def test_nothing_compared_is_a_warning_not_a_pass(self):
+        s = snap()
+        s["builder_pool"]["games"] = {}
+        self.assertEqual(la.check_surfaces(s)[0]["status"], la.WARN)
 
     def test_a_player_missing_from_the_official_roster_fails(self):
         self.rosters(mp=False)
@@ -59,7 +80,9 @@ class TestAuditChecks(unittest.TestCase):
 
     def test_an_old_quote_labelled_fresh_fails_the_freshness_check(self):
         s = snap()
-        s["slate_board"]["games"][0]["scorers"][0]["price"]["quote_updated_utc"] = "2026-10-17T10:00:00Z"
+        s["slate_board"]["games"][0]["start_utc"] = "2026-10-19T00:00:00Z"
+        self.assertEqual(la.check_freshness(s, NOW)[0]["status"], la.PASS)                         # the 10-minute-old quote is inside the limit
+        s["slate_board"]["games"][0]["scorers"][0]["price"]["quote_updated_utc"] = "2026-10-18T20:00:00Z"        # 3.5 hours old, game 90 minutes away
         self.assertEqual(la.check_freshness(s, NOW)[0]["status"], la.FAIL)
 
 

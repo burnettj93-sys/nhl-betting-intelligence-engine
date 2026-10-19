@@ -83,6 +83,7 @@ def build(nhl_conn, now: dt.datetime) -> dict:
     doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": snap["date"], "model_version": MODEL_VERSION, "games": {},
            "skipped": {"unmatched_prices": 0, "not_active": 0, "saves_unconfirmed": 0, "integrity": 0}, "families": {k: v[2] for k, v in FAMILIES.items()}}
     rosters: dict[str, dict] = {}
+    official = player_integrity._load(player_integrity.ROSTER_STATE)         # read once per build
     for e in events:
         m = bb.match_game(e, games)
         if not m:
@@ -132,7 +133,7 @@ def build(nhl_conn, now: dt.datetime) -> dict:
                         continue
                     if (code == "SAVES") != (pos == "G"):
                         continue                                             # saves are goalies' lines; every other market is a skater's
-                    iv = player_integrity.verdict(pid, team, now, name=o["description"])
+                    iv = player_integrity.verdict(pid, team, now, name=o["description"], rosters=official)
                     if player_integrity.blocking(iv["status"]):
                         doc["skipped"]["integrity"] += 1                    # not on the team's current official roster (or another person under that id): never offered
                         continue

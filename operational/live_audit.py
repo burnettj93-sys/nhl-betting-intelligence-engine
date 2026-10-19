@@ -3,7 +3,7 @@ The live acceptance audit: one command that checks the DEPLOYED engine and the P
 
     python3 -m operational.live_audit            # prints every check; exit code 1 if any check FAILS
 
-Each check returns {"name", "status": PASS | FAIL | WARN, "detail"}. It reads (never writes) the published snapshot (the cloud-data branch, what the hosted app serves), the local state files and the
+Each check returns {"name", "status": PASS | FAIL | WARN, "detail"}. It reads (writes only its own ledger-hash baseline) the published snapshot (the cloud-data branch, what the hosted app serves), the local state files and the
 ledgers. Run it after every deployment: a new failure goes back into the repair loop. Nothing here is a fixture: a check that cannot read its evidence reports WARN, not PASS.
 """
 from __future__ import annotations
@@ -33,26 +33,43 @@ def _c(name, ok, detail, warn=False):
 
 
 def check_integrity(snap, now) -> list[dict]:
+    """Every selection a visitor can see or a slip can use: board scorers and shots picks, the builder's priced players, the Best Options and ticket legs. A selection whose team is not in the game, whose name is
+    ambiguous, or who is not on his team's current official roster FAILS. Selections that cannot be verified (no usable official roster) are counted and reported as a WARNING, never as a pass."""
     from operational import player_integrity as pi
     rosters = pi._load(pi.ROSTER_STATE)
     sb = snap["slate_board"]
     bad, unver, n = [], 0, 0
+
+    def judge(label, pid, nm, tm, game):
+        nonlocal unver, n
+        n += 1
+        v = pi.check_selection(pid, nm, tm, game, sb["date_et"], now, rosters=rosters) if game else pi.verdict(pid, tm, now, name=nm, rosters=rosters)
+        if v["status"] == pi.UNVERIFIED:
+            unver += 1
+        elif v["status"] != pi.OK:
+            bad.append(f"{label} {nm}: {v['status']}")
+
     for g in sb["games"]:
         game = {"home": g["home"], "away": g["away"]}
-        sel = [(s["name"], s.get("team"), s.get("player_id")) for s in g["scorers"]] + [(p["name"], p.get("team"), p.get("player_id")) for p in g["shots"]["picks"]]
-        for nm, tm, pid in sel:
-            n += 1
-            v = pi.check_selection(pid, nm, tm, game, sb["date_et"], now, rosters=rosters)
-            if v["status"] == pi.UNVERIFIED:
-                unver += 1
-            elif v["status"] != pi.OK:
-                bad.append(f"{g['away']}@{g['home']} {nm}: {v['status']}")
-        withdrawn = (g["coverage"].get("integrity") or {}).get("withdrawn") or []
+        for s_ in g["scorers"]:
+            judge(f"{g['away']}@{g['home']} scorer", s_.get("player_id"), s_["name"], s_.get("team"), game)
+        for p_ in g["shots"]["picks"]:
+            judge(f"{g['away']}@{g['home']} shots", p_.get("player_id"), p_["name"], p_.get("team"), game)
         if g.get("state") == "SCHEDULED" and "integrity" not in g["coverage"]:
             bad.append(f"{g['away']}@{g['home']}: the integrity block is missing from the published card")
-        _ = withdrawn
-    out = [_c("integrity_every_displayed_selection_is_on_the_official_roster_of_a_team_in_the_game", not bad, f"{n} selections checked; problems: {bad or 'none'}")]
-    out.append(_c("integrity_official_rosters_available", unver == 0, f"{unver} of {n} displayed selections could not be verified (official roster missing or older than {pi.USABLE_MAX_AGE_H} h)", warn=True))
+    for gid, gp in ((snap.get("builder_pool") or {}).get("games") or {}).items():
+        for pid, p_ in (gp.get("players") or {}).items():
+            judge(f"builder {gid}", pid, p_.get("n", ""), p_.get("t"), None)
+    legs = []
+    for o in ((snap["tickets"].get("options") or {}).get("options") or []):
+        legs += o.get("legs") or []
+    for t in snap["tickets"].get("tickets") or []:
+        legs += t.get("legs") or []
+    for l in legs:
+        if str(l.get("participant_id") or "").isdigit():
+            judge("slip/option leg", l["participant_id"], l.get("participant_name", ""), l.get("team"), None)
+    out = [_c("integrity_no_displayed_or_slip_selection_is_a_wrong_player", not bad, f"{n} selections checked ({unver} unverifiable); problems: {bad[:8] or 'none'}")]
+    out.append(_c("integrity_official_rosters_verified_the_selections", unver == 0, f"{unver} of {n} selections could not be verified (official roster missing or older than {pi.USABLE_MAX_AGE_H} h)", warn=True))
     return out
 
 
@@ -80,29 +97,37 @@ def check_surfaces(snap) -> list[dict]:
                     if k in bl and bl[k] != price:
                         mismatches.append(f"{pk['name']} {k}+: board {bl[k]} vs builder {price}")
     opts = (snap["tickets"].get("options") or {}).get("options") or []
-    return [_c("surfaces_slate_board_and_builder_agree_on_prices_and_provider_times", not mismatches, f"{compared} prices compared; mismatches: {mismatches[:5] or 'none'}"),
+    first = _c("surfaces_slate_board_and_builder_agree_on_prices_and_provider_times", not mismatches, f"{compared} prices compared; mismatches: {mismatches[:5] or 'none'}")
+    if not mismatches and compared == 0:
+        first = _c("surfaces_slate_board_and_builder_agree_on_prices_and_provider_times", False, "no price appears on both surfaces yet (nothing was compared)", warn=True)
+    return [first,
             _c("surfaces_published_sections_share_one_build", len({snap['slate_board']['generated_at_utc'][:16], snap['builder_pool']['generated_at_utc'][:16]}) == 1,
                f"board {snap['slate_board']['generated_at_utc']}, builder {snap['builder_pool']['generated_at_utc']}, tickets {snap['tickets']['generated_at_utc']}; {len(opts)} Best Options")]
 
 
 def check_freshness(snap, now) -> list[dict]:
-    from operational import quote_freshness as qf
+    """Every displayed provider quote time against the limit that applies at this distance from puck drop (operational/best_bets.price_age_limit_min): a quote past its limit must not be labelled fresh."""
+    from operational import best_bets
     sb = snap["slate_board"]
-    stale_unlabelled = []
+    wrong = []
+    checked = 0
     for g in sb["games"]:
-        if g.get("state") != "SCHEDULED":
+        if g.get("state") != "SCHEDULED" or not g.get("start_utc"):
             continue
+        hours = (dt.datetime.fromisoformat(g["start_utc"].replace("Z", "+00:00")) - now).total_seconds() / 3600.0
+        limit = best_bets.price_age_limit_min(max(hours, 0.0))
         word = g["coverage"].get("price_state")
-        ages = [s["price"]["quote_updated_utc"] for s in g["scorers"] if s.get("price")] + [p["chosen"].get("quote_updated_utc") for p in g["shots"]["picks"] if p.get("chosen") and p["chosen"].get("quote_updated_utc")]
-        for q in ages:
+        stamps = [s["price"]["quote_updated_utc"] for s in g["scorers"] if s.get("price")] + [p["chosen"].get("quote_updated_utc") for p in g["shots"]["picks"] if p.get("chosen") and p["chosen"].get("quote_updated_utc")]
+        for q in stamps:
+            checked += 1
             try:
                 age = (now - dt.datetime.fromisoformat(q.replace("Z", "+00:00"))).total_seconds() / 60.0
             except (TypeError, ValueError):
-                stale_unlabelled.append(f"{g['away']}@{g['home']}: unreadable quote time {q}")
+                wrong.append(f"{g['away']}@{g['home']}: unreadable quote time {q}")
                 continue
-            if age > 600 and word == "FRESH_PRICES":
-                stale_unlabelled.append(f"{g['away']}@{g['home']}: a {age:.0f} min old quote labelled fresh")
-    return [_c("freshness_no_old_quote_is_labelled_fresh", not stale_unlabelled, str(stale_unlabelled[:4] or "none"))]
+            if age > limit and word == "FRESH_PRICES":
+                wrong.append(f"{g['away']}@{g['home']}: a {age:.0f} min old quote (limit {limit:.0f}) labelled fresh")
+    return [_c("freshness_no_quote_past_its_limit_is_labelled_fresh", not wrong, f"{checked} quotes checked; {wrong[:4] or 'none'}")]
 
 
 def check_credits(now) -> list[dict]:
@@ -121,6 +146,27 @@ def check_credits(now) -> list[dict]:
             _c("credits_player_spend_within_the_days_share", share is None or spent_player <= share + 1.0, f"player credits spent {spent_player} vs today's share {share} (the recovery credit may add 1)")]
 
 
+def _wave_timeliness(now) -> dict:
+    """When each wave was captured against its T-90 target and T-60 deadline (from the wave state). The file cannot tell an unattended capture from a manually triggered one: that is reported as a WARNING note, not a pass."""
+    from operational import eastern_time as et, state_paths
+    try:
+        doc = json.loads(state_paths.path("wave_capture_state.json").read_text())
+    except (OSError, ValueError):
+        return _c("jobs_wave_captures_timely", False, "no wave capture state", warn=True)
+    if doc.get("day") != et.eastern_today(now):
+        return _c("jobs_wave_captures_timely", False, f"wave state is for {doc.get('day')}, not today", warn=True)
+    rows, late = [], []
+    for idx, w in (doc.get("waves") or {}).items():
+        first = min((g.get("captured_at_utc") for g in (w.get("games") or {}).values() if g.get("captured_at_utc")), default=None)
+        if not first or not w.get("target_utc"):
+            continue
+        mins = (dt.datetime.fromisoformat(first.replace("Z", "+00:00")) - dt.datetime.fromisoformat(w["target_utc"].replace("Z", "+00:00"))).total_seconds() / 60.0
+        rows.append(f"wave {idx}: {mins:+.0f} min vs target" + ("" if w.get("on_time") else " (after the T-60 deadline)"))
+        if not w.get("on_time"):
+            late.append(idx)
+    return _c("jobs_wave_captures_timely", not late and bool(rows), "; ".join(rows) or "no captured wave yet", warn=not late)
+
+
 def check_jobs(now) -> list[dict]:
     from operational import watchdog
     st = watchdog.load_state() or {}
@@ -132,7 +178,7 @@ def check_jobs(now) -> list[dict]:
     fails = [(c["name"], c["detail"][:100]) for c in st.get("checks", []) if c["status"] == "FAIL"]
     return [_c("jobs_watchdog_state_is_fresh", age is not None and age < 45, f"watchdog checked {age and round(age)} min ago"),
             _c("jobs_no_watchdog_check_fails", not fails, str(fails or "none")),
-            _c("jobs_scheduled_captures_ran_unattended", True, "see day_status waves: each wave's capture time vs its target (manual triggers are logged in the session, not distinguishable here)", warn=True)]
+            _wave_timeliness(now)]
 
 
 def check_recording(now) -> list[dict]:
@@ -146,7 +192,7 @@ def check_recording(now) -> list[dict]:
     pol = ticket_policy.checked_active()
     return [_c("recording_one_active_experiment_with_500_start", act is not None and act["starting_bankroll"] == 500.0 and len([e for e in exps if e["status"] == "ACTIVE"]) == 1, f"active {act and act['experiment_id']}"),
             _c("recording_policy_digest_is_the_corrected_one", pol.digest() == "1fad3ba03503cf94" and pol.anchor_cap == 0.02, f"{pol.policy_id} {pol.digest()} cap {pol.anchor_cap}"),
-            _c("recording_state", True, f"paused={recording_pause.is_paused()} approved={ticket_policy.is_approved()}", warn=False)]
+            _c("recording_state_is_reported", True, f"paused={recording_pause.is_paused()} approved={ticket_policy.is_approved()} (informational)")]
 
 
 def check_hosted(snap, now) -> list[dict]:
@@ -165,7 +211,10 @@ def check_isolation() -> list[dict]:
         prev = json.loads(state.read_text())
     except (OSError, ValueError):
         prev = {}
-    state.write_text(json.dumps(cur))
+    try:
+        state.write_text(json.dumps(cur))
+    except OSError:
+        pass
     note = "first run: baseline recorded" if not prev else ("unchanged since the last audit" if prev == cur else "CHANGED since the last audit (a ticket, settlement or experiment change is expected; a test run is not)")
     return [_c("isolation_model_book_hash", True, note)]
 
