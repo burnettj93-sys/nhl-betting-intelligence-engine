@@ -1,9 +1,9 @@
-# Acceptance checklist (one list; updated 2026-10-19 08:05 ET, release c746d9d)
+# Acceptance checklist (one list; updated 2026-10-19 08:35 ET, release 1e79d85)
 
 Evidence classes: **FIXED+TESTED** (code and regression tests, full suite green) · **VERIFIED LIVE** (observed on production data or the hosted app) · **AWAITING OBSERVATION** (scheduled; will be observed by itself) · **EXTERNAL** (needs something only the owner can do).
 Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integrity, surface agreement, freshness labels, credits, jobs, recording safeguards, hosted recency).
 
-## Monday 2026-10-19 observations (release c746d9d, no manual trigger unless stated)
+## Monday 2026-10-19 observations (release c746d9d until 08:14 ET, then 1e79d85; no manual trigger unless stated)
 | Item | State |
 |---|---|
 | Mac power overnight | **EXTERNAL, failed overnight**: on battery the Mac slept about 05:20 ET to 07:36 ET (trader gap in `run_heartbeats.json`). The charger went in about 07:36; the engine's own guard then took its sleep-prevention hold (07:39) and every job resumed by itself |
@@ -16,10 +16,11 @@ Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integri
 | Today's schedule vs the NHL feed | **VERIFIED LIVE**: 4 games, teams and start times identical; waves: 17:30 ET target (ANA@NYR, COL@PHI, SJS@TOR; COL@PHI funded) and 19:30 ET target (PIT@UTA funded) |
 | Sunday official results | **VERIFIED LIVE**: CBJ 1-2 MIN, CAR 2-3 CGY identical to the NHL box scores in `games`; player and goalie rows stored for both games |
 | Reconciliation | **VERIFIED LIVE**: cash $500 = $500 start, 0 tickets, 0 open stake (Experiment 2) |
-| Prediction scoring | **GAP FOUND, FIXED+TESTED in PR 164, not yet released**: the prospective ledger had no rows after Oct 17 (the T-35/sweep writers are retired; the legacy shots corpus ends April 2026 so its orchestrators log nothing on real data, reproduced on copies). A read-only board scorecard now grades each frozen pregame card against FINAL results. On Oct 17-18: scorers 30 graded (hit 33%, mean estimate 30%), other markets under 30 (TOO_FEW). No verdict is claimed |
-| Hosted health: Live Odds Scheduler STALE | **FIXED+TESTED in PR 164, not yet released** (it still expected the three retired jobs) |
-| Unattended waves today (17:30 and 19:30 ET targets) | **AWAITING OBSERVATION** |
-| Recording | **PAUSED** (owner); activation dry run reported below; no authorization to activate |
+| Prediction scoring | **GAP FOUND, FIXED+TESTED, RELEASED (PR 164, 08:14 ET); VERIFIED LIVE**: the trader wrote the first real scorecard by itself at 08:17 ET (49 graded rows): the prospective ledger had no rows after Oct 17 (the T-35/sweep writers are retired; the legacy shots corpus ends April 2026 so its orchestrators log nothing on real data, reproduced on copies). A read-only board scorecard now grades each frozen pregame card against FINAL results. On Oct 17-18: scorers 30 graded over 6 games (hit 33%, mean estimate 30%, model Brier 0.203 vs the vig-inclusive price 0.199 on the 12 priced rows), other markets under 30 (TOO_FEW). No verdict is claimed |
+| Hosted health: Live Odds Scheduler STALE | **FIXED+TESTED, RELEASED** (it expected the three retired jobs); the hosted app shows Code 1e79d85 with the corrected wording; its health item is read from the next published snapshot |
+| Full suite on the merged code | **VERIFIED**: 4268 tests OK (2 skipped); production model-book hash identical before and after |
+| Unattended waves today (17:30 and 19:30 ET targets) | **AWAITING OBSERVATION**. The Mac was on battery again at 08:18 ET (42%): the charger and an open lid are **EXTERNAL**; on battery the engine holds the Mac awake only inside capture windows above 30%. Verify with `python3 -m operational.live_audit` (wave timeliness) and `docs/`-listed state files `wave_capture_state.json`, `credit_plan_ledger.jsonl` |
+| Recording | **PAUSED** (owner). Activation dry run (08:14 ET, from the release checkout): `all_pass: true`, 16 of 16 checks (policy digest 1fad3ba03503cf94, cap +0.02, $10 stake, +100 to +500, EXP-2 the single active $500 experiment, EXP-1 archived, reconciliation, watchdog fresh, release pinned). Not applied: no explicit activation authorization |
 
 ## Player and matchup integrity
 | Item | State |
