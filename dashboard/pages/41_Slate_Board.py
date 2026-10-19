@@ -47,7 +47,7 @@ st.subheader("Eggy's Parlay Pick of the Day")
 pol = board.get("policy") or {}
 if board.get("recording_paused"):
     st.caption("Automatic recording is paused: this is the slip the selector would record, shown for review. Nothing is staked.")
-ui.eggy_pick_card(primary, recording_paused=bool(board.get("recording_paused")))
+ui.eggy_candidate_card(board.get("eggy"), primary, recording_paused=bool(board.get("recording_paused")))
 ticket = primary.get("ticket")
 if ticket:
     st.caption(f"{ui.esc(primary.get('price_note') or '')}")
@@ -72,6 +72,12 @@ else:
                         f"({s['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(s.get('quote_updated_utc'), True)} ({age}){' · STALE' if stale else ''}"
                         f"{' · provisional' if s.get('provisional') else ''}")
     st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
+
+if (board.get("eggy") or {}).get("availability"):
+    with st.expander("Why prices are missing: every market, game by game"):
+        ui.eggy_availability(board.get("eggy"))
+else:
+    st.caption("The per-market explanation of missing prices is not in this snapshot yet; it appears with the next engine update.")
 
 with st.expander("Today's capture timeline: waves, games priced, games excluded by budget, credits"):
     ui.day_timeline()

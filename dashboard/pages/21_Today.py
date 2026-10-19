@@ -95,7 +95,11 @@ if _proposed:
 _prim = tk.get("primary") if _single else None
 _eggy = bool(_prim)
 if _eggy:
-    ui.eggy_pick_card(_prim, recording_paused=bool(tk.get("recording_paused")))
+    try:                                                    # the whole-slate candidate search lives on the slate board document; a missing or failed one falls back to the official card alone
+        _stage_a = (ps.slate_board() or {}).get("eggy")
+    except Exception:  # noqa: BLE001
+        _stage_a = None
+    ui.eggy_candidate_card(_stage_a, _prim, recording_paused=bool(tk.get("recording_paused")))
 _shown = {((_prim or {}).get("ticket") or {}).get("ticket_id")} if _eggy else set()
 for t in tk["tickets"]:
     if t.get("ticket_id") not in _shown:

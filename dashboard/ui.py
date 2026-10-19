@@ -533,6 +533,138 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
         st.caption("This is the same ticket as the primary parlay on the board, not an extra bet. Hit chances are estimates with a range, not promises; any parlay can lose.")
 
 
+def _stale_on_open(quoted_at, start_utc) -> tuple[bool | None, float | None]:
+    """Judged when the page is opened, from the provider's own quote time and the engine's price limit (the document's flags are from when it was built, up to ten minutes ago or more)."""
+    from operational import quote_freshness as qf
+    now = _utcnow()
+    start = qf.parse_utc(start_utc)
+    if start is None or not quoted_at:
+        return None, None
+    hours = (start - now).total_seconds() / 3600.0
+    r = qf.assess(quoted_at, None, now, qf.price_limit_min(hours), require_retrieval=False)
+    return (not r["fresh"]), r.get("quote_age_min")
+
+
+def _eggy_leg_line(l: dict) -> str:
+    price = l.get("price")
+    if price:
+        stale, age = _stale_on_open(price.get("quote_updated_utc"), l.get("start_utc"))
+        if stale is None:
+            stale = price.get("fresh") is False
+        when = et_time(price.get("quote_updated_utc"), True) if price.get("quote_updated_utc") else "no quote time"
+        price_txt = f"{american(price['american'])} (quoted {when}{'; STALE' if stale else ''})"
+    else:
+        price_txt = f"no price yet: {str(l.get('price_outlook') or 'UNKNOWN').replace('_', ' ').lower()}"
+    bits = [f"**{esc(l['label'])}**", price_txt]
+    if l.get("model_probability") is not None:
+        bits.append(f"model {pct(l['model_probability'])}")
+    if l.get("recent_record"):
+        bits.append(f"recent {l['recent_record']} games")
+    if l.get("estimate") is not None:
+        bits.append(f"estimate {pct(l['estimate'])}")
+    if l.get("implied_probability"):
+        bits.append(f"price implies {pct(l['implied_probability'])}")
+    tags = []
+    if not (l.get("gates") or {}).get("recording_policy_uses_market", True):
+        tags.append("not used by the recording policy")
+    if l.get("model_validation") not in (None, "BEATS_BASELINES", "STRENGTH_MODEL_AND_MARKET"):
+        tags.append(f"model: {str(l['model_validation']).lower().replace('_', ' ')}")
+    return "- " + " · ".join(bits) + (f" · _{'; '.join(tags)}_" if tags else "")
+
+
+def _stage_b_note(primary: dict | None) -> None:
+    """What the production recording policy (stage B, cross-game tickets at real prices) found, shown in its own words and labelled as such."""
+    primary = primary or {}
+    if primary.get("data_limit"):
+        st.warning(primary["data_limit"]["note"])
+    if primary.get("reason"):
+        st.caption("Production recording policy (cross-game tickets only, at real prices): " + esc(primary["reason"]))
+
+
+def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_paused: bool = False) -> None:
+    """Eggy's Parlay Pick of the Day with its two stages. An official pick (stage B, the production recording policy) is shown exactly as before. Without one, the card shows the BEST EGGY CANDIDATE
+    the whole-slate search found and says which certification gates stand in its way, or a TRUE PASS with what was examined. It never invents a joint probability or a combined price."""
+    from dashboard import theme
+    eggy = eggy or {}
+    out = eggy.get("daily_output")
+    if (primary or {}).get("ticket"):                      # an official ticket (proposed or recorded) is always shown by the original card, whatever the candidate document says
+        eggy_pick_card(primary, recording_paused=recording_paused)
+        return
+    today = et.eastern_today(_utcnow())
+    if eggy and eggy.get("date_et") and eggy["date_et"] != today:
+        st.caption(f"The candidate search on file is for {esc(eggy['date_et'])}, not today ({today}); it is not shown. The official card follows.")
+        eggy_pick_card(primary, recording_paused=recording_paused)
+        return
+    if out in (None, "UNAVAILABLE", "OFFICIAL_EGGY_PICK") or eggy.get("error"):
+        if eggy.get("error"):
+            st.caption("Eggy's whole-slate candidate search could not be completed this cycle: " + esc(eggy["error"]))
+        eggy_pick_card(primary, recording_paused=recording_paused)
+        return
+    img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
+    best = eggy.get("best_candidate")
+    with st.container(border=True):
+        if out == "TRUE_PASS" or not best:
+            ex = eggy.get("examined") or {}
+            sub = ("No game is left to examine (every game has started or finished). Eggy does not manufacture a pick." if not ex.get("games") else
+                   f"After examining {ex.get('games', 0)} games and {ex.get('candidates', 0)} thesis candidates, none reaches the support bar ({ex.get('support_floor', 0.6):.0%}) with every leg's model validated. "
+                   "Eggy does not manufacture a pick.")
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>TRUE PASS</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
+            _stage_b_note(primary)
+            return
+        sub = f"Best Eggy candidate: {best['matchup']} — {best['thesis']['title'].title()}. It is shown because the thesis is strong, not because it is certified."
+        st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>NO CERTIFIED EGGY PICK TODAY</div>"
+                    f"<div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
+        _stage_b_note(primary)
+        st.caption(f"Candidate search built {et_time(eggy.get('generated_at_utc'), True)}; each price is judged against its own quote time when you open the page. "
+                   "Nothing here is recorded or staked: a candidate is a thesis to look at, not a qualified pick, and a day without a pick is a correct answer.")
+        st.markdown(f"**Thesis.** {esc(best['thesis']['sentence'])}")
+        if best["thesis"].get("evidence"):
+            st.caption("Evidence: " + " · ".join(esc(e) for e in best["thesis"]["evidence"]))
+        st.markdown(f"**{esc(best['label'])}**")
+        for l in best["legs"]:
+            st.markdown(_eggy_leg_line(l))
+        dep = best.get("dependence") or {}
+        bounds = dep.get("joint_bounds")
+        bits = ["Joint probability: **not certified**"]
+        if bounds:
+            bits.append(f"assumption-free bounds {pct(bounds['low'])} to {pct(bounds['high'])} (true for any dependence; not an estimate)")
+        bits.append("Combined price: **not available** (the feed has no same-game-parlay price and none is made up)")
+        bits.append(f"support score {best['support_score']:.2f} (ranks candidates; not a probability)")
+        st.markdown(" · ".join(bits))
+        with st.expander("Why it is not certified, how the legs depend on each other, and what would certify it"):
+            st.markdown("**Gates that stand in the way**")
+            for b in best.get("blockers") or []:
+                st.markdown(f"- {esc(b)}")
+            st.markdown("**How the legs depend on each other**")
+            for pr in dep.get("pairs") or []:
+                st.markdown(f"- {esc(pr['a'])} + {esc(pr['b'])}: {esc(pr['kind'].replace('_', ' ').lower())}, {esc(pr['direction'].lower())} ({esc(pr['strength'])}) — {esc(pr['note'])}")
+            if best.get("other_compatible_legs"):
+                st.markdown("**Other compatible legs considered:** " + "; ".join(esc(x) for x in best["other_compatible_legs"]))
+            st.markdown("**What would certify it**")
+            for t in best.get("to_certify") or []:
+                st.markdown(f"- {esc(t)}")
+            st.caption("Prices are DraftKings US-feed quotes with the provider's own times; Ontario offerings and prices are unverified. Nothing here is recorded or staked.")
+        others = eggy.get("other_candidates") or []
+        if others:
+            with st.expander(f"Other candidates examined ({len(others)})"):
+                for c in others:
+                    st.markdown(f"**{esc(c['matchup'])} — {esc(c['thesis']['title'].title())}** · support {c['support_score']:.2f} · {c['priced_legs']} of {c['total_legs']} legs priced" + ("" if c.get("game_funded") else " · game outside today's credit plan"))
+                    st.caption(" + ".join(esc(l['label']) for l in c["legs"]))
+
+
+def eggy_availability(eggy: dict | None) -> None:
+    """Per game and market: is there a price, and if not, exactly why (not yet fetched, outside the credit plan, not posted, fetch failed, not usable) with the market's contract status."""
+    rows = (eggy or {}).get("availability") or {}
+    if not rows:
+        return
+    for gid, g in rows.items():
+        st.markdown(f"**{esc(g['matchup'])}** · {esc(g.get('start_et') or '')}")
+        for m in g["markets"]:
+            st.markdown(f"- {esc(m['label'])}: **{esc(str(m['state']).replace('_', ' ').lower())}** — {esc(m.get('why') or '')} · contract {esc(str(m.get('contract', '')).lower())} · recording policy: {esc(m.get('recording_policy', ''))}")
+        if g.get("withdrawn_for_identity"):
+            st.caption("Withdrawn for identity (not on the team's current official roster): " + ", ".join(esc(str(n)) for n in g["withdrawn_for_identity"]))
+
+
 STATUS_WORDS = {"SELECTED": "Taken", "BLOCKED_LEG_LIMIT": "Skipped — leg limit", "BLOCKED_PLAYER_LIMIT": "Skipped — player limit", "BLOCKED_GAME_LIMIT": "Skipped — game limit",
                 "BLOCKED_RECORDING_WINDOW": "Held — recording window", "BLOCKED_OPPOSITE_SIDE": "Skipped — opposite side held", "ALREADY_RECORDED": "Already on the book",
                 "NOT_REACHED": "Not needed — slots full"}
