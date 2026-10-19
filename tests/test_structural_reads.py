@@ -60,6 +60,10 @@ JUSTIFIED_EXCEPTIONS = {
     # deploy/score_selection_shadow.py scores shadow-logged legs AFTER their games are final (shots/goals/assists of a finished game) to measure how
     # the model's earlier, frozen probabilities did. It reads outcomes, never "what was known at time T" for a prediction, and writes nothing.
     ("deploy/score_selection_shadow.py", "player_game_stats"),
+    # operational/board_scorecard.py grades the Slate Board's pregame-FROZEN cards AFTER their games are FINAL (goals, shots, saves, score of a finished game) to measure how the card's earlier, frozen
+    # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
+    ("operational/board_scorecard.py", "player_game_stats"),
+    ("operational/board_scorecard.py", "goalie_game_stats"),
     # ingest/nhl_api.py's SELECTs are idempotency checks in the WRITE
     # path (spec item 5: "reingesting identical state stays idempotent")
     # -- they compare a candidate new row to the latest existing one to
