@@ -694,7 +694,7 @@ def _no_legs_reason(nhl_conn, now: dt.datetime) -> str:
         except Exception:  # noqa: BLE001
             avail = ""
         return (f"{len(starts)} game(s) still to start today; the first puck drop is {first_et}. No fresh price qualifies right now (a price is fresh for up to 150 minutes, 100 "
-                f"when the game is under two hours away). {avail} The engine looks every 15 minutes and makes each wave's coordinated capture about {ct.CAPTURE_TARGET_MIN} minutes before the wave's first puck drop.").strip()
+                f"when the game is under two hours away). {avail} The engine looks every 10 minutes and makes each wave's coordinated capture about {ct.CAPTURE_TARGET_MIN} minutes before the wave's first puck drop.").strip()
     return base
 
 

@@ -1,5 +1,5 @@
 """
-Real Parlay Paper Trader: the scheduled job (every 15 minutes) that runs the
+Real Parlay Paper Trader: the scheduled job (every 10 minutes) that runs the
 unified ticket workflow in operational/daily_tickets.py against the real
 $500 / $10-per-ticket paper account.
 
@@ -117,7 +117,14 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             price_refresh = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "changed": False}
 
-        # The league-wide moneyline + standard-spread pull is on the day's timeline (08:00 morning pull, one pregame pull shared by every wave): it runs from this 15-minute cycle, self-gated
+        # Grade the pregame-frozen board cards of games that are now FINAL against the official results (read-only; operational/board_scorecard.py).
+        try:
+            from operational import board_scorecard
+            scorecard_summary = board_scorecard.score_final_games(nhl_conn) if not _sp.under_test() else {"status": "SKIPPED_UNDER_TEST"}
+        except Exception as exc:  # noqa: BLE001 - grading must never stop a trader cycle
+            scorecard_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
+
+        # The league-wide moneyline + standard-spread pull is on the day's timeline (08:00 morning pull, one pregame pull shared by every wave): it runs from this 10-minute cycle, self-gated
         # by operational/capture_timeline.py and by credit reservations, so a late cycle after a sleep or an outage still takes the pull that is due.
         try:
             from operational import moneyline_freshness
@@ -181,7 +188,7 @@ def run(now: dt.datetime | None = None) -> dict:
         bankroll_conn.close()
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
-              "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
+              "revalidation_summary": revalidation_summary, "price_refresh": price_refresh, "board_scorecard": scorecard_summary,
               "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {

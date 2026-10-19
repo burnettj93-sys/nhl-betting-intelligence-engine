@@ -229,7 +229,7 @@ def run_if_due(now: dt.datetime | None = None, label: str | None = "ordinary_due
 def post_pull_chain(pull_result: dict) -> dict:
     """Everything that must follow a REAL league-wide pull so its prices reach the rest of the engine: the odds bridge writes each game's two moneyline sides into odds_snapshots (the table the product
     state, the Slate Board, the builder and every moneyline estimate read), then the moneyline recommendation step evaluates the new quotes. It lives HERE, inside the pull workflow, so every caller
-    (the 08:00 job, the 15-minute trader, the fixed-hour job, a forced run) gets it. Until 2026-10-18 only `live_odds_daily_pull._main` ran it, so the trader's pulls left the board on the previous
+    (the 08:00 job, the 10-minute trader, the fixed-hour job, a forced run) gets it. Until 2026-10-18 only `live_odds_daily_pull._main` ran it, so the trader's pulls left the board on the previous
     night's moneylines. A pull that did not run (due-check, quota, error) changes nothing. Never raises."""
     if not pull_result.get("ran"):
         return {}

@@ -1,7 +1,7 @@
 """
 A pause switch for NEW automatic paper tickets.
 
-While the file `recording_pause.json` (shared runtime directory) says `paused: true`, the 15-minute trader selects and records nothing new. Everything else is unaffected:
+While the file `recording_pause.json` (shared runtime directory) says `paused: true`, the 10-minute trader selects and records nothing new. Everything else is unaffected:
 odds collection, publishing, settlement of existing tickets, and the read-only Parlay Builder. Existing tickets are never touched, and the $500 model book is
 neither reset nor rewritten. The pause is a plain file so it takes effect on the next cycle and is easy to inspect; it is ended only by an explicit `resume`.
 

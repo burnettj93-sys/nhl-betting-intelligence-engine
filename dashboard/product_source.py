@@ -70,7 +70,7 @@ def tickets() -> dict:
     from operational import daily_tickets
     state = daily_tickets.read_state()
     if state is None:
-        raise Unavailable("The ticket board has not been built yet; it is written by the 15-minute paper-trader job.")
+        raise Unavailable("The ticket board has not been built yet; it is written by the 10-minute paper-trader job.")
     return state
 
 

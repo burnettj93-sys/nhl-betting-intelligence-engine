@@ -838,7 +838,7 @@ def note_missed_pregame_windows(now: dt.datetime, plan: dict, games: dict | None
             elif blocked:
                 tag, detail = None, (f"the trader was running during the window and the game was not captured: {blocked}. Nothing is bought after the window.")
             elif ran is False:
-                tag, detail = "ENGINE_OUTAGE_OBSERVED", ("no sleep evidence, and the 15-minute trader did not start a run between the wave's target and its last chance: an engine outage was observed "
+                tag, detail = "ENGINE_OUTAGE_OBSERVED", ("no sleep evidence, and the 10-minute trader did not start a run between the wave's target and its last chance: an engine outage was observed "
                                                           "(job unloaded, crashed or blocked). Nothing is bought after the window.")
             else:
                 tag, detail = None, ("the trader was running during the window but no capture was made (credits, an API error or the plan"
@@ -1109,13 +1109,13 @@ def capture_plan(now: dt.datetime, *, games: dict | None = None, hours_ahead: fl
             elif now < opens:
                 nxt = f"coordinated capture ({', '.join(m.replace('player_', '') for m in (day_plan.get('game_markets') or {}).get(gid_s, []))}) from {fmt(opens)}, 90 minutes before wave {wdoc['index'] + 1}'s first game"
             elif now <= _parse_utc(wdoc["last_chance_utc"]):
-                nxt = "coordinated capture is due now (on the next 15-minute trader cycle)"
+                nxt = "coordinated capture is due now (on the next 10-minute trader cycle)"
             else:
                 nxt = "the capture window has closed: nothing is bought after it"
         elif age is None and now < opens:
-            nxt = f"first capture on the first 15-minute trader cycle at or after {fmt(opens)}"
+            nxt = f"first capture on the first 10-minute trader cycle at or after {fmt(opens)}"
         elif decision:
-            nxt = f"{decision} on the next 15-minute trader cycle"
+            nxt = f"{decision} on the next 10-minute trader cycle"
         else:
             oldest = min(c[0] for c in (shots, pts) if c)
             far_t = oldest + dt.timedelta(minutes=MAX_PRICE_AGE_MIN_FAR - REFRESH_LEAD_MIN)

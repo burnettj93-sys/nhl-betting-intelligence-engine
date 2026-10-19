@@ -368,12 +368,10 @@ def settlement_backlog_health() -> dict:
                              technical_detail=repr(e))
 
 
-_SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.daily-props-pull",
-                     "com.nhlengine.prop-sweep-first", "com.nhlengine.prop-sweep-second",
-                     # P0.1 (2026-09-24 hardening block): the odds scheduler was extended with
-                     # 5 more real jobs (NHL sync full/midday/pregame, settlement, post-mortem) --
-                     # this health check must reflect the FULL real scheduler, not just its
-                     # original 4 odds-only jobs.
+# The jobs a v4 install actually runs (2026-10-19). daily-props-pull, prop-sweep-first and prop-sweep-second were retired on 2026-10-17 (saves ride on the wave capture, see watchdog.RETIRED_JOBS): expecting them
+# left this health item permanently STALE on the hosted app. The 10-minute trader, the 07:45 morning refresh and the watchdog are the jobs that matter now and must be reported if they are not loaded.
+_SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.real-parlay-paper-trader",
+                     "com.nhlengine.morning-refresh", "com.nhlengine.watchdog",
                      "com.nhlengine.daily-nhl-sync", "com.nhlengine.midday-schedule-refresh",
                      "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement",
                      "com.nhlengine.daily-postmortem", "com.nhlengine.database-backup")

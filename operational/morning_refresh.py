@@ -1,7 +1,7 @@
 """
 The 07:45 ET morning refresh: schedules, results, player statistics, rosters and the available participation evidence, BEFORE the 08:00 analysis and the first league-wide pull.
 
-It runs from its own launchd job at 07:45 and, so that an early first game never waits for it, from the 15-minute trader as soon as `capture_timeline.prep_times` says it is due (earlier than
+It runs from its own launchd job at 07:45 and, so that an early first game never waits for it, from the 10-minute trader as soon as `capture_timeline.prep_times` says it is due (earlier than
 07:45 when the day's first game is early; at wake-up when the machine slept through 07:45). Once per Eastern day: the state file says whether it ran, what each step did and whether it succeeded.
 
 Steps (each independent; one failing never stops the next, and every outcome is written down):

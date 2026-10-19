@@ -254,7 +254,7 @@ def sentence(day: str, game_ids: list[str] | None = None) -> str:
 # ----------------------------------------------------------------- the morning update ----
 
 MORNING_DONE, MORNING_PARTIAL, MORNING_NOT_YET, MORNING_MISSED, MORNING_NO_GAMES, MORNING_BUDGET_ONLY, MORNING_LATE = "DONE", "PARTIAL", "NOT_YET", "MISSED", "NO_GAMES", "BUDGET_ONLY", "LATE"
-MORNING_GRACE_MIN = 45        # the first look is due at 08:00 ET; the trader runs every 15 minutes, so it should land by ~08:15; 08:45 is already late
+MORNING_GRACE_MIN = 45        # the first look is due at 08:00 ET; the trader runs every 10 minutes, so it should land by ~08:10; 08:45 is already late
 
 
 def morning_status(now: dt.datetime, day: str | None = None) -> dict:

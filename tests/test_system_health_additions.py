@@ -142,6 +142,26 @@ class Test06LiveOddsSchedulerHealth(unittest.TestCase):
         finally:
             subprocess.run = original
 
+    def test_retired_jobs_are_not_expected_and_the_live_trader_is(self):
+        """Regression (2026-10-19): the hosted board showed Live Odds Scheduler STALE for good because the retired props/sweep jobs were still expected."""
+        import subprocess
+        from operational import watchdog
+        self.assertFalse(set(watchdog.RETIRED_JOBS) & set(sh._SCHEDULER_LABELS))
+        for live in ("com.nhlengine.real-parlay-paper-trader", "com.nhlengine.morning-refresh", "com.nhlengine.watchdog"):
+            self.assertIn(live, sh._SCHEDULER_LABELS)
+        original = subprocess.run
+
+        class _Without:
+            stdout = "\n".join(x for x in sh._SCHEDULER_LABELS if "paper-trader" not in x)
+
+        subprocess.run = lambda *a, **k: _Without()
+        try:
+            item = sh.live_odds_scheduler_health()
+            self.assertEqual(item["status"], "STALE")
+            self.assertIn("real-parlay-paper-trader", item["message"])
+        finally:
+            subprocess.run = original
+
     def test_reports_waiting_when_nothing_is_loaded(self):
         import subprocess
         original = subprocess.run
