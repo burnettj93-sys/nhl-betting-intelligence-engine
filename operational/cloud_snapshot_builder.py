@@ -215,7 +215,7 @@ def _manual_orders() -> dict:
 
 
 def _builder_pool() -> dict:
-    """The Paper Parlay Builder's price list (operational/builder_pool.py), written by the 15-minute trader."""
+    """The Paper Parlay Builder's price list (operational/builder_pool.py), written by the 10-minute trader."""
     from operational import builder_pool
     return builder_pool.load() or {"generated_at_utc": None, "games": {}}
 
@@ -227,7 +227,7 @@ def _day_status() -> dict:
 
 
 def _slate_board() -> dict:
-    """The per-game board and the primary slip (operational/slate_board.py), written by the 15-minute trader."""
+    """The per-game board and the primary slip (operational/slate_board.py), written by the 10-minute trader."""
     from operational import slate_board
     return slate_board.load() or {"generated_at_utc": None, "games": [], "primary": None}
 

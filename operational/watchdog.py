@@ -4,7 +4,7 @@ Persistent self-check (launchd, every 30 minutes; deploy/launchd/com.nhlengine.w
   OPERATIONAL HEALTH -- is the unattended machinery running the code it should, on the right data, and are its books consistent?
       jobs_loaded           every scheduled job the product depends on is loaded in launchd, none last exited with an error;
       release_pinned        the release checkout is clean and equals origin/master (WARN while a deploy is pending);
-      trader_recent         the 15-minute trader recorded a success in the last 45 minutes;
+      trader_recent         the 10-minute trader recorded a success in the last 45 minutes;
       publish_recent        the hosted snapshot was published in the last 60 minutes;
       database_path         the resolved NHL database is the live one and the ledger exists;
       reconciliation        the model book re-derived from raw rows (cash by P&L = cash by stake/return flows = the account helper);
@@ -645,7 +645,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
         health = ingestion_health.load_health()
     except Exception:  # noqa: BLE001
         health = {}
-    checks.append(check_age("trader_recent", (health.get("real_parlay_paper_trader") or {}).get("last_success_utc"), TRADER_MAX_AGE_MIN, now, "the 15-minute trader"))
+    checks.append(check_age("trader_recent", (health.get("real_parlay_paper_trader") or {}).get("last_success_utc"), TRADER_MAX_AGE_MIN, now, "the 10-minute trader"))
     checks.append(check_age("publish_recent", (health.get("cloud_snapshot_publish") or {}).get("last_success_utc"), PUBLISH_MAX_AGE_MIN, now, "the hosted snapshot publication"))
     checks.append(check_database())
     checks.append(check_publishing_enabled())

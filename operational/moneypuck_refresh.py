@@ -3,7 +3,7 @@ Afternoon and evening MoneyPuck re-check.
 
 The daily sync (`sync_daily.py`, 07:00) downloads MoneyPuck's player and goalie game logs once. The source publishes the previous night's games LATER than 07:00 (observed 2026-10-10: at 07:00 the logs ran
 through Oct 8; by 15:30 the source had updated), so every player page, projection and goalie line stayed a day behind for the whole of the day. This job asks the source again at 13:30 and 17:30 ET.
-It is the same free download and the same archive-and-promote step as the daily sync (no odds credits), changes nothing when the source has not moved, and the next 15-minute trader cycle rebuilds the
+It is the same free download and the same archive-and-promote step as the daily sync (no odds credits), changes nothing when the source has not moved, and the next 10-minute trader cycle rebuilds the
 player and goalie data from whatever is newest.
 
     python3 -m operational.moneypuck_refresh

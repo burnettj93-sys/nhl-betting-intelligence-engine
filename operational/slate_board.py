@@ -10,7 +10,7 @@ Nothing here is a new model. Every number comes from the engine's existing, vali
 (anchor.shots_final_estimate, cap +0.02), DraftKings prices as archived with their provider update times, and the price-availability record that says why a price is missing. The primary parlay is
 produced by the same selector as recording (operational/daily_tickets._primary_slip), so the board, the Best Options page and any recorded ticket cannot disagree.
 
-Written by the 15-minute trader after the product state, published as the `slate_board` snapshot section, and read by the hosted page. Informational: recording is untouched by anything in this file.
+Written by the 10-minute trader after the product state, published as the `slate_board` snapshot section, and read by the hosted page. Informational: recording is untouched by anything in this file.
 """
 from __future__ import annotations
 

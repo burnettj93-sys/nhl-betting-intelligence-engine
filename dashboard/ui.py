@@ -242,7 +242,7 @@ def header(title: str, subtitle: str | None = None, *, meta: dict | None = None)
             pass
     st.caption(" · ".join(bits))
     if stale:
-        banner(f"The data on this page is {age_text(gen).replace(' ago', '')} old. The engine refreshes it about every 15 minutes while the "
+        banner(f"The data on this page is {age_text(gen).replace(' ago', '')} old. The engine refreshes it about every 10 minutes while the "
                "Mac that runs it is awake; prices may have moved.", "warn")
 
 
@@ -605,7 +605,7 @@ def option_card(opt: dict, *, key: str, show_people: bool = True) -> None:
             banner("<b>Stale price.</b> At least one price on this card is past its freshness limit now. It is shown for reference only: it is no longer a recommendation.", "bad")
         elif prov_any:
             banner("<b>Provisional.</b> An earlier look at DraftKings' price today, now older than the freshness limit. It can be browsed, but it is not a current recommendation until its "
-                   "price is refreshed (the engine looks again every 15 minutes).", "warn")
+                   "price is refreshed (the engine looks again every 10 minutes).", "warn")
         elif opt.get("early"):
             banner("<b>Morning price.</b> From an earlier look today and still inside the freshness limit; the engine re-checks it at the pregame look.", "info")
         st.caption(esc(opt["rationale"]))

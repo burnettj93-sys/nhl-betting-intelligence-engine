@@ -1,7 +1,25 @@
-# Acceptance checklist (one list; updated 2026-10-18 20:40 ET, release 2c8055b)
+# Acceptance checklist (one list; updated 2026-10-19 08:05 ET, release c746d9d)
 
 Evidence classes: **FIXED+TESTED** (code and regression tests, full suite green) · **VERIFIED LIVE** (observed on production data or the hosted app) · **AWAITING OBSERVATION** (scheduled; will be observed by itself) · **EXTERNAL** (needs something only the owner can do).
 Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integrity, surface agreement, freshness labels, credits, jobs, recording safeguards, hosted recency).
+
+## Monday 2026-10-19 observations (release c746d9d, no manual trigger unless stated)
+| Item | State |
+|---|---|
+| Mac power overnight | **EXTERNAL, failed overnight**: on battery the Mac slept about 05:20 ET to 07:36 ET (trader gap in `run_heartbeats.json`). The charger went in about 07:36; the engine's own guard then took its sleep-prevention hold (07:39) and every job resumed by itself |
+| 07:00 NHL sync and 07:15 settlement at wake | **FAILED/DEFERRED by network**: the Mac woke at 07:36 before DNS was up (`NameResolutionError`); the daily sync exited 1 and the settlement run deferred itself (nothing pending, no Experiment 2 tickets, so no effect today). These calendar jobs have no retry until tomorrow; the trader settles paper bets every cycle regardless |
+| 07:45 ET morning refresh | **VERIFIED LIVE (unattended)**: started 07:45:05, finished 07:46:21, DONE on the first attempt, statistics OK |
+| 08:00 ET league pull | **VERIFIED LIVE (unattended)**: ran 08:00:05 ET; 2 credits planned, 2 charged; provider header 179 to 177 |
+| Automatic bridging after the pull | **VERIFIED LIVE (unattended)**: moneyline rows for all four games in `odds_snapshots` one second after the pull (provider quote 07:58:19 ET); the published board carried the same prices and quote times; every price equals the raw provider payload for its own game (ANA@NYR and SJS@TOR both +120/-142 in the payload itself) |
+| Hosted Slate Board after the build | **VERIFIED LIVE**: "Engine update 8:00 AM ET (1 min ago)", box scores through Oct 18, moneylines quoted 7:58 AM ET, Eggy "No Eggy pick today" with the exact reason (closest combination COL + UTA +119, value -8.1%) |
+| Published board has the `integrity` block on every scheduled card | **VERIFIED LIVE**: all four cards; ANA@NYR withdrew Cole Beaudoin (NYR) and Roger McQueen (ANA) as not on their official rosters |
+| Today's schedule vs the NHL feed | **VERIFIED LIVE**: 4 games, teams and start times identical; waves: 17:30 ET target (ANA@NYR, COL@PHI, SJS@TOR; COL@PHI funded) and 19:30 ET target (PIT@UTA funded) |
+| Sunday official results | **VERIFIED LIVE**: CBJ 1-2 MIN, CAR 2-3 CGY identical to the NHL box scores in `games`; player and goalie rows stored for both games |
+| Reconciliation | **VERIFIED LIVE**: cash $500 = $500 start, 0 tickets, 0 open stake (Experiment 2) |
+| Prediction scoring | **GAP FOUND, FIXED+TESTED in PR 164, not yet released**: the prospective ledger had no rows after Oct 17 (the T-35/sweep writers are retired; the legacy shots corpus ends April 2026 so its orchestrators log nothing on real data, reproduced on copies). A read-only board scorecard now grades each frozen pregame card against FINAL results. On Oct 17-18: scorers 30 graded (hit 33%, mean estimate 30%), other markets under 30 (TOO_FEW). No verdict is claimed |
+| Hosted health: Live Odds Scheduler STALE | **FIXED+TESTED in PR 164, not yet released** (it still expected the three retired jobs) |
+| Unattended waves today (17:30 and 19:30 ET targets) | **AWAITING OBSERVATION** |
+| Recording | **PAUSED** (owner); activation dry run reported below; no authorization to activate |
 
 ## Player and matchup integrity
 | Item | State |
@@ -12,7 +30,7 @@ Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integri
 | Accent loss in MoneyPuck names (Lafrenire, Sttzle, Slafkovsk, Bck): the provider's spelling never matched, so their prices were silently unmatched | **FIXED+TESTED** (NHL players table is the name of record; model cache bumped) |
 | Provider event is the same night as the scheduled game | **FIXED+TESTED** |
 | Recording gate: only players verified on a current official roster can be staked; moneyline legs are not players | **FIXED+TESTED** (a review found and fixed a bug that would have blocked every moneyline leg) |
-| Official rosters on the production release | **AWAITING OBSERVATION**: the first full board built by the new release (after midnight ET) must show an `integrity` block on every scheduled card; `live_audit` checks it |
+| Official rosters on the production release | **VERIFIED LIVE** (Oct 19 board: `integrity` block on every scheduled card; `live_audit` checks it) |
 
 ## Data propagation
 | Odds bridge after a league pull (provider response to stored odds to board to published snapshot) | **FIXED+TESTED** (end-to-end test with provider timestamps, both moneyline sides and spreads); was **VERIFIED LIVE as a manual recovery only** at 10:38 and 16:39 ET. Unattended on the new release: **AWAITING OBSERVATION** (Monday's pregame pull) |

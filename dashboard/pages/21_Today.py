@@ -40,7 +40,7 @@ _exp_text = (f"{_exp.get('label')} (started {ui.et_time(_exp.get('started_at_utc
 st.caption(f"Model book (automatic tickets only) · {ui.esc(_exp_text)} · \\${acct.get('starting_bankroll', 500):,.0f} start, \\$10 per ticket · earlier experiments are archived on Paper Performance · ticket board updated {ui.et_time(tk['generated_at_utc'], True)} ({ui.age_text(tk['generated_at_utc'])}).")
 _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
-    ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 15 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
+    ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 10 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
 ui.book_split(origins)
 if tk.get("notice"):
     ui.banner(ui.esc(tk["notice"]), "warn")
