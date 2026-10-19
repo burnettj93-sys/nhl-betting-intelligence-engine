@@ -22,6 +22,19 @@ class TestChecks(unittest.TestCase):
         bad = LAUNCHCTL.replace(f"-\t0\t{wd.EXPECTED_JOBS[1]}", f"-\t78\t{wd.EXPECTED_JOBS[1]}")
         self.assertEqual(wd.check_jobs(bad)["status"], wd.WARN)
 
+    def test_a_later_success_supersedes_launchds_remembered_exit_for_the_jobs_loaded_check(self):
+        """2026-10-19: the 07:00 sync exited 1 on a wake-time DNS failure and was re-run successfully at 07:46, yet jobs_loaded stayed WARN until the next calendar run (tomorrow)."""
+        job = "com.nhlengine.daily-nhl-sync"
+        bad = LAUNCHCTL.replace(f"-\t0\t{job}", f"-\t1\t{job}")
+        comp = wd.JOB_OUTPUTS[job][0]
+        later = {comp: {"last_status": "SUCCESS", "last_attempt_utc": "2026-10-19T11:46:05+00:00", "last_success_utc": "2026-10-19T11:46:05+00:00"}}
+        r = wd.check_jobs(bad, later)
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("daily-nhl-sync exited non-zero earlier but a later run succeeded", r["detail"])
+        failed_after = {comp: {"last_status": "FAILED", "last_attempt_utc": "2026-10-19T12:00:00+00:00", "last_success_utc": "2026-10-19T11:46:05+00:00"}}
+        self.assertEqual(wd.check_jobs(bad, failed_after)["status"], wd.WARN)       # a failure AFTER the success is not hidden
+        self.assertEqual(wd.check_jobs(bad, {})["status"], wd.WARN)                  # no recorded later success: still a warning
+
     def test_release_checks(self):
         self.assertEqual(wd.check_release("a" * 40, False, "a" * 40)["status"], wd.OK)
         self.assertEqual(wd.check_release("a" * 40, False, "b" * 40)["status"], wd.WARN)
