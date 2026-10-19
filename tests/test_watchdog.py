@@ -22,6 +22,60 @@ class TestChecks(unittest.TestCase):
         bad = LAUNCHCTL.replace(f"-\t0\t{wd.EXPECTED_JOBS[1]}", f"-\t78\t{wd.EXPECTED_JOBS[1]}")
         self.assertEqual(wd.check_jobs(bad)["status"], wd.WARN)
 
+    JOB = "com.nhlengine.daily-nhl-sync"
+
+    def _bad(self):
+        return LAUNCHCTL.replace(f"-\t0\t{self.JOB}", f"-\t1\t{self.JOB}")
+
+    def _row(self, **kw):
+        return {wd.JOB_OUTPUTS[self.JOB][0]: {"last_status": "SUCCESS", "last_attempt_utc": "2026-10-19T11:46:05+00:00", "last_success_utc": "2026-10-19T11:46:05+00:00", **kw}}
+
+    LOG_AT_0736 = {JOB: dt.datetime(2026, 10, 19, 11, 36, tzinfo=dt.timezone.utc)}
+
+    def test_a_success_recorded_after_the_failed_run_supersedes_launchds_remembered_exit(self):
+        """2026-10-19: the 07:00 sync exited 1 on a wake-time DNS failure (logs written 07:36) and was re-run successfully at 07:46, yet jobs_loaded stayed WARN until the next calendar run (tomorrow)."""
+        r = wd.check_jobs(self._bad(), self._row(), self.LOG_AT_0736)
+        self.assertEqual(r["status"], wd.OK)
+        self.assertIn("daily-nhl-sync (exit 1) exited non-zero earlier", r["detail"])             # the non-zero exit stays visible even when downgraded
+
+    def test_a_success_recorded_BEFORE_the_job_last_ran_does_not_excuse_its_exit(self):
+        late_logs = {self.JOB: dt.datetime(2026, 10, 19, 11, 50, tzinfo=dt.timezone.utc)}         # the job wrote its logs after the recorded success: it crashed or exited non-zero after recording
+        self.assertEqual(wd.check_jobs(self._bad(), self._row(), late_logs)["status"], wd.WARN)
+        yesterday = self._row(last_attempt_utc="2026-10-18T11:00:05+00:00", last_success_utc="2026-10-18T11:00:05+00:00")
+        self.assertEqual(wd.check_jobs(self._bad(), yesterday, self.LOG_AT_0736)["status"], wd.WARN)    # a crash before recording leaves yesterday's success: not a recovery
+
+    def test_failures_and_unknowns_are_never_excused(self):
+        for kw in ({"last_status": "FAILED", "last_attempt_utc": "2026-10-19T12:00:00+00:00"}, {"last_status": "DEFERRED"}, {"last_success_utc": "2026-10-19T11:00:00+00:00", "last_status": "PARTIAL"}):
+            self.assertEqual(wd.check_jobs(self._bad(), self._row(**kw), self.LOG_AT_0736)["status"], wd.WARN, kw)
+        self.assertEqual(wd.check_jobs(self._bad(), {}, self.LOG_AT_0736)["status"], wd.WARN)
+        self.assertEqual(wd.check_jobs(self._bad(), None, self.LOG_AT_0736)["status"], wd.WARN)
+        self.assertEqual(wd.check_jobs(self._bad(), {wd.JOB_OUTPUTS[self.JOB][0]: "corrupt"}, self.LOG_AT_0736)["status"], wd.WARN)
+        unmapped = "com.nhlengine.moneyline-snapshot"
+        self.assertNotIn(unmapped, wd.JOB_OUTPUTS)
+        bad = LAUNCHCTL.replace(f"-\t0\t{unmapped}", f"-\t1\t{unmapped}")
+        self.assertEqual(wd.check_jobs(bad, self._row(), {unmapped: self.LOG_AT_0736[self.JOB]})["status"], wd.WARN)    # a job with no recorded output cannot be excused
+
+    def test_timestamp_formats_are_compared_as_times_not_strings(self):
+        for stamp in ("2026-10-19T11:46:05Z", "2026-10-19T11:46:05.500000+00:00", "2026-10-19T07:46:05-04:00", "2026-10-19T11:46:05"):
+            r = self._row(last_attempt_utc=stamp, last_success_utc=stamp)
+            self.assertEqual(wd.check_jobs(self._bad(), r, self.LOG_AT_0736)["status"], wd.OK, stamp)
+        mixed = self._row(last_attempt_utc="2026-10-19T11:46:05.500000+00:00", last_success_utc="2026-10-19T11:46:05Z")      # success earlier than the attempt, though 'Z' sorts after '.'
+        self.assertEqual(wd.check_jobs(self._bad(), mixed, self.LOG_AT_0736)["status"], wd.WARN)
+
+    def test_run_passes_ingestion_health_and_log_activity_to_jobs_loaded(self):
+        seen = {}
+        orig = wd.check_jobs
+        with mock.patch.object(wd, "check_jobs", side_effect=lambda text, health=None, activity=None: seen.update(health=health, activity=activity) or orig(text, health, activity)), \
+             mock.patch("operational.ingestion_health.load_health", return_value={"nhl_sync_full": {"last_status": "SUCCESS"}}):
+            wd.run(NOW, runner=lambda cmd, *a, **k: LAUNCHCTL if cmd[0] == "launchctl" else "x" * 40, notify=False, deep=False)
+        self.assertEqual(seen["health"], {"nhl_sync_full": {"last_status": "SUCCESS"}})
+        self.assertIsInstance(seen["activity"], dict)
+
+    def test_job_states_still_treat_a_later_success_as_recovery(self):
+        row = self._row()[wd.JOB_OUTPUTS[self.JOB][0]]
+        self.assertTrue(wd._later_success(row))
+        self.assertFalse(wd._later_success({**row, "last_status": "FAILED"}))
+
     def test_release_checks(self):
         self.assertEqual(wd.check_release("a" * 40, False, "a" * 40)["status"], wd.OK)
         self.assertEqual(wd.check_release("a" * 40, False, "b" * 40)["status"], wd.WARN)
