@@ -292,6 +292,8 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         reported = reported_lineups(lineup_state, sk["players"], now)
         prior = prior_season_totals(srows, history.CURRENT_SEASON - 1)
         players_out, by_team = {}, defaultdict(list)
+        from operational import player_integrity
+        _nhl_names = player_integrity.official_names(nhl)                  # the NHL's own spelling (MoneyPuck drops accented letters)
         for pid, p in sk["players"].items():
             team = p["team"]
             ng = next_game.get(team)
@@ -303,7 +305,7 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
                             "limited_history": m["limited_history"], "pricing_eligible": m["pricing_eligible"],
                             "probabilities": {k: m["probabilities"][k]["calibrated"] for k in SHOW_KEYS},
                             "model_version": m["model_version"]}
-            rec = {"player_id": pid, "name": p["name"], "team": team, "position": p["position"], "usage_tier": p["usage_tier"], "pp_usage": p["pp_usage"],
+            rec = {"player_id": pid, "name": _nhl_names.get(str(pid)) or p["name"], "team": team, "position": p["position"], "usage_tier": p["usage_tier"], "pp_usage": p["pp_usage"],
                    "usage_source": p["usage_source"], "role_games": p["role_games"], "reported": reported.get(pid), "season": p["season_totals"],
                    "recent_games": p["recent_games"], "recent_avg": {k.replace("recent_", ""): round(p[k], 2) for k in
                                                                     ("recent_toi", "recent_toi_pp", "recent_shots", "recent_goals", "recent_assists", "recent_hits", "recent_blocks")},

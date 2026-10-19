@@ -96,6 +96,16 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             keep_awake_summary = {"action": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
 
+        # Official NHL rosters for the teams playing today and tomorrow (free, no credits): the identity check for every card, price and slip. At most every 3 hours per team; a failure keeps the last good copy.
+        try:
+            from operational import eastern_time as _et2, player_integrity
+            _d0 = _et2.eastern_today(now)
+            _d1 = (dt.date.fromisoformat(_d0) + dt.timedelta(days=1)).isoformat()
+            _teams = {t for r in nhl_conn.execute("SELECT home_team, away_team FROM games WHERE game_date IN (?, ?)", (_d0, _d1)).fetchall() for t in (r[0], r[1])}
+            roster_summary = player_integrity.refresh_official(_teams, now)
+        except Exception as exc:  # noqa: BLE001
+            roster_summary = {"error": f"{exc.__class__.__name__}: {exc}"}
+
         revalidation_summary = bet_revalidation.revalidate_pending_real_market_bets(
             bankroll_conn, nhl_conn, now)
 
@@ -172,7 +182,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh,
-              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

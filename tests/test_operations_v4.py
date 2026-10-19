@@ -235,6 +235,20 @@ class TestDayStatus(Isolated):
         self.assertIn(d["waves"][0]["state"], ("CLOSED", "MISSED"))
 
 
+class TestJobStatesAfterRecovery(unittest.TestCase):
+    def test_a_later_success_supersedes_launchds_remembered_nonzero_exit(self):
+        from operational import watchdog as wd
+        now = dt.datetime(2026, 10, 18, 15, 0, tzinfo=dt.timezone.utc)
+        defs = {"com.nhlengine.daily-nhl-sync": {"StartCalendarInterval": {"Hour": 7}, "StandardOutPath": "/x/sync.log"}}
+        iso = lambda m: (now - dt.timedelta(minutes=m)).isoformat().replace("+00:00", "Z")
+        launchctl = "-\t1\tcom.nhlengine.daily-nhl-sync\n"
+        failed_last = {"nhl_sync_full": {"last_success_utc": iso(900), "last_attempt_utc": iso(5), "last_status": "FAILED"}}
+        recovered = {"nhl_sync_full": {"last_success_utc": iso(3), "last_attempt_utc": iso(3), "last_status": "SUCCESS"}}
+        mt = lambda _p: (now - dt.timedelta(minutes=5)).timestamp()
+        self.assertEqual(wd.job_states(now, launchctl_text=launchctl, health=failed_last, definitions=defs, mtime=mt)[0]["state"], "FAILED")
+        self.assertEqual(wd.job_states(now, launchctl_text=launchctl, health=recovered, definitions=defs, mtime=mt)[0]["state"], "OK")
+
+
 class TestRetiredJobs(Isolated):
     def test_the_t35_decision_job_makes_no_call_and_writes_no_audit_record(self):
         from operational import moneyline_pregame

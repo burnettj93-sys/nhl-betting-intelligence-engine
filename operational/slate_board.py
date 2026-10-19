@@ -381,6 +381,8 @@ def _frozen_block(previous_doc: dict | None, today: str, g: dict, recovered: dic
     at = prev.get("frozen_at_utc") or (previous_doc or {}).get("generated_at_utc") if from_doc else prev.get("frozen_at_utc")
     cov = prev["coverage"]
     cov["frozen_at_utc"] = at
+    if not str(cov.get("price_state_word") or "").startswith("pregame view frozen"):        # idempotent: a block that was already frozen keeps its label as it is
+        cov["price_state_word"] = f"pregame view frozen at puck drop (prices as of then; not current): {cov.get('price_state_word') or 'analysis'}"
     cov["recommended"] = []                                         # nothing on a started game is a current recommendation
     # The frozen block is for reference: every recommendation-shaped field is made inert so no page path can show it as a current pick.
     note = "The game has started: the pregame view is kept for reference and is not a current recommendation."
@@ -420,6 +422,8 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
             summ = ((m.get("validation") or {}).get("summary") or {})
             saves_ok = bool(summ.get("markets_scored")) and summ.get("beating_baselines") == summ.get("markets_scored")
     out_games = []
+    from operational import player_integrity
+    rosters_doc = player_integrity._load(player_integrity.ROSTER_STATE)
     counts = {"scheduled": len(games), "analysed": 0, "shots_priced": 0, "goals_priced": 0, "saves_priced": 0, "moneyline_priced": 0, "with_recommendation": 0}
     def _one(g: dict):
         gid = g["game_id"]
@@ -427,6 +431,21 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
         sides = d.get("sides") or {}
         scheduled = g.get("state") == "SCHEDULED"
         side_players = {s: [players[i] for i in ((sides.get(s) or {}).get("skater_ids") or []) if i in players] for s in ("home", "away")}
+        # Identity and matchup integrity: a skater who is on the wrong side or not on the team's CURRENT official roster, or whose name is shared by two players on his team, is WITHDRAWN before any analysis.
+        withdrawn, unverified = [], 0
+        for s_ in ("home", "away"):
+            keep = []
+            for p in side_players[s_]:
+                if p.get("team") not in (None, g.get(s_)):
+                    chk = {"status": player_integrity.WRONG_GAME, "detail": f"{p.get('name')} is on the {s_} side of {g.get('away')} at {g.get('home')} but his team is {p.get('team')}"}
+                else:
+                    chk = player_integrity.check_selection(p.get("player_id"), p.get("name") or "", g.get(s_), {"home": g.get("home"), "away": g.get("away")}, today or "", now, rosters=rosters_doc)
+                if player_integrity.blocking(chk["status"]):
+                    withdrawn.append({"name": p.get("name"), "player_id": p.get("player_id"), "team": g.get(s_), "status": chk["status"], "detail": chk["detail"]})
+                    continue
+                unverified += chk["status"] == player_integrity.UNVERIFIED
+                keep.append(p)
+            side_players[s_] = keep
         all_players = side_players["home"] + side_players["away"]
         pg = pool_games.get(gid)
         gl_by_side = {}
@@ -501,7 +520,8 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                "team_model": bool((g.get("win_probability") or {}).get("home") is not None),
                "markets": mk, "moneyline_priced": ml_priced, "models": {"skater_shots": "SUPPORTED", "anytime_goal": "SUPPORTED", "goalie_saves": "SUPPORTED_NEEDS_CONFIRMED_STARTER" if saves_ok else "NOT_SUPPORTED",
                                                                         "moneyline": "STRENGTH_MODEL_AND_MARKET", "puck_line": "NOT_VALIDATED"},
-               "recommended": recommended, "missing": missing}
+               "recommended": recommended, "missing": missing,
+               "integrity": {"checked_against": "the NHL's current official team rosters", "withdrawn": withdrawn, "unverified_players": unverified}}
         bump = {"analysed": 1 if analysis_ok else 0, "shots_priced": 1 if mk["player_shots_on_goal_alternate"]["status"] == "POSTED" else 0,
                 "goals_priced": 1 if mk["player_goal_scorer_anytime"]["status"] == "POSTED" else 0, "saves_priced": 1 if mk["player_total_saves"]["status"] == "POSTED" else 0,
                 "moneyline_priced": 1 if ml_priced else 0, "with_recommendation": 1 if recommended else 0}

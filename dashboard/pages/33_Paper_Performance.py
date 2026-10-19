@@ -42,7 +42,7 @@ st.dataframe(rows, hide_index=True, width="stretch")
 st.caption("Only the engine's automatic tickets are counted here; no bet submitted by a person is part of this record (individual bets were removed from the app). Unresolved tickets stay open until their settlement rules can be applied.")
 
 hist = summ.get("bankroll_history") or []
-if hist:
+if len(hist) > 1:
     st.subheader("Bankroll after each settled ticket")
     st.line_chart([{"Settled ticket #": i, "Bankroll": h["bankroll"]} for i, h in enumerate(hist)], x="Settled ticket #", y="Bankroll")
 

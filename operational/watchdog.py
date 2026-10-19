@@ -500,7 +500,8 @@ def job_states(now: dt.datetime, *, launchctl_text: str = "", health: dict | Non
         def _age(stamp):
             return None if not stamp else (now - dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))).total_seconds() / 60.0
         ok_age, try_age = _age(last_ok), _age(last_try)
-        failed = bool(comp and row.get("last_status") in ("FAILED", "FAIL", "HALT") and (last_ok is None or (last_try and last_try > last_ok))) or (exit_status not in ("0", "-") and pid == "-")
+        recovered = bool(comp and last_ok and last_try and last_ok >= last_try and row.get("last_status") not in ("FAILED", "FAIL", "HALT"))       # a LATER successful run supersedes launchd's remembered non-zero exit
+        failed = bool(comp and row.get("last_status") in ("FAILED", "FAIL", "HALT") and (last_ok is None or (last_try and last_try > last_ok))) or (exit_status not in ("0", "-") and pid == "-" and not recovered)
         if pid not in ("-", ""):
             state, why = RUNNING, f"a process is alive (pid {pid})"
         elif failed:

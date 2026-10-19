@@ -22,7 +22,7 @@ except ps.Unavailable as _exc:
     games = None
     _games_error = str(_exc)
 if "account" not in tk:
-    ui.unavailable("The ticket board has not been built yet; it is written by the 15-minute paper-trader job.", "The ticket board")
+    ui.unavailable("The ticket board has not been built yet; it is written by the 10-minute paper-trader job.", "The ticket board")
     st.stop()
 
 acct, origins = tk["account"], tk.get("origins") or {}

@@ -535,6 +535,7 @@ class TestStartedGamesKeepTheirPregameAnalysis(unittest.TestCase):
         g = after["games"][0]
         self.assertEqual(g["state"], "LIVE")
         self.assertEqual(g["frozen_at_utc"], before["generated_at_utc"])
+        self.assertIn("frozen at puck drop", g["coverage"]["price_state_word"])                   # a started game never claims "fresh prices"
         self.assertTrue(g["coverage"]["analysis_available"])
         self.assertEqual(g["coverage"]["recommended"], [])
         self.assertEqual([r["name"] for r in g["scorers"]], [r["name"] for r in before["games"][0]["scorers"]])

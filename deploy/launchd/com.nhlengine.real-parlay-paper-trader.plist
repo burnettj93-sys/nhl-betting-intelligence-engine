@@ -25,7 +25,7 @@
     <string>/Users/johnburnett/Downloads/nhl_engine 2</string>
 
     <key>StartInterval</key>
-    <integer>900</integer>
+    <integer>600</integer>
 
     <key>StandardOutPath</key>
     <string>/Users/johnburnett/Downloads/nhl_engine 2/operational/logs/real_parlay_paper_trader.log</string>
