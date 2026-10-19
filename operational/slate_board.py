@@ -406,7 +406,7 @@ def _frozen_block(previous_doc: dict | None, today: str, g: dict, recovered: dic
 
 
 def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict | None, availability: dict | None, saves_by_game: dict | None = None,
-              previous_day: dict | None = None, saves_errors: dict | None = None, previous_doc: dict | None = None, recovered: dict | None = None) -> dict:
+              previous_day: dict | None = None, saves_errors: dict | None = None, previous_doc: dict | None = None, recovered: dict | None = None, plan: dict | None = None) -> dict:
     today = product.get("et_today")
     haircut, policy_error = _policy_haircut()
     games = [g for g in (product.get("games") or {}).get("games", []) if g.get("date_et") == today and g.get("type") == "REGULAR"]
@@ -422,6 +422,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
             summ = ((m.get("validation") or {}).get("summary") or {})
             saves_ok = bool(summ.get("markets_scored")) and summ.get("beating_baselines") == summ.get("markets_scored")
     out_games = []
+    players_by_game: dict = {}
     from operational import player_integrity
     rosters_doc = player_integrity._load(player_integrity.ROSTER_STATE)
     counts = {"scheduled": len(games), "analysed": 0, "shots_priced": 0, "goals_priced": 0, "saves_priced": 0, "moneyline_priced": 0, "with_recommendation": 0}
@@ -447,6 +448,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
                 keep.append(p)
             side_players[s_] = keep
         all_players = side_players["home"] + side_players["away"]
+        players_by_game[gid] = {"home": list(side_players["home"]), "away": list(side_players["away"])}        # the integrity-filtered skaters: what the stage-A candidate search may use
         pg = pool_games.get(gid)
         gl_by_side = {}
         for s in ("home", "away"):
@@ -548,7 +550,13 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
             counts[k] += v
         out_games.append(entry)
     primary = (tickets or {}).get("primary")
-    doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary,
+    eggy = None
+    try:                                                    # stage A: the whole real slate, same-game theses included (operational/eggy_candidates.py); never records anything, never blocks the board
+        from operational import eggy_candidates
+        eggy = eggy_candidates.build(now, games=out_games, players_by_game=players_by_game, product=product, pool=pool, availability=availability, plan=plan, primary=primary)
+    except Exception as exc:  # noqa: BLE001
+        eggy = {"version": 1, "daily_output": "UNAVAILABLE", "headline": "Eggy's candidate search could not be built", "error": f"{exc.__class__.__name__}: {exc}"}
+    doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary, "eggy": eggy,
            "policy": (tickets or {}).get("ticket_policy"), "recording_paused": bool((tickets or {}).get("recording_paused")),
            "models": {"skaters": "player-rate-toi-v2 (corrected shots estimate, cap +0.02)", "goalies": "goalie-team-v1", "teams": "goalie-team-v1 strength model"},
            "previous_day": previous_day, "policy_error": policy_error, "haircut": round(haircut, 4), "input_errors": dict(saves_errors or {}), "notes": [
@@ -721,7 +729,12 @@ def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | No
     saves = _by_goalie_id(_saves_lines(pool, now, saves_errors), product.get("goalies") or {})
     previous = load()
     recovered = _frozen_sources(product, today, previous)
-    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=previous, recovered=recovered)
+    try:
+        from operational import credit_planner
+        plan = credit_planner.load_plan(today) if today else None
+    except Exception:  # noqa: BLE001 - the plan only explains why a price is missing
+        plan = None
+    doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=previous, recovered=recovered, plan=plan)
     try:
         from operational import pregame_archive
         pregame_archive.remember(doc)                          # the last scheduled block of each analysed game is kept for after puck drop

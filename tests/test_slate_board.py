@@ -615,7 +615,8 @@ class TestThePage(unittest.TestCase):
         blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption) + " " + " ".join(x.label for x in at.expander) + " " + " ".join(h.value for h in at.subheader)
         self.assertIn("Eggy's Parlay Pick of the Day", blob)
         self.assertIn("BBB @ AAA", blob)
-        self.assertIn("No Eggy pick today", blob)
+        self.assertTrue("TRUE PASS" in blob or "NO CERTIFIED EGGY PICK TODAY" in blob, blob[-400:])     # the stage-A card replaced the bare "No Eggy pick today"
+        self.assertNotIn("No Eggy pick today", blob)
         self.assertIn("Test Skater One", blob)
 
     def test_a_recommendation_that_has_aged_past_its_limit_is_withdrawn_when_the_page_is_opened(self):
@@ -675,9 +676,10 @@ class TestThePage(unittest.TestCase):
         s = snapshot()
         s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value after the haircut.", "strongest_singles": []}})
         at = run_page("41_Slate_Board.py", s)
-        blob = " ".join(x.value for x in at.markdown)
-        self.assertIn("No Eggy pick today", blob)
-        self.assertIn("after the haircut", blob)
+        blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)
+        self.assertTrue("TRUE PASS" in blob or "NO CERTIFIED EGGY PICK TODAY" in blob)          # stage A replaced the bare "No Eggy pick today"; no ticket is invented either way
+        self.assertIn("after the haircut", blob)                                                  # the production policy's own reason is still shown, labelled as such
+        self.assertIn("Production recording policy", blob)
         self.assertNotIn("To return", blob)
 
     def test_the_closest_combination_is_displayed_with_its_label(self):
