@@ -120,7 +120,7 @@ def run(now: dt.datetime | None = None) -> dict:
         # Grade the pregame-frozen board cards of games that are now FINAL against the official results (read-only; operational/board_scorecard.py).
         try:
             from operational import board_scorecard
-            scorecard_summary = board_scorecard.score_final_games(nhl_conn) if not _sp.under_test() else {"status": "SKIPPED_UNDER_TEST"}
+            scorecard_summary = board_scorecard.safe_score(nhl_conn) if not _sp.under_test() else {"status": "SKIPPED_UNDER_TEST"}
         except Exception as exc:  # noqa: BLE001 - grading must never stop a trader cycle
             scorecard_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
 

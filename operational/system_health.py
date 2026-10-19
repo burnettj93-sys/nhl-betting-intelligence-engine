@@ -376,9 +376,8 @@ _SCHEDULER_LABELS = ("com.nhlengine.moneyline-snapshot", "com.nhlengine.real-par
                      "com.nhlengine.pregame-targeted-refresh", "com.nhlengine.daily-settlement",
                      "com.nhlengine.daily-postmortem", "com.nhlengine.database-backup")
 
-# VPS Production Deployment block (2026-09-24), Part 14: the 1:1 mapping
-# from each macOS launchd label above to its VPS systemd timer unit, per
-# docs/VPS_DEPLOYMENT_PREP.md's own naming -- same job order, same count.
+# VPS Production Deployment block (2026-09-24), Part 14: the legacy `nhlengine-*` timer names of the original 10-job scheduler. NOT kept in step with _SCHEDULER_LABELS above (v4 retired the props and
+# sweep jobs and added the trader, morning refresh and watchdog); the current systemd export derives its unit names from watchdog.EXPECTED_JOBS (deploy/export_systemd_units.py). No VPS exists yet.
 _SYSTEMD_TIMER_UNITS = ("nhlengine-moneyline.timer", "nhlengine-props-pull.timer",
                         "nhlengine-sweep-first.timer", "nhlengine-sweep-second.timer",
                         "nhlengine-nhl-sync.timer", "nhlengine-midday-refresh.timer",

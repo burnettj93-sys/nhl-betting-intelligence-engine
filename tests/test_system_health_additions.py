@@ -162,6 +162,11 @@ class Test06LiveOddsSchedulerHealth(unittest.TestCase):
         finally:
             subprocess.run = original
 
+    def test_scheduler_labels_do_not_drift_from_the_watchdogs_expected_jobs(self):
+        from operational import watchdog
+        allowed = set(watchdog.EXPECTED_JOBS) | {"com.nhlengine.watchdog"}
+        self.assertEqual(set(sh._SCHEDULER_LABELS) - allowed, set())
+
     def test_reports_waiting_when_nothing_is_loaded(self):
         import subprocess
         original = subprocess.run

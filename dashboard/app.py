@@ -90,7 +90,7 @@ pg = st.navigation(_nav_sections)
 with st.sidebar:
     theme.brand("NHL Intelligence", "Games, players, goalies and paper tickets")
     if _MODE == runtime_mode.COMMUNITY_CLOUD_MODE:
-        st.caption("☁️ Hosted view — data is published by the engine every ~15 minutes")
+        st.caption("☁️ Hosted view — data is published by the engine every ~10 minutes")
         try:                                       # which code and which data this is (dashboard/version.py); public, never fatal
             from dashboard import snapshot_source as _ss, version as _version
             _txt = _version.footer_text(_version.code_commit(), _version.data_commit(getattr(_ss.current(), "data", None)))
