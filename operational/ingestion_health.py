@@ -66,6 +66,12 @@ def record_run(component: str, summary: dict, *, cache_path: Path | None = None)
     health[component] = row
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text(json.dumps(health, indent=2, sort_keys=True))
+    if status in _FAILURE_STATUSES and cache_path == DEFAULT_CACHE_PATH:      # remember a failed or deferred run of the morning chain, so a later success reads RECOVERED (operational/morning_catchup.py)
+        try:
+            from operational import morning_catchup
+            morning_catchup.note_event(component, "DEFERRED" if status == "DEFERRED" else "FAILED", row["last_detail"])
+        except Exception:  # noqa: BLE001
+            pass
     return row
 
 

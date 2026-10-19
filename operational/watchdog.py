@@ -421,6 +421,35 @@ def check_ticket_policy() -> dict:
 PREDICTION_LOG_MAX_AGE_MIN = 60.0
 
 
+DAILY_CHAIN_FAIL_AFTER_MIN = 180.0
+
+
+def check_daily_chain(now: dt.datetime) -> dict:
+    """The morning chain (07:00 sync, 07:15 settlement, 07:30 postmortem, 07:45 backup) as four honest states, not one exit code (operational/morning_catchup.chain_status): COMPLETED (clean), RECOVERED (succeeded
+    after a failure or deferral today), DEFERRED (not attempted: network down, upstream not recovered, slot missed), FAILED (attempted, did not succeed). A stage that is deferred or failed but still being retried
+    is a warning; one that is exhausted, or still unrecovered three hours after its slot, fails."""
+    from operational import deployment_mode, morning_catchup as mc
+    if not deployment_mode.is_active_scheduler():
+        return {"name": "daily_chain", "status": OK, "detail": "not the active scheduler: the morning chain runs on the active machine"}
+    rows = mc.chain_status(now)
+    short = {"nhl_sync_full": "sync", "settlement": "settlement", "postmortem": "postmortem", "database_backups": "backup"}
+    summary = ", ".join(f"{short.get(r['component'], r['component'])} {r['state']}" for r in rows)
+    bad = [r for r in rows if r["state"] in ("FAILED", "DEFERRED")]
+    if not bad:
+        return {"name": "daily_chain", "status": OK, "detail": summary}
+
+    def overdue(r):
+        slot = mc._utc(r["slot_utc"])
+        if r["exhausted"]:
+            return True
+        # A stage the catch-up has not had a chance to try (a Mac that was off or asleep, a cycle that has not run) is a warning, never a failure: it fails only after the engine tried, or recorded a failure, past the grace.
+        last_event = mc._utc(r.get("last_event_utc"))
+        tried = r["attempts"] > 0 or r["state"] == "FAILED" or bool(slot and last_event and last_event >= slot + dt.timedelta(minutes=mc.GRACE_MIN))
+        return bool(slot and tried and now >= slot + dt.timedelta(minutes=DAILY_CHAIN_FAIL_AFTER_MIN))
+    why = "; ".join(f"{short.get(r['component'], r['component'])}: {r.get('detail') or r['state'].lower()}" + (f" (next retry {r['next_retry_utc']})" if r.get("next_retry_utc") else "") + ("" if (r["attempts"] or r["state"] == "FAILED" or r.get("last_event_utc")) else " (no catch-up cycle has run yet)") for r in bad)
+    return {"name": "daily_chain", "status": FAIL if any(overdue(r) for r in bad) else WARN, "detail": f"{summary} -- {why}"}
+
+
 def check_prediction_log(now: dt.datetime) -> dict:
     """The frozen-prediction log (operational/shadow_selection.py) must be looked at on every trader cycle, recording or paused: it is where the entry estimates are kept before the games. It stamps
     every look, so a quiet pool is told apart from a logger that stopped (as it did when recording resumed on 2026-10-11)."""
@@ -653,7 +682,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
-    for fn in (check_jobs_ran, check_missed_windows, check_power):
+    for fn in (check_jobs_ran, check_missed_windows, check_power, check_daily_chain):
         try:
             checks.append(fn(now))
         except Exception as exc:  # noqa: BLE001 - one broken check must not stop the watchdog from writing its state
