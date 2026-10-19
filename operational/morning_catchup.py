@@ -40,6 +40,7 @@ from __future__ import annotations
 import datetime as dt
 import fcntl
 import json
+import os
 import subprocess
 import sys
 import time
@@ -115,7 +116,7 @@ def _save_state(state: dict, path: Path | None, today: str) -> None:
     keep = sorted(state["days"])[-KEEP_DAYS:]
     state["days"] = {d: state["days"][d] for d in keep}
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")                 # per process: the scheduled jobs' note_event and the catch-up never share a temp file
     tmp.write_text(json.dumps(state, indent=2, sort_keys=True))
     tmp.replace(path)
 
@@ -124,7 +125,8 @@ def run_catchup(now: dt.datetime | None = None, *, runner: Callable | None = Non
                 health_fn: Callable[[], dict] | None = None, state_path: Path | None = None,
                 lock_path: Path | None = None, active_fn: Callable[[], bool] | None = None,
                 python: str | None = None, network_fn: Callable[[], bool] | None = None,
-                sleep_fn: Callable[[float], None] | None = None) -> dict:
+                sleep_fn: Callable[[float], None] | None = None, clock: Callable[[], dt.datetime] | None = None,
+                settle_work_fn: Callable[[], int | None] | None = None) -> dict:
     """One bounded pass. Returns {"status", "actions": [...], "reason"}; never raises."""
     now = now or dt.datetime.now(dt.timezone.utc)
     out = {"status": "OK", "reason": None, "actions": []}
@@ -159,12 +161,29 @@ def run_catchup(now: dt.datetime | None = None, *, runner: Callable | None = Non
                 out.update(status="SKIPPED", reason="ANOTHER_INSTANCE_RUNNING")
                 return out
             if network_fn is None:
-                from operational import morning_refresh
-                network_fn = morning_refresh.network_up
-            return _run_locked(now, due, out, runner, health_fn, state_path, python or sys.executable, network_fn, sleep_fn or time.sleep)
+                network_fn = _fresh_network_probe
+            return _run_locked(now, due, out, runner, health_fn, state_path, python or sys.executable, network_fn, sleep_fn or time.sleep,
+                               clock or ((lambda: max(now, dt.datetime.now(dt.timezone.utc))) if runner is subprocess.run else (lambda: now)),
+                               settle_work_fn if settle_work_fn is not None else _default_settle_work)
     except Exception as exc:  # noqa: BLE001 -- a maintenance hook must never break its host job
         out.update(status="FAILED", reason=f"{type(exc).__name__}: {str(exc)[:160]}")
         return out
+
+
+def _default_settle_work() -> int | None:
+    """How many PENDING observations are past their event start (None = unknown). Zero means settlement has nothing to wait the sync for (operational/settle_daily_observations.main completes on its own)."""
+    if _sp.under_test():
+        return None
+    try:
+        from operational import prospective_ledger as pl
+        from operational import settle_daily_observations as sdo
+        conn = pl.init_db()
+        try:
+            return len(sdo.find_settlement_candidates(conn))
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _backoff_gap(attempts: int) -> dt.timedelta:
@@ -175,6 +194,13 @@ def _add_event(rec: dict, now: dt.datetime, status: str, detail: str | None = No
     ev = rec.setdefault("events", [])
     ev.append({"at": now.isoformat(), "status": status, **({"detail": str(detail)[:200]} if detail else {})})
     del ev[:-EVENT_KEEP]
+
+
+def _fresh_network_probe() -> bool:
+    """morning_refresh.network_up caches an answer for 60 s; a wait for the network must see it come back, so each poll asks again."""
+    from operational import morning_refresh
+    morning_refresh._NET_CACHE.update(at=None, up=None)
+    return morning_refresh.network_up()
 
 
 def _wait_for_network(network_fn, sleep_fn, wait_s: float = NETWORK_WAIT_S, poll_s: float = NETWORK_POLL_S) -> bool:
@@ -191,7 +217,8 @@ def _wait_for_network(network_fn, sleep_fn, wait_s: float = NETWORK_WAIT_S, poll
         waited += poll_s
 
 
-def _run_locked(now, due, out, runner, health_fn, state_path, python, network_fn=None, sleep_fn=time.sleep):
+def _run_locked(now, due, out, runner, health_fn, state_path, python, network_fn=None, sleep_fn=time.sleep, clock=None, settle_work_fn=None):
+    clock = clock or (lambda: now)
     today = now.astimezone().date().isoformat()
     state = _load_state(state_path)
     day = state["days"].setdefault(today, {})
@@ -200,6 +227,8 @@ def _run_locked(now, due, out, runner, health_fn, state_path, python, network_fn
         comp = stage["component"]
         dep = stage["depends_on"]
         rec = day.setdefault(comp, {"attempts": 0})
+        if dep and dep in unrecovered and comp == "settlement" and settle_work_fn is not None and settle_work_fn() == 0:
+            dep = None                                              # nothing is waiting to be settled: the sync is not needed for this stage, so it runs and completes now (never "tomorrow")
         if dep and dep in unrecovered:
             rec.update(status="DEFERRED", reason="UPSTREAM_NOT_RECOVERED", slot_utc=stage["slot_utc"])
             out["actions"].append({"component": comp, "action": "SKIPPED_UPSTREAM_NOT_RECOVERED", "depends_on": dep})
@@ -221,14 +250,22 @@ def _run_locked(now, due, out, runner, health_fn, state_path, python, network_fn
             _save_state(state, state_path, today)
             continue
         if comp in NEEDS_NETWORK and network_fn is not None and not _wait_for_network(network_fn, sleep_fn):
+            state = _load_state(state_path)                         # the wait took up to ~100 s: scheduled jobs may have noted events meanwhile; never write back a stale copy
+            day = state["days"].setdefault(today, {})
+            rec = day.setdefault(comp, {"attempts": 0})
             rec.update(status="DEFERRED", reason="NETWORK_DOWN", slot_utc=stage["slot_utc"])
-            _add_event(rec, now, "DEFERRED", "NETWORK_DOWN")
+            _add_event(rec, clock(), "DEFERRED", "NETWORK_DOWN")
             out["actions"].append({"component": comp, "action": "DEFERRED_NETWORK_DOWN", "attempts": rec["attempts"]})      # no attempt consumed: the machine was offline, the source did not fail
             unrecovered.add(comp)
             _save_state(state, state_path, today)
             continue
 
-        rec.update(attempts=rec["attempts"] + 1, last_attempt_utc=now.isoformat(), reason=REASON,
+        if comp in NEEDS_NETWORK and network_fn is not None:        # the network was found up after a wait: reload for the same reason
+            state = _load_state(state_path)
+            day = state["days"].setdefault(today, {})
+            rec = day.setdefault(comp, {"attempts": 0})
+        started = clock()
+        rec.update(attempts=rec["attempts"] + 1, last_attempt_utc=started.isoformat(), reason=REASON,
                    slot_utc=stage["slot_utc"], status="ATTEMPTING")
         rec.pop("next_retry_utc", None)
         _save_state(state, state_path, today)                      # recorded BEFORE running: a crash still counts
@@ -245,14 +282,14 @@ def _run_locked(now, due, out, runner, health_fn, state_path, python, network_fn
             action.update(action="ERROR", error=type(exc).__name__)
             detail = type(exc).__name__
         recovered = succeeded_since(health_fn(), comp, _utc(stage["slot_utc"]))
-        finished = dt.datetime.now(dt.timezone.utc)
+        finished = clock()
         state = _load_state(state_path)                             # the stage's own process may have noted an event in the meantime: never overwrite it with a stale copy
         day = state["days"].setdefault(today, {})
         rec = day.setdefault(comp, {"attempts": 1})
         rec.update(status="RECOVERED" if recovered else "FAILED", finished_utc=finished.isoformat())
         if not recovered:
             gap = _backoff_gap(rec["attempts"])
-            rec["next_retry_utc"] = (now + gap).isoformat() if rec["attempts"] < DAILY_ATTEMPT_CAP else None
+            rec["next_retry_utc"] = (started + gap).isoformat() if rec["attempts"] < DAILY_ATTEMPT_CAP else None
             rec["exhausted"] = rec["attempts"] >= DAILY_ATTEMPT_CAP
         _add_event(rec, finished, "RECOVERED" if recovered else "FAILED", detail or (f"returncode {action.get('returncode')}" if not recovered else None))
         action["recovered"] = recovered
@@ -296,9 +333,14 @@ def chain_status(now: dt.datetime | None = None, health: dict | None = None, sta
         rec = day.get(component) or {}
         events = [e for e in rec.get("events", []) if _utc(e.get("at")) and _utc(e["at"]) >= slot]
         bad_events = [e for e in events if e.get("status") in ("FAILED", "DEFERRED")]
-        row = {"component": component, "slot_utc": slot.isoformat(), "attempts": rec.get("attempts", 0), "exhausted": bool(rec.get("exhausted")), "next_retry_utc": rec.get("next_retry_utc")}
+        row = {"component": component, "slot_utc": slot.isoformat(), "attempts": rec.get("attempts", 0), "exhausted": bool(rec.get("exhausted")), "next_retry_utc": rec.get("next_retry_utc"),
+               "last_event_utc": (events[-1]["at"] if events else None)}
         if succeeded_since(health, component, slot):
-            row.update(state="RECOVERED" if (bad_events or rec.get("reason") == REASON) else "COMPLETED", detail=None)
+            ok_at = _utc((health.get(component) or {}).get("last_success_utc"))
+            before = [e for e in bad_events if _utc(e["at"]) < ok_at]
+            after = [e for e in bad_events if _utc(e["at"]) >= ok_at]
+            row.update(state="RECOVERED" if (before or rec.get("reason") == REASON) else "COMPLETED",
+                       detail=(f"a later run {after[-1]['status'].lower()} at {after[-1]['at']}" if after else None))
         elif now < slot + dt.timedelta(minutes=GRACE_MIN) and not bad_events:
             row.update(state="PENDING", detail="its scheduled run is not due yet" if now < slot else "inside the grace window for its scheduled run")
         else:

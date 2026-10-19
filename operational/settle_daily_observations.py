@@ -305,6 +305,19 @@ def main() -> None:
     # fire at 07:15 against a stale/incomplete schedule. DEFER (never
     # retry-loop) when the upstream sync isn't confirmed healthy; the
     # next scheduled settlement run picks it up once sync recovers.
+    import fcntl
+    from operational import settlement_trigger_hook
+    settlement_trigger_hook.LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(settlement_trigger_hook.LOCK_PATH, "w") as lock:        # the same lock the new-results trigger takes: a scheduled run, a catch-up and the trigger can never settle at once
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            print("ANOTHER_SETTLEMENT_RUNNING: another settlement run holds the lock; it will settle what is due, so this run does nothing.")
+            return
+        _main_locked()
+
+
+def _main_locked() -> None:
     conn = pl.init_db()
     sync_ready, sync_reason = ingestion_health.dependency_ready("nhl_sync_full", max_age_hours=30.0)
     if not sync_ready:

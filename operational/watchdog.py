@@ -428,16 +428,26 @@ def check_daily_chain(now: dt.datetime) -> dict:
     """The morning chain (07:00 sync, 07:15 settlement, 07:30 postmortem, 07:45 backup) as four honest states, not one exit code (operational/morning_catchup.chain_status): COMPLETED (clean), RECOVERED (succeeded
     after a failure or deferral today), DEFERRED (not attempted: network down, upstream not recovered, slot missed), FAILED (attempted, did not succeed). A stage that is deferred or failed but still being retried
     is a warning; one that is exhausted, or still unrecovered three hours after its slot, fails."""
-    from operational import morning_catchup as mc
+    from operational import deployment_mode, morning_catchup as mc
+    if not deployment_mode.is_active_scheduler():
+        return {"name": "daily_chain", "status": OK, "detail": "not the active scheduler: the morning chain runs on the active machine"}
     rows = mc.chain_status(now)
     short = {"nhl_sync_full": "sync", "settlement": "settlement", "postmortem": "postmortem", "database_backups": "backup"}
     summary = ", ".join(f"{short.get(r['component'], r['component'])} {r['state']}" for r in rows)
     bad = [r for r in rows if r["state"] in ("FAILED", "DEFERRED")]
     if not bad:
         return {"name": "daily_chain", "status": OK, "detail": summary}
-    overdue = [r for r in bad if r["exhausted"] or (mc._utc(r["slot_utc"]) is not None and now >= mc._utc(r["slot_utc"]) + dt.timedelta(minutes=DAILY_CHAIN_FAIL_AFTER_MIN))]
-    why = "; ".join(f"{short.get(r['component'], r['component'])}: {r.get('detail') or r['state'].lower()}" + (f" (next retry {r['next_retry_utc']})" if r.get("next_retry_utc") else "") for r in bad)
-    return {"name": "daily_chain", "status": FAIL if overdue else WARN, "detail": f"{summary} -- {why}"}
+
+    def overdue(r):
+        slot = mc._utc(r["slot_utc"])
+        if r["exhausted"]:
+            return True
+        # A stage the catch-up has not had a chance to try (a Mac that was off or asleep, a cycle that has not run) is a warning, never a failure: it fails only after the engine tried, or recorded a failure, past the grace.
+        last_event = mc._utc(r.get("last_event_utc"))
+        tried = r["attempts"] > 0 or r["state"] == "FAILED" or bool(slot and last_event and last_event >= slot + dt.timedelta(minutes=mc.GRACE_MIN))
+        return bool(slot and tried and now >= slot + dt.timedelta(minutes=DAILY_CHAIN_FAIL_AFTER_MIN))
+    why = "; ".join(f"{short.get(r['component'], r['component'])}: {r.get('detail') or r['state'].lower()}" + (f" (next retry {r['next_retry_utc']})" if r.get("next_retry_utc") else "") + ("" if (r["attempts"] or r["state"] == "FAILED" or r.get("last_event_utc")) else " (no catch-up cycle has run yet)") for r in bad)
+    return {"name": "daily_chain", "status": FAIL if any(overdue(r) for r in bad) else WARN, "detail": f"{summary} -- {why}"}
 
 
 def check_prediction_log(now: dt.datetime) -> dict:

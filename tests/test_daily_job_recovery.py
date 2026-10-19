@@ -58,6 +58,8 @@ class Sim(unittest.TestCase):
         kw.setdefault("runner", self.runner)
         kw.setdefault("network_fn", self.net)
         kw.setdefault("sleep_fn", lambda s: None)
+        kw.setdefault("clock", lambda: self.clock)                 # simulated time everywhere, never the real clock
+        kw.setdefault("settle_work_fn", lambda: None)
         return mc.run_catchup(at, health_fn=lambda: self.health, state_path=self.state, lock_path=self.lock, active_fn=lambda: True, **kw)
 
     def states(self, at):
@@ -157,12 +159,13 @@ class StatesAreDistinguished(Sim):
         self.assertEqual(set(self.states(local(6, 0)).values()), {"PENDING"})
         self.health = {"nhl_sync_full": {"last_status": "SUCCESS", "last_success_utc": local(7, 1).astimezone(dt.timezone.utc).isoformat()}}
         self.assertEqual(self.states(local(7, 10))["nhl_sync_full"], "COMPLETED")             # ran on its own slot, no failure recorded
-        mc.note_event("nhl_sync_full", "FAILED", "ConnectionError", now=local(7, 1), state_path=self.state)
+        mc.note_event("nhl_sync_full", "FAILED", "ConnectionError", now=local(7, 0, ) + dt.timedelta(seconds=30), state_path=self.state)
         self.assertEqual(self.states(local(7, 10))["nhl_sync_full"], "RECOVERED")             # the same success after a recorded failure
         self.assertEqual(self.states(local(8, 0))["settlement"], "DEFERRED")                  # slot long gone, nothing recorded, waiting for the catch-up
 
+    @unittest.skipUnless(__import__("operational.state_paths", fromlist=["x"]).under_test(), "writes health state: only inside the isolated test run")
     def test_the_scheduled_run_failing_is_recorded_by_ingestion_health_for_the_chain_only(self):
-        with mock.patch.object(mc, "STATE_PATH", self.state):
+        with mock.patch.object(mc, "STATE_PATH", self.state), mock.patch.object(ingestion_health, "DEFAULT_CACHE_PATH", self.tmp / "health.json"):
             ingestion_health.record_run("nhl_sync_full", {"status": "FAILED", "error": "NameResolutionError"})
             ingestion_health.record_run("settlement", {"status": "DEFERRED", "reason": "upstream not ready"})
             ingestion_health.record_run("moneyline_snapshot", {"status": "FAILED", "error": "x"})      # not part of the chain
@@ -174,7 +177,8 @@ class StatesAreDistinguished(Sim):
 
 class WatchdogReportsTheStates(Sim):
     def check(self, at):
-        with mock.patch.object(mc, "STATE_PATH", self.state), mock.patch.object(ingestion_health, "load_health", return_value=self.health):
+        with mock.patch.object(mc, "STATE_PATH", self.state), mock.patch.object(ingestion_health, "load_health", return_value=self.health), \
+             mock.patch("operational.deployment_mode.is_active_scheduler", return_value=True):
             return watchdog.check_daily_chain(at)
 
     def test_ok_warn_fail(self):
@@ -193,7 +197,9 @@ class WatchdogReportsTheStates(Sim):
 class NothingToSettleDoesNotWait(unittest.TestCase):
     def _main(self, ledger):
         recorded = []
-        with mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+        from operational import settlement_trigger_hook as hook
+        with mock.patch.object(hook, "LOCK_PATH", Path(tempfile.mkdtemp()) / "settlement_trigger.lock"), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
              mock.patch.object(sdo.pl, "init_db", return_value=ledger), \
              mock.patch.object(sdo.ingestion_health, "dependency_ready", return_value=(False, "nhl_sync_full's last recorded run did not succeed")), \
              mock.patch.object(sdo.ingestion_health, "record_run", side_effect=lambda c, s: recorded.append((c, s))):
@@ -228,19 +234,82 @@ class NoDuplicateSettlementOrPayout(unittest.TestCase):
         self.assertEqual(pl.get_observation(ledger, "pred-1")["result_status"], "WIN")
 
     def test_a_paper_bet_pays_out_once_and_a_second_settlement_changes_nothing(self):
-        conn = pb.init_db(db_path=":memory:") if "db_path" in pb.init_db.__code__.co_varnames else None
-        self.assertIsNotNone(conn)
+        conn = pb.init_db(db_path=":memory:")
         bet = pb.record_paper_bet(conn, track="REAL_MARKET_PAPER", price_source="LIVE_DRAFTKINGS", market_id="PLAYER_SOG", entry_odds=150, event_id="g1", game_date="2026-10-18",
                                   player_id="P1", player_name_snapshot="P One", team="MIN", opponent="CBJ", market_family="PLAYER_SOG", threshold="2+", side="OVER")
-        cash_before = pb.account_summary(conn, "REAL_MARKET_PAPER")["available_cash"] if hasattr(pb, "account_summary") else None
-        first = pb.settle_paper_bet(conn, bet["paper_bet_id"], "WIN")
-        pnl = first["profit_loss"]
+        pnl = pb.settle_paper_bet(conn, bet["paper_bet_id"], "WIN")["profit_loss"]
         with self.assertRaises(pb.InvalidPaperBetError):
             pb.settle_paper_bet(conn, bet["paper_bet_id"], "WIN")
         row = conn.execute("SELECT result_status, profit_loss FROM paper_bets WHERE paper_bet_id=?", (bet["paper_bet_id"],)).fetchone()
         self.assertEqual((row["result_status"], row["profit_loss"]), ("WIN", pnl))
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM paper_bets").fetchone()[0], 1)
-        del cash_before
+
+    def test_a_scheduled_or_catchup_settlement_cannot_run_while_another_settlement_holds_the_lock(self):
+        import fcntl
+        from operational import settlement_trigger_hook as hook
+        ledger = pl.init_db(db_path=":memory:")
+        with mock.patch.object(hook, "LOCK_PATH", self.lock_path), mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch.object(sdo.pl, "init_db", return_value=ledger) as init, mock.patch.object(sdo.ingestion_health, "record_run") as rec:
+            with open(self.lock_path, "w") as held:
+                fcntl.flock(held, fcntl.LOCK_EX)                                          # the new-results trigger is settling right now
+                sdo.main()
+            init.assert_not_called()                                                      # nothing opened, nothing recorded, nothing settled twice
+            rec.assert_not_called()
+
+    def setUp(self):
+        self.lock_path = Path(tempfile.mkdtemp()) / "settlement_trigger.lock"
+
+
+class ReviewFixes(Sim):
+    def test_events_noted_by_a_scheduled_job_during_the_network_wait_are_not_overwritten(self):
+        self.network = False
+
+        def sleep(s):
+            if not getattr(self, "_noted", False):
+                self._noted = True
+                mc.note_event("settlement", "DEFERRED", "upstream not ready", now=self.clock, state_path=self.state)       # the 07:15 scheduled run lands during the wait
+        self.cycle(local(8, 20), sleep_fn=sleep)
+        day = mc._load_state(self.state)["days"][local(8, 20).date().isoformat()]
+        self.assertEqual([e["detail"] for e in day["settlement"]["events"] if e["status"] == "DEFERRED"][:1], ["upstream not ready"])
+
+    def test_the_catchup_and_note_event_do_not_share_a_temp_file(self):
+        mc._save_state({"days": {}}, self.state, "2026-10-19")
+        self.assertFalse(any(p.name == "s.json.tmp" for p in self.tmp.iterdir()))
+
+    def test_a_failure_after_a_clean_success_is_not_hidden_and_does_not_make_it_recovered(self):
+        self.health = {"settlement": {"last_status": "SUCCESS", "last_success_utc": local(7, 16).astimezone(dt.timezone.utc).isoformat()}}
+        mc.note_event("settlement", "FAILED", "later trigger run", now=local(15, 0), state_path=self.state)
+        row = [r for r in mc.chain_status(local(15, 5), self.health, self.state) if r["component"] == "settlement"][0]
+        self.assertEqual(row["state"], "COMPLETED")
+        self.assertIn("a later run failed", row["detail"])
+
+    def test_settlement_with_nothing_pending_completes_even_while_the_sync_is_unrecovered(self):
+        self.outcome["nhl_sync_full"] = False
+        self.cycle(local(8, 30), settle_work_fn=lambda: 0)
+        self.assertIn("settlement", self.ran)                                               # not left waiting for tomorrow
+        self.assertEqual(self.states(local(8, 31))["settlement"], "RECOVERED")
+        self.assertEqual(self.states(local(8, 31))["nhl_sync_full"], "FAILED")
+
+    def test_settlement_with_work_waiting_still_waits_for_the_sync(self):
+        self.outcome["nhl_sync_full"] = False
+        self.cycle(local(8, 30), settle_work_fn=lambda: 3)
+        self.assertNotIn("settlement", self.ran)
+
+    def test_a_mac_that_was_off_all_night_is_a_warning_not_a_failure(self):
+        with mock.patch.object(mc, "STATE_PATH", self.state), mock.patch.object(ingestion_health, "load_health", return_value={}),              mock.patch("operational.deployment_mode.is_active_scheduler", return_value=True):
+            out = watchdog.check_daily_chain(local(10, 30))                                 # woke at 10:30, no catch-up cycle has run yet
+        self.assertEqual(out["status"], "WARN")
+        self.assertIn("no catch-up cycle has run yet", out["detail"])
+
+    def test_a_standby_machine_is_not_judged_on_the_morning_chain(self):
+        with mock.patch("operational.deployment_mode.is_active_scheduler", return_value=False):
+            self.assertEqual(watchdog.check_daily_chain(local(10, 30))["status"], "OK")
+
+    def test_the_default_network_probe_asks_again_each_poll(self):
+        from operational import morning_refresh
+        morning_refresh._NET_CACHE.update(at=1.0, up=False)
+        with mock.patch.object(morning_refresh, "network_up", side_effect=lambda: morning_refresh._NET_CACHE["up"] is None):
+            self.assertTrue(mc._fresh_network_probe())                                       # the stale "down" answer was cleared before asking
 
 
 if __name__ == "__main__":
