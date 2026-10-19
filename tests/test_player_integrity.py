@@ -9,6 +9,12 @@ from unittest import mock
 
 from operational import best_bets as bb
 from operational import player_integrity as pi
+from operational import state_paths
+
+
+def _clean_integrity_state():
+    for name in (pi.ROSTER_STATE, pi.AMBIGUOUS_STATE):                      # these tests write official rosters and ambiguity lists: never leave them for other tests in the process
+        state_paths.path(name).unlink(missing_ok=True)
 from operational import slate_board as sb
 from tests.test_slate_board import NOW, avail, pool, product
 
@@ -20,6 +26,10 @@ def roster(**players):
 
 
 class TestVerdicts(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def test_a_player_on_the_current_official_roster_is_ok_and_a_missing_one_is_a_mismatch(self):
         docs = {"VAN": roster(**{"8480012": "Elias Pettersson"})}
         now = OFFICIAL_AT + dt.timedelta(minutes=30)
@@ -57,6 +67,10 @@ class TestVerdicts(unittest.TestCase):
 
 
 class TestNames(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def test_mangled_names_match_the_nhl_spelling_and_different_people_do_not(self):
         for mangled, real in (("Alexis Lafrenire", "Alexis Lafrenière"), ("Tim Sttzle", "Tim Stützle"), ("Juraj Slafkovsk", "Juraj Slafkovský"), ("Oskar Bck", "Oskar Bäck"),
                               ("Felix Unger Srum", "Felix Unger Sörum")):
@@ -82,6 +96,10 @@ class TestNames(unittest.TestCase):
 
 
 class TestTheModelJoin(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def test_a_second_player_under_the_same_name_withdraws_both_instead_of_overwriting(self):
         model, coll = {}, {}
         bb._put_player(model, coll, "elias pettersson|VAN", {"player_id": "8480012", "name": "Elias Pettersson", "team": "VAN"})
@@ -94,6 +112,10 @@ class TestTheModelJoin(unittest.TestCase):
 
 
 class TestTheBoardWithdrawsWrongPlayers(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def test_a_player_not_on_the_official_roster_is_withdrawn_from_scorers_and_shots(self):
         p = product()
         now = NOW
@@ -114,6 +136,10 @@ class TestTheBoardWithdrawsWrongPlayers(unittest.TestCase):
 
 
 class TestTheRecordingGate(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def combo(self, *legs):
         return mock.Mock(legs=list(legs))
 
@@ -148,6 +174,10 @@ class TestTheRecordingGate(unittest.TestCase):
 
 
 class TestReviewFixes(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def test_the_frozen_label_is_idempotent(self):
         p = product()
         d = sb.build_doc(NOW, p, pool(), {}, avail(), {}, None)

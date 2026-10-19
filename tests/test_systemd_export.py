@@ -26,7 +26,7 @@ class TestExport(unittest.TestCase):
         defs = ex.definitions()
         kw = dict(release_dir="/r", python="/py", user="u", log_dir="/l")
         trader = ex.units("com.nhlengine.real-parlay-paper-trader", defs["com.nhlengine.real-parlay-paper-trader"], **kw)["nhl-real-parlay-paper-trader.timer"]
-        self.assertIn("OnUnitActiveSec=900", trader)
+        self.assertIn("OnUnitActiveSec=600", trader)
         snap = ex.units("com.nhlengine.moneyline-snapshot", defs["com.nhlengine.moneyline-snapshot"], **kw)["nhl-moneyline-snapshot.timer"]
         for hh in ("08", "13", "17", "20"):
             self.assertIn(f"OnCalendar=*-*-* {hh}:00:00", snap)

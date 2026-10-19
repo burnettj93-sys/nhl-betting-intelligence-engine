@@ -8,6 +8,12 @@ import unittest
 import operational.system_health  # noqa: F401
 from operational import live_audit as la
 from operational import player_integrity as pi
+from operational import state_paths
+
+
+def _clean_integrity_state():
+    for name in (pi.ROSTER_STATE, pi.AMBIGUOUS_STATE):                      # these tests write official rosters and ambiguity lists: never leave them for other tests in the process
+        state_paths.path(name).unlink(missing_ok=True)
 
 NOW = dt.datetime(2026, 10, 18, 23, 30, tzinfo=dt.timezone.utc)
 
@@ -25,6 +31,10 @@ def snap():
 
 
 class TestAuditChecks(unittest.TestCase):
+    def setUp(self):
+        _clean_integrity_state()
+        self.addCleanup(_clean_integrity_state)
+
     def rosters(self, mp=True):
         pi._save(pi.ROSTER_STATE, {"MIN": {"fetched_at_utc": "2026-10-18T22:00:00Z", "players": {"8478864": "Kirill Kaprizov", "8476399": "Blake Coleman"} if mp else {}, "error": None},
                                    "CBJ": {"fetched_at_utc": "2026-10-18T22:00:00Z", "players": {"1": "X Y"}, "error": None}})
