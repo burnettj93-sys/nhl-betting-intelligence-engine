@@ -65,30 +65,65 @@ def _age_min(stamp: str | None, now: dt.datetime) -> float | None:
     return (now - t).total_seconds() / 60.0
 
 
-def _later_success(row: dict | None) -> bool:
-    """True when a component's latest successful run is not older than its latest attempt and that attempt did not fail: a LATER success supersedes launchd's remembered non-zero exit (launchd keeps the old exit
-    status until the job's next scheduled run, which for a daily job is tomorrow)."""
-    row = row or {}
-    ok, tried = row.get("last_success_utc"), row.get("last_attempt_utc")
-    return bool(ok and tried and ok >= tried and row.get("last_status") not in ("FAILED", "FAIL", "HALT"))
+def _ts(value) -> dt.datetime | None:
+    """An ISO timestamp as an aware UTC datetime ('Z', offsets and microseconds all parse; naive is taken as UTC); None when it cannot be read."""
+    try:
+        t = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
 
 
-def check_jobs(launchctl_text: str, health: dict | None = None) -> dict:
+_FAILED_STATUSES = frozenset({"FAILED", "FAIL", "HALT", "DEFERRED"})
+
+
+def _later_success(row: dict | None, since: dt.datetime | None = None) -> bool:
+    """A component's latest run succeeded and is not older than its latest attempt (a later success supersedes launchd's remembered non-zero exit, which launchd keeps until the job's next scheduled run).
+    With `since` (when the job last wrote its logs, i.e. when launchd last ran it) the success must also have been recorded AFTER that: a run that records SUCCESS and then exits non-zero, or one that crashed
+    before recording anything, therefore stays a warning instead of being excused by an earlier success."""
+    if not isinstance(row, dict):
+        return False
+    ok, tried = _ts(row.get("last_success_utc")), _ts(row.get("last_attempt_utc"))
+    if ok is None or tried is None or ok < tried or row.get("last_status") in _FAILED_STATUSES:
+        return False
+    return since is None or ok > since
+
+
+def _log_activity(definitions: dict | None = None, mtime=None) -> dict[str, dt.datetime]:
+    """{label: the latest modification time of the job's stdout/stderr logs}: when launchd last ran it."""
+    definitions = definitions if definitions is not None else _job_definitions()
+    mtime = mtime or (lambda path: Path(path).stat().st_mtime)
+    out = {}
+    for label, d in definitions.items():
+        stamps = []
+        for key in ("StandardOutPath", "StandardErrorPath"):
+            if d.get(key):
+                try:
+                    stamps.append(mtime(d[key]))
+                except OSError:
+                    pass
+        if stamps:
+            out[label] = dt.datetime.fromtimestamp(max(stamps), dt.timezone.utc)
+    return out
+
+
+def check_jobs(launchctl_text: str, health: dict | None = None, log_activity: dict | None = None) -> dict:
     rows = {}
     for line in launchctl_text.splitlines():
         parts = line.split()
         if len(parts) >= 3 and parts[2].startswith("com.nhlengine."):
             rows[parts[2]] = parts[1]
-    health = health or {}
+    health = health if isinstance(health, dict) else {}
+    log_activity = log_activity or {}
     missing = [j for j in EXPECTED_JOBS if j not in rows]
     nonzero = [j for j in EXPECTED_JOBS if j in rows and rows[j] not in ("0", "-")]
-    recovered = [j for j in nonzero if _later_success(health.get((JOB_OUTPUTS.get(j) or (None, None))[0]))]
+    recovered = [j for j in nonzero if _later_success(health.get((JOB_OUTPUTS.get(j) or (None, None))[0]), log_activity.get(j))]
     failing = [j for j in nonzero if j not in recovered]
     if missing:
         return {"name": "jobs_loaded", "status": FAIL, "detail": f"not loaded: {', '.join(m.split('.')[-1] for m in missing)}"}
     if failing:
         return {"name": "jobs_loaded", "status": WARN, "detail": f"last exit non-zero: {', '.join(f'{j.split(chr(46))[-1]}={rows[j]}' for j in failing)}"}
-    note = f"; {', '.join(j.split('.')[-1] for j in recovered)} exited non-zero earlier but a later run succeeded" if recovered else ""
+    note = f"; {', '.join(f'{j.split(chr(46))[-1]} (exit {rows[j]})' for j in recovered)} exited non-zero earlier, then its output was recorded again after that run" if recovered else ""
     return {"name": "jobs_loaded", "status": OK, "detail": f"all {len(EXPECTED_JOBS)} jobs loaded, last exits clean{note}"}
 
 
@@ -673,7 +708,11 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     except Exception:  # noqa: BLE001
         early_health = {}
     try:
-        checks.append(check_jobs(runner(["launchctl", "list"]), early_health))
+        activity = _log_activity()
+    except Exception:  # noqa: BLE001
+        activity = {}
+    try:
+        checks.append(check_jobs(runner(["launchctl", "list"]), early_health, activity))
     except Exception as exc:  # noqa: BLE001
         checks.append({"name": "jobs_loaded", "status": FAIL, "detail": f"launchctl failed: {exc}"})
     try:
@@ -686,11 +725,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     except Exception:  # noqa: BLE001
         origin = None
     checks.append(check_release(head, dirty, origin))
-    try:
-        from operational import ingestion_health
-        health = ingestion_health.load_health()
-    except Exception:  # noqa: BLE001
-        health = {}
+    health = early_health
     checks.append(check_age("trader_recent", (health.get("real_parlay_paper_trader") or {}).get("last_success_utc"), TRADER_MAX_AGE_MIN, now, "the 10-minute trader"))
     checks.append(check_age("publish_recent", (health.get("cloud_snapshot_publish") or {}).get("last_success_utc"), PUBLISH_MAX_AGE_MIN, now, "the hosted snapshot publication"))
     checks.append(check_database())
