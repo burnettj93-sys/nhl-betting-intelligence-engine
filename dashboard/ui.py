@@ -533,11 +533,25 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
         st.caption("This is the same ticket as the primary parlay on the board, not an extra bet. Hit chances are estimates with a range, not promises; any parlay can lose.")
 
 
+def _stale_on_open(quoted_at, start_utc) -> tuple[bool | None, float | None]:
+    """Judged when the page is opened, from the provider's own quote time and the engine's price limit (the document's flags are from when it was built, up to ten minutes ago or more)."""
+    from operational import quote_freshness as qf
+    now = _utcnow()
+    start = qf.parse_utc(start_utc)
+    if start is None or not quoted_at:
+        return None, None
+    hours = (start - now).total_seconds() / 3600.0
+    r = qf.assess(quoted_at, None, now, qf.price_limit_min(hours), require_retrieval=False)
+    return (not r["fresh"]), r.get("quote_age_min")
+
+
 def _eggy_leg_line(l: dict) -> str:
     price = l.get("price")
-    when = et_time(price.get("quote_updated_utc"), True) if price and price.get("quote_updated_utc") else None
     if price:
-        stale = price.get("fresh") is False
+        stale, age = _stale_on_open(price.get("quote_updated_utc"), l.get("start_utc"))
+        if stale is None:
+            stale = price.get("fresh") is False
+        when = et_time(price.get("quote_updated_utc"), True) if price.get("quote_updated_utc") else "no quote time"
         price_txt = f"{american(price['american'])} (quoted {when}{'; STALE' if stale else ''})"
     else:
         price_txt = f"no price yet: {str(l.get('price_outlook') or 'UNKNOWN').replace('_', ' ').lower()}"
@@ -573,9 +587,17 @@ def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_pa
     from dashboard import theme
     eggy = eggy or {}
     out = eggy.get("daily_output")
+    if (primary or {}).get("ticket"):                      # an official ticket (proposed or recorded) is always shown by the original card, whatever the candidate document says
+        eggy_pick_card(primary, recording_paused=recording_paused)
+        return
+    today = et.eastern_today(_utcnow())
+    if eggy and eggy.get("date_et") and eggy["date_et"] != today:
+        st.caption(f"The candidate search on file is for {esc(eggy['date_et'])}, not today ({today}); it is not shown. The official card follows.")
+        eggy_pick_card(primary, recording_paused=recording_paused)
+        return
     if out in (None, "UNAVAILABLE", "OFFICIAL_EGGY_PICK") or eggy.get("error"):
         if eggy.get("error"):
-            st.caption("Eggy's whole-slate candidate search could not be built this cycle: " + esc(eggy["error"]))
+            st.caption("Eggy's whole-slate candidate search could not be completed this cycle: " + esc(eggy["error"]))
         eggy_pick_card(primary, recording_paused=recording_paused)
         return
     img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
@@ -583,7 +605,8 @@ def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_pa
     with st.container(border=True):
         if out == "TRUE_PASS" or not best:
             ex = eggy.get("examined") or {}
-            sub = (f"After examining {ex.get('games', 0)} games and {ex.get('candidates', 0)} thesis candidates, none reaches the support bar ({ex.get('support_floor', 0.6):.0%}). "
+            sub = ("No game is left to examine (every game has started or finished). Eggy does not manufacture a pick." if not ex.get("games") else
+                   f"After examining {ex.get('games', 0)} games and {ex.get('candidates', 0)} thesis candidates, none reaches the support bar ({ex.get('support_floor', 0.6):.0%}) with every leg's model validated. "
                    "Eggy does not manufacture a pick.")
             st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>TRUE PASS</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
             _stage_b_note(primary)
@@ -592,6 +615,8 @@ def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_pa
         st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>NO CERTIFIED EGGY PICK TODAY</div>"
                     f"<div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
         _stage_b_note(primary)
+        st.caption(f"Candidate search built {et_time(eggy.get('generated_at_utc'), True)}; each price is judged against its own quote time when you open the page. "
+                   "Nothing here is recorded or staked: a candidate is a thesis to look at, not a qualified pick, and a day without a pick is a correct answer.")
         st.markdown(f"**Thesis.** {esc(best['thesis']['sentence'])}")
         if best["thesis"].get("evidence"):
             st.caption("Evidence: " + " · ".join(esc(e) for e in best["thesis"]["evidence"]))

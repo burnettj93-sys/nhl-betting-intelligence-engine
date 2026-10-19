@@ -73,8 +73,8 @@ def specs():
     return [{"code": "ML", "team": "COL"}, {"code": "PTS", "player": "Nathan MacKinnon", "k": 1}, {"code": "SOG", "player": "Nathan MacKinnon", "k": 2}, {"code": "SOG", "player": "Cale Makar", "k": 2}]
 
 
-def evaluate(now=NOW, pool=None, availability=None, pl=None):
-    return ec.evaluate_combination(now, game=game(), sides_players=col_players(), specs=specs(), pool_game=((pool or {}).get("games") or {}).get(GID), avail_game=((availability or {}).get("games") or {}).get(GID),
+def evaluate(now=NOW, pool=None, availability=None, pl=None, ml_quote=Q_ML):
+    return ec.evaluate_combination(now, game=game(ml_quote=ml_quote), sides_players=col_players(), specs=specs(), pool_game=((pool or {}).get("games") or {}).get(GID), avail_game=((availability or {}).get("games") or {}).get(GID),
                                    plan=pl if pl is not None else plan(), product=product())
 
 
@@ -153,21 +153,27 @@ class TestColoradoRegressionBeforeTheWave(unittest.TestCase):
 
 class TestColoradoRegressionAfterTheWave(unittest.TestCase):
     def test_priced_legs_carry_price_time_freshness_record_and_the_ticket_estimate(self):
-        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=priced_pool(),
+        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=priced_pool(), ml_quote="2026-10-19T21:30:00Z",
                      availability=avail(player_shots_on_goal_alternate={"status": "POSTED", "checked_utc": "2026-10-19T21:31:00Z", "last_update": "2026-10-19T21:31:00Z", "outcomes": 40}))
         mk = leg(c, "Nathan MacKinnon 2+ shots")
         self.assertEqual((mk["price"]["american"], mk["price"]["quote_updated_utc"], mk["price"]["fresh"]), (-300.0, "2026-10-19T21:31:00Z", True))
         self.assertEqual((mk["recent_record"], mk["estimate"]), ("26 of 30", 0.8))                                  # the ticket estimate from the pool, not the raw model
         self.assertIn("recent record", mk["estimate_basis"])
         self.assertAlmostEqual(mk["implied_probability"], 300 / 400, places=3)
-        self.assertEqual(c["priced_legs"], 3)                                                                        # moneyline + two shots lines; points still unpriced
+        self.assertEqual(c["priced_legs"], 3)                                                                        # a fresh moneyline + two shots lines; points still unpriced
         self.assertEqual(leg(c, "Nathan MacKinnon 1+ point")["price_outlook"], "NOT_IN_CREDIT_PLAN")
 
-    def test_even_with_every_leg_priced_the_same_game_combination_stays_not_certified(self):
-        pool = priced_pool(points=True)
-        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=pool)
+    def test_a_stale_price_is_not_counted_as_a_price_for_the_combination(self):
+        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=priced_pool())            # the 07:58 ET moneyline is stale by now, the shots lines are fresh
+        self.assertEqual(c["priced_legs"], 2)
+        self.assertEqual(c["stale_priced_legs"], ["COL to win"])
         ml = leg(c, "COL to win")
-        ml["price"]["fresh"] = True                                                                                  # the moneyline is refreshed by the pregame pull in production
+        self.assertTrue(ml["priced"] and not ml["usable_price"])
+        self.assertEqual(ml["price_outlook"], "STALE")
+        self.assertEqual(c["status"], "AWAITING_PRICES")
+
+    def test_even_with_every_leg_priced_the_same_game_combination_stays_not_certified(self):
+        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=priced_pool(points=True), ml_quote="2026-10-19T21:30:00Z")
         self.assertEqual(c["priced_legs"], 4)
         self.assertTrue(c["complete_prices"])
         self.assertEqual(c["status"], "NOT_CERTIFIED")
@@ -175,6 +181,27 @@ class TestColoradoRegressionAfterTheWave(unittest.TestCase):
         self.assertFalse(c["combined_price"]["available"])
         self.assertFalse(c["monitored_paper_bet_eligible"])
         self.assertIn("SAME-GAME DEPENDENCE", " ".join(c["blockers"]))
+
+    def test_the_other_sides_stale_quote_makes_the_moneyline_stale_too(self):
+        g = game(ml_quote="2026-10-19T21:30:00Z")
+        g["side"]["sides"]["home"]["quote_captured_at_utc"] = "2026-10-19T15:00:00Z"                                # the estimate rests on both sides' quotes
+        ml = ec.moneyline_leg(g, "away", dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc))
+        self.assertFalse(ml["price"]["fresh"])
+        g2 = game(ml_quote="2026-10-19T21:30:00Z")
+        g2["side"]["fresh"] = False                                                                                 # the board's own verdict (status not ACTIVE, or a side aged out)
+        self.assertFalse(ec.moneyline_leg(g2, "away", dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc))["price"]["fresh"])
+
+    def test_a_player_without_a_line_in_a_priced_market_is_not_reported_as_priced_or_as_not_offered(self):
+        c = evaluate(now=dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), pool=priced_pool(), ml_quote="2026-10-19T21:30:00Z")
+        pool = priced_pool()
+        pool["games"][GID]["players"].pop("8480069")                                                                # Makar has no line, the market is priced for others
+        c = ec.evaluate_combination(dt.datetime(2026, 10, 19, 21, 40, tzinfo=dt.timezone.utc), game=game(ml_quote="2026-10-19T21:30:00Z"), sides_players=col_players(), specs=specs(), pool_game=pool["games"][GID],
+                                    avail_game={"markets": {"player_shots_on_goal_alternate": {"status": "POSTED"}}}, plan=plan(), product=product())
+        mk = leg(c, "Cale Makar 2+ shots")
+        self.assertEqual(mk["price_outlook"], "NO_LINE_FOR_THIS_PLAYER")
+        self.assertIsNone(mk["gates"]["offered_in_feed"])                                                           # not asserted either way
+        self.assertNotIn("PRICED", " ".join(mk["exclusions"]).replace("NO_LINE", ""))
+        self.assertIn("not offered, or removed", " ".join(mk["exclusions"]))
 
     def test_a_stale_quote_is_flagged_not_hidden(self):
         c = evaluate(now=dt.datetime(2026, 10, 19, 22, 30, tzinfo=dt.timezone.utc), pool=priced_pool(q="2026-10-19T20:30:00Z"))   # priced 20:30Z, opened 22:30Z (120 minutes), game at 23:00Z: past the 100-minute limit near puck drop
@@ -349,7 +376,7 @@ class TestThePageShowsStageA(unittest.TestCase):
         from tests.test_slate_board import doc
         s = snapshot()
         s["slate_board"] = doc()
-        s["slate_board"]["eggy"] = eggy
+        s["slate_board"]["eggy"] = dict(eggy, date_et="2026-10-15")              # the page tests open the board on 2026-10-15
         s["slate_board"]["primary"] = primary if primary is not None else {"status": "NONE", "ticket": None, "reason": "0 player-prop leg(s) in 0 game(s) with prop prices", "strongest_singles": []}
         at = run_page("41_Slate_Board.py", s)
         self.assertFalse(at.exception, at.exception)
@@ -376,7 +403,7 @@ class TestThePageShowsStageA(unittest.TestCase):
         from tests.test_slate_board import doc
         s = snapshot()
         s["slate_board"] = doc()
-        s["slate_board"]["eggy"] = e
+        s["slate_board"]["eggy"] = dict(e, date_et="2026-10-15")
         with mock.patch("dashboard.ui.eggy_pick_card") as original:
             at = run_page("41_Slate_Board.py", s)
         self.assertFalse(at.exception, at.exception)
@@ -388,6 +415,137 @@ class TestThePageShowsStageA(unittest.TestCase):
         blob = self.page(e)
         self.assertIn("TRUE PASS", blob)
         self.assertIn("none reaches the support bar", blob)
+
+
+class TestReviewFixesDay(unittest.TestCase):
+    def build(self, games=None, players=None, primary=None, now=NOW, prod=None):
+        gs = games if games is not None else [game()]
+        return ec.build(now, games=gs, players_by_game=players if players is not None else {g["game_id"]: col_players() for g in gs}, product=prod or product(), pool=None, availability=None, plan=plan(), primary=primary or {})
+
+    def test_best_is_chosen_from_the_candidates_that_reach_the_bar_not_just_the_first_ranked(self):
+        """A funded game below the bar must not turn the day into TRUE PASS while an unfunded candidate above it exists."""
+        low, high = game(), game()
+        low["game_id"], high["game_id"] = "2026020138", "2026020137"
+        weak = copy.deepcopy(col_players())
+        for p in weak["away"]:
+            p["projection"]["probabilities"].update({"points>=1": 0.61, "shots>=2": 0.61})
+        d = self.build(games=[low, high], players={"2026020138": weak, "2026020137": col_players()})
+        self.assertEqual(d["daily_output"], ec.BEST)
+        self.assertTrue(d["best_candidate"]["support_score"] >= ec.MIN_SUPPORT)
+
+    def test_a_search_error_is_never_reported_as_a_true_pass(self):
+        broken_prod = product()
+        d = self.build(games=[game()], players={GID: {"away": [skater("X1", "No Stats", "COL", "C")], "home": []}})
+        d["examined"]["by_game"]                                                                                  # a game without usable data simply has no thesis: that is a pass
+        self.assertEqual(d["daily_output"], ec.PASS)
+        real = ec.candidates_for_game
+        with mock.patch.object(ec, "candidates_for_game", side_effect=RuntimeError("search failed")):
+            d2 = self.build(games=[game()])
+        self.assertEqual(d2["daily_output"], "UNAVAILABLE")
+        self.assertIn("search failed", d2["error"])
+        self.assertEqual(d2["examined"]["games_failed"], 1)
+        del broken_prod, real
+
+    def test_missing_expected_values_do_not_crash_the_search(self):
+        pl = col_players()
+        pl["away"][0]["projection"]["expected"] = {"points": None, "shots": None}
+        d = self.build(players={GID: pl})
+        self.assertIn(d["daily_output"], (ec.BEST, ec.PASS))
+        self.assertFalse(d["examined"]["games_failed"])
+
+    def test_a_candidate_with_an_unvalidated_leg_cannot_headline(self):
+        prod = product()
+        prod["model_health"]["skater_verdicts"]["points>=1"] = {"verdict": "DOES_NOT_BEAT_BASELINES"}
+        d = self.build(prod=prod)
+        self.assertTrue(all(c["all_legs_validated"] for c in ([d["best_candidate"]] if d["best_candidate"] else [])))
+        self.assertNotEqual((d["best_candidate"] or {}).get("thesis", {}).get("key"), "STRONG_FAVORITE_STAR")
+
+    def test_a_game_that_has_started_is_not_examined(self):
+        d = self.build(now=dt.datetime(2026, 10, 19, 23, 5, tzinfo=dt.timezone.utc))
+        self.assertEqual(d["examined"]["games"], 0)
+        self.assertEqual(d["daily_output"], ec.PASS)
+        self.assertEqual(d["availability"], {})
+
+    def test_one_malformed_availability_row_does_not_remove_the_whole_search(self):
+        real = ec.explain_markets
+
+        def flaky(g, *a, **k):
+            if g["game_id"] == "2026020199":
+                raise ValueError("bad avail row")
+            return real(g, *a, **k)
+        broken = dict(game(), game_id="2026020199")
+        with mock.patch.object(ec, "explain_markets", flaky):
+            d = self.build(games=[broken, game()], players={"2026020199": col_players(), GID: col_players()})
+        self.assertEqual(d["daily_output"], ec.BEST)
+        self.assertEqual(d["examined"]["games_failed"], 1)
+
+    def test_the_wave_window_states_after_the_last_chance_are_missed_not_due(self):
+        rows = {r["market"]: r for r in ec.explain_markets(game(), None, plan(), None, None, dt.datetime(2026, 10, 19, 22, 50, tzinfo=dt.timezone.utc))}
+        p = plan()
+        p["waves"][0]["last_chance_utc"] = "2026-10-19T22:45:00Z"
+        rows = {r["market"]: r for r in ec.explain_markets(game(), None, p, None, None, dt.datetime(2026, 10, 19, 22, 50, tzinfo=dt.timezone.utc))}
+        self.assertEqual(rows["player_shots_on_goal_alternate"]["state"], "MISSED_WINDOW")
+        self.assertEqual(rows["player_points"]["state"], "NOT_IN_CREDIT_PLAN")
+        self.assertIn("add-on", rows["player_points"]["why"])
+
+
+class TestReviewFixesPage(unittest.TestCase):
+    def snap(self, eggy, primary):
+        from tests.test_slate_board import doc
+        s = snapshot()
+        s["slate_board"] = doc()
+        s["slate_board"]["eggy"] = eggy
+        s["slate_board"]["primary"] = primary
+        return s
+
+    def eggy(self, **kw):
+        e = ec.build(NOW, games=[game()], players_by_game={GID: col_players()}, product=product(), pool=None, availability=None, plan=plan(), primary={"status": "NONE", "ticket": None, "reason": "r"})
+        e.update(kw)
+        return e
+
+    def test_an_official_ticket_in_the_primary_slot_is_never_hidden_by_a_candidate_document(self):
+        e = self.eggy(date_et="2026-10-15")                                                                       # the candidate document is out of step with the tickets section
+        with mock.patch("dashboard.ui.eggy_pick_card") as original:
+            at = run_page("41_Slate_Board.py", self.snap(e, {"status": "SELECTED", "ticket": {"ticket_id": "T9", "legs": []}}))
+        self.assertFalse(at.exception, at.exception)
+        original.assert_called()
+        blob = " ".join(x.value for x in at.markdown)
+        self.assertNotIn("NO CERTIFIED EGGY PICK TODAY", blob)
+
+    def test_a_candidate_document_from_another_day_is_not_shown_as_todays(self):
+        e = self.eggy(date_et="2026-10-14")
+        with mock.patch("dashboard.ui.eggy_pick_card") as original:
+            at = run_page("41_Slate_Board.py", self.snap(e, {"status": "NONE", "ticket": None, "reason": "r"}))
+        original.assert_called()
+        self.assertIn("is for 2026-10-14, not today", " ".join(c.value for c in at.caption))
+        self.assertNotIn("COL controls the matchup", " ".join(x.value for x in at.markdown))
+
+    def test_prices_are_re_judged_when_the_page_is_opened_and_the_card_says_nothing_is_staked(self):
+        e = self.eggy(date_et="2026-10-15")
+        at = run_page("41_Slate_Board.py", self.snap(e, {"status": "NONE", "ticket": None, "reason": "r"}))
+        blob = " ".join(x.value for x in at.markdown)
+        self.assertIn("(quoted Oct 19, 7:58 AM ET; STALE)", blob)                                                  # opened at 2026-10-15 17:05Z, game on the 19th: far outside the limit
+        self.assertIn("Nothing here is recorded or staked", " ".join(c.value for c in at.caption))
+
+    def test_the_today_page_shows_the_stage_a_card_and_never_hides_the_official_ticket(self):
+        from tests.test_slate_board import doc
+        snap = snapshot()
+        primary = (snap["tickets"].get("primary") or {})
+        snap["slate_board"] = doc()
+        snap["slate_board"]["eggy"] = self.eggy(date_et="2026-10-15")
+        with mock.patch("dashboard.ui.eggy_candidate_card") as card:
+            at = run_page("21_Today.py", snap)
+        self.assertFalse(at.exception, at.exception)
+        if primary:
+            card.assert_called()
+            args = card.call_args
+            self.assertEqual(args[0][0]["daily_output"], ec.BEST)                                                # the board's stage-A document reaches the Today page's card
+            self.assertEqual(args[0][1], primary)                                                                # together with the tickets section's own primary slot (the official ticket wins inside the card)
+
+    def test_an_old_format_snapshot_still_renders_with_the_original_card(self):
+        at = run_page("41_Slate_Board.py", self.snap({}, {"status": "NONE", "ticket": None, "reason": "r"}))
+        self.assertFalse(at.exception, at.exception)
+        self.assertIn("not in this snapshot yet", " ".join(c.value for c in at.caption))
 
 
 if __name__ == "__main__":

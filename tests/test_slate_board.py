@@ -603,10 +603,16 @@ class TestStartedGamesKeepTheirPregameAnalysis(unittest.TestCase):
         self.assertNotIn("frozen_at_utc", d["games"][0])
 
 
+def _dated_for_the_page(board: dict) -> dict:
+    """The page tests open the board on 2026-10-15; the stage-A search only shows for the day it was built for (tests/test_eggy_candidates.py covers a mismatch)."""
+    board["eggy"]["date_et"] = "2026-10-15"
+    return board
+
+
 class TestThePage(unittest.TestCase):
     def snap(self, **kw) -> dict:
         s = snapshot()
-        s["slate_board"] = doc(**kw)
+        s["slate_board"] = _dated_for_the_page(doc(**kw))
         return s
 
     def test_renders_with_the_primary_slot_the_games_and_no_exception(self):
@@ -615,7 +621,7 @@ class TestThePage(unittest.TestCase):
         blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption) + " " + " ".join(x.label for x in at.expander) + " " + " ".join(h.value for h in at.subheader)
         self.assertIn("Eggy's Parlay Pick of the Day", blob)
         self.assertIn("BBB @ AAA", blob)
-        self.assertTrue("TRUE PASS" in blob or "NO CERTIFIED EGGY PICK TODAY" in blob, blob[-400:])     # the stage-A card replaced the bare "No Eggy pick today"
+        self.assertIn("TRUE PASS", blob)                                                                # this one-game fixture has no thesis that reaches the support bar: the stage-A card replaced the bare "No Eggy pick today"
         self.assertNotIn("No Eggy pick today", blob)
         self.assertIn("Test Skater One", blob)
 
@@ -674,10 +680,10 @@ class TestThePage(unittest.TestCase):
 
     def test_with_no_ticket_the_card_says_no_eggy_pick_and_gives_the_reason_without_inventing_one(self):
         s = snapshot()
-        s["slate_board"] = doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value after the haircut.", "strongest_singles": []}})
+        s["slate_board"] = _dated_for_the_page(doc(tickets={"primary": {"status": "NONE", "ticket": None, "reason": "No combination reaches +100 to +500 with value after the haircut.", "strongest_singles": []}}))
         at = run_page("41_Slate_Board.py", s)
         blob = " ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)
-        self.assertTrue("TRUE PASS" in blob or "NO CERTIFIED EGGY PICK TODAY" in blob)          # stage A replaced the bare "No Eggy pick today"; no ticket is invented either way
+        self.assertIn("TRUE PASS", blob)                                                          # stage A replaced the bare "No Eggy pick today"; no ticket is invented either way
         self.assertIn("after the haircut", blob)                                                  # the production policy's own reason is still shown, labelled as such
         self.assertIn("Production recording policy", blob)
         self.assertNotIn("To return", blob)

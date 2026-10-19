@@ -32,7 +32,8 @@ SHOT_STAR_FLOOR = 0.70              # two skaters this likely to reach 2+ shots 
 SCORER_FLOOR = 0.30                 # a primary scorer's anytime-goal model probability
 DOMINANT_FAVORITE = 0.60
 MIN_SUPPORT = 0.60                  # a candidate is worth showing when its support score reaches the "well supported" mark
-WEAK_GOALIE_SAVE_PCT = 0.903        # below this save percentage the opposing goaltending is a weakness (league average is about 0.905)
+WEAK_GOALIE_SAVE_PCT = 0.895        # projected save percentage below this marks weak opposing goaltending (the projection is shrunk toward the league mean of about 0.905, so only a clearly lower value counts)
+SHOT_ENV_FLOOR = 24.0               # a team whose top 12 skaters project this many shots: among the league's highest (2026-10-19 slate: league range 18.5 to 24.9)
 TOP_PLAYERS = 8
 
 FAMILY = {"SOG": ("PLAYER_SOG_ALTERNATE", "player_shots_on_goal_alternate", "shots on goal", "shots"),
@@ -74,23 +75,28 @@ def _label_k(code: str, k: int) -> str:
 
 # ------------------------------------------------------------------------------------------- market availability
 def _plan_view(plan: dict | None, gid: str, key: str, now: dt.datetime) -> dict:
-    """Why a market has not been asked for yet, from the day's credit plan."""
+    """Why a market has not been asked for yet, from the day's credit plan (and the wave's own window)."""
     if not plan:
         return {"state": "NOT_FETCHED", "why": "no credit plan is on file for today"}
     from operational import capture_timeline as ct
     if gid in (plan.get("games_not_priced") or []):
-        return {"state": "EXCLUDED_BY_CREDIT_PLAN", "why": f"today's credit plan funds player prices for {len(plan.get('games_priced') or [])} of {plan.get('games_today')} games; this game is outside it (a game is never priced past the day's credit allowance)"}
+        return {"state": "EXCLUDED_BY_CREDIT_PLAN", "why": f"not priced today: the plan funds player prices for {len(plan.get('games_priced') or [])} of {plan.get('games_today')} games; a game is left out when the day's credits do not reach it or its capture window has closed"}
     if key not in ((plan.get("game_markets") or {}).get(gid) or []):
-        surplus = plan.get("surplus_credits")
-        return {"state": "NOT_IN_CREDIT_PLAN", "why": f"this market is not part of the plan's capture for the game (points are bought only from surplus credits; today's surplus is {surplus if surplus is not None else 'unknown'} against 1 credit per game)"}
+        if key == "player_points":
+            surplus = plan.get("surplus_credits")
+            return {"state": "NOT_IN_CREDIT_PLAN", "why": f"points are an add-on bought only from surplus credits; today's surplus is {surplus if surplus is not None else 'unknown'} against 1 credit per game"}
+        return {"state": "NOT_IN_CREDIT_PLAN", "why": "this market is not part of the planned capture for this game"}
     for w in plan.get("waves") or []:
         if gid in (w.get("games") or []):
             first = _parse(w.get("first_start_utc"))
             if first is not None:
                 target = first - dt.timedelta(minutes=ct.CAPTURE_TARGET_MIN)
+                last = _parse(w.get("last_chance_utc")) or (first - dt.timedelta(minutes=ct.LAST_CHANCE_MIN))
                 when = target.astimezone(dt.timezone(dt.timedelta(hours=-4 if _is_dst(target) else -5))).strftime("%-I:%M %p ET")
                 if now < target:
                     return {"state": "AWAITING_WAVE", "why": f"funded: captured with its wave at {when} ({ct.CAPTURE_TARGET_MIN} minutes before the wave's first puck drop; publication follows by 60 minutes before)"}
+                if now > last:
+                    return {"state": "MISSED_WINDOW", "why": f"the capture window (opened {when}) closed without a capture; nothing is bought late for a game that is about to start"}
                 return {"state": "CAPTURE_DUE", "why": f"funded: its wave capture (due {when}) has not landed yet"}
     return {"state": "NOT_FETCHED", "why": "funded in the plan but no capture window is on file"}
 
@@ -114,7 +120,10 @@ def explain_markets(game: dict, avail_game: dict | None, plan: dict | None, pool
         info = by_name.get({"SOG": "Shots on goal (alternate ladder)", "PTS": "Points (1+, 2+)", "GOAL": "Anytime goal"}[code]) or {}
         row = {"market": key, "label": label, "contract": info.get("contract", "UNKNOWN"), "model": info.get("validation"), "recording_policy": "USED" if code in MONITORED_FAMILIES else "NOT USED (speculative; no calibration evidence of the policy's kind)"}
         m = ((avail_game or {}).get("markets") or {}).get(key) or {}
-        if players:
+        started = _parse(game.get("start_utc"))
+        if started is not None and started <= now and not players:
+            row.update(state="GAME_STARTED", why="the game has started; nothing is priced or bought after puck drop")
+        elif players:
             quoted = max((p["m"][code]["q"] for p in players), default=None)
             fresh, age = _fresh(quoted, game.get("start_utc"), now)
             row.update(state="PRICED" if fresh else "STALE", why=f"{len(players)} players priced; quoted {quoted}" + ("" if fresh else f" ({age:.0f} min old: past the freshness limit)" if age is not None else ""), quote_updated_utc=quoted)
@@ -158,22 +167,22 @@ def player_leg(game: dict, sk: dict, code: str, k: int, pool_game: dict | None, 
     model_p = sk["prob"].get(STAT_KEY[code].format(k=k))
     price = _price_of(pool_game, sk["player_id"], code, k)
     explain = None
+    outlook = "PRICED"
     gates = {}
     if price:
         fresh, age = _fresh(price["quote_updated_utc"], game.get("start_utc"), now)
         price["fresh"], price["age_min"] = fresh, age
         gates["real_price"], gates["fresh"], gates["offered_in_feed"] = True, fresh, True
+        if not fresh:
+            outlook = "STALE"
     else:
-        m = ((avail_game or {}).get("markets") or {}).get(key) or {}
-        if m.get("status") == "POSTED":
-            gates["real_price"], gates["offered_in_feed"] = False, False
-            explain = "the provider returned this market for the game but not this line for this player (not offered in the feed)"
+        row = next((r for r in explain_markets(game, avail_game, plan, pool_game, matrix, now) if r["market"] == key), {})
+        state = row.get("state", "NOT_FETCHED")
+        if state in ("PRICED", "STALE"):                 # the market is priced for other players of this game, but this line is not among them
+            outlook, explain = "NO_LINE_FOR_THIS_PLAYER", "the market is priced for other players of this game but there is no usable line for this player (not offered, or removed by the identity, roster or freshness rules)"
         else:
-            view = explain_markets(game, avail_game, plan, pool_game, matrix, now)
-            row = next((r for r in view if r["market"] == key), {})
-            gates["real_price"], gates["offered_in_feed"] = False, None
-            explain = f"no price on file: {row.get('state', 'NOT_FETCHED')}. {row.get('why', '')}"
-        gates["fresh"] = None
+            outlook, explain = state, f"no price on file ({state.replace('_', ' ').lower()}): {row.get('why', '')}"
+        gates["real_price"], gates["offered_in_feed"], gates["fresh"] = False, None, None      # whether the book offers the line is unknown until the market is captured: never asserted either way
     verdict = (verdicts or {}).get(STAT_KEY[code].format(k=k)) or {}
     gates["model_support"] = model_p is not None and sk["eligible"]
     gates["identity_verified"] = True                       # the skater list the board uses is already integrity-filtered against the official rosters
@@ -199,12 +208,12 @@ def player_leg(game: dict, sk: dict, code: str, k: int, pool_game: dict | None, 
         why.append(f"model validation verdict for {STAT_KEY[code].format(k=k)}: {verdict.get('verdict') or 'not available'}")
     if not gates["recording_policy_uses_market"]:
         why.append("the production recording policy does not use this market in a recorded ticket")
-    outlook = "PRICED" if price else (explain or "").split("no price on file: ")[-1].split(".")[0] if explain and "no price on file: " in (explain or "") else ("NOT_OFFERED_IN_FEED" if gates.get("offered_in_feed") is False else "UNKNOWN")
     return {"kind": "PLAYER", "price_outlook": outlook, "code": code, "market_key": key, "label": f"{sk['name']} {_label_k(code, k)}", "participant": sk["name"], "player_id": sk["player_id"], "team": sk["team"], "position": sk["position"],
             "threshold": k, "game_id": str(game["game_id"]), "price": price, "model_probability": None if model_p is None else round(model_p, 4), "recent_record": price["recent"] if price else None,
             "estimate": None if est is None else round(est, 4), "estimate_basis": est_basis, "implied_probability": None if not price else round(_implied(price["american"]) or 0, 4),
             "model_validation": verdict.get("verdict"), "ontario": "UNVERIFIED (the feed is DraftKings US via The Odds API; Ontario offerings and prices are not matched)", "gates": gates,
-            "candidate_eligible": bool(gates["model_support"] and gates["identity_verified"]), "priced": bool(price), "monitored_eligible": False, "exclusions": why}
+            "candidate_eligible": bool(gates["model_support"] and gates["identity_verified"]), "priced": bool(price), "usable_price": bool(price and gates["fresh"]),
+            "validated": bool(validated and gates["model_support"]), "start_utc": game.get("start_utc"), "monitored_eligible": False, "exclusions": why}
 
 
 def moneyline_leg(game: dict, side: str, now: dt.datetime) -> dict | None:
@@ -212,14 +221,19 @@ def moneyline_leg(game: dict, side: str, now: dt.datetime) -> dict | None:
     if not sd or sd.get("american") is None:
         return None
     fresh, age = _fresh(sd.get("quote_captured_at_utc"), game.get("start_utc"), now)
+    other = ((game.get("side") or {}).get("sides") or {}).get("away" if side == "home" else "home") or {}
+    if other.get("quote_captured_at_utc") is not None:                       # the no-vig estimate rests on BOTH sides' quotes
+        fresh = fresh and _fresh(other.get("quote_captured_at_utc"), game.get("start_utc"), now)[0]
+    if (game.get("side") or {}).get("fresh") is False:
+        fresh = False
     team = sd.get("team")
     why = [] if fresh else [f"the moneyline quote is {age:.0f} minutes old, past the freshness limit" if age is not None else "the moneyline quote has no usable time"]
-    return {"kind": "MONEYLINE", "price_outlook": "PRICED", "code": "ML", "market_key": "h2h", "label": f"{team} to win", "participant": team, "player_id": None, "team": team, "position": None, "threshold": None, "game_id": str(game["game_id"]),
+    return {"kind": "MONEYLINE", "price_outlook": "PRICED" if fresh else "STALE", "code": "ML", "market_key": "h2h", "label": f"{team} to win", "participant": team, "player_id": None, "team": team, "position": None, "threshold": None, "game_id": str(game["game_id"]),
             "price": {"american": sd["american"], "quote_updated_utc": sd.get("quote_captured_at_utc"), "fresh": fresh, "age_min": age}, "model_probability": sd.get("model"),
             "recent_record": None, "estimate": sd.get("no_vig"), "estimate_basis": "the market's own no-vig probability (no model here beats a DraftKings moneyline)", "implied_probability": round(_implied(sd["american"]) or 0, 4),
             "model_validation": "STRENGTH_MODEL_AND_MARKET", "ontario": "UNVERIFIED (the feed is DraftKings US via The Odds API; Ontario offerings and prices are not matched)",
             "gates": {"real_price": True, "fresh": fresh, "offered_in_feed": True, "model_support": sd.get("model") is not None, "identity_verified": True, "model_validated_held_out": True, "recording_policy_uses_market": True},
-            "candidate_eligible": True, "priced": True, "monitored_eligible": False, "exclusions": why}
+            "candidate_eligible": True, "priced": True, "usable_price": bool(fresh), "validated": True, "start_utc": game.get("start_utc"), "monitored_eligible": False, "exclusions": why}
 
 
 # ------------------------------------------------------------------------------------------- dependence
@@ -230,6 +244,8 @@ def classify_pair(a: dict, b: dict) -> dict:
     if same_player and {a["code"], b["code"]} == {"PTS", "SOG"}:
         return {"a": a["label"], "b": b["label"], "kind": "SAME_PLAYER_SHOTS_AND_POINTS", "direction": "POSITIVE", "strength": "strong",
                 "note": "a player who shoots more creates more of the chances that become his goals and assists; the two legs usually hit together"}
+    if same_player and {a["code"], b["code"]} == {"SOG", "GOAL"}:
+        return {"a": a["label"], "b": b["label"], "kind": "SAME_PLAYER_SHOTS_AND_GOALS", "direction": "POSITIVE", "strength": "strong", "note": "a goal is a shot on goal: the goal leg hitting adds a shot toward the shots leg"}
     if same_player and {a["code"], b["code"]} == {"PTS", "GOAL"}:
         return {"a": a["label"], "b": b["label"], "kind": "NESTED", "direction": "IMPLIES", "strength": "total", "note": "a goal is a point: the goal leg hitting guarantees the points leg (redundant, not diversification)"}
     if ml and (a["team"] == b["team"]):
@@ -267,19 +283,19 @@ def _top(team_players: list[dict], key: str, n: int = 2, floor: float = 0.0) -> 
     return pool[:n]
 
 
-def _modifiers(game: dict, team: str, opp_goalie_save_pct: float | None, team_players: list[dict]) -> list[str]:
+def _modifiers(game: dict, team: str, opp_goalie_save_pct: float | None, team_players: list[dict], opp_goalie_status: str | None = None) -> list[str]:
     ev = []
     if opp_goalie_save_pct is not None and opp_goalie_save_pct < WEAK_GOALIE_SAVE_PCT:
-        ev.append(f"weak opposing goaltending: projected save percentage {opp_goalie_save_pct:.4f} (below {WEAK_GOALIE_SAVE_PCT:.3f})")
+        ev.append(f"projected weak opposing goaltending: save percentage {opp_goalie_save_pct:.4f} (below {WEAK_GOALIE_SAVE_PCT:.3f}); starter {str(opp_goalie_status or 'status unknown').lower().replace('_', ' ')}")
     shots = sum((p["exp"].get("shots") or 0.0) for p in sorted(team_players, key=lambda p: -(p["exp"].get("shots") or 0.0))[:12])
-    if shots >= 24:
-        ev.append(f"high expected shot environment: the team's top skaters project {shots:.0f} shots")
+    if shots >= SHOT_ENV_FLOOR:
+        ev.append(f"projected shot environment among the league's highest: the team's top skaters project {shots:.1f} shots")
     return ev
 
 
 def _thesis_sentence(key: str, team: str, names: list[str]) -> str:
     return {"STRONG_FAVORITE_STAR": f"{team} controls the matchup and its elite players drive the offence ({', '.join(names)}).",
-            "HIGH_SHOT_VOLUME": f"{team}'s shooters generate volume: {' and '.join(names)} are both very likely to reach 2+ shots.",
+            "HIGH_SHOT_VOLUME": f"{team}'s shooters generate volume: {' and '.join(names)} are both very likely to clear their shots lines.",
             "DOMINANT_TEAM_PRIMARY_SCORERS": f"{team} is a clear favourite and its primary scorers ({', '.join(names)}) are the likeliest goals.",
             "SPECIFIED": f"A combination specified for evaluation ({team}): {', '.join(names)}. Evaluated with exactly the rules every candidate gets; it is not recommended by being listed."}[key]
 
@@ -300,13 +316,15 @@ def _assemble(game: dict, thesis_key: str, team: str, legs: list[dict], evidence
     for l in legs:
         for w in l["exclusions"]:
             blockers.append(f"{l['label']}: {w}")
-    priced = sum(1 for l in legs if l["priced"])
-    return {"id": f"{game['game_id']}:{thesis_key}", "kind": "SAME_GAME", "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "start_et": game.get("start_et"),
+    priced = sum(1 for l in legs if l.get("usable_price"))           # only a fresh quote counts as a price for the combination
+    stale = [l["label"] for l in legs if l["priced"] and not l.get("usable_price")]
+    validated = all(l.get("validated") for l in legs)
+    return {"id": f"{game['game_id']}:{thesis_key}", "kind": "SAME_GAME", "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "start_et": game.get("start_et"), "start_utc": game.get("start_utc"),
             "thesis": {"key": thesis_key, "title": THESIS_TITLES[thesis_key], "sentence": _thesis_sentence(thesis_key, team, names), "evidence": evidence, "team": team},
             "legs": legs, "other_compatible_legs": bench or [], "game_funded": funded, "support_score": score, "support_note": "geometric mean of the legs' estimates: a ranking aid, NOT a probability of the combination",
             "dependence": {"same_game": True, "pairs": pairs, "joint_model": "NOT_CERTIFIED", "joint_probability": None, "joint_bounds": frechet(est)},
             "combined_price": {"available": False, "american": None, "reason": "no same-game-parlay price exists in the feed and none is fabricated"},
-            "expected_value": None, "priced_legs": priced, "total_legs": len(legs), "complete_prices": priced == len(legs),
+            "expected_value": None, "priced_legs": priced, "stale_priced_legs": stale, "total_legs": len(legs), "complete_prices": priced == len(legs), "all_legs_validated": validated,
             "status": "AWAITING_PRICES" if priced < len(legs) else "NOT_CERTIFIED",
             "label": "EGGY SAME-GAME CANDIDATE — JOINT PROBABILITY NOT YET CERTIFIED", "monitored_paper_bet_eligible": False, "blockers": blockers,
             "to_certify": ["a validated same-game joint model for these leg types (research, not started)", "a real quoted same-game combined price (a provider that supplies one; not purchased)",
@@ -328,7 +346,7 @@ def candidates_for_game(game: dict, sides_players: dict, pool_game: dict | None,
         pl = sk[s]
         gl = next((b for b in (game.get("goalies") or []) if b.get("side") == opp), None) or {}
         save_pct = ((gl.get("projection") or {}).get("save_pct_used"))
-        mods = _modifiers(game, team, save_pct, pl)
+        mods = _modifiers(game, team, save_pct, pl, ((gl.get("starter") or {}).get("status")))
         ctx = dict(game=game, pool_game=pool_game, avail_game=avail_game, plan=plan, matrix=matrix, verdicts=verdicts, now=now)
 
         def P(p, code, k):
@@ -349,7 +367,7 @@ def candidates_for_game(game: dict, sides_players: dict, pool_game: dict | None,
             used = {star["player_id"]} | ({shooters[0]["player_id"]} if shooters else set())
             bench = [f"{p['name']} 2+ shots (model {p['prob']['shots>=2']:.0%})" for p in _top([q for q in pl if q["player_id"] not in used], "shots>=2", 4, 0.50)] \
                     + [f"{p['name']} 1+ point (model {p['prob']['points>=1']:.0%})" for p in _top([q for q in pl if q["player_id"] != star["player_id"]], "points>=1", 3, 0.45)]
-            ev = [f"{team} no-vig win probability {nv:.0%} (price {sd.get('american'):+.0f})", f"{star['name']}: points>=1 model {star['prob']['points>=1']:.0%}, {star['exp'].get('points', 0):.2f} expected points"] + mods
+            ev = [f"{team} no-vig win probability {nv:.0%} (price {sd.get('american'):+.0f})", f"{star['name']}: points>=1 model {star['prob']['points>=1']:.0%}, {(star['exp'].get('points') or 0):.2f} expected points"] + mods
             cand = _assemble(game, "STRONG_FAVORITE_STAR", team, legs, ev, names, bench, funded)
             if cand:
                 out.append(cand)
@@ -365,7 +383,7 @@ def candidates_for_game(game: dict, sides_players: dict, pool_game: dict | None,
             for p in top2:
                 k = 3 if (p["prob"].get("shots>=3") or 0) >= 0.65 else 2
                 legs.append(P(p, "SOG", k))
-            cand = _assemble(game, "HIGH_SHOT_VOLUME", team, legs, [f"{p['name']}: shots>=2 model {p['prob']['shots>=2']:.0%}, {p['exp'].get('shots', 0):.1f} expected shots" for p in top2] + mods, [p["name"] for p in top2], funded=funded)
+            cand = _assemble(game, "HIGH_SHOT_VOLUME", team, legs, [f"{p['name']}: shots>=2 model {p['prob']['shots>=2']:.0%}, {(p['exp'].get('shots') or 0):.1f} expected shots" for p in top2] + mods, [p["name"] for p in top2], funded=funded)
             if cand:
                 out.append(cand)
                 t2["passed"] = True
@@ -425,35 +443,46 @@ def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product
     pool_games = (pool or {}).get("games") or {}
     avail_games = (availability or {}).get("games") or {}
     candidates, examined, availability_rows = [], [], {}
+    n_examined = 0
     for g in games:
         gid = str(g["game_id"])
-        if g.get("state") != "SCHEDULED":
-            continue
-        availability_rows[gid] = {"matchup": f"{g['away']} @ {g['home']}", "start_et": g.get("start_et"),
-                                  "markets": explain_markets(g, avail_games.get(gid), plan, pool_games.get(gid), matrix, now),
-                                  "withdrawn_for_identity": [w.get("name") for w in ((g.get("coverage") or {}).get("integrity") or {}).get("withdrawn", [])]}
+        start = _parse(g.get("start_utc"))
+        if g.get("state") != "SCHEDULED" or (start is not None and start <= now):
+            continue                                        # started or finished: nothing is priced or recommended for it
+        n_examined += 1
         try:
+            availability_rows[gid] = {"matchup": f"{g['away']} @ {g['home']}", "start_et": g.get("start_et"),
+                                      "markets": explain_markets(g, avail_games.get(gid), plan, pool_games.get(gid), matrix, now),
+                                      "withdrawn_for_identity": [w.get("name") for w in ((g.get("coverage") or {}).get("integrity") or {}).get("withdrawn", [])]}
             cands, ex = candidates_for_game(g, players_by_game.get(gid) or {}, pool_games.get(gid), avail_games.get(gid), plan, matrix, verdicts, goalies, now)
-        except Exception as exc:  # noqa: BLE001 - one game's failure must not remove the rest of the stage-A search
+        except Exception as exc:  # noqa: BLE001 - one game's failure must not remove the rest of the stage-A search; it is reported, never read as "nothing to find"
             examined.append({"game_id": gid, "error": f"{exc.__class__.__name__}: {exc}"})
             continue
         candidates.extend(cands)
         examined.append(ex)
+    errors = [e for e in examined if e.get("error")]
     ranked = sorted((c for c in candidates if c["support_score"] is not None), key=lambda c: (not c["game_funded"], -c["support_score"], -c["priced_legs"], c["id"]))     # a game whose prices can still arrive today outranks one the credit plan excludes
+    qualifying = [c for c in ranked if c["support_score"] >= MIN_SUPPORT and c["all_legs_validated"]]        # a leg whose model did not beat its baselines cannot headline a candidate
     primary = primary or {}
     ticket = primary.get("ticket")
     if ticket:
         output, headline = OFFICIAL, "OFFICIAL EGGY PICK"
-    elif ranked and ranked[0]["support_score"] >= MIN_SUPPORT:
+    elif qualifying:
         output, headline = BEST, "NO CERTIFIED EGGY PICK TODAY"
+    elif errors:
+        output, headline = "UNAVAILABLE", "Eggy's candidate search was incomplete"        # never a TRUE PASS when part of the search failed
     else:
         output, headline = PASS, "TRUE PASS"
-    n_scheduled = sum(1 for g in games if g.get("state") == "SCHEDULED")
-    return {"version": 1, "generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "daily_output": output, "headline": headline,
-            "best_candidate": ranked[0] if output == BEST else None, "other_candidates": [c for c in ranked[:5] if output != BEST or c["id"] != ranked[0]["id"]] if ranked else [],
-            "stage_b": {"official_ticket": bool(ticket), "closest_cross_game": primary.get("closest"), "reason": primary.get("reason"), "strongest_singles": primary.get("strongest_singles")},
-            "examined": {"games": n_scheduled, "theses_per_team": 3, "candidates": len(candidates), "support_floor": MIN_SUPPORT, "by_game": examined},
-            "availability": availability_rows,
-            "notes": ["Stage A looks at the whole real slate and never records anything; stage B (the production recording policy) is unchanged and is the only source of a recorded paper bet.",
-                      "Joint probabilities and combined prices of same-game candidates are NOT claimed; see each candidate's dependence section.",
-                      "The support score ranks candidates; it is not a probability and not value."]}
+    best = qualifying[0] if output == BEST else None
+    out = {"version": 1, "generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": (product or {}).get("et_today"), "daily_output": output, "headline": headline,
+           "best_candidate": best, "other_candidates": [c for c in ranked[:6] if best is None or c["id"] != best["id"]][:5],
+           "stage_b": {"official_ticket": bool(ticket), "closest_cross_game": primary.get("closest"), "reason": primary.get("reason"), "strongest_singles": primary.get("strongest_singles")},
+           "examined": {"games": n_examined, "theses_per_team": 3, "candidates": len(candidates), "support_floor": MIN_SUPPORT, "by_game": examined, "games_failed": len(errors)},
+           "availability": availability_rows,
+           "notes": ["Stage A looks at the whole real slate and never records anything; stage B (the production recording policy) is unchanged and is the only source of a recorded paper bet.",
+                     "Joint probabilities and combined prices of same-game candidates are NOT claimed; see each candidate's dependence section.",
+                     "The support score ranks candidates; it is not a probability and not value.",
+                     "Moneyline legs are included without stage B's model-agreement requirement: a candidate is a thesis to look at, not a qualified pick."]}
+    if output == "UNAVAILABLE":
+        out["error"] = f"{len(errors)} game(s) could not be searched: " + "; ".join(f"{e['game_id']}: {e['error']}" for e in errors[:3])
+    return out

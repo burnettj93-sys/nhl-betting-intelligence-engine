@@ -73,8 +73,11 @@ else:
                         f"{' · provisional' if s.get('provisional') else ''}")
     st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
 
-with st.expander("Why prices are missing: every market, game by game"):
-    ui.eggy_availability(board.get("eggy"))
+if (board.get("eggy") or {}).get("availability"):
+    with st.expander("Why prices are missing: every market, game by game"):
+        ui.eggy_availability(board.get("eggy"))
+else:
+    st.caption("The per-market explanation of missing prices is not in this snapshot yet; it appears with the next engine update.")
 
 with st.expander("Today's capture timeline: waves, games priced, games excluded by budget, credits"):
     ui.day_timeline()
