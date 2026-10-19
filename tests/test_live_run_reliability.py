@@ -266,16 +266,20 @@ class TestLateBootRecovery(CatchupCase):
         self.assertEqual(by["database_backups"], "RAN")                             # independent of the chain
         self.assertEqual(sum(1 for c in self.ran if c[-1] == "sync_daily.py"), 1)
 
-    def test_attempts_are_bounded_spaced_and_never_an_infinite_loop(self):
+    def test_attempts_are_spaced_by_a_growing_backoff_and_capped_per_day(self):
         bad = self.runner(succeed=False, rc=1)
         self.run_catchup(runner=bad)                                                # attempt 1 (08:30)
         r = self.run_catchup(runner=bad, now=self.now + dt.timedelta(minutes=10))
         self.assertIn("SKIPPED_RETRY_TOO_SOON", [a["action"] for a in r["actions"]])   # the NHL API is not hammered
-        self.run_catchup(runner=bad, now=self.now + dt.timedelta(minutes=35))       # attempt 2
-        r = self.run_catchup(runner=bad, now=self.now + dt.timedelta(minutes=80))
-        self.assertIn("SKIPPED_MAX_ATTEMPTS", [a["action"] for a in r["actions"]])
+        t = self.now
+        for gap in (15, 30, 60, 120, 120, 120, 120):                                # attempts 2..8: 15, 30, 60, then every 120 minutes
+            t = t + dt.timedelta(minutes=gap)
+            self.run_catchup(runner=bad, now=t)
         syncs = [c for c in self.ran if c[-1] == "sync_daily.py"]
-        self.assertEqual(len(syncs), mc.MAX_ATTEMPTS)
+        self.assertEqual(len(syncs), mc.DAILY_ATTEMPT_CAP)
+        r = self.run_catchup(runner=bad, now=t + dt.timedelta(minutes=240))        # the cap is a daily bound, never an infinite loop
+        self.assertIn("SKIPPED_MAX_ATTEMPTS", [a["action"] for a in r["actions"]])
+        self.assertEqual(len([c for c in self.ran if c[-1] == "sync_daily.py"]), mc.DAILY_ATTEMPT_CAP)
 
     def test_the_attempt_is_recorded_before_running_so_a_crash_still_counts(self):
         def boom(cmd, **kw):

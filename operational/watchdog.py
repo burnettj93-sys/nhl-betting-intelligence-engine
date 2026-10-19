@@ -421,6 +421,25 @@ def check_ticket_policy() -> dict:
 PREDICTION_LOG_MAX_AGE_MIN = 60.0
 
 
+DAILY_CHAIN_FAIL_AFTER_MIN = 180.0
+
+
+def check_daily_chain(now: dt.datetime) -> dict:
+    """The morning chain (07:00 sync, 07:15 settlement, 07:30 postmortem, 07:45 backup) as four honest states, not one exit code (operational/morning_catchup.chain_status): COMPLETED (clean), RECOVERED (succeeded
+    after a failure or deferral today), DEFERRED (not attempted: network down, upstream not recovered, slot missed), FAILED (attempted, did not succeed). A stage that is deferred or failed but still being retried
+    is a warning; one that is exhausted, or still unrecovered three hours after its slot, fails."""
+    from operational import morning_catchup as mc
+    rows = mc.chain_status(now)
+    short = {"nhl_sync_full": "sync", "settlement": "settlement", "postmortem": "postmortem", "database_backups": "backup"}
+    summary = ", ".join(f"{short.get(r['component'], r['component'])} {r['state']}" for r in rows)
+    bad = [r for r in rows if r["state"] in ("FAILED", "DEFERRED")]
+    if not bad:
+        return {"name": "daily_chain", "status": OK, "detail": summary}
+    overdue = [r for r in bad if r["exhausted"] or (mc._utc(r["slot_utc"]) is not None and now >= mc._utc(r["slot_utc"]) + dt.timedelta(minutes=DAILY_CHAIN_FAIL_AFTER_MIN))]
+    why = "; ".join(f"{short.get(r['component'], r['component'])}: {r.get('detail') or r['state'].lower()}" + (f" (next retry {r['next_retry_utc']})" if r.get("next_retry_utc") else "") for r in bad)
+    return {"name": "daily_chain", "status": FAIL if overdue else WARN, "detail": f"{summary} -- {why}"}
+
+
 def check_prediction_log(now: dt.datetime) -> dict:
     """The frozen-prediction log (operational/shadow_selection.py) must be looked at on every trader cycle, recording or paused: it is where the entry estimates are kept before the games. It stamps
     every look, so a quiet pool is told apart from a logger that stopped (as it did when recording resumed on 2026-10-11)."""
@@ -653,7 +672,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_ticket_policy())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
-    for fn in (check_jobs_ran, check_missed_windows, check_power):
+    for fn in (check_jobs_ran, check_missed_windows, check_power, check_daily_chain):
         try:
             checks.append(fn(now))
         except Exception as exc:  # noqa: BLE001 - one broken check must not stop the watchdog from writing its state

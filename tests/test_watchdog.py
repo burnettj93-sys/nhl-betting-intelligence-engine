@@ -51,7 +51,7 @@ class TestRun(unittest.TestCase):
         with mock.patch("operational.keep_awake.battery_state", return_value={"on_ac": True, "percent": 100, "known": True}):
             state = wd.run(NOW, runner=self.runner, notify=False, deep=False)
         self.assertIn(state["status"], (wd.OK, wd.WARN, wd.FAIL))
-        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "power", "morning_update"})
+        self.assertEqual({c["name"] for c in state["checks"]}, {"jobs_loaded", "release_pinned", "trader_recent", "publish_recent", "database_path", "publishing_enabled", "recording_pause", "ticket_policy", "prediction_log", "jobs_ran", "missed_windows", "power", "daily_chain", "morning_update"})
         stored = wd.load_state()
         self.assertEqual(stored["checked_at_utc"], "2026-10-09T12:00:00Z")
         self.assertEqual(wd.view(stored, NOW + dt.timedelta(minutes=20))["status"], stored["status"])

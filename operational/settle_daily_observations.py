@@ -305,13 +305,20 @@ def main() -> None:
     # fire at 07:15 against a stale/incomplete schedule. DEFER (never
     # retry-loop) when the upstream sync isn't confirmed healthy; the
     # next scheduled settlement run picks it up once sync recovers.
+    conn = pl.init_db()
     sync_ready, sync_reason = ingestion_health.dependency_ready("nhl_sync_full", max_age_hours=30.0)
     if not sync_ready:
-        print(f"DEFERRED: upstream nhl_sync_full not ready ({sync_reason}) -- skipping this settlement run.")
+        # Waiting on the sync only matters if there is something to settle. With nothing PENDING past its event start there is no work to protect from stale results, so the run is COMPLETE (2026-10-19:
+        # a failed wake-time sync used to leave settlement DEFERRED all day on a day with no open observations). With work waiting it still DEFERS; the catch-up and the new-results trigger settle it later.
+        waiting = len(find_settlement_candidates(conn))
+        if waiting == 0:
+            print(f"NOTHING TO SETTLE: no PENDING observation is past its event start, so the upstream sync ({sync_reason}) is not needed for this run.")
+            ingestion_health.record_run("settlement", {"status": "SUCCESS", "reason": "NOTHING_TO_SETTLE"})
+            return
+        print(f"DEFERRED: upstream nhl_sync_full not ready ({sync_reason}) and {waiting} observation(s) are waiting -- skipping this settlement run.")
         ingestion_health.record_run("settlement", {"status": "DEFERRED", "reason": sync_reason})
         return
 
-    conn = pl.init_db()
     result = _run_and_record(conn, None, generation_utc=current_input_generation_utc())
     # Cloud live-data sprint (2026-09-25): settlement changed the ledger/bankroll ->
     # publish (opt-in, downstream, never raises, only when the run did not fail).
