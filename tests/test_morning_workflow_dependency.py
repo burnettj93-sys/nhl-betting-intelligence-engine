@@ -89,15 +89,28 @@ class TestSettlementDefersOnUnhealthyUpstream(unittest.TestCase):
     def _patch_cache(self):
         return mock.patch.object(ih, "DEFAULT_CACHE_PATH", self.cache_path)
 
-    def test_settlement_defers_when_nhl_sync_never_ran(self):
+    def test_settlement_defers_when_nhl_sync_never_ran_and_work_is_waiting(self):
         from operational import settle_daily_observations as sdo
         with self._patch_cache(), \
              mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch.object(sdo, "find_settlement_candidates", return_value=[{"prediction_id": "p1"}]), \
              mock.patch.object(sdo, "run_settlement_batch") as mock_batch:
             sdo.main()
         mock_batch.assert_not_called()
         health = ih.load_health(cache_path=self.cache_path)
         self.assertEqual(health["settlement"]["last_status"], "DEFERRED")
+
+    def test_settlement_completes_without_the_sync_when_nothing_is_waiting(self):
+        """2026-10-19: a failed wake-time sync used to leave settlement DEFERRED all day even with no pending observation."""
+        from operational import settle_daily_observations as sdo
+        with self._patch_cache(), \
+             mock.patch("operational.deployment_mode.require_active_scheduler_or_exit", return_value=True), \
+             mock.patch.object(sdo, "find_settlement_candidates", return_value=[]), \
+             mock.patch.object(sdo, "run_settlement_batch") as mock_batch:
+            sdo.main()
+        mock_batch.assert_not_called()                                    # nothing to settle, nothing run
+        health = ih.load_health(cache_path=self.cache_path)
+        self.assertEqual((health["settlement"]["last_status"], health["settlement"]["last_detail"]), ("SUCCESS", "NOTHING_TO_SETTLE"))
 
     def test_settlement_proceeds_when_nhl_sync_recently_succeeded(self):
         from operational import settle_daily_observations as sdo
