@@ -131,20 +131,23 @@ class TestPatternsAndActions(unittest.TestCase):
         self.assertEqual(res["by_category"], {dpm.ROLE_CHANGE_MISSED: 1})
         self.assertTrue(all(p["classification"]["recommended_action"] == dpm.NO_ACTION for p in pms))             # one distinct event: below the WATCH bar
 
-    def test_two_distinct_role_changes_are_a_watch_and_three_an_investigation(self):
+    def test_role_changes_measured_against_the_own_average_never_go_beyond_a_watch(self):
+        """The ticket does not freeze the model's projection, so ice time against the player's own last-5 average fires on ordinary losses: it can justify a watch, never an investigation or a challenger."""
         c = world(toi=11.0)
-        for gid, pid in ((101, "1002"), (102, "1003")):
+        pms = [ticket("A")]
+        for gid, pid in ((101, "1002"), (102, "1003"), (103, "1004"), (104, "1005")):
             game(c, gid, f"2026-10-1{gid - 100 + 2}")
             pstat(c, gid, pid, "EDM", 9.0)
             tstat(c, gid, "EDM", 30.0)
             for i in range(5):
                 game(c, 200 + gid * 10 + i, f"2026-09-0{i + 1}")
                 pstat(c, 200 + gid * 10 + i, pid, "EDM", 20.0)
+            pms.append(ticket(f"T{gid}", participant_id=pid, game_id=gid, participant_name=pid))
         c.commit()
-        two = [ticket("A"), ticket("B", participant_id="1002", game_id=101, participant_name="Two")]
-        self.assertEqual(tlc.classify_all(two, c)["by_action"][dpm.WATCH], 2)
-        three = two + [ticket("C", participant_id="1003", game_id=102, participant_name="Three")]
-        self.assertEqual(tlc.classify_all(three, c)["by_action"][dpm.INVESTIGATE], 3)
+        res = tlc.classify_all(pms, c)
+        self.assertEqual(res["by_category"][dpm.ROLE_CHANGE_MISSED], 5)                                            # five distinct incidents
+        self.assertEqual({p["classification"]["recommended_action"] for p in pms}, {dpm.WATCH})
+        self.assertIn("own last-5-game average", " ".join(f["explanation"] for f in res["classified_failures"]))
 
     def test_a_repeated_integrity_defect_in_one_market_recommends_halting_that_market_and_still_acts_on_nothing(self):
         c = world()
@@ -155,7 +158,7 @@ class TestPatternsAndActions(unittest.TestCase):
         pms = [ticket("A", quote_age_min_at_entry=400.0), ticket("B", quote_age_min_at_entry=400.0, game_id=101, game_start_utc="2026-10-13T23:00:00Z", captured_at_utc="2026-10-13T21:00:00+00:00")]
         res = tlc.classify_all(pms, c)
         self.assertEqual(res["integrity_defects"][0]["recommended_action"], dpm.HALT_MARKET)
-        self.assertEqual(res["integrity_defects"][0]["distinct_events"], 2)
+        self.assertEqual(res["integrity_defects"][0]["distinct_incidents"], 2)
         self.assertEqual(pms[0]["classification"]["recommended_action"], dpm.HALT_MARKET)
         self.assertIn("recommendation", res["policy_note"].lower())
 
@@ -278,6 +281,188 @@ class TestTheBanner(unittest.TestCase):
     def test_no_active_banner_while_paused(self):
         blob = self.page(self.rec(active=False))
         self.assertNotIn("AUTOMATIC PAPER RECORDING: ACTIVE", blob)
+
+
+class TestReviewFixes(unittest.TestCase):
+    def test_one_incident_on_several_thresholds_is_one_event_so_a_single_stale_quote_cannot_recommend_a_halt(self):
+        c = world()
+        pms = [ticket("A", quote_age_min_at_entry=400.0, threshold=2), ticket("B", quote_age_min_at_entry=400.0, threshold=3)]
+        res = tlc.classify_all(pms, c)
+        self.assertEqual(res["integrity_defects"][0]["distinct_incidents"], 1)
+        self.assertEqual({p["classification"]["recommended_action"] for p in pms}, {dpm.BUG_FIX})                  # fix it, but one incident is not a repeat
+
+    def test_distinct_dates_come_from_the_games_not_the_game_ids(self):
+        c = world(toi=11.0)
+        game(c, 101, "2026-10-12")                                                                                 # a second game the same night
+        pstat(c, 101, "1002", "EDM", 9.0)
+        tstat(c, 101, "EDM", 30.0)
+        for i in range(5):
+            game(c, 500 + i, f"2026-09-0{i + 1}")
+            pstat(c, 500 + i, "1002", "EDM", 20.0)
+        c.commit()
+        res = tlc.classify_all([ticket("A"), ticket("B", participant_id="1002", game_id=101, participant_name="Two")], c)
+        f = next(x for x in res["classified_failures"] if x["category"] == dpm.ROLE_CHANGE_MISSED)
+        self.assertEqual((f["occurrences"], f["unique_game_dates"]), (2, 1))
+
+    def test_an_old_ticket_is_classified_but_neither_counts_toward_a_pattern_nor_carries_an_action(self):
+        c = world(toi=11.0)
+        old, recent = ticket("OLD"), ticket("NEW", game_id=100)
+        old["settled_at_utc"] = "2026-08-01T12:00:00+00:00"
+        recent["settled_at_utc"] = "2026-10-12T12:00:00+00:00"
+        res = tlc.classify_all([old, recent], c, now=dt.datetime(2026, 10, 14, tzinfo=dt.timezone.utc))
+        self.assertEqual(old["classification"]["category"], dpm.ROLE_CHANGE_MISSED)
+        self.assertEqual(old["classification"]["recommended_action"], dpm.NO_ACTION)
+        self.assertTrue(old["classification"]["legs"][0]["outside_window"])
+        self.assertEqual(res["by_category"], {dpm.ROLE_CHANGE_MISSED: 1})                                         # only the recent one counts
+
+    def test_two_integrity_events_months_apart_are_not_a_repeat(self):
+        c = world()
+        game(c, 101, "2026-10-13")
+        pstat(c, 101, "1001", "EDM", 20.0)
+        tstat(c, 101, "EDM", 30.0)
+        c.commit()
+        a, b = ticket("A", quote_age_min_at_entry=400.0), ticket("B", quote_age_min_at_entry=400.0, game_id=101, game_start_utc="2026-10-13T23:00:00Z", captured_at_utc="2026-10-13T21:00:00+00:00")
+        a["settled_at_utc"], b["settled_at_utc"] = "2026-06-01T12:00:00+00:00", "2026-10-14T12:00:00+00:00"
+        res = tlc.classify_all([a, b], c, now=dt.datetime(2026, 10, 15, tzinfo=dt.timezone.utc))
+        self.assertEqual(res["integrity_defects"][0]["distinct_incidents"], 1)
+        self.assertEqual(res["integrity_defects"][0]["recommended_action"], dpm.BUG_FIX)
+
+    def test_a_player_with_too_little_history_is_unknown_not_normal_variance(self):
+        c = official_db()
+        game(c, 100, "2026-10-12")
+        pstat(c, 100, "1001", "EDM", 20.0)
+        tstat(c, 100, "EDM", 30.0)
+        c.commit()                                                                                                  # no prior games: ice time cannot be compared
+        cls, _ = classify(ticket(), c)
+        self.assertEqual(cls["category"], dpm.UNKNOWN)
+        self.assertIn("ice_time_vs_recent_average", cls["legs"][0]["not_evaluated"])
+
+    def test_goalie_legs_are_not_concluded_on(self):
+        cls, _ = classify(ticket(market_family="GOALIE_SAVES", threshold=25), world())
+        self.assertEqual(cls["category"], dpm.UNKNOWN)
+        self.assertIn("starter_and_workload", cls["legs"][0]["not_evaluated"])
+
+    def test_a_missing_team_id_is_not_a_checked_identity_and_never_a_mismatch(self):
+        c = world()
+        c.execute("UPDATE player_game_stats SET team_id = NULL WHERE game_id = 100 AND player_id = '1001'")
+        cls, _ = classify(ticket(), c)
+        self.assertNotEqual(cls["category"], dpm.IDENTITY_LINEUP_ERROR)
+        self.assertEqual(cls["category"], dpm.UNKNOWN)
+
+    def test_a_non_fresh_status_with_an_in_limit_age_is_still_stale_data(self):
+        cls, _ = classify(ticket(freshness_status="STALE_QUOTE", quote_age_min_at_entry=5.0), world())
+        self.assertEqual((cls["category"], cls["integrity_defect"]), (dpm.STALE_DATA, True))
+
+    def test_a_ticket_with_one_clean_and_one_unknown_leg_shows_unknown(self):
+        pm = ticket("M")
+        extra = dict(pm["missed_legs"][0], participant_id="9999", participant_name="No Box Score")
+        pm["missed_legs"].append(extra)
+        pm["frozen_legs"].append(frozen(participant_id="9999", participant_name="No Box Score"))
+        classify(pm, world())
+        self.assertEqual(pm["classification"]["category"], dpm.UNKNOWN)
+
+    def test_a_confirmed_integrity_defect_reaches_the_report_lists_the_morning_review_reads(self):
+        c = world()
+        conn = pb.init_db(db_path=":memory:")
+        with mock.patch.object(dpm, "real_market_parlay_loss_postmortems", return_value=[ticket("S", quote_age_min_at_entry=400.0)]):
+            report = dpm.run_daily_postmortem(conn, nhl_conn=c)
+        self.assertEqual([i["category"] for i in report["software_bug_candidates"]], [dpm.STALE_DATA])
+        self.assertEqual(report["software_bug_candidates"][0]["recommended_action"], dpm.BUG_FIX)
+        self.assertEqual([i["category"] for i in report["investigate"]], [dpm.STALE_DATA])
+        self.assertTrue(report["normal_variance_vs_systematic"].startswith("SYSTEMATIC") or "STALE_DATA" in report["normal_variance_vs_systematic"])
+        self.assertNotIn("frozen_legs", report["real_market_parlay_postmortems"][0])                                 # not published
+
+    def test_a_failure_mid_pass_leaves_no_partial_classification(self):
+        c = world()
+        pms = [ticket("A"), ticket("B")]
+        real = tlc.leg_diagnostics
+        calls = {"n": 0}
+
+        def flaky(*a, **k):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise RuntimeError("boom")
+            return real(*a, **k)
+        with mock.patch.object(tlc, "leg_diagnostics", flaky):
+            with self.assertRaises(RuntimeError):
+                tlc.classify_all(pms, c)
+        self.assertTrue(all("classification" not in p for p in pms))
+
+    def test_a_losing_streak_of_anomalous_misses_on_one_player_never_halts_or_pauses(self):
+        c = world(toi=11.0)
+        pms = [ticket(f"S{i}", threshold=2 + (i % 2), market_family="PLAYER_SOG_ALTERNATE" if i % 3 else "PLAYER_POINTS") for i in range(9)]
+        res = tlc.classify_all(pms, c)
+        self.assertEqual(res["by_action"][dpm.HALT_MARKET], 0)
+        self.assertLessEqual({p["classification"]["recommended_action"] for p in pms}, {dpm.NO_ACTION, dpm.WATCH})
+
+
+class TestStatusIsTruthful(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 20, 19, 40, tzinfo=dt.timezone.utc)
+
+    def status(self, cash=500.0, describe_fails=False):
+        pause = {"paused": False, "since_utc": None, "reason": None, "set_by": None}
+        with mock.patch("operational.recording_pause.status", return_value=pause), \
+             mock.patch("operational.ticket_policy.describe", side_effect=RuntimeError("no policy") if describe_fails else None, return_value={"policy_id": "p", "digest": "d", "approved": True}):
+            return dtk.recording_status(self.NOW, [], {"available_cash": cash, "equity": cash, "open_stakes": 0.0})
+
+    def test_it_never_says_active_when_the_policy_cannot_load_or_cash_is_below_the_stake(self):
+        s = self.status(describe_fails=True)
+        self.assertEqual((s["active"], s["label"]), (False, "AUTOMATIC PAPER RECORDING: BLOCKED"))
+        self.assertIn("policy", s["blocked_reason"])
+        s2 = self.status(cash=4.0)
+        self.assertEqual((s2["active"], s2["label"]), (False, "AUTOMATIC PAPER RECORDING: BLOCKED"))
+        self.assertIn("below the $10 stake", s2["blocked_reason"])
+        self.assertTrue(self.status()["active"])
+
+    def test_the_banner_shows_a_blocked_state_as_a_warning_not_as_active(self):
+        snap = snapshot()
+        snap["tickets"]["recording"] = self.status(cash=4.0)
+        at = run_page("21_Today.py", snap)
+        blob = " ".join(m.value for m in at.markdown)
+        self.assertIn("AUTOMATIC PAPER RECORDING: BLOCKED", blob)
+        self.assertNotIn("RECORDING: ACTIVE", blob)
+
+    def test_the_paused_state_shows_the_pause_notice_not_the_active_banner(self):
+        snap = snapshot()
+        snap["tickets"]["recording"] = TestRecordingStatus().status(paused=True)
+        snap["tickets"]["notice"] = "Automatic paper tickets are PAUSED since 2026-10-13: test notice"
+        at = run_page("21_Today.py", snap)
+        blob = " ".join(m.value for m in at.markdown)
+        self.assertIn("PAUSED since 2026-10-13", blob)
+        self.assertNotIn("RECORDING: ACTIVE", blob)
+
+
+class TestNothingCanPauseRecordingByItself(unittest.TestCase):
+    def test_an_ast_scan_of_every_non_test_module_finds_no_automatic_pause(self):
+        import ast
+        offenders = []
+        allowed = {"operational/recording_pause.py", "deploy/reset_model_bankroll.py"}
+        for f in REPO.rglob("*.py"):
+            rel = str(f.relative_to(REPO))
+            if rel.startswith(("tests/", ".git/", "venv/", ".venv/")) or "site-packages" in rel or rel in allowed:
+                continue
+            try:
+                tree = ast.parse(f.read_text())
+            except (SyntaxError, UnicodeDecodeError):
+                continue
+            names, funcs = set(), set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    names |= {(a.asname or a.name.split(".")[-1]) for a in node.names if a.name.endswith("recording_pause")}
+                elif isinstance(node, ast.ImportFrom):
+                    if (node.module or "").endswith("recording_pause"):
+                        funcs |= {(a.asname or a.name) for a in node.names if a.name == "pause"}
+                    names |= {(a.asname or a.name) for a in node.names if a.name == "recording_pause"}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    fn = node.func
+                    if isinstance(fn, ast.Attribute) and fn.attr == "pause" and isinstance(fn.value, ast.Name) and fn.value.id in names:
+                        offenders.append(rel)
+                    if isinstance(fn, ast.Name) and fn.id in funcs:
+                        offenders.append(rel)
+                if isinstance(node, ast.Constant) and isinstance(node.value, str) and "recording_pause.json" in node.value and rel != "operational/recording_pause.py":
+                    offenders.append(f"{rel} (writes or names the pause file)")
+        self.assertEqual(sorted(set(offenders)), [], "something can pause recording by itself")
 
 
 if __name__ == "__main__":

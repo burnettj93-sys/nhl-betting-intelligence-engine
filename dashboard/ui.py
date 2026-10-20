@@ -535,7 +535,12 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
 
 def recording_status_banner(rec: dict | None) -> None:
     """One concise status line while automatic paper recording is ACTIVE (a paused state keeps its own notice). Nothing here stakes anything: paper only, $10 a ticket, only when every production gate passes."""
-    if not rec or not rec.get("active"):
+    if not rec:
+        return
+    if rec.get("blocked_reason"):
+        banner(f"<b>{esc(rec.get('label') or 'AUTOMATIC PAPER RECORDING: BLOCKED')}</b> · {esc(rec['blocked_reason'])}. Existing tickets still settle and prices still refresh.", "warn")
+        return
+    if not rec.get("active"):
         return
     bank = rec.get("bankroll") or {}
     cash, eq = bank.get("available_cash"), bank.get("equity")

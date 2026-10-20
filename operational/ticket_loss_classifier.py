@@ -26,7 +26,10 @@ ROLE_CHANGE_RATIO = 0.65         # his ice time fell below this share of his own
 TOI_PROJECTION_RATIO = 0.80      # ... or below this share: the ice-time projection was off
 TEAM_SHOTS_RATIO = 0.80          # his team's shots fell below this share of its own recent average (shots and points legs)
 INTEGRITY_CATEGORIES = (dpm.STALE_DATA, dpm.IDENTITY_LINEUP_ERROR, dpm.DATA_PIPELINE_ERROR)
-HALT_REPEATS = 2                 # the same integrity category twice in one market family recommends halting that market (a recommendation only)
+HALT_REPEATS = 2                 # the same integrity category in two DISTINCT incidents in one market family within the window recommends halting that market (a recommendation only)
+WINDOW_DAYS = 14                 # pattern counts use tickets settled in this window; an old miss never keeps a recommendation alive
+PROXY_CATEGORIES = (dpm.ROLE_CHANGE_MISSED, dpm.TOI_PROJECTION_ERROR, dpm.TEAM_SHOT_ENVIRONMENT_ERROR)
+PROXY_BASIS = "basis: the player's (or team's) own last-5-game average, not the model's projection (a ticket does not freeze it)"
 PLAYER_MARKETS = ("PLAYER_SOG", "PLAYER_SOG_ALTERNATE", "PLAYER_POINTS", "PLAYER_GOALS", "PLAYER_ASSISTS")
 SHOT_ENV_MARKETS = ("PLAYER_SOG", "PLAYER_SOG_ALTERNATE", "PLAYER_POINTS", "PLAYER_GOALS")
 POLICY_NOTE = ("A losing ticket, a losing day or a losing streak never pauses recording. Only a confirmed integrity defect (stale data treated as fresh, an identity mapping failure that affects a ticket's truth, "
@@ -74,6 +77,11 @@ def leg_diagnostics(nhl_conn, frozen_leg: dict, missed: dict) -> dict:
         missing["price_freshness_at_entry"] = "the ticket did not freeze the quote age or the game start"
 
     gid, pid, team, fam = frozen_leg.get("game_id") or missed.get("game_id"), frozen_leg.get("participant_id"), frozen_leg.get("team"), frozen_leg.get("market_family") or missed.get("market_family")
+    gd = nhl_conn.execute("SELECT game_date FROM games WHERE game_id = ?", (int(gid),)).fetchone() if gid is not None else None
+    sig["game_date"] = gd[0] if gd else None
+    if fam == "GOALIE_SAVES":
+        missing["starter_and_workload"] = "goalie legs: the starter and shots-against checks are not implemented, so nothing is concluded"
+        return {"signals": sig, "evaluated": evaluated, "not_evaluated": missing}
     is_player = fam in PLAYER_MARKETS and pid is not None and str(pid).isdigit()
     if not is_player:
         sig["note"] = "team market: the player-level signals do not apply"
@@ -87,9 +95,12 @@ def leg_diagnostics(nhl_conn, frozen_leg: dict, missed: dict) -> dict:
         missing["identity_and_ice_time"] = "no box-score row for this player in this game"
     else:
         # 2. identity: the official box score must place the player on the team the ticket named
-        sig["identity_match_status"] = "MATCHED" if (team is None or row[0] == team) else "UNMATCHED"
         sig["box_score_team"] = row[0]
-        evaluated.append("identity_against_box_score")
+        if team and row[0]:                                   # both sides must be known: a missing team id is "not checked", never a mismatch
+            sig["identity_match_status"] = "MATCHED" if row[0] == team else "UNMATCHED"
+            evaluated.append("identity_against_box_score")
+        else:
+            missing["identity_against_box_score"] = "the ticket or the box score has no team id for this player"
         # 3. ice time against his own recent average
         recent = _latest_stat_rows(nhl_conn, str(pid), game_date, RECENT_GAMES)
         if row[1] and len(recent) >= 3:
@@ -116,8 +127,9 @@ def classify_missed_leg(missed: dict, diag: dict) -> dict:
     sig = diag["signals"]
     ctx: dict = {}
     if sig.get("stale_at_entry"):
-        ctx["data_freshness_hours"] = sig["quote_age_min_at_entry"] / 60.0
-        ctx["stale_data_threshold_hours"] = sig["freshness_limit_min"] / 60.0
+        limit_h = sig["freshness_limit_min"] / 60.0
+        ctx["data_freshness_hours"] = max(sig["quote_age_min_at_entry"] / 60.0, limit_h + 1.0 / 60.0)     # a non-FRESH status with an in-limit age still counts as past the limit
+        ctx["stale_data_threshold_hours"] = limit_h
     if sig.get("identity_match_status") == "UNMATCHED":
         ctx["identity_match_status"] = "UNMATCHED"
     ratio = sig.get("toi_ratio")
@@ -130,19 +142,20 @@ def classify_missed_leg(missed: dict, diag: dict) -> dict:
         ctx["team_shot_environment_gap"] = sig["team_shots_actual"] - sig["team_shots_recent_avg"]
     anomaly = bool(ctx)
     ev = set(diag["evaluated"])
-    if not anomaly and "price_freshness_at_entry" in ev and (("identity_against_box_score" in ev) or "note" in sig):
-        ctx["residual"] = 0.0                                     # everything that could be checked was clean: the leg simply missed
+    # "everything that could be checked was clean" needs the checks that matter for the leg type: for a player leg the price age, the identity AND the ice time; for a team leg the price age
+    checked = "price_freshness_at_entry" in ev and ((("identity_against_box_score" in ev) and ("ice_time_vs_recent_average" in ev)) or "note" in sig)
+    if not anomaly and checked:
+        ctx["residual"] = 0.0
     cat = dpm.classify_failure({"result_status": "LOSS", "is_combo": False, "market_family": missed.get("market_family")}, ctx)
+    unknown_reason = None
     if cat == dpm.UNKNOWN and not anomaly:
-        reason = "too few signals could be evaluated to call it variance or anything else: " + "; ".join(f"{k}: {v}" for k, v in diag["not_evaluated"].items())
-    else:
-        reason = None
-    return {"category": cat, "signals": sig, "evaluated": diag["evaluated"], "not_evaluated": diag["not_evaluated"], "unknown_reason": reason,
-            "integrity_defect": cat in INTEGRITY_CATEGORIES}
+        unknown_reason = "too few signals could be evaluated to call it variance or anything else: " + "; ".join(f"{k}: {v}" for k, v in diag["not_evaluated"].items())
+    return {"category": cat, "signals": sig, "evaluated": diag["evaluated"], "not_evaluated": diag["not_evaluated"], "unknown_reason": unknown_reason,
+            "integrity_defect": cat in INTEGRITY_CATEGORIES, "basis": PROXY_BASIS if cat in PROXY_CATEGORIES else None}
 
 
 PRIORITY = (dpm.DATA_PIPELINE_ERROR, dpm.IDENTITY_LINEUP_ERROR, dpm.STALE_DATA, dpm.ROLE_CHANGE_MISSED, dpm.TOI_PROJECTION_ERROR, dpm.TEAM_SHOT_ENVIRONMENT_ERROR,
-            dpm.MODEL_CALIBRATION, dpm.DEPENDENCE_ERROR, dpm.NORMAL_VARIANCE, dpm.UNKNOWN)
+            dpm.MODEL_CALIBRATION, dpm.DEPENDENCE_ERROR, dpm.UNKNOWN, dpm.NORMAL_VARIANCE)
 
 
 def _frozen_for(pm: dict, missed: dict) -> dict:
@@ -153,60 +166,81 @@ def _frozen_for(pm: dict, missed: dict) -> dict:
     return {}
 
 
-def classify_all(postmortems: list[dict], nhl_conn) -> dict:
-    """Adds `classification` to every ticket post-mortem (in place) and returns {"classified_failures", "by_category", "by_action", "integrity_defects", "policy_note"}.
-    `classified_failures` is the aggregated list daily_postmortem.run_daily_postmortem() turns into recommended actions."""
-    per_cat: dict[str, dict] = {}
-    per_market_integrity: dict[tuple, list] = {}
+def _incident(c: dict, missed: dict) -> tuple:
+    """One real-world incident, however many tickets or thresholds it appears on: a player in a game (player legs) or a team in a game (team legs)."""
+    who = str(missed.get("participant_id") or missed.get("participant_name"))
+    return (c["game_id"], who)
+
+
+def classify_all(postmortems: list[dict], nhl_conn, *, now: dt.datetime | None = None, window_days: int = WINDOW_DAYS) -> dict:
+    """Classifies every ticket post-mortem (attaches `classification` only after the whole pass succeeded) and returns {"classified_failures", "by_category", "by_action", "integrity_defects", "policy_note"}.
+    Pattern counts use DISTINCT incidents (a player or team in a game) from tickets settled within `window_days`; an older ticket is still classified but contributes no pattern and carries no action."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    cutoff = now - dt.timedelta(days=window_days)
+
+    def in_window(pm: dict) -> bool:
+        t = dpm_parse(pm.get("settled_at_utc"))
+        return t is None or t >= cutoff
+
+    work = []
     for pm in postmortems:
         leg_cls = []
         for missed in pm.get("missed_legs") or []:
             c = classify_missed_leg(missed, leg_diagnostics(nhl_conn, _frozen_for(pm, missed), missed))
-            c.update(label=f"{missed.get('participant_name')} {missed.get('market_family')} {missed.get('threshold')}", market_family=missed.get("market_family"), game_id=missed.get("game_id"))
+            c.update(label=f"{missed.get('participant_name')} {missed.get('market_family')} {missed.get('threshold')}", market_family=missed.get("market_family"), game_id=missed.get("game_id"),
+                     game_date=c["signals"].get("game_date"), incident=_incident({"game_id": missed.get("game_id")}, missed))
             leg_cls.append(c)
-        if leg_cls:
-            top = min((c["category"] for c in leg_cls), key=lambda x: PRIORITY.index(x) if x in PRIORITY else len(PRIORITY))
-        else:
-            top = dpm.UNKNOWN                                         # a loss driven by a leg the resolver could not grade: nothing to classify, say so
-        pm["classification"] = {"category": top, "legs": leg_cls, "integrity_defect": any(c["integrity_defect"] for c in leg_cls)}
-        for c, missed in zip(leg_cls, pm.get("missed_legs") or []):
-            event = (c["game_id"], str(missed.get("participant_id") or missed.get("participant_name")), c["market_family"], missed.get("threshold"))
-            e = per_cat.setdefault(c["category"], {"events": set(), "game_ids": set(), "markets": {}})
-            if event not in e["events"]:                       # the same miss on several tickets is ONE event, not a pattern
-                e["events"].add(event)
+        work.append((pm, leg_cls))
+    per_cat: dict[str, dict] = {}
+    integrity: dict[tuple, dict] = {}
+    for pm, leg_cls in work:
+        if not in_window(pm):
+            continue
+        for c in leg_cls:
+            e = per_cat.setdefault(c["category"], {"incidents": set(), "dates": set(), "markets": {}})
+            if c["incident"] not in e["incidents"]:
+                e["incidents"].add(c["incident"])
                 e["markets"][c["market_family"]] = e["markets"].get(c["market_family"], 0) + 1
-            e["game_ids"].add(c["game_id"])
+            e["dates"].add(c["game_date"] or c["game_id"])
             if c["integrity_defect"]:
-                key = (c["category"], c["market_family"])
-                per_market_integrity.setdefault(key, {"events": set(), "tickets": []})
-                per_market_integrity[key]["events"].add(event)
-                per_market_integrity[key]["tickets"].append(pm["ticket_id"])
+                k = integrity.setdefault((c["category"], c["market_family"]), {"incidents": set(), "tickets": []})
+                k["incidents"].add(c["incident"])
+                k["tickets"].append(pm["ticket_id"])
+    halts = {k for k, v in integrity.items() if len(v["incidents"]) >= HALT_REPEATS}
+    order = (dpm.NO_ACTION, dpm.WATCH, dpm.INVESTIGATE, dpm.CHALLENGER_IDEA, dpm.BUG_FIX, dpm.HALT_MARKET)
+
+    def action_for(c: dict) -> str:
+        cat = c["category"]
+        if cat in INTEGRITY_CATEGORIES:
+            return dpm.HALT_MARKET if (cat, c["market_family"]) in halts else dpm.BUG_FIX
+        e = per_cat.get(cat) or {"incidents": set(), "dates": set()}
+        a = dpm.recommended_action_for_pattern(cat, occurrences=len(e["incidents"]), unique_game_dates=len(e["dates"]), explanation=f"{len(e['incidents'])} distinct incident(s) classified {cat}")
+        if cat in PROXY_CATEGORIES and order.index(a) > order.index(dpm.WATCH):
+            a = dpm.WATCH                                       # a proxy against the own recent average can never justify more than a watch (it fires on ordinary losses)
+        return a
+
+    for pm, leg_cls in work:
+        for c in leg_cls:
+            c["recommended_action"] = action_for(c) if in_window(pm) else dpm.NO_ACTION
+            c["outside_window"] = not in_window(pm)
+        top = min((c["category"] for c in leg_cls), key=lambda x: PRIORITY.index(x) if x in PRIORITY else len(PRIORITY)) if leg_cls else dpm.UNKNOWN
+        act = dpm.NO_ACTION
+        for c in leg_cls:
+            act = max(act, c["recommended_action"], key=order.index)
+        pm["classification"] = {"category": top, "legs": leg_cls, "integrity_defect": any(c["integrity_defect"] for c in leg_cls), "recommended_action": act}
+        pm["why"] = f"[{top} · {act}] " + str(pm.get("why") or "")
     failures = []
     for cat, e in per_cat.items():
-        dates = len(e["game_ids"])                                    # distinct games stand in for distinct dates when the date is not joined here
-        n = len(e["events"])
-        failures.append({"category": cat, "occurrences": n, "unique_game_dates": dates, "markets": e["markets"],
-                         "explanation": f"{n} distinct missed leg(s) classified {cat} across {dates} game(s)"})
-    halts = {k: v for k, v in per_market_integrity.items() if len(v["events"]) >= HALT_REPEATS}
-    for pm in postmortems:
-        cls = pm["classification"]
-        action = dpm.NO_ACTION
-        for c in cls["legs"]:
-            cat = c["category"]
-            e = per_cat[cat]
-            if cat in INTEGRITY_CATEGORIES:
-                a = dpm.HALT_MARKET if (cat, c["market_family"]) in halts else dpm.BUG_FIX
-            else:
-                a = dpm.recommended_action_for_pattern(cat, occurrences=len(e["events"]), unique_game_dates=len(e["game_ids"]), explanation=f"{len(e['events'])} distinct missed leg(s) classified {cat}")
-            c["recommended_action"] = a
-            order = (dpm.NO_ACTION, dpm.WATCH, dpm.INVESTIGATE, dpm.CHALLENGER_IDEA, dpm.BUG_FIX, dpm.HALT_MARKET)
-            action = max(action, a, key=order.index)
-        cls["recommended_action"] = action
-        pm["why"] = f"[{cls['category']} · {action}] " + str(pm.get("why") or "")
-    for f in failures:
-        f["recommended_action"] = next((c["recommended_action"] for pm in postmortems for c in pm["classification"]["legs"] if c["category"] == f["category"]), dpm.NO_ACTION)
-    return {"classified_failures": failures, "by_category": {k: len(v["events"]) for k, v in per_cat.items()},
+        act = max((c["recommended_action"] for _pm, lc in work for c in lc if c["category"] == cat and not c["outside_window"]), key=order.index, default=dpm.NO_ACTION)
+        failures.append({"category": cat, "occurrences": len(e["incidents"]), "unique_game_dates": len(e["dates"]), "markets": e["markets"], "recommended_action": act,
+                         "explanation": f"{len(e['incidents'])} distinct incident(s) classified {cat} on {len(e['dates'])} date(s) in the last {window_days} days" + (f" ({PROXY_BASIS})" if cat in PROXY_CATEGORIES else "")})
+    return {"classified_failures": failures, "by_category": {k: len(v["incidents"]) for k, v in per_cat.items()},
             "by_action": {a: sum(1 for pm in postmortems if pm["classification"]["recommended_action"] == a) for a in dpm.RECOMMENDED_ACTIONS},
-            "integrity_defects": [{"category": k[0], "market_family": k[1], "tickets": v["tickets"], "distinct_events": len(v["events"]),
-                                  "recommended_action": dpm.HALT_MARKET if len(v["events"]) >= HALT_REPEATS else dpm.BUG_FIX} for k, v in per_market_integrity.items()],
-            "policy_note": POLICY_NOTE, "tickets_classified": len(postmortems)}
+            "integrity_defects": [{"category": k[0], "market_family": k[1], "tickets": v["tickets"], "distinct_incidents": len(v["incidents"]),
+                                   "recommended_action": dpm.HALT_MARKET if k in halts else dpm.BUG_FIX} for k, v in integrity.items()],
+            "window_days": window_days, "policy_note": POLICY_NOTE, "tickets_classified": len(postmortems)}
+
+
+def dpm_parse(value):
+    from operational import quote_freshness as qf
+    return qf.parse_utc(value)

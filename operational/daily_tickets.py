@@ -579,7 +579,15 @@ def recording_status(now: dt.datetime, rows: list[dict], account: dict) -> dict:
     except Exception:  # noqa: BLE001 - the status line must never stop a cycle
         policy = None
     fmt = lambda t: t.strftime("%a %-I:%M %p ET")  # noqa: E731
-    return {"active": not pause["paused"], "label": "AUTOMATIC PAPER RECORDING: " + ("ACTIVE" if not pause["paused"] else "PAUSED"),
+    blocked = None
+    if not pause["paused"]:
+        if policy is None:
+            blocked = "the ticket policy could not be loaded, so nothing can be recorded"
+        elif (account.get("available_cash") or 0) < pb.PAPER_BET_STAKE:
+            blocked = f"available cash is below the ${pb.PAPER_BET_STAKE:.0f} stake, so no new ticket can be recorded"
+    active = (not pause["paused"]) and blocked is None
+    return {"active": active, "blocked_reason": blocked,
+            "label": "AUTOMATIC PAPER RECORDING: " + ("ACTIVE" if active else "PAUSED" if pause["paused"] else "BLOCKED"),
             "bankroll": {"available_cash": account.get("available_cash"), "equity": account.get("equity"), "open_stakes": account.get("open_stakes")},
             "tickets_recorded_today": len(rows), "pending_today": pending, "settled_today": settled, "stake_usd": pb.PAPER_BET_STAKE, "daily_slots": slot_count_for_display(),
             "next_settlement": {"at_utc": nxt_settle.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "label": fmt(nxt_settle)},
@@ -949,6 +957,8 @@ def _blocked_cycle(bankroll_conn, now: dt.datetime, et_date: str, message: str) 
     state["policy_error"] = message
     state["notice"] = message
     state["recording_paused"] = {"paused": True, "since_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "reason": message, "set_by": "policy_unavailable"}
+    if isinstance(state.get("recording"), dict):
+        state["recording"].update(active=False, blocked_reason=message, label="AUTOMATIC PAPER RECORDING: BLOCKED")
     state["primary"] = {"status": "ERROR", "reason": message, "ticket": None, "strongest_singles": []}
     changed = _write_state(state)
     return {"eastern_date": et_date, "qualifying_tickets_found": 0, "recording_paused": True, "newly_recorded": 0, "already_recorded": 0, "insufficient_funds": 0, "results": [],

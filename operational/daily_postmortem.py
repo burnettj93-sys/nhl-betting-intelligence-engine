@@ -457,6 +457,8 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
             ticket_classification = ticket_loss_classifier.classify_all(real_market_postmortems, nhl_conn)
             if not classified_failures:
                 classified_failures = ticket_classification["classified_failures"]
+            for _pm in real_market_postmortems:
+                _pm.pop("frozen_legs", None)                  # the ledger already holds them; do not grow the published payload
         except Exception as exc:  # noqa: BLE001 - a classification failure must never stop the report; it is stated, not hidden
             ticket_classification = {"error": f"{exc.__class__.__name__}: {exc}"}
         missed_by_family: dict[str, dict] = {}
@@ -484,9 +486,12 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
 
     issues = []
     for f in classified_failures:
-        action = recommended_action_for_pattern(
-            f["category"], occurrences=f["occurrences"], unique_game_dates=f["unique_game_dates"],
-            explanation=f.get("explanation", ""))
+        if f.get("recommended_action") and f["category"] in (STALE_DATA, IDENTITY_LINEUP_ERROR, DATA_PIPELINE_ERROR):
+            action = f["recommended_action"]                  # a confirmed integrity defect keeps the classifier's BUG_FIX / HALT_MARKET: it is a defect, not a variance pattern
+        else:
+            action = recommended_action_for_pattern(
+                f["category"], occurrences=f["occurrences"], unique_game_dates=f["unique_game_dates"],
+                explanation=f.get("explanation", ""))
         issues.append({**f, "recommended_action": action})
 
     any_bets_settled = any(
@@ -509,8 +514,8 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
         "normal_variance_vs_systematic": (
             "NO_DATA (no settled recommendations yet -- no variance or model conclusion is drawn)"
             if not any_bets_settled and not issues else _variance_vs_systematic(issues)),
-        "investigate": [i for i in issues if i["recommended_action"] in (INVESTIGATE, BUG_FIX, CHALLENGER_IDEA)],
-        "software_bug_candidates": [i for i in issues if i["recommended_action"] == BUG_FIX],
+        "investigate": [i for i in issues if i["recommended_action"] in (INVESTIGATE, BUG_FIX, CHALLENGER_IDEA, HALT_MARKET)],
+        "software_bug_candidates": [i for i in issues if i["recommended_action"] in (BUG_FIX, HALT_MARKET)],
         "challenger_ideas": [i for i in issues if i["recommended_action"] == CHALLENGER_IDEA],
         "scoreboard": scoreboard,
         "parlay_health": parlay_health,
