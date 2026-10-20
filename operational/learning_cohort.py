@@ -8,7 +8,7 @@ What is different from the normal paper book, and only that: more bets per day, 
 only on a REAL, FRESH quote for a real, not-yet-started game, with a verified identity, a market the engine has a certified contract, a model estimate and a settlement path for, once (no duplicate), at the actual
 captured price. It never fabricates a bet to reach 10: if fewer legitimate bets exist the day records fewer and says exactly why.
 
-Accounting (a separate, clearly labelled ledger, `learning_cohort.db`): its own experiment bankroll of $1,400 (14 days x 10 bets x $10). Whenever the bankroll cannot fund the next $10 bet it is reset to $500.00 by a
+Accounting (a separate, clearly labelled ledger, `learning_cohort.db`): its own experiment bankroll of $500.00. Whenever the bankroll cannot fund the next $10 bet it is reset to $500.00 by a
 funding event that is logged (time, balance before, amount, balance after, experiment day, reason LEARNING_EXPERIMENT_BANKROLL_RESET) and is never profit or returned stake: betting P/L, ROI, hit rate and calibration come
 from settled ticket results only. Historical results are never rewritten. Nothing here touches Eggy's ledger, the model book (Experiment 2) or any other ledger.
 
@@ -39,8 +39,8 @@ START_DATE, END_DATE = "2026-10-20", "2026-11-02"
 DAILY_TARGET = 10
 STAKE = 10.0
 ODDS_FLOOR = -150.0                  # an American price of -150 or longer (a price MORE expensive than -150, e.g. -155, is excluded)
-INITIAL_BANKROLL = 1400.0            # 14 days x 10 bets x $10
-RESET_TO = 500.0                     # reset target whenever the bankroll cannot fund the next bet
+INITIAL_BANKROLL = 500.0             # the owner's instruction (2026-10-20): start at $500 and reset to $500 whenever cash cannot fund the next bet
+RESET_TO = 500.0                     # cash is reset TO this amount whenever it cannot fund the next bet
 RESET_REASON = "LEARNING_EXPERIMENT_BANKROLL_RESET"
 DB_NAME = "learning_cohort.db"
 STATE_NAME = "learning_experiment_state.json"
@@ -55,6 +55,10 @@ SELECTION_WEIGHTS = {"conservative_probability": 0.25, "model_probability": 0.10
 # held to the model (validated on 2025, anchor.py); the others use the calibrated model's own probability, which has no capped record-based estimate; a moneyline is the market's own no-vig chance (no model
 # here beats the market). One purpose of this experiment is to measure all of them.
 MODEL_QUALITY = {"PLAYER_SOG_ALTERNATE": 1.0, "PLAYER_SOG": 1.0, "GOALIE_SAVES": 0.7, "PLAYER_POINTS": 0.6, "PLAYER_GOALS": 0.5, "MONEYLINE": 0.5}
+EDGE_POSITIVE, EDGE_NEUTRAL, EDGE_NEGATIVE = "POSITIVE_EDGE", "NEUTRAL_UNCERTAIN_EDGE", "LEARNING_SAMPLE_NEGATIVE_EDGE"
+EDGE_CLASSES = (EDGE_POSITIVE, EDGE_NEUTRAL, EDGE_NEGATIVE)
+EDGE_BAND = 0.02                       # estimated edge (the recorded hit chance less the price's implied chance) of +2 points or more is positive; within 2 points either way is neutral; below -2 is negative
+ANCHORED_BASES = ("ANCHORED_RECORD_ESTIMATE", "MARKET_NO_VIG")
 UNANCHORED_SHOTS_FACTOR = 0.7          # a shots leg whose record is thin or below the flagship floor still ranks, with this share of the shots model-quality prior
 DIVERSIFICATION_PENALTY = {"same_game": 0.03, "same_player": 0.10, "same_market_family_over_4": 0.02, "same_price_band": 0.01, "same_team": 0.01}
 PRICE_BANDS = ((-150, -131, "-150 to -131"), (-130, -111, "-130 to -111"), (-110, 100, "-110 to +100"), (101, 150, "+101 to +150"), (151, 10 ** 6, "+151 and longer"))
@@ -72,7 +76,11 @@ POLICY = {
                   "probability_basis": "shots: the book's anchored record estimate (record held to the model + 0.02, 70% for 3+) when it exists, else the model probability; moneyline: the market's no-vig chance; points, goals and saves: the "
                                        "calibrated model probability, labelled unanchored; the recorded conservative probability is never above the source leg's own",
                   "exclusions": "one side of a game's moneyline; one threshold per player and statistic (PLAYER_SOG and PLAYER_SOG_ALTERNATE are the same statistic); the engine's leg gate (leg_is_eligible) applies unchanged",
-                  "honours_owner_recording_pause": True, "no_edge_floor": "a candidate with a negative edge (a moneyline carries the bookmaker's margin) can still be recorded if it ranks in the day's best ten; the edge is recorded"},
+                  "honours_owner_recording_pause": True,
+                  "edge_classes": {"POSITIVE_EDGE": f"edge >= +{EDGE_BAND} on an anchored estimate", "NEUTRAL_UNCERTAIN_EDGE": f"edge within {EDGE_BAND} of zero, or positive on an unanchored estimate",
+                                   "LEARNING_SAMPLE_NEGATIVE_EDGE": f"edge < -{EDGE_BAND}"},
+                  "negative_edge": "a LEARNING_SAMPLE_NEGATIVE_EDGE candidate passes every integrity and support gate like any other, is recorded only to fill the day's sample after positive and neutral candidates, "
+                                   "and only once no better price for its wave can still arrive (the final 25 minutes before the wave's puck drop); it is tagged at recording time and reported separately"},
     "integrity_gates": ["real current event", "real sportsbook market with a verified contract", "fresh quote judged at the moment of recording", "verified identity on a current official roster", "event not started",
                         "supported settlement path", "no duplicate bet", "model estimate present and eligible", "no demo or simulated data", "no fabricated or approximated price", "no stale quote treated as current"],
     "ends": "automatically on 2026-11-03 Eastern (date arithmetic; no manual step)",
@@ -121,7 +129,7 @@ CREATE TABLE IF NOT EXISTS bets (
     participant_id TEXT NOT NULL, participant_name TEXT, team TEXT, opponent TEXT, american_price REAL NOT NULL, decimal_price REAL NOT NULL, stake REAL NOT NULL,
     model_probability REAL, conservative_probability REAL NOT NULL, implied_probability REAL NOT NULL, edge REAL NOT NULL, ev REAL NOT NULL,
     selection_score REAL NOT NULL, score_components_json TEXT NOT NULL, selection_reason TEXT NOT NULL, freshness_status TEXT, quote_updated_utc TEXT, retrieved_at_utc TEXT, quote_age_min REAL,
-    model_version TEXT, price_source TEXT NOT NULL, dependence_json TEXT, eggy_relation TEXT, leg_json TEXT NOT NULL, probability_basis TEXT, source_conservative_probability REAL,
+    model_version TEXT, price_source TEXT NOT NULL, dependence_json TEXT, eggy_relation TEXT, leg_json TEXT NOT NULL, probability_basis TEXT, source_conservative_probability REAL, edge_class TEXT NOT NULL, edge_class_reason TEXT,
     result_status TEXT NOT NULL DEFAULT 'PENDING', settled_at_utc TEXT, settled_odds REAL, profit_loss REAL, return_amount REAL, closing_odds REAL, clv REAL, notes TEXT, settlement_json TEXT
 );
 CREATE TABLE IF NOT EXISTS funding_events (
@@ -147,7 +155,7 @@ CREATE TRIGGER IF NOT EXISTS bets_are_never_deleted BEFORE DELETE ON bets BEGIN 
 ENTRY_COLUMNS = ("bet_id", "idempotency_key", "experiment_id", "cohort", "policy_digest", "et_date", "experiment_day", "selection_rank", "wave_index", "created_at_utc", "created_at_et", "game_id", "event_id",
                  "event_start_utc", "market_family", "settlement_market_id", "threshold", "side", "participant_id", "participant_name", "team", "opponent", "american_price", "decimal_price", "stake",
                  "model_probability", "conservative_probability", "implied_probability", "edge", "ev", "selection_score", "score_components_json", "selection_reason", "freshness_status", "quote_updated_utc",
-                 "retrieved_at_utc", "quote_age_min", "model_version", "price_source", "dependence_json", "eggy_relation", "leg_json", "probability_basis", "source_conservative_probability")
+                 "retrieved_at_utc", "quote_age_min", "model_version", "price_source", "dependence_json", "eggy_relation", "leg_json", "probability_basis", "source_conservative_probability", "edge_class", "edge_class_reason")
 RESULT_COLUMNS = ("result_status", "settled_at_utc", "settled_odds", "profit_loss", "return_amount", "closing_odds", "clv", "notes", "settlement_json")
 SCHEMA = (SCHEMA.replace("@ENTRY_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in ENTRY_COLUMNS))
           .replace("@RESULT_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in RESULT_COLUMNS)))
@@ -273,6 +281,18 @@ def probability_basis(leg) -> tuple[float, str]:
     return base, "MODEL_PROBABILITY_UNANCHORED"
 
 
+def edge_class(edge: float, basis: str | None) -> tuple[str, str]:
+    """(class, reason), assigned at recording time from the estimate's own edge. A positive edge only counts as POSITIVE_EDGE when the estimate is anchored (the player's record held to the model, or the market's own
+    chance); a positive number on an unanchored model probability is NEUTRAL_UNCERTAIN_EDGE: it is not supported by a capped, record-based estimate."""
+    if edge < -EDGE_BAND:
+        return EDGE_NEGATIVE, f"estimated edge {edge:+.1%} is below -{EDGE_BAND:.0%}: recorded to fill the learning sample"
+    if edge >= EDGE_BAND:
+        if basis in ANCHORED_BASES:
+            return EDGE_POSITIVE, f"estimated edge {edge:+.1%} on an anchored estimate"
+        return EDGE_NEUTRAL, f"estimated edge {edge:+.1%} but the estimate is unanchored ({basis}): uncertain"
+    return EDGE_NEUTRAL, f"estimated edge {edge:+.1%} is within {EDGE_BAND:.0%} of zero"
+
+
 def prepare(leg):
     """The leg as the cohort will rank and record it: the estimate re-formed by probability_basis (never above the source's), the basis kept with it."""
     p, basis = probability_basis(leg)
@@ -389,7 +409,7 @@ def select(cands: list[dict], already: list[dict], slots: int) -> list[dict]:
     chosen, pool = list(already), list(cands)
     picked = []
     while pool and len(picked) < slots:
-        best = max(pool, key=lambda c: (round(c["score"] - _penalty(c, chosen), 6), c["key"]))
+        best = max(pool, key=lambda c: (0 if c.get("edge_class") == EDGE_NEGATIVE else 1, round(c["score"] - _penalty(c, chosen), 6), c["key"]))          # a negative-edge candidate only fills what the others leave
         best["penalty"] = round(_penalty(best, chosen), 4)
         chosen.append(best)
         picked.append(best)
@@ -412,18 +432,18 @@ def _record(conn, cand: dict, now: dt.datetime, day: int, rank: int, wave: int |
     leg, sc = cand["leg"], cand["scored"]
     bet_id = "L" + cand["key"][:15].upper()
     rel = eggy.get((str(leg.game_id), str(leg.participant_id), leg.market_family))
-    reason = (f"rank {rank} of the day: score {sc['score']:.3f} (conservative p {leg.conservative_probability:.0%}, edge {sc['edge_value']:+.1%} at {leg.american_price:+.0f}, "
+    reason = (f"{cand['edge_class']}; rank {rank} of the day: score {sc['score']:.3f} (conservative p {leg.conservative_probability:.0%}, edge {sc['edge_value']:+.1%} at {leg.american_price:+.0f}, "
               f"{leg.market_family} {leg.participant_name}{'' if leg.threshold is None else ' ' + str(leg.threshold) + '+'}); diversification penalty {cand.get('penalty', 0.0):.3f}")
     conn.execute(
         """INSERT INTO bets (bet_id, idempotency_key, experiment_id, cohort, policy_digest, et_date, experiment_day, selection_rank, wave_index, created_at_utc, created_at_et, game_id, event_id, event_start_utc,
            market_family, settlement_market_id, threshold, side, participant_id, participant_name, team, opponent, american_price, decimal_price, stake, model_probability, conservative_probability,
            implied_probability, edge, ev, selection_score, score_components_json, selection_reason, freshness_status, quote_updated_utc, retrieved_at_utc, quote_age_min, model_version, price_source,
-           dependence_json, eggy_relation, leg_json, probability_basis, source_conservative_probability) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           dependence_json, eggy_relation, leg_json, probability_basis, source_conservative_probability, edge_class, edge_class_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (bet_id, cand["key"], EXPERIMENT_ID, COHORT, policy_digest(), et.eastern_today(now), day, rank, wave, _utc(now), _et(now), str(leg.game_id), leg.event_id, leg.game_start_utc,
          leg.market_family, settlement_market_id(leg), leg.threshold, leg.side, str(leg.participant_id), leg.participant_name, leg.team, leg.opponent, leg.american_price, sc["decimal"], STAKE,
          leg.model_probability, float(leg.conservative_probability), sc["implied"], sc["edge_value"], sc["ev"], sc["score"], json.dumps(sc["components"]), reason, leg.freshness_status,
          leg.quote_updated_utc, leg.retrieved_at_utc, leg.quote_age_min, leg.model_version, "LIVE_DRAFTKINGS", json.dumps(dep, sort_keys=True),
-         f"SAME_PLAYER_AND_MARKET_AS_EGGY_PICK_LEG:{rel} (a single here, a parlay leg there; separate ledgers, nothing staked twice)" if rel else "EGGY_NOT_INVOLVED", json.dumps(dataclasses.asdict(leg), default=str), cand.get("basis"), cand.get("source_p")))
+         f"SAME_PLAYER_AND_MARKET_AS_EGGY_PICK_LEG:{rel} (a single here, a parlay leg there; separate ledgers, nothing staked twice)" if rel else "EGGY_NOT_INVOLVED", json.dumps(dataclasses.asdict(leg), default=str), cand.get("basis"), cand.get("source_p"), cand["edge_class"], cand["edge_reason"]))
     return bet_id
 
 
@@ -545,8 +565,9 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         sc = score_leg(pleg, now, basis)
         cur = by_key.get(key)
         if cur is None or (leg.captured_at_utc or "") > (cur["leg"].captured_at_utc or ""):
+            ecls, ereason = edge_class(sc["edge_value"], basis)
             by_key[key] = {"leg": pleg, "key": key, "scored": sc, "score": sc["score"], "band": band_of(leg.american_price), "wave": game_wave.get(str(leg.game_id)), "basis": basis,
-                           "source_p": float(leg.conservative_probability)}
+                           "source_p": float(leg.conservative_probability), "edge_class": ecls, "edge_reason": ereason}
     cands, claimed = [], set(held_exposure)
     for c in sorted(by_key.values(), key=lambda c: (-c["score"], c["key"])):
         ek = exclusive_key(c["leg"].game_id, c["leg"].participant_id, c["leg"].market_family)
@@ -557,7 +578,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         cands.append(c)
     chosen_before = [{"leg": SimpleNamespace(game_id=r["game_id"], participant_id=r["participant_id"], team=r["team"], market_family=r["market_family"]), "band": band_of(r["american_price"])} for r in rows]
     eggy = _eggy_legs()
-    recorded_now, rank = [], len(rows)
+    recorded_now, rank, held_negative = [], len(rows), 0
     per_wave_before = Counter(r["wave_index"] for r in rows)
     waves_with_cands = sorted({c["wave"] for c in cands if c["wave"] is not None})
     for w in waves_with_cands:
@@ -567,7 +588,9 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         room = min(room, DAILY_TARGET - (len(rows) + len(recorded_now)))
         if room <= 0:
             continue
-        pool = [c for c in cands if c["wave"] == w and c not in recorded_now]
+        final_window = w in wave_start and (wave_start[w] - now).total_seconds() / 60.0 <= RELAX_MIN          # no better price for this wave can still arrive
+        pool = [c for c in cands if c["wave"] == w and c not in recorded_now and (final_window or c["edge_class"] != EDGE_NEGATIVE)]
+        held_negative += sum(1 for c in cands if c["wave"] == w and c not in recorded_now and c["edge_class"] == EDGE_NEGATIVE and not final_window)
         for c in select(pool, chosen_before + [x for x in recorded_now], room):
             dep = _dependence(c, chosen_before + recorded_now)
             try:
@@ -588,7 +611,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     shortfall = None
     if open_slots > 0:
         waiting_caps = {w: caps.get(w) for w in sorted(set(game_wave.values()))}
-        shortfall = {"target": DAILY_TARGET, "recorded": recorded_total, "slots_open": open_slots, "eligible_not_yet_recorded": len([c for c in cands if c not in recorded_now]),
+        shortfall = {"target": DAILY_TARGET, "recorded": recorded_total, "slots_open": open_slots, "eligible_not_yet_recorded": len([c for c in cands if c not in recorded_now]), "negative_edge_candidates_held_until_the_final_window": held_negative,
                      "legs_in_pool": len(legs), "not_eligible_reasons": dict(reasons.most_common(12)), "wave_caps": waiting_caps,
                      "sources": {k: (v.get("exclusion_reasons") if isinstance(v, dict) else None) for k, v in (collected.get("sources") or {}).items() if isinstance(v, dict) and v.get("exclusion_reasons")},
                      "why": ("fewer than 10 legitimate eligible bets exist so far today; slots are released with the puck-drop waves (later waves' prices are not captured yet)"
@@ -670,7 +693,7 @@ def status_doc(now: dt.datetime | None = None, conn=None) -> dict:
             "start_date": START_DATE, "end_date": END_DATE, "target_per_day": DAILY_TARGET, "stake_usd": STAKE, "odds_requirement": f"{int(ODDS_FLOOR)} or better",
             "recorded_today": len(rows), "exposure_today_usd": round(len(rows) * STAKE, 2), "bankroll": bal, "resets": resets, "bets_total": total,
             "record": {"wins": wins, "losses": losses, "voids": int(settled[2] or 0), "open": int(settled[3] or 0), "hit_rate": round(wins / (wins + losses), 4) if wins + losses else None},
-            "bets_today": [{k: r[k] for k in ("selection_rank", "market_family", "participant_name", "team", "threshold", "american_price", "conservative_probability", "edge", "result_status", "profit_loss", "eggy_relation")} for r in rows],
+            "edge_classes_today": dict(Counter(r["edge_class"] for r in rows)), "bets_today": [{k: r[k] for k in ("selection_rank", "market_family", "participant_name", "team", "threshold", "american_price", "conservative_probability", "edge", "edge_class", "result_status", "profit_loss", "eggy_relation")} for r in rows],
             "shortfall_today": (json.loads(daily["shortfall_json"]) if daily and daily["shortfall_json"] else None),
             "eggy": {"official_picks_per_day": 1, "note": "Eggy's Parlay Pick of the Day is separate: one official pick a day, its own ledger"},
             "ends_automatically": "2026-11-03 (Eastern): no new bets, the reset rule stops, open bets still settle"}

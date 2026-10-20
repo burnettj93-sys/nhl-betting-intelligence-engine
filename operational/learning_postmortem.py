@@ -1,6 +1,6 @@
 """Daily postmortem, 14-day scorecard and end-of-experiment review for the POSTMORTEM_LEARNING_14D paper cohort (operational/learning_cohort.py).
 
-READ-ONLY on the ledger and the official database; writes only its own JSON/markdown documents. Everything is computed from settled ticket results: funding events (the $1,400 start and any reset to $500) are
+READ-ONLY on the ledger and the official database; writes only its own JSON/markdown documents. Everything is computed from settled ticket results: funding events (the $500 start and any reset to $500) are
 never performance and appear only in their own lines. A bet that is open, UNRESOLVED (did not play: the void rule is unverified) or VOID never counts as a win or a loss. Recommendations only: nothing here
 changes a model, a threshold or a policy.
 """
@@ -84,6 +84,7 @@ def breakdown(bets: list[dict], key) -> list[dict]:
 
 def breakdowns(bets: list[dict]) -> dict:
     return {
+        "edge_class": breakdown(bets, lambda b: b.get("edge_class") or "unknown"),
         "market_type": breakdown(bets, lambda b: b["market_family"]),
         "price_band": breakdown(bets, lambda b: lc.band_of(b["american_price"])),
         "model_probability_band": breakdown(bets, lambda b: _band(_model_p(b), PROB_BANDS)),
@@ -94,6 +95,20 @@ def breakdowns(bets: list[dict]) -> dict:
         "data_freshness": breakdown(bets, lambda b: _band(b["quote_age_min"], FRESH_BANDS)),
         "selection_rank": breakdown(bets, lambda b: _band(b["selection_rank"], RANK_BANDS)),
     }
+
+
+def edge_class_table(bets: list[dict]) -> list[dict]:
+    """Results by the edge class assigned at recording time (POSITIVE_EDGE / NEUTRAL_UNCERTAIN_EDGE / LEARNING_SAMPLE_NEGATIVE_EDGE), each with the full set of measures. The classes are never merged into one number."""
+    out = []
+    for cls in lc.EDGE_CLASSES:
+        v = [b for b in bets if b.get("edge_class") == cls]
+        m = metrics(v)
+        out.append({"edge_class": cls, "n": m["placed"], "settled": m["settled"], "wins": m["wins"], "losses": m["losses"], "pushes_voids": m["voids"], "open": m["open"], "unresolved": m["unresolved"],
+                    "hit_rate": m["hit_rate"], "average_decimal_odds": m["average_decimal_odds"], "average_american_odds": m["average_american_odds_of_average_decimal"],
+                    "average_model_probability": m["average_model_probability"], "average_conservative_probability": m["average_conservative_probability"], "average_implied_probability": m["average_implied_probability"],
+                    "average_estimated_edge": m["average_edge_at_placement"], "profit_loss": m["profit_loss"], "roi": m["roi"], "expected_wins": m["expected_wins"], "expected_wins_conservative": m["expected_wins_conservative"],
+                    "actual_wins": m["actual_wins"], "calibration_delta": m["calibration_delta"], "calibration_z": m["calibration_z"], "brier": m["brier"]})
+    return out
 
 
 def daily_rows(bets: list[dict], today_day: int) -> list[dict]:
@@ -174,9 +189,9 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
         c = cls["per_bet"].get(b["bet_id"])
         day_lines.append({"rank": b["selection_rank"], "market": b["market_family"], "bet": f"{b['participant_name']} {'' if b['threshold'] is None else str(b['threshold']) + '+'} ({b['team']} vs {b['opponent']})",
                           "price": b["american_price"], "model_probability": _model_p(b), "edge": b["edge"], "result": b["result_status"], "profit_loss": b["profit_loss"],
-                          "classification": (c or {}).get("category"), "action": (c or {}).get("recommended_action")})
+                          "edge_class": b.get("edge_class"), "classification": (c or {}).get("category"), "action": (c or {}).get("recommended_action")})
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
-            "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_bets": day_lines, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
+            "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows), "day_bets": day_lines, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),
             "scorecard": daily_rows(all_rows, ph["day"] if ph["phase"] == "ACTIVE" else (14 if ph["phase"] == "ENDED" else 0)),
             "bankroll": {**bal, "label": "separate experiment bankroll (not Eggy's paper bankroll)", "note": "betting P/L is from settled tickets only; resets and the initial funding are funding events, never profit"},
@@ -227,9 +242,9 @@ def snapshot_section() -> dict:
                                   "start_date": lc.START_DATE, "end_date": lc.END_DATE}
     pm = load() or {}
     cb = pm.get("cumulative_breakdowns") or {}
-    keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
-    keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
-    keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
+    keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
+    keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
+    keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
     return {**status, "postmortem": keep, "final_report": load_final()}
 
 
@@ -282,6 +297,15 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
     underconf = [b for b in doc["calibration"] if b["z"] is not None and b["z"] >= SIGNIFICANT_Z and b["n"] >= 10]
     wellcal = [b for b in doc["calibration"] if b["z"] is not None and abs(b["z"]) < SIGNIFICANT_Z and b["n"] >= 10]
     integrity = cls.get("integrity_defects") or []
+    edge_classes = edge_class_table(all_rows)
+    byc = {r["edge_class"]: r for r in edge_classes}
+    p_, n_ = byc[lc.EDGE_POSITIVE], byc[lc.EDGE_NEGATIVE]
+    if p_["settled"] < 10 or n_["settled"] < 10:
+        edge_reading = (f"not enough settled bets to compare (positive-edge {p_['settled']}, negative-edge {n_['settled']}); the classes are reported separately above and no conclusion is drawn")
+    else:
+        gap = (p_["roi"] or 0) - (n_["roi"] or 0)
+        edge_reading = (f"positive-edge ROI {p_['roi']:.1%} vs negative-edge ROI {n_['roi']:.1%} (gap {gap:+.1%}); positive-edge calibration z {p_['calibration_z']}, negative-edge z {n_['calibration_z']}. "
+                        "A gap in the expected direction supports the edge calculation; a small sample, correlated same-game bets and the vig make this suggestive only")
     answers = {
         "1_markets_that_made_money": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) > 0],
         "2_markets_that_lost": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) <= 0],
@@ -302,8 +326,11 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         "14_challenger_work": [f for f, (v, _) in verdicts.items() if v == "CHALLENGER_IDEA"],
         "15_halt": ([{"integrity_defect": d} for d in integrity] if integrity else "none: a market is only recommended for halting on a repeated integrity defect, and none was found"),
         "market_verdicts": {f: {"recommendation": v, "reason": r} for f, (v, r) in verdicts.items()},
+        "edge_class_results": edge_classes,
+        "did_positive_edge_outperform": edge_reading,
     }
     pos = [f for f, (v, _) in verdicts.items() if v == "PROMOTE_CANDIDATE"]
+
     answers["16_normal_paper_book_policy"] = {
         "recommendation": ("Keep the normal paper-book policy as it is unless the evidence below supports a change; this report recommends, it does not apply."
                            + (f" Candidates to consider for a wider normal policy: {', '.join(pos)} (each must still pass its own review)." if pos else " No market met the bar for promotion (at least 30 settled bets, positive ROI and no significant miscalibration).")),

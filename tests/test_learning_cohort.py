@@ -60,6 +60,18 @@ class Base(unittest.TestCase):
     def _mem():
         return lc.open_ledger(":memory:")
 
+    def _bet(self, rank, game, pid, price, p, status, day=1, date="2026-10-20", fam="PLAYER_SOG_ALTERNATE", k=2, edge_class="NEUTRAL_UNCERTAIN_EDGE"):
+        stake = 10.0
+        pl = {"WIN": lc.pb_profit(stake, price) if hasattr(lc, "pb_profit") else (stake * price / 100.0 if price > 0 else stake * 100.0 / abs(price)), "LOSS": -stake}.get(status)
+        ret = {"WIN": stake + (pl or 0), "LOSS": 0.0}.get(status)
+        dec = 1 + (price / 100.0 if price > 0 else 100.0 / abs(price))
+        self.conn.execute(
+            """INSERT INTO bets (bet_id, idempotency_key, experiment_id, cohort, policy_digest, et_date, experiment_day, selection_rank, wave_index, created_at_utc, created_at_et, game_id, market_family, settlement_market_id,
+               threshold, side, participant_id, participant_name, team, opponent, american_price, decimal_price, stake, model_probability, conservative_probability, implied_probability, edge, ev, selection_score,
+               score_components_json, selection_reason, price_source, leg_json, quote_age_min, result_status, profit_loss, return_amount, edge_class) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (f"B{rank}{day}{pid}", f"K{rank}{day}{pid}", lc.EXPERIMENT_ID, lc.COHORT, lc.policy_digest(), date, day, rank, 0, "x", "x", game, fam, "PLAYER_SOG_2PLUS", k, "OVER", pid, "Player " + pid, "TOR", "MTL", price, dec, stake,
+             p, p - 0.02, 1 / dec, p - 0.02 - 1 / dec, 0.0, 0.5, "{}", "r", "LIVE_DRAFTKINGS", "{}", 12.0, status, pl, ret, edge_class))
+
     def cycle(self, legs, now=D1, fresh=True):
         if fresh:          # the quotes were just captured, whatever the test clock says
             stamp = lambda m: (now - dt.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -209,14 +221,14 @@ class TestSelectionAndRecording(Base):
 
 
 class TestBankroll(Base):
-    def test_starts_at_1400_and_each_bet_takes_10(self):
+    def test_starts_at_500_and_each_bet_takes_10(self):
         self.cycle([leg()])
         b = lc.balance(self.conn)
-        self.assertEqual((b["initial_funding"], b["cash"], b["open_stakes"], b["equity"], b["reset_count"]), (1400.0, 1390.0, 10.0, 1400.0, 0))
+        self.assertEqual((b["initial_funding"], b["cash"], b["open_stakes"], b["equity"], b["reset_count"]), (500.0, 490.0, 10.0, 500.0, 0))
 
     def test_resets_to_500_when_it_cannot_fund_the_next_bet_and_logs_a_non_performance_event(self):
         lc.ensure_funded(self.conn, D1)
-        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
+        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-495,0,1,'t')")
         self.assertEqual(lc.balance(self.conn)["cash"], 5.0)
         ev = lc.reset_if_needed(self.conn, D1, 1)
         self.assertEqual((ev["balance_before"], ev["amount"], ev["balance_after"]), (5.0, 495.0, 500.0))
@@ -228,7 +240,7 @@ class TestBankroll(Base):
 
     def test_a_reset_is_never_profit_and_never_a_returned_stake(self):
         lc.ensure_funded(self.conn, D1)
-        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
+        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-495,0,1,'t')")
         lc.reset_if_needed(self.conn, D1, 1)
         self.assertIsNone(lc.balance(self.conn)["roi"])
         self.assertEqual(lc.balance(self.conn)["betting_pl"], 0.0)
@@ -236,7 +248,7 @@ class TestBankroll(Base):
     def test_no_reset_when_the_bankroll_can_fund_a_bet_or_after_the_experiment_ends(self):
         lc.ensure_funded(self.conn, D1)
         self.assertIsNone(lc.reset_if_needed(self.conn, D1, 1))
-        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
+        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-495,0,1,'t')")
         self.assertIsNone(lc.reset_if_needed(self.conn, dt.datetime(2026, 11, 3, 15, tzinfo=dt.timezone.utc), 14))
 
     def test_funding_events_are_append_only_and_bets_are_never_deleted_or_edited(self):
@@ -254,7 +266,7 @@ class TestBankroll(Base):
 
     def test_a_reset_during_recording_keeps_the_ten_a_day_target(self):
         lc.ensure_funded(self.conn, D1)
-        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
+        self.conn.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-495,0,1,'t')")
         self.cycle([leg(pid=str(8470000 + i), game="1" if i % 2 else "2") for i in range(8)])
         self.assertEqual(lc.balance(self.conn)["reset_count"], 1)
         self.assertGreaterEqual(len(self.rows()), 7)
@@ -358,24 +370,12 @@ class TestActivationTool(unittest.TestCase):
             doc = lc.activate(D1, approved_by="owner", evidence="test", conn=c)
             self.assertEqual(doc["policy_digest"], lc.policy_digest())
             self.assertTrue(lc.is_authorised())
-            self.assertEqual(lc.balance(c)["initial_funding"], 1400.0)
+            self.assertEqual(lc.balance(c)["initial_funding"], 500.0)
             lc.activate(D1, approved_by="owner", evidence="again", conn=c)          # re-running never funds twice
-            self.assertEqual(lc.balance(c)["initial_funding"], 1400.0)
+            self.assertEqual(lc.balance(c)["initial_funding"], 500.0)
 
 
 class TestPostmortemAndScorecard(Base):
-    def _bet(self, rank, game, pid, price, p, status, day=1, date="2026-10-20", fam="PLAYER_SOG_ALTERNATE", k=2):
-        stake = 10.0
-        pl = {"WIN": lc.pb_profit(stake, price) if hasattr(lc, "pb_profit") else (stake * price / 100.0 if price > 0 else stake * 100.0 / abs(price)), "LOSS": -stake}.get(status)
-        ret = {"WIN": stake + (pl or 0), "LOSS": 0.0}.get(status)
-        dec = 1 + (price / 100.0 if price > 0 else 100.0 / abs(price))
-        self.conn.execute(
-            """INSERT INTO bets (bet_id, idempotency_key, experiment_id, cohort, policy_digest, et_date, experiment_day, selection_rank, wave_index, created_at_utc, created_at_et, game_id, market_family, settlement_market_id,
-               threshold, side, participant_id, participant_name, team, opponent, american_price, decimal_price, stake, model_probability, conservative_probability, implied_probability, edge, ev, selection_score,
-               score_components_json, selection_reason, price_source, leg_json, quote_age_min, result_status, profit_loss, return_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (f"B{rank}{day}{pid}", f"K{rank}{day}{pid}", lc.EXPERIMENT_ID, lc.COHORT, lc.policy_digest(), date, day, rank, 0, "x", "x", game, fam, "PLAYER_SOG_2PLUS", k, "OVER", pid, "Player " + pid, "TOR", "MTL", price, dec, stake,
-             p, p - 0.02, 1 / dec, p - 0.02 - 1 / dec, 0.0, 0.5, "{}", "r", "LIVE_DRAFTKINGS", "{}", 12.0, status, pl, ret))
-
     def test_metrics_use_settled_wins_and_losses_only(self):
         from operational import learning_postmortem as lpm
         lc.ensure_funded(self.conn, D1)
@@ -394,7 +394,7 @@ class TestPostmortemAndScorecard(Base):
         for i, price in enumerate([-145.0, -120.0, -105.0, 120.0, 200.0]):
             self._bet(i + 1, "1", str(i), price, 0.6, "WIN" if i % 2 else "LOSS")
         b = lpm.breakdowns(lpm.rows(self.conn))
-        self.assertEqual(set(b), {"market_type", "price_band", "model_probability_band", "edge_band", "game", "team", "player", "data_freshness", "selection_rank"})
+        self.assertEqual(set(b), {"edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "game", "team", "player", "data_freshness", "selection_rank"})
         self.assertEqual({r["group"] for r in b["price_band"]}, {"-150 to -131", "-130 to -111", "-110 to +100", "+101 to +150", "+151 and longer"})
         self.assertEqual({r["group"] for r in b["selection_rank"]}, {"ranks 1-3", "ranks 4-6"})
 
@@ -494,7 +494,7 @@ class TestPaperPerformancePanel(unittest.TestCase):
         cu = {"placed": 10, "settled": 10, "wins": 6, "losses": 4, "voids": 0, "hit_rate": 0.6, "profit_loss": 12.0, "roi": 0.12, "expected_wins": 5.9, "actual_wins": 6, "brier": 0.23}
         return {"cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "authorised": True, "phase": "ACTIVE", "day": 2, "days": 14, "start_date": "2026-10-20", "end_date": "2026-11-02",
                 "target_per_day": 10, "stake_usd": 10.0, "odds_requirement": "-150 or better", "recorded_today": 7, "exposure_today_usd": 70.0,
-                "bankroll": {"cash": 1330.0, "equity": 1400.0, "betting_pl": 12.0, "roi": 0.12, "reset_count": 1, "reset_funding_added": 495.0},
+                "bankroll": {"cash": 430.0, "equity": 500.0, "betting_pl": 12.0, "roi": 0.12, "reset_count": 1, "reset_funding_added": 495.0},
                 "record": {"wins": 6, "losses": 4, "voids": 0, "open": 7, "hit_rate": 0.6}, "resets": [{"at_et": "x EDT", "experiment_day": 2, "balance_before": 5.0, "amount": 495.0, "balance_after": 500.0, "reason": lc.RESET_REASON}],
                 "shortfall_today": {"target": 10, "recorded": 7, "slots_open": 3, "why": "fewer than 10 legitimate eligible bets exist so far today", "not_eligible_reasons": {"price not fresh": 4}, "eligible_not_yet_recorded": 0, "legs_in_pool": 11},
                 "bets_today": [{"selection_rank": 1, "market_family": "PLAYER_SOG_ALTERNATE", "participant_name": "A Player", "team": "TOR", "threshold": 2, "american_price": -135.0, "conservative_probability": 0.7,
@@ -512,7 +512,7 @@ class TestPaperPerformancePanel(unittest.TestCase):
         at = run_page("33_Paper_Performance.py", self._snap(self._section()))
         self.assertFalse(at.exception)
         t = self._text(at)
-        for needle in ("14-DAY POSTMORTEM LEARNING EXPERIMENT", "Day 2 of 14", "Today's target", "7/10", "-150 or better", "Experiment bankroll", "Total betting P/L", "Resets", "Total reset funding", "Eggy"):
+        for needle in ("14-DAY POSTMORTEM LEARNING EXPERIMENT", "Day 2 of 14", "Today's target", "7/10", "-150 or better", "Current cash", "Betting P/L", "Reset count", "Total reset funding", "Eggy"):
             self.assertIn(needle, t, needle)
         self.assertIn("Available cash", t)           # the model book is still there
 
@@ -615,7 +615,7 @@ class TestReviewFindings(Base):
     def test_initial_funding_can_only_happen_once(self):
         lc.ensure_funded(self.conn, D1)
         with self.assertRaises(sqlite3.DatabaseError):
-            lc._fund(self.conn, D1, "INITIAL", 1400.0, "x", 1)
+            lc._fund(self.conn, D1, "INITIAL", 500.0, "x", 1)
 
     def test_an_owner_pause_stops_recording_but_not_settlement(self):
         with mock.patch.object(lc, "_paused", return_value=True):
@@ -650,6 +650,100 @@ class TestReviewFindings(Base):
         s = lc.status_doc(D1, conn=self.conn)
         self.assertEqual(s["generated_at_utc"], "2026-10-20T21:00:00Z")
         self.assertEqual(json.loads(schema.strict_dumps(s))["recorded_today"], 1)
+
+
+class TestEdgeClasses(Base):
+    def test_classification_thresholds_and_anchoring(self):
+        self.assertEqual(lc.edge_class(0.05, "ANCHORED_RECORD_ESTIMATE")[0], "POSITIVE_EDGE")
+        self.assertEqual(lc.edge_class(0.02, "MARKET_NO_VIG")[0], "POSITIVE_EDGE")
+        self.assertEqual(lc.edge_class(0.05, "MODEL_PROBABILITY_UNANCHORED")[0], "NEUTRAL_UNCERTAIN_EDGE")
+        self.assertEqual(lc.edge_class(0.0, "ANCHORED_RECORD_ESTIMATE")[0], "NEUTRAL_UNCERTAIN_EDGE")
+        self.assertEqual(lc.edge_class(-0.02, "ANCHORED_RECORD_ESTIMATE")[0], "NEUTRAL_UNCERTAIN_EDGE")
+        self.assertEqual(lc.edge_class(-0.0201, "ANCHORED_RECORD_ESTIMATE")[0], "LEARNING_SAMPLE_NEGATIVE_EDGE")
+
+    def test_every_bet_is_tagged_at_recording_time_with_a_reason(self):
+        pos = leg(pid="8470001", p=0.80, model_probability=0.78, empirical_probability=0.80, empirical_hits=24, empirical_games=30, price=-130.0)
+        neu = leg(pid="8470002", p=0.58, price=-130.0)
+        self.cycle([pos, neu], now=dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc))
+        by = {r["participant_id"]: r for r in self.rows()}
+        self.assertEqual(by["8470001"]["edge_class"], "POSITIVE_EDGE")
+        self.assertIn("anchored", by["8470001"]["edge_class_reason"])
+        self.assertIn(by["8470002"]["edge_class"], ("NEUTRAL_UNCERTAIN_EDGE", "LEARNING_SAMPLE_NEGATIVE_EDGE"))
+        self.assertTrue(by["8470001"]["selection_reason"].startswith("POSITIVE_EDGE"))
+
+    def _neg(self, pid="8470009", game="1"):
+        return leg(pid=pid, game=game, p=0.50, model_probability=0.5, price=-148.0, empirical_games=30)
+
+    def test_a_negative_edge_candidate_waits_until_no_better_price_can_arrive_then_fills_the_sample(self):
+        early = dt.datetime(2026, 10, 20, 21, 0, tzinfo=dt.timezone.utc)           # 17:00 ET, two hours before the 19:00 drop
+        late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)           # 18:45 ET, inside the final 25 minutes
+        out = self.cycle([self._neg()], now=early)
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(out["recording"]["shortfall"]["negative_edge_candidates_held_until_the_final_window"], 1)
+        self.cycle([self._neg()], now=late)
+        r = self.rows()
+        self.assertEqual((len(r), r[0]["edge_class"]), (1, "LEARNING_SAMPLE_NEGATIVE_EDGE"))
+        self.assertIn("learning sample", r[0]["edge_class_reason"])
+
+    def test_negative_edge_never_displaces_a_better_candidate(self):
+        late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)
+        legs = [self._neg(pid=str(8471000 + i), game="1" if i % 2 else "2") for i in range(8)] + [leg(pid=str(8472000 + i), game="1" if i % 2 else "2", p=0.75) for i in range(5)]
+        self.cycle(legs, now=late)
+        cls = [r["edge_class"] for r in self.rows()]
+        self.assertGreaterEqual(len(cls), 5)
+        first_neg = next((i for i, c in enumerate(cls) if c == "LEARNING_SAMPLE_NEGATIVE_EDGE"), len(cls))
+        self.assertTrue(all(c != "LEARNING_SAMPLE_NEGATIVE_EDGE" for c in cls[:first_neg]))
+        self.assertEqual(sum(1 for c in cls[:first_neg]), 5)           # all five better candidates were taken before any negative one
+
+    def test_a_negative_edge_candidate_still_needs_every_gate(self):
+        late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)
+        bad = dataclasses.replace(self._neg(), identity_resolved=False)
+        self.cycle([bad, dataclasses.replace(self._neg(pid="8470010"), price_fresh=False), dataclasses.replace(self._neg(pid="8470011"), american_price=-155.0)], now=late)
+        self.assertEqual(self.rows(), [])
+
+    def test_the_edge_class_is_locked_on_the_ledger(self):
+        self.cycle([leg()])
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.conn.execute("UPDATE bets SET edge_class = 'POSITIVE_EDGE'")
+
+    def test_postmortem_reports_each_class_separately_with_every_measure(self):
+        from operational import learning_postmortem as lpm
+        for i, (cls, st, price) in enumerate([("POSITIVE_EDGE", "WIN", -120.0), ("POSITIVE_EDGE", "LOSS", -120.0), ("LEARNING_SAMPLE_NEGATIVE_EDGE", "LOSS", -145.0),
+                                              ("LEARNING_SAMPLE_NEGATIVE_EDGE", "WIN", -145.0), ("NEUTRAL_UNCERTAIN_EDGE", "WIN", 110.0)]):
+            self._bet(i + 1, "1", str(i), price, 0.6, st, edge_class=cls)
+        t = {r["edge_class"]: r for r in lpm.edge_class_table(lpm.rows(self.conn))}
+        self.assertEqual(set(t), {"POSITIVE_EDGE", "NEUTRAL_UNCERTAIN_EDGE", "LEARNING_SAMPLE_NEGATIVE_EDGE"})
+        p = t["POSITIVE_EDGE"]
+        self.assertEqual((p["n"], p["wins"], p["losses"], p["pushes_voids"], p["hit_rate"]), (2, 1, 1, 0, 0.5))
+        for k in ("average_decimal_odds", "average_model_probability", "average_implied_probability", "average_estimated_edge", "profit_loss", "roi", "expected_wins", "calibration_delta"):
+            self.assertIn(k, p)
+        self.assertNotEqual(p["profit_loss"], t["LEARNING_SAMPLE_NEGATIVE_EDGE"]["profit_loss"])
+        doc = lpm.build(self.conn, self.nhl, dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual(len(doc["day_edge_classes"]), 3)
+        self.assertEqual(len(doc["cumulative_edge_classes"]), 3)
+
+    def test_the_final_report_compares_the_classes_without_overclaiming(self):
+        from operational import learning_postmortem as lpm
+        lc.ensure_funded(self.conn, D1)
+        self._bet(1, "1", "1", -120.0, 0.6, "WIN", edge_class="POSITIVE_EDGE")
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(lpm.state_paths, "path", side_effect=lambda n, **k: Path(t) / n):
+            lpm.final_report_if_ready(self.conn, self.nhl, dt.datetime(2026, 11, 4, 12, 0, tzinfo=dt.timezone.utc))
+            rep = json.loads(Path(t, lpm.REPORT_NAME).read_text())
+        self.assertEqual(len(rep["answers"]["edge_class_results"]), 3)
+        self.assertIn("no conclusion is drawn", rep["answers"]["did_positive_edge_outperform"])
+
+    def test_the_reset_is_reachable_and_the_bankroll_starts_at_500(self):
+        lc.ensure_funded(self.conn, D1)
+        for i in range(49):
+            self._bet(i + 1, "1", f"p{i}", -120.0, 0.6, "LOSS")
+        self.assertEqual(lc.balance(self.conn)["cash"], 10.0)
+        self._bet(50, "1", "p50", -120.0, 0.6, "LOSS")
+        self.assertEqual(lc.balance(self.conn)["cash"], 0.0)
+        ev = lc.reset_if_needed(self.conn, D1, 5)
+        self.assertEqual((ev["balance_before"], ev["amount"], ev["balance_after"]), (0.0, 500.0, 500.0))
+        b = lc.balance(self.conn)
+        self.assertEqual((b["betting_pl"], b["reset_count"], b["reset_funding_added"], b["cash"]), (-500.0, 1, 500.0, 500.0))
+        self.assertEqual(b["roi"], -1.0)           # the reset never softens ROI
 
 
 if __name__ == "__main__":

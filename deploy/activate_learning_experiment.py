@@ -5,7 +5,7 @@ Activate the temporary 14-day PAPER learning experiment (POSTMORTEM_LEARNING_14D
     python3 -m deploy.activate_learning_experiment --apply     # if every check passes: write the activation log, then approve the policy digest (funds the experiment bankroll)
 
 Owner authorisation (chat, 2026-10-20), verbatim: "I AUTHORIZE A 14-DAY PAPER-BOOK LEARNING EXPERIMENT FROM OCTOBER 20 THROUGH NOVEMBER 2, 2026, TARGETING 10 REAL, ELIGIBLE PAPER BETS PER EASTERN DAY
-AT $10 EACH, WITH ACTUAL ODDS OF -150 OR BETTER." Plus the automatic bankroll reset to $500 when the experiment bankroll cannot fund the next $10 bet. PAPER ONLY; no real-money wagering is authorised.
+AT $10 EACH, WITH ACTUAL ODDS OF -150 OR BETTER." Owner corrections (chat, 2026-10-20): the experiment bankroll STARTS at $500.00 and is reset to $500.00 whenever cash falls below the next $10 stake; every bet carries an edge class (POSITIVE_EDGE / NEUTRAL_UNCERTAIN_EDGE / LEARNING_SAMPLE_NEGATIVE_EDGE). PAPER ONLY; no real-money wagering is authorised.
 Eggy stays at one official pick a day, on its own ledger. The experiment ends by itself on 2026-11-03 Eastern. Nothing here lowers an integrity gate, edits a probability or forces a bet.
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-EXPECTED = {"daily_target": 10, "stake_usd": 10.0, "odds_floor_american": -150.0, "initial_bankroll_usd": 1400.0, "reset_to_usd": 500.0, "reset_when_below_usd": 10.0, "days": 14,
+EXPECTED = {"daily_target": 10, "stake_usd": 10.0, "odds_floor_american": -150.0, "initial_bankroll_usd": 500.0, "reset_to_usd": 500.0, "reset_when_below_usd": 10.0, "days": 14,
             "start_date": "2026-10-20", "end_date": "2026-11-02"}
 EGGY_POLICY_DIGEST = "1fad3ba03503cf94"
 OWNER = ("owner (chat authorisation 2026-10-20: 14-day paper-book learning experiment, 10 real eligible paper bets per Eastern day at $10, actual odds -150 or better, "
@@ -60,7 +60,7 @@ def checks(now: dt.datetime) -> list[dict]:
         guarded = sorted(want - triggers)
         m.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
         ev = lc.reset_if_needed(m, now, lc.phase(now)["day"])
-        ok = not guarded and lc.balance(m)["initial_funding"] == 1400.0 and ev and ev["balance_after"] == 500.0
+        ok = not guarded and lc.balance(m)["initial_funding"] == 500.0 and ev and ev["balance_after"] == 500.0
         add("ledger_and_reset_rule_work", ok, f"missing protections: {guarded or 'none'}; rehearsal reset {ev}")
     except Exception as exc:  # noqa: BLE001
         add("ledger_and_reset_rule_work", False, f"{exc.__class__.__name__}: {exc}")

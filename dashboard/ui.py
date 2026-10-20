@@ -554,6 +554,20 @@ def recording_status_banner(rec: dict | None) -> None:
     banner(" · ".join(parts), "good")
 
 
+_EDGE_LABEL = {"POSITIVE_EDGE": "Positive edge", "NEUTRAL_UNCERTAIN_EDGE": "Neutral / uncertain", "LEARNING_SAMPLE_NEGATIVE_EDGE": "Learning sample: negative edge"}
+
+
+def _edge_class_table(rows_: list | None) -> None:
+    """The three edge classes side by side, never merged: N, W-L-P, hit rate, average odds, average model and implied probability, average estimated edge, P/L, ROI and calibration."""
+    if not rows_:
+        return
+    st.dataframe([{"Edge class": _EDGE_LABEL.get(r["edge_class"], r["edge_class"]), "N": r["n"], "W-L-P": f"{r['wins']}-{r['losses']}-{r['pushes_voids']}", "Hit rate": _lx_pct(r.get("hit_rate")),
+                   "Avg odds": (f"{r['average_american_odds']:+.0f}" if r.get("average_american_odds") is not None else "—"), "Avg model prob": _lx_pct(r.get("average_model_probability"), 1),
+                   "Avg implied prob": _lx_pct(r.get("average_implied_probability"), 1), "Avg est. edge": (f"{r['average_estimated_edge'] * 100:+.1f} pts" if r.get("average_estimated_edge") is not None else "—"),
+                   "P/L": signed_money(r["profit_loss"]) if r["settled"] else "—", "ROI": _lx_pct(r.get("roi"), 1),
+                   "Wins: expected vs actual": (f"{r['expected_wins']:.1f} vs {r['actual_wins']}" if r["settled"] else "—")} for r in rows_], hide_index=True, width="stretch")
+
+
 def _lx_pct(v, digits=0) -> str:
     return "—" if v is None else pct(v, digits)
 
@@ -584,11 +598,11 @@ def learning_experiment_panel(doc: dict | None) -> None:
     b[2].metric("Experiment ROI", _lx_pct(bank.get("roi"), 1))
     b[3].metric("Hit rate", _lx_pct(rec.get("hit_rate")), f"{rec.get('wins', 0)}-{rec.get('losses', 0)}-{rec.get('voids', 0)} · {rec.get('open', 0)} open", delta_color="off")
     c = st.columns(4)
-    c[0].metric("Experiment bankroll", money(bank.get("cash", 0)), f"equity {money(bank.get('equity', 0))}", delta_color="off")
-    c[1].metric("Total betting P/L", signed_money(bank.get("betting_pl", 0)))
-    c[2].metric("Resets", bank.get("reset_count", 0))
-    c[3].metric("Total reset funding", money(bank.get("reset_funding_added", 0)))
-    st.caption("A separate experiment bankroll that started at \\$1,400. Whenever it cannot fund the next \\$10 bet it is reset to \\$500.00 and the reset is logged as funding, never as profit; results come from settled bets only. "
+    c[0].metric("Current cash", money(bank.get("cash", 0)), f"equity {money(bank.get('equity', 0))}", delta_color="off")
+    c[1].metric("Betting P/L", signed_money(bank.get("betting_pl", 0)))
+    c[2].metric("Reset count", bank.get("reset_count", 0))
+    c[3].metric("Total reset funding (not profit)", money(bank.get("reset_funding_added", 0)))
+    st.caption("A separate experiment bankroll that started at \\$500.00. Whenever cash falls below the next \\$10 stake it is reset to \\$500.00; the reset is logged as funding, never as winnings or profit, and earlier losses are never erased; results come from settled bets only. "
                "Each day aims for 10 real, fresh, eligible paper bets at -150 or better; if fewer qualify the day records fewer and says why. Eggy's pick of the day is separate and unchanged.")
     sf = doc.get("shortfall_today")
     if sf and doc.get("recorded_today", 0) < doc.get("target_per_day", 10):
@@ -602,7 +616,7 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if bets:
         st.markdown("**Today's experiment bets**")
         st.dataframe([{"Rank": x["selection_rank"], "Market": x["market_family"].replace("_", " ").title(), "Bet": f"{x['participant_name']}" + ("" if x.get("threshold") is None else f" {x['threshold']}+"),
-                       "Team": x.get("team"), "Price": f"{x['american_price']:+.0f}", "Hit chance": _lx_pct(x.get("conservative_probability")), "Edge": f"{(x.get('edge') or 0) * 100:+.1f} pts",
+                       "Team": x.get("team"), "Price": f"{x['american_price']:+.0f}", "Hit chance": _lx_pct(x.get("conservative_probability")), "Edge": f"{(x.get('edge') or 0) * 100:+.1f} pts", "Edge class": _EDGE_LABEL.get(x.get("edge_class"), x.get("edge_class") or "—"),
                        "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
                        "Eggy": "Eggy leg" if str(x.get("eggy_relation", "")).startswith("SAME_PLAYER") else ""} for x in bets], hide_index=True, width="stretch")
     pm = doc.get("postmortem") or {}
@@ -617,6 +631,10 @@ def learning_experiment_panel(doc: dict | None) -> None:
         st.caption(f"Cumulative: {cu.get('placed', 0)} placed, {cu.get('settled', 0)} settled · {cu.get('wins', 0)}-{cu.get('losses', 0)}-{cu.get('voids', 0)} · hit rate {_lx_pct(cu.get('hit_rate'))} · P/L {signed_money(cu.get('profit_loss', 0))} · "
                    f"ROI {_lx_pct(cu.get('roi'), 1)} · expected wins {cu.get('expected_wins', 0)} vs actual {cu.get('actual_wins', 0)} · Brier {cu.get('brier') if cu.get('brier') is not None else '—'}. "
                    "A handful of bets says almost nothing about skill; same-game bets are not independent.")
+    if (pm.get("cumulative_edge_classes") or []) and any(r["n"] for r in pm["cumulative_edge_classes"]):
+        st.markdown("**By edge class (so far)**")
+        _edge_class_table(pm["cumulative_edge_classes"])
+        st.caption("Positive-edge, neutral and learning-sample negative-edge bets are reported separately so we can see whether the edge calculation predicts results.")
     if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
         dm = pm["day_metrics"]
         with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
@@ -627,6 +645,9 @@ def learning_experiment_panel(doc: dict | None) -> None:
             if db_:
                 st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Price": f"{x['price']:+.0f}", "Result": str(x["result"]).title(), "Why (classification)": x.get("classification") or "—", "Action": x.get("action") or "—"} for x in db_],
                              hide_index=True, width="stretch")
+            if pm.get("day_edge_classes"):
+                st.markdown("**By edge class**")
+                _edge_class_table(pm["day_edge_classes"])
             for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"),
                                ("selection_rank", "By selection rank"), ("data_freshness", "By data freshness"), ("team", "By team"), ("player", "By player")):
                 rows_ = (pm.get("day_breakdowns") or {}).get(key)
@@ -653,8 +674,12 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if fr:
         with st.expander("Final experiment report (recommendations only)", expanded=True):
             st.caption(fr.get("statement", ""))
+            if (fr.get("answers") or {}).get("edge_class_results"):
+                st.markdown("**Results by edge class**")
+                _edge_class_table(fr["answers"]["edge_class_results"])
+                st.caption(str(fr["answers"].get("did_positive_edge_outperform", "")))
             for k, v in (fr.get("answers") or {}).items():
-                if k == "market_verdicts":
+                if k in ("market_verdicts", "edge_class_results", "did_positive_edge_outperform"):
                     continue
                 st.markdown(f"**{k.split('_', 1)[0]}. {k.split('_', 1)[1].replace('_', ' ').capitalize()}**")
                 st.json(v, expanded=False)
