@@ -14,6 +14,12 @@ from dashboard import product_source as ps
 from dashboard import ui
 
 ui.header("Paper Performance", "What the model's paper book has done: cash, results, and every settled ticket. ")
+try:                                                      # the temporary 14-day paper learning experiment: its own bankroll and record, above and apart from the model book
+    ui.learning_experiment_panel(ps.learning_experiment())
+    st.divider()
+    st.markdown("### The model's \\$500 paper book (Eggy's tickets)")
+except Exception:  # noqa: BLE001 - an older snapshot without the section, or a failure here, never hides the main book
+    pass
 perf = ui.load(ps.performance, "Paper performance")
 acct, summ, origins = perf["account"], perf["summary"], perf["origins"]
 

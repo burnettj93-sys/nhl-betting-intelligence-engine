@@ -232,6 +232,12 @@ def _slate_board() -> dict:
     return slate_board.load() or {"generated_at_utc": None, "games": [], "primary": None}
 
 
+def _learning_experiment() -> dict:
+    """The temporary 14-day paper learning cohort (operational/learning_cohort.py): status, scorecard, postmortem and, once it exists, the final report. Written by the 10-minute trader."""
+    from operational import learning_postmortem
+    return learning_postmortem.snapshot_section()
+
+
 _SECTION_BUILDERS = {
     "tickets": _tickets,
     "product_meta": _product_meta,
@@ -244,6 +250,7 @@ _SECTION_BUILDERS = {
     "manual_orders": _manual_orders,
     "builder_pool": _builder_pool,
     "slate_board": _slate_board,
+    "learning_experiment": _learning_experiment,
     "day_status": _day_status,
     "performance": _performance,
     "morning_review": _morning_review,

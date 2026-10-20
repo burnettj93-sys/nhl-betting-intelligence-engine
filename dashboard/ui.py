@@ -554,6 +554,112 @@ def recording_status_banner(rec: dict | None) -> None:
     banner(" · ".join(parts), "good")
 
 
+def _lx_pct(v, digits=0) -> str:
+    return "—" if v is None else pct(v, digits)
+
+
+def learning_experiment_panel(doc: dict | None) -> None:
+    """The temporary 14-day paper learning experiment (operational/learning_cohort.py): its own bankroll, its own record, visibly separate from Eggy's pick and the normal paper book. Paper only."""
+    if not doc:
+        return
+    st.markdown("### 14-DAY POSTMORTEM LEARNING EXPERIMENT")
+    phase, day = doc.get("phase"), doc.get("day") or 0
+    if not doc.get("authorised"):
+        banner("<b>14-DAY POSTMORTEM LEARNING EXPERIMENT: not recording yet.</b> It starts recording as soon as the owner's activation is applied. Paper only; Eggy's pick is separate.", "info")
+        return
+    if phase == "ENDED":
+        banner("<b>14-DAY POSTMORTEM LEARNING EXPERIMENT: ended.</b> The window closed after November 2 (Eastern). Nothing new is recorded; open bets still settle and the final report is below once it is written. The normal paper-book policy continues.", "info")
+    else:
+        banner(f"<b>14-DAY POSTMORTEM LEARNING EXPERIMENT · Day {day} of {doc.get('days', 14)}</b> · paper only, separate from Eggy and the normal paper book · "
+               f"{esc(doc.get('start_date'))} to {esc(doc.get('end_date'))}, then it ends automatically", "good")
+    bank, rec = doc.get("bankroll") or {}, doc.get("record") or {}
+    a = st.columns(4)
+    a[0].metric("Today's target", doc.get("target_per_day", 10))
+    a[1].metric("Recorded today", f"{doc.get('recorded_today', 0)}/{doc.get('target_per_day', 10)}")
+    a[2].metric("Stake each", money(doc.get("stake_usd", 10)))
+    a[3].metric("Odds requirement", str(doc.get("odds_requirement", "-150 or better")))
+    b = st.columns(4)
+    b[0].metric("Today's exposure", money(doc.get("exposure_today_usd", 0)))
+    b[1].metric("Experiment P/L", signed_money(bank.get("betting_pl", 0)))
+    b[2].metric("Experiment ROI", _lx_pct(bank.get("roi"), 1))
+    b[3].metric("Hit rate", _lx_pct(rec.get("hit_rate")), f"{rec.get('wins', 0)}-{rec.get('losses', 0)}-{rec.get('voids', 0)} · {rec.get('open', 0)} open", delta_color="off")
+    c = st.columns(4)
+    c[0].metric("Experiment bankroll", money(bank.get("cash", 0)), f"equity {money(bank.get('equity', 0))}", delta_color="off")
+    c[1].metric("Total betting P/L", signed_money(bank.get("betting_pl", 0)))
+    c[2].metric("Resets", bank.get("reset_count", 0))
+    c[3].metric("Total reset funding", money(bank.get("reset_funding_added", 0)))
+    st.caption("A separate experiment bankroll that started at \\$1,400. Whenever it cannot fund the next \\$10 bet it is reset to \\$500.00 and the reset is logged as funding, never as profit; results come from settled bets only. "
+               "Each day aims for 10 real, fresh, eligible paper bets at -150 or better; if fewer qualify the day records fewer and says why. Eggy's pick of the day is separate and unchanged.")
+    sf = doc.get("shortfall_today")
+    if sf and doc.get("recorded_today", 0) < doc.get("target_per_day", 10):
+        with st.expander(f"Today: {sf.get('recorded')}/{sf.get('target')} recorded, why not 10"):
+            st.write(sf.get("why") or "")
+            reasons = sf.get("not_eligible_reasons") or {}
+            if reasons:
+                st.dataframe([{"Reason a candidate was not eligible": k, "Candidates": v} for k, v in reasons.items()], hide_index=True, width="stretch")
+            st.caption(f"{sf.get('eligible_not_yet_recorded', 0)} eligible now but held back by the puck-drop slot release · {sf.get('legs_in_pool', 0)} candidate legs examined.")
+    bets = doc.get("bets_today") or []
+    if bets:
+        st.markdown("**Today's experiment bets**")
+        st.dataframe([{"Rank": x["selection_rank"], "Market": x["market_family"].replace("_", " ").title(), "Bet": f"{x['participant_name']}" + ("" if x.get("threshold") is None else f" {x['threshold']}+"),
+                       "Team": x.get("team"), "Price": f"{x['american_price']:+.0f}", "Hit chance": _lx_pct(x.get("conservative_probability")), "Edge": f"{(x.get('edge') or 0) * 100:+.1f} pts",
+                       "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
+                       "Eggy": "Eggy leg" if str(x.get("eggy_relation", "")).startswith("SAME_PLAYER") else ""} for x in bets], hide_index=True, width="stretch")
+    pm = doc.get("postmortem") or {}
+    sc = pm.get("scorecard") or []
+    if sc:
+        st.markdown("**14-day scorecard**")
+        st.dataframe([{"Day": d["day"], "Date": d["date"], "Recorded": f"{d['recorded']}/{d['target']}", "W-L-P": f"{d['wins']}-{d['losses']}-{d['pushes_voids']}", "Hit rate": _lx_pct(d.get("hit_rate")),
+                       "P/L": signed_money(d["profit_loss"]) if d["recorded"] else "—", "ROI": _lx_pct(d.get("roi"), 1), "Avg odds (dec)": f"{d['average_decimal_odds']:.2f}" if d.get("average_decimal_odds") and d["recorded"] else "—",
+                       "Expected wins": f"{d['expected_wins']:.2f}" if d["recorded"] else "—", "Actual wins": str(d["actual_wins"]) if d["recorded"] else "—",
+                       "Calibration": f"{d['calibration_delta']:+.2f}" if d.get("calibration_delta") is not None else "—"} for d in sc if not d.get("is_future") or d["recorded"]], hide_index=True, width="stretch")
+        cu = pm.get("cumulative") or {}
+        st.caption(f"Cumulative: {cu.get('placed', 0)} placed, {cu.get('settled', 0)} settled · {cu.get('wins', 0)}-{cu.get('losses', 0)}-{cu.get('voids', 0)} · hit rate {_lx_pct(cu.get('hit_rate'))} · P/L {signed_money(cu.get('profit_loss', 0))} · "
+                   f"ROI {_lx_pct(cu.get('roi'), 1)} · expected wins {cu.get('expected_wins', 0)} vs actual {cu.get('actual_wins', 0)} · Brier {cu.get('brier') if cu.get('brier') is not None else '—'}. "
+                   "A handful of bets says almost nothing about skill; same-game bets are not independent.")
+    if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
+        dm = pm["day_metrics"]
+        with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
+            st.write(f"{dm['placed']} placed, {dm['settled']} settled: {dm['wins']} won, {dm['losses']} lost, {dm['voids']} void/push, {dm['unresolved']} unresolved, {dm['open']} open · hit rate {_lx_pct(dm.get('hit_rate'))} · "
+                     f"staked {money(dm['staked'])}, returned {money(dm['returned'])}, P/L {signed_money(dm['profit_loss'])} (ROI {_lx_pct(dm.get('roi'), 1)}) · expected wins {dm['expected_wins']} vs actual {dm['actual_wins']}")
+            st.caption(pm.get("closing_price_movement") or "")
+            db_ = pm.get("day_bets") or []
+            if db_:
+                st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Price": f"{x['price']:+.0f}", "Result": str(x["result"]).title(), "Why (classification)": x.get("classification") or "—", "Action": x.get("action") or "—"} for x in db_],
+                             hide_index=True, width="stretch")
+            for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"),
+                               ("selection_rank", "By selection rank"), ("data_freshness", "By data freshness"), ("team", "By team"), ("player", "By player")):
+                rows_ = (pm.get("day_breakdowns") or {}).get(key)
+                if rows_:
+                    st.markdown(f"**{label}**")
+                    st.dataframe([{"Group": r["group"], "Placed": r["placed"], "W": r["wins"], "L": r["losses"], "P/L": signed_money(r["profit_loss"]), "ROI": _lx_pct(r.get("roi"), 1)} for r in rows_], hide_index=True, width="stretch")
+    cb = pm.get("cumulative_breakdowns") or {}
+    if any(cb.values()):
+        with st.expander("Everything so far, by group"):
+            for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"), ("selection_rank", "By selection rank")):
+                if cb.get(key):
+                    st.markdown(f"**{label}**")
+                    st.dataframe([{"Group": r["group"], "Placed": r["placed"], "Settled": r["settled"], "W": r["wins"], "L": r["losses"], "Hit rate": _lx_pct(r.get("hit_rate")), "P/L": signed_money(r["profit_loss"]),
+                                   "ROI": _lx_pct(r.get("roi"), 1), "Expected wins": r["expected_wins"]} for r in cb[key]], hide_index=True, width="stretch")
+            if pm.get("calibration"):
+                st.markdown("**Calibration: predicted against actual**")
+                st.dataframe([{"Band": r["band"], "Settled": r["n"], "Predicted": _lx_pct(r.get("predicted"), 1), "Actual": _lx_pct(r.get("actual"), 1), "Wins vs expected": r.get("delta_wins")} for r in pm["calibration"]],
+                             hide_index=True, width="stretch")
+    if doc.get("bankroll", {}).get("reset_count"):
+        with st.expander(f"Bankroll resets ({bank.get('reset_count')}) · funding, not profit"):
+            st.dataframe([{"When (ET)": r["at_et"], "Day": r["experiment_day"], "Before": money(r["balance_before"]), "Added": money(r["amount"]), "After": money(r["balance_after"]), "Reason": r["reason"]}
+                          for r in (doc.get("resets") or [])], hide_index=True, width="stretch")
+    fr = doc.get("final_report")
+    if fr:
+        with st.expander("Final experiment report (recommendations only)", expanded=True):
+            st.caption(fr.get("statement", ""))
+            for k, v in (fr.get("answers") or {}).items():
+                if k == "market_verdicts":
+                    continue
+                st.markdown(f"**{k.split('_', 1)[0]}. {k.split('_', 1)[1].replace('_', ' ').capitalize()}**")
+                st.json(v, expanded=False)
+
+
 def _stale_on_open(quoted_at, start_utc) -> tuple[bool | None, float | None]:
     """Judged when the page is opened, from the provider's own quote time and the engine's price limit (the document's flags are from when it was built, up to ten minutes ago or more)."""
     from operational import quote_freshness as qf

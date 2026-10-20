@@ -98,6 +98,14 @@ def slate_board() -> dict:
     return sb.load() or {"generated_at_utc": None, "games": [], "primary": None}
 
 
+def learning_experiment() -> dict:
+    """The temporary 14-day paper learning cohort's status, scorecard and postmortem. Local mode reads the engine's own files."""
+    if _cloud():
+        return _wrap(cloud_snapshot.learning_experiment)
+    from operational import learning_postmortem
+    return learning_postmortem.snapshot_section()
+
+
 def day_status() -> dict:
     """The day's capture timeline (refresh, analysis, league pulls, waves, budget). Local mode reads the engine's own file."""
     if _cloud():
