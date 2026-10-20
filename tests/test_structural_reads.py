@@ -64,6 +64,10 @@ JUSTIFIED_EXCEPTIONS = {
     # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
     ("operational/board_scorecard.py", "player_game_stats"),
     ("operational/board_scorecard.py", "goalie_game_stats"),
+    # operational/ticket_loss_classifier.py explains a LOSING, already-settled paper ticket AFTER its game is final: it reads the official box score of that finished game (identity, ice time) and the same player's
+    # strictly EARLIER games (`game_date <` the ticket's game date) to compare with his own recent average. It is a post-mortem diagnosis of an outcome, never "what was known at prediction time" for a new
+    # prediction, feeds no pricing or decision, and writes nothing.
+    ("operational/ticket_loss_classifier.py", "player_game_stats"),
     # ingest/nhl_api.py's SELECTs are idempotency checks in the WRITE
     # path (spec item 5: "reingesting identical state stays idempotent")
     # -- they compare a candidate new row to the latest existing one to
