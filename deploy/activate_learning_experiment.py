@@ -58,7 +58,7 @@ def checks(now: dt.datetime) -> list[dict]:
         triggers = {r[0] for r in m.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         want = {"bets_entry_is_immutable", "bets_never_replaced", "funding_is_append_only_u", "funding_is_append_only_d", "bets_are_never_deleted"}
         guarded = sorted(want - triggers)
-        m.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-1395,0,1,'t')")
+        m.execute("INSERT INTO funding_events (at_utc, at_et, kind, balance_before, amount, balance_after, experiment_day, reason) VALUES ('x','x','TEST',0,-495,0,1,'t')")
         ev = lc.reset_if_needed(m, now, lc.phase(now)["day"])
         ok = not guarded and lc.balance(m)["initial_funding"] == 500.0 and ev and ev["balance_after"] == 500.0
         add("ledger_and_reset_rule_work", ok, f"missing protections: {guarded or 'none'}; rehearsal reset {ev}")

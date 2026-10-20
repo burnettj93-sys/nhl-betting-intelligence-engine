@@ -746,5 +746,66 @@ class TestEdgeClasses(Base):
         self.assertEqual(b["roi"], -1.0)           # the reset never softens ROI
 
 
+class TestEdgeClassReviewFixes(Base):
+    LATE = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)           # 18:45 ET: inside the final 25 minutes before the 19:00 drop
+
+    def _neg(self, pid, game="1", **kw):
+        return leg(pid=pid, game=game, p=0.50, model_probability=0.5, price=-148.0, empirical_games=30, **kw)
+
+    def test_a_negative_candidate_does_not_shadow_a_better_classed_alternative_of_the_same_exposure(self):
+        fav = ml(team="TOR", price=-140.0, p=0.5, market_probability=0.50)                                     # edge about -7 pts: negative
+        dog = dataclasses.replace(ml(team="MTL", price=120.0, p=0.46, market_probability=0.455), side="AWAY")  # edge about -1 pt: neutral
+        self.cycle([fav, dog], now=dt.datetime(2026, 10, 20, 21, 0, tzinfo=dt.timezone.utc))
+        self.assertEqual([(r["participant_id"], r["edge_class"]) for r in self.rows()], [("MTL", "NEUTRAL_UNCERTAIN_EDGE")])
+
+    def test_negative_fill_never_uses_the_relaxed_headroom_held_for_better_candidates(self):
+        legs = [self._neg(str(8473000 + i), game="1" if i % 2 else "2") for i in range(9)]
+        self.cycle(legs, now=self.LATE)
+        self.assertLessEqual(len(self.rows()), 7)           # wave 0's proportional cap (7 of 10), not the relaxed 9
+
+    def test_the_final_window_is_the_bets_own_game_not_the_waves_first_game(self):
+        games = (("1", START1), ("2", START1), ("4", "2026-10-21T00:15:00"))           # game 4 drops 75 minutes after the wave's first game
+        self.nhl.close()
+        self.nhl = nhl(games)
+        late_game = self._neg("8474001", game="4", game_start_utc="2026-10-21T00:15:00", provider_start_utc="2026-10-21T00:15:00Z")
+        self.cycle([late_game], now=self.LATE)
+        self.assertEqual(self.rows(), [])                  # 18:45 ET is 90 minutes before ITS puck drop: better prices can still arrive
+        self.cycle([late_game], now=dt.datetime(2026, 10, 20, 23, 52, tzinfo=dt.timezone.utc))          # 8 minutes before its own drop
+        self.assertEqual([r["edge_class"] for r in self.rows()], ["LEARNING_SAMPLE_NEGATIVE_EDGE"])
+
+    def test_the_comparison_text_never_overclaims(self):
+        from operational import learning_postmortem as lpm
+        lc.ensure_funded(self.conn, D1)
+        for i in range(32):
+            self._bet(i + 1, "1", f"a{i}", -120.0, 0.6, "WIN" if i % 2 else "LOSS", edge_class="POSITIVE_EDGE")
+            self._bet(i + 1, "1", f"b{i}", -120.0, 0.6, "WIN" if i % 3 else "LOSS", edge_class="LEARNING_SAMPLE_NEGATIVE_EDGE")
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(lpm.state_paths, "path", side_effect=lambda n, **k: Path(t) / n):
+            lpm.final_report_if_ready(self.conn, self.nhl, dt.datetime(2026, 11, 4, 12, 0, tzinfo=dt.timezone.utc))
+            rep = json.loads(Path(t, lpm.REPORT_NAME).read_text())
+        text = rep["answers"]["did_positive_edge_outperform"]
+        self.assertIn("did NOT outperform", text)
+        self.assertIn("suggestive only", text)
+
+    def test_the_morning_report_carries_each_edge_class_and_the_reset_funding_line(self):
+        from operational import daily_postmortem as dpm
+        row = {"edge_class": "POSITIVE_EDGE", "n": 3, "wins": 2, "losses": 1, "pushes_voids": 0, "hit_rate": 0.67, "average_model_probability": 0.7, "average_implied_probability": 0.6,
+               "average_estimated_edge": 0.03, "profit_loss": 4.0, "roi": 0.13, "expected_wins": 2.1, "actual_wins": 2}
+        dm = {"placed": 3, "settled": 3, "wins": 2, "losses": 1, "voids": 0, "hit_rate": 0.67, "profit_loss": 4.0, "roi": 0.13, "expected_wins": 2.1}
+        lcp = {"cohort": lc.COHORT, "postmortem_for": "2026-10-20", "day_metrics": dm, "day_edge_classes": [row], "cumulative_edge_classes": [row], "cumulative": dm,
+               "bankroll": {"cash": 490.0, "betting_pl": 4.0, "reset_count": 1, "reset_funding_added": 495.0}}
+        report = {"what_worked": "x", "what_didnt": "x", "why": [], "normal_variance_vs_systematic": "x", "investigate": [], "learning_cohort_postmortem": lcp}
+        with tempfile.TemporaryDirectory() as t:
+            md = dpm.write_report_markdown(report, out_dir=Path(t)).read_text()
+        self.assertIn("edge class POSITIVE_EDGE (day)", md)
+        self.assertIn("edge class POSITIVE_EDGE (cumulative)", md)
+        self.assertIn("$495.0 in funding (not profit)", md)
+        self.assertIn("betting P/L 4.0", md)
+
+    def test_the_initial_funding_note_states_the_corrected_start(self):
+        lc.ensure_funded(self.conn, D1)
+        row = self.conn.execute("SELECT amount, note FROM funding_events WHERE kind='INITIAL'").fetchone()
+        self.assertEqual((row["amount"], "500.00" in row["note"]), (500.0, True))
+
+
 if __name__ == "__main__":
     unittest.main()

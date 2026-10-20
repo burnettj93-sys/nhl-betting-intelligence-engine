@@ -300,12 +300,14 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
     edge_classes = edge_class_table(all_rows)
     byc = {r["edge_class"]: r for r in edge_classes}
     p_, n_ = byc[lc.EDGE_POSITIVE], byc[lc.EDGE_NEGATIVE]
-    if p_["settled"] < 10 or n_["settled"] < 10:
-        edge_reading = (f"not enough settled bets to compare (positive-edge {p_['settled']}, negative-edge {n_['settled']}); the classes are reported separately above and no conclusion is drawn")
+    if p_["settled"] < 30 or n_["settled"] < 30:
+        edge_reading = (f"not enough settled bets to compare the classes (positive-edge {p_['settled']}, negative-edge {n_['settled']}; at least 30 each are needed, and even then ROI is noisy); "
+                        "the classes are reported separately above and no conclusion is drawn")
     else:
         gap = (p_["roi"] or 0) - (n_["roi"] or 0)
-        edge_reading = (f"positive-edge ROI {p_['roi']:.1%} vs negative-edge ROI {n_['roi']:.1%} (gap {gap:+.1%}); positive-edge calibration z {p_['calibration_z']}, negative-edge z {n_['calibration_z']}. "
-                        "A gap in the expected direction supports the edge calculation; a small sample, correlated same-game bets and the vig make this suggestive only")
+        verdict = "positive-edge bets did outperform" if gap > 0 else "positive-edge bets did NOT outperform"
+        edge_reading = (f"{verdict}: positive-edge ROI {p_['roi']:.1%} vs negative-edge ROI {n_['roi']:.1%} (gap {gap:+.1%}); positive-edge calibration z {p_['calibration_z']}, negative-edge z {n_['calibration_z']}. "
+                        "With 30-ish bets per class a ROI gap of 30 points or more is within noise; same-game bets are correlated and the vig is not removed, so this is suggestive only")
     answers = {
         "1_markets_that_made_money": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) > 0],
         "2_markets_that_lost": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) <= 0],

@@ -210,7 +210,7 @@ def _fund(conn, now: dt.datetime, kind: str, amount: float, reason: str, day: in
 
 def ensure_funded(conn, now: dt.datetime) -> None:
     if conn.execute("SELECT 1 FROM funding_events WHERE kind = 'INITIAL'").fetchone() is None:
-        _fund(conn, now, "INITIAL", INITIAL_BANKROLL, "INITIAL_EXPERIMENT_FUNDING", phase(now)["day"] or 1, "14 days x 10 bets x $10")
+        _fund(conn, now, "INITIAL", INITIAL_BANKROLL, "INITIAL_EXPERIMENT_FUNDING", phase(now)["day"] or 1, "owner correction 2026-10-20: the experiment bankroll starts at $500.00")
         conn.commit()
 
 
@@ -355,6 +355,16 @@ def _reason_label(reason: str) -> str:
     """A reason with the leg's own label and the changing detail removed, so shortfall reasons aggregate ('price no longer fresh', not one line per leg)."""
     r = reason.split(": ", 1)[-1]
     return r.split(" (")[0].strip()
+
+
+def _own_final_window(leg, now: dt.datetime) -> bool:
+    """True when this game's puck drop is within RELAX_MIN (or has passed): no better price for it can still arrive."""
+    from operational import best_bets
+    raw = leg.provider_start_utc or leg.game_start_utc
+    if not raw:
+        return False
+    start = best_bets.effective_start(raw, leg.game_start_utc)
+    return (start - now).total_seconds() / 60.0 <= RELAX_MIN
 
 
 def day_waves(nhl_conn, et_date: str) -> tuple[dict, int, dict]:
@@ -542,6 +552,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     legs = collected.get("legs") or []
     game_wave, total_games, wave_start = day_waves(nhl_conn, today)
     caps = cumulative_caps(game_wave, total_games, wave_start, now) if total_games else {}
+    strict_caps = cumulative_caps(game_wave, total_games) if total_games else {}
     rows = _today_rows(conn, today)
     have_keys = {r["idempotency_key"] for r in conn.execute("SELECT idempotency_key FROM bets")}          # all days: a rescheduled game keeps its game_id
     held_exposure = {exclusive_key(r["game_id"], r["participant_id"], r["market_family"]) for r in rows}
@@ -569,7 +580,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
             by_key[key] = {"leg": pleg, "key": key, "scored": sc, "score": sc["score"], "band": band_of(leg.american_price), "wave": game_wave.get(str(leg.game_id)), "basis": basis,
                            "source_p": float(leg.conservative_probability), "edge_class": ecls, "edge_reason": ereason}
     cands, claimed = [], set(held_exposure)
-    for c in sorted(by_key.values(), key=lambda c: (-c["score"], c["key"])):
+    for c in sorted(by_key.values(), key=lambda c: (c["edge_class"] == EDGE_NEGATIVE, -c["score"], c["key"])):          # a negative-edge candidate never shadows a better-classed alternative of the same exposure
         ek = exclusive_key(c["leg"].game_id, c["leg"].participant_id, c["leg"].market_family)
         if ek in claimed:
             reasons["same exposure as a better-ranked or held bet (both sides of a moneyline, or another threshold of one player's statistic)"] += 1
@@ -588,10 +599,16 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         room = min(room, DAILY_TARGET - (len(rows) + len(recorded_now)))
         if room <= 0:
             continue
-        final_window = w in wave_start and (wave_start[w] - now).total_seconds() / 60.0 <= RELAX_MIN          # no better price for this wave can still arrive
-        pool = [c for c in cands if c["wave"] == w and c not in recorded_now and (final_window or c["edge_class"] != EDGE_NEGATIVE)]
-        held_negative += sum(1 for c in cands if c["wave"] == w and c not in recorded_now and c["edge_class"] == EDGE_NEGATIVE and not final_window)
-        for c in select(pool, chosen_before + [x for x in recorded_now], room):
+        others = [c for c in cands if c["wave"] == w and c not in recorded_now]
+        picks = select([c for c in others if c["edge_class"] != EDGE_NEGATIVE], chosen_before + recorded_now, room)
+        neg = [c for c in others if c["edge_class"] == EDGE_NEGATIVE]
+        ready = [c for c in neg if _own_final_window(c["leg"], now)]          # no better price for THIS game can still arrive
+        held_negative += len(neg) - len(ready)
+        strict_room = max(0, min(strict_caps.get(w, DAILY_TARGET), DAILY_TARGET) - (used + len(picks)))          # a negative-edge fill never uses the relaxed headroom held for better candidates
+        neg_room = min(room - len(picks), strict_room)
+        if ready and neg_room > 0:
+            picks += select(ready, chosen_before + recorded_now + picks, neg_room)
+        for c in picks:
             dep = _dependence(c, chosen_before + recorded_now)
             try:
                 conn.execute("SAVEPOINT bet")
