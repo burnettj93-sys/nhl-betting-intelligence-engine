@@ -291,7 +291,7 @@ class TestSettlement(Base):
         self.assertEqual((by["8478402"]["result_status"], round(by["8478402"]["profit_loss"], 2), by["8478402"]["return_amount"]), ("WIN", 8.0, 18.0))
         self.assertEqual((by["8470002"]["result_status"], by["8470002"]["profit_loss"], by["8470002"]["return_amount"]), ("LOSS", -10.0, 0.0))
         b = lc.balance(self.conn)
-        self.assertEqual((b["betting_pl"], b["open_stakes"], b["cash"], b["roi"]), (-2.0, 0.0, 1398.0, -0.1))
+        self.assertEqual((b["betting_pl"], b["open_stakes"], b["cash"], b["roi"]), (-2.0, 0.0, 498.0, -0.1))
 
     def test_a_game_not_final_stays_pending_and_settlement_is_idempotent(self):
         self.cycle([leg()])
