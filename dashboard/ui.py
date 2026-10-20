@@ -533,6 +533,27 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
         st.caption("This is the same ticket as the primary parlay on the board, not an extra bet. Hit chances are estimates with a range, not promises; any parlay can lose.")
 
 
+def recording_status_banner(rec: dict | None) -> None:
+    """One concise status line while automatic paper recording is ACTIVE (a paused state keeps its own notice). Nothing here stakes anything: paper only, $10 a ticket, only when every production gate passes."""
+    if not rec:
+        return
+    if rec.get("blocked_reason"):
+        banner(f"<b>{esc(rec.get('label') or 'AUTOMATIC PAPER RECORDING: BLOCKED')}</b> · {esc(rec['blocked_reason'])}. Existing tickets still settle and prices still refresh.", "warn")
+        return
+    if not rec.get("active"):
+        return
+    bank = rec.get("bankroll") or {}
+    cash, eq = bank.get("available_cash"), bank.get("equity")
+    nxt_s, nxt_p = (rec.get("next_settlement") or {}).get("label"), (rec.get("next_postmortem") or {}).get("label")
+    parts = [f"<b>{esc(rec.get('label') or 'AUTOMATIC PAPER RECORDING: ACTIVE')}</b>",
+             f"paper bankroll {money(cash)}" + (f" (equity {money(eq)})" if eq is not None and eq != cash else ""),
+             f"today: {rec.get('tickets_recorded_today', 0)} recorded · {rec.get('pending_today', 0)} pending · {rec.get('settled_today', 0)} settled",
+             f"${rec.get('stake_usd', 10):.0f} paper stake, up to {rec.get('daily_slots', 1)} ticket(s) a day, only when every production gate passes"]
+    if nxt_s and nxt_p:
+        parts.append(f"next daily settlement {esc(nxt_s)}, post-mortem {esc(nxt_p)} ({esc(rec.get('settlement_note') or '')})")
+    banner(" · ".join(parts), "good")
+
+
 def _stale_on_open(quoted_at, start_utc) -> tuple[bool | None, float | None]:
     """Judged when the page is opened, from the provider's own quote time and the engine's price limit (the document's flags are from when it was built, up to ten minutes ago or more)."""
     from operational import quote_freshness as qf

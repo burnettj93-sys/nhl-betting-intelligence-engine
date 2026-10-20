@@ -45,6 +45,7 @@ st.caption(f"Board built {ui.et_time(board.get('generated_at_utc'), True)} for E
 primary = board.get("primary") or {}
 st.subheader("Eggy's Parlay Pick of the Day")
 pol = board.get("policy") or {}
+ui.recording_status_banner(board.get("recording"))
 if board.get("recording_paused"):
     st.caption("Automatic recording is paused: this is the slip the selector would record, shown for review. Nothing is staked.")
 ui.eggy_candidate_card(board.get("eggy"), primary, recording_paused=bool(board.get("recording_paused")))

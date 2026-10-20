@@ -556,7 +556,7 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
         eggy = eggy_candidates.build(now, games=out_games, players_by_game=players_by_game, product=product, pool=pool, availability=availability, plan=plan, primary=primary)
     except Exception as exc:  # noqa: BLE001
         eggy = {"version": 1, "daily_output": "UNAVAILABLE", "headline": "Eggy's candidate search could not be built", "error": f"{exc.__class__.__name__}: {exc}"}
-    doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary, "eggy": eggy,
+    doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary, "eggy": eggy, "recording": (tickets or {}).get("recording"),
            "policy": (tickets or {}).get("ticket_policy"), "recording_paused": bool((tickets or {}).get("recording_paused")),
            "models": {"skaters": "player-rate-toi-v2 (corrected shots estimate, cap +0.02)", "goalies": "goalie-team-v1", "teams": "goalie-team-v1 strength model"},
            "previous_day": previous_day, "policy_error": policy_error, "haircut": round(haircut, 4), "input_errors": dict(saves_errors or {}), "notes": [
