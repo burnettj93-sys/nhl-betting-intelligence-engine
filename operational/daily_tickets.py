@@ -560,6 +560,34 @@ def mark_on_book(options: dict | None, bankroll_conn, et_date: str) -> dict | No
     return options
 
 
+def _next_et(now: dt.datetime, hour: int, minute: int) -> dt.datetime:
+    local = now.astimezone(et.EASTERN)
+    t = local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return t if t > local else t + dt.timedelta(days=1)
+
+
+def recording_status(now: dt.datetime, rows: list[dict], account: dict) -> dict:
+    """The one-line truth about automatic paper recording, published with the ticket board: is it on, the paper bankroll, what was recorded today, what is pending and settled, and when the next daily settlement
+    and post-mortem jobs run (the trader also settles every 10 minutes as games finish). While paused, the pause notice is shown instead (operational/recording_pause.py)."""
+    pause = recording_pause.status()
+    pending = sum(1 for r in rows if r.get("result_status") in ("PENDING", "UNRESOLVED"))
+    settled = sum(1 for r in rows if r.get("result_status") in ("WIN", "LOSS", "VOID"))
+    nxt_settle, nxt_pm = _next_et(now, 7, 15), _next_et(now, 7, 30)
+    try:
+        pol = ticket_policy.describe()
+        policy = {"policy_id": pol.get("policy_id"), "digest": pol.get("digest"), "approved": pol.get("approved")}
+    except Exception:  # noqa: BLE001 - the status line must never stop a cycle
+        policy = None
+    fmt = lambda t: t.strftime("%a %-I:%M %p ET")  # noqa: E731
+    return {"active": not pause["paused"], "label": "AUTOMATIC PAPER RECORDING: " + ("ACTIVE" if not pause["paused"] else "PAUSED"),
+            "bankroll": {"available_cash": account.get("available_cash"), "equity": account.get("equity"), "open_stakes": account.get("open_stakes")},
+            "tickets_recorded_today": len(rows), "pending_today": pending, "settled_today": settled, "stake_usd": pb.PAPER_BET_STAKE, "daily_slots": slot_count_for_display(),
+            "next_settlement": {"at_utc": nxt_settle.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "label": fmt(nxt_settle)},
+            "next_postmortem": {"at_utc": nxt_pm.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "label": fmt(nxt_pm)},
+            "settlement_note": "settlement also runs automatically every 10 minutes as games finish", "policy": policy,
+            "pause": pause if pause["paused"] else None}
+
+
 def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.ParlayResult], singles: list[rmp.ParlayLeg],
                 empty_reason: str | None, diagnostics: dict, record_results: list[dict], options: dict | None = None,
                 provisional: dict | None = None, proposed: bool = False) -> dict:
@@ -594,7 +622,7 @@ def build_state(bankroll_conn, now: dt.datetime, *, recommended: list[rmp.Parlay
     other_alerts = pb.ticket_alerts(bankroll_conn, [r["paper_bet_id"] for r in settled + open_rows])
     return {
         "date_et": et_date, "generated_at_utc": now.isoformat(),
-        "account": account, "slots": {"total": slot_count_for_display(), "used": slots_used, "empty": empty},
+        "account": account, "recording": recording_status(now, rows, account), "slots": {"total": slot_count_for_display(), "used": slots_used, "empty": empty},
         "tickets": cards, "empty_slot_reason": empty_reason if empty else None, "notice": notice,
         "origins": pb.origin_performance(bankroll_conn, TRACK),
         "singles": [single_card(l) for l in singles],

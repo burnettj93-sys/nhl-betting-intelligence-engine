@@ -42,6 +42,7 @@ _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 10 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
 ui.book_split(origins)
+ui.recording_status_banner(tk.get("recording"))
 if tk.get("notice"):
     ui.banner(ui.esc(tk["notice"]), "warn")
 if tk.get("label"):

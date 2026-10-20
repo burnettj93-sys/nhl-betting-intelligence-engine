@@ -365,6 +365,7 @@ def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
             entry = frozen.get((leg.get("game_id"), leg.get("participant_id"), leg.get("market_family"),
                                 leg.get("threshold")), leg)
             summary = {
+                "participant_id": leg.get("participant_id"),
                 "market_family": leg.get("market_family"), "participant_name": leg.get("participant_name"),
                 "threshold": leg.get("threshold"), "side": leg.get("side"), "game_id": leg.get("game_id"),
                 "actual_value": leg_result.get("actual_value"), "resolver_status": leg_result.get("status"),
@@ -391,7 +392,7 @@ def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
             "stake": bet["stake"], "profit_loss": bet.get("profit_loss"),
             "conservative_probability": bet.get("conservative_probability"),
             "recorded_price": bet.get("entry_odds"), "model_version": bet.get("model_version"),
-            "missed_legs": missed, "hit_legs": hit, "other_legs": other,
+            "missed_legs": missed, "hit_legs": hit, "other_legs": other, "frozen_legs": list(frozen.values()),
             "why": "; ".join(_describe(m) for m in missed) if missed else (
                 "no RESOLVED leg in this combo actually missed -- the loss is driven by a leg this "
                 "resolver could not grade (see other_legs), not a clean model miss"),
@@ -451,6 +452,13 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
     # rather than silently producing an empty/misleading section.
     if nhl_conn is not None:
         real_market_postmortems = real_market_parlay_loss_postmortems(conn, nhl_conn)
+        try:                                                  # every losing ticket gets a category and a recommended action from real signals (operational/ticket_loss_classifier.py); never a pause
+            from operational import ticket_loss_classifier
+            ticket_classification = ticket_loss_classifier.classify_all(real_market_postmortems, nhl_conn)
+            if not classified_failures:
+                classified_failures = ticket_classification["classified_failures"]
+        except Exception as exc:  # noqa: BLE001 - a classification failure must never stop the report; it is stated, not hidden
+            ticket_classification = {"error": f"{exc.__class__.__name__}: {exc}"}
         missed_by_family: dict[str, dict] = {}
         for pm in real_market_postmortems:
             for m in pm["missed_legs"]:
@@ -472,6 +480,7 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
     else:
         real_market_postmortems = "NHL_CONN_NOT_PROVIDED -- pass nhl_conn= to run_daily_postmortem() for per-loss leg detail"
         real_market_leg_miss_patterns = "NHL_CONN_NOT_PROVIDED"
+        ticket_classification = None
 
     issues = []
     for f in classified_failures:
@@ -508,6 +517,9 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
         "real_market_parlay_health": real_market_parlay_health,
         "real_market_parlay_postmortems": real_market_postmortems,
         "real_market_parlay_leg_miss_patterns": real_market_leg_miss_patterns,
+        "real_market_ticket_classification": ticket_classification,
+        "recording_policy_note": ("A losing ticket, a losing day or a losing streak never pauses recording; only a confirmed integrity defect can, by an owner or operator decision "
+                                  "(HALT_MARKET is a recommendation, nothing here pauses recording or disables a market)."),
         "failure_summary": summarize_failures([i["category"] for i in issues]),
     }
     return report
@@ -550,6 +562,18 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
         "## Normal variance vs. systematic", report["normal_variance_vs_systematic"], "",
         "## Recommended actions", *[f"- {i['category']}: {i['recommended_action']}" for i in report["investigate"]],
     ]
+    tc = report.get("real_market_ticket_classification")
+    if tc and not tc.get("error") and tc.get("tickets_classified"):
+        lines += ["", "## Losing tickets: why (classified from real signals)", f"- {tc['tickets_classified']} losing ticket(s); by category {tc['by_category']}; by recommended action {tc['by_action']}"]
+        for pm in report.get("real_market_parlay_postmortems") or []:
+            if isinstance(pm, dict) and pm.get("classification"):
+                lines.append(f"- {pm['ticket_id']}: {pm['classification']['category']} -> {pm['classification']['recommended_action']}")
+                for c in pm["classification"]["legs"]:
+                    lines.append(f"  - {c['label']}: {c['category']} ({c.get('recommended_action')}); evaluated {c['evaluated']}" + (f"; not evaluated {list(c['not_evaluated'])}" if c["not_evaluated"] else ""))
+        lines += [f"- INTEGRITY {d['category']} in {d['market_family']}: {d['recommended_action']} (tickets {d['tickets']})" for d in tc.get("integrity_defects") or []]
+        lines.append(f"- {tc['policy_note']}")
+    elif tc and tc.get("error"):
+        lines += ["", "## Losing tickets: why", f"- the classification could not be built: {tc['error']}"]
     rv = report.get("daily_review")
     if rv:
         lines += ["", f"## Daily review of {rv['review_date_et']} (Eastern)",
