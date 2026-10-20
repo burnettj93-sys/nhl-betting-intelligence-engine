@@ -503,8 +503,23 @@ def run_daily_postmortem(conn, *, classified_failures: list[dict] | None = None,
     if nhl_conn is not None:
         from operational import daily_review as _dr
         daily_review = _dr.build_review(conn, nhl_conn)
+    cohort_postmortem = None
+    if nhl_conn is not None:
+        try:                                                  # the temporary 14-day paper learning cohort has its own postmortem (operational/learning_postmortem.py); absent when it is not running
+            from operational import learning_cohort as _lc, learning_postmortem as _lpm
+            if _lc.is_authorised():
+                _c = _lc.connect()
+                try:
+                    _lpm.refresh(_c, nhl_conn, dt.datetime.now(dt.timezone.utc))
+                finally:
+                    _c.close()
+                _doc = _lpm.load() or {}
+                cohort_postmortem = {k: _doc.get(k) for k in ("cohort", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "cumulative", "bankroll", "loss_classification")}
+        except Exception as exc:  # noqa: BLE001 - a cohort failure never stops the main report; it is stated
+            cohort_postmortem = {"error": f"{exc.__class__.__name__}: {exc}"}
     report = {
         "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "learning_cohort_postmortem": cohort_postmortem,
         "daily_review": daily_review,
         "what_worked": _summarize_what_worked(scoreboard) if any_bets_settled else "WAITING_FOR_SETTLED_DATA",
         "what_didnt": _summarize_what_didnt(issues) if issues else (
@@ -579,6 +594,19 @@ def write_report_markdown(report: dict, *, out_dir: Path = REPORTS_DIR) -> Path:
         lines.append(f"- {tc['policy_note']}")
     elif tc and tc.get("error"):
         lines += ["", "## Losing tickets: why", f"- the classification could not be built: {tc['error']}"]
+    lcp = report.get("learning_cohort_postmortem")
+    if lcp and not lcp.get("error") and lcp.get("day_metrics"):
+        dm, cu, bk = lcp["day_metrics"], lcp["cumulative"], lcp["bankroll"]
+        lines += ["", f"## 14-day paper learning experiment: {lcp['postmortem_for']}",
+                  f"- placed {dm['placed']}, settled {dm['settled']}: {dm['wins']}W-{dm['losses']}L-{dm['voids']}V, hit rate {dm['hit_rate']}, P/L {dm['profit_loss']} (ROI {dm['roi']}), expected wins {dm['expected_wins']}",
+                  f"- cumulative {cu['settled']} settled: {cu['wins']}W-{cu['losses']}L, P/L {cu['profit_loss']}, ROI {cu['roi']}, expected {cu['expected_wins']}; current cash ${bk['cash']}, betting P/L {bk['betting_pl']}, {bk['reset_count']} reset(s) adding ${bk['reset_funding_added']} in funding (not profit)",
+                  "- separate from Eggy and the normal paper book; full detail in learning_experiment_postmortem.json"]
+        for _scope, _key in (("day", "day_edge_classes"), ("cumulative", "cumulative_edge_classes")):
+            for _r in lcp.get(_key) or []:
+                lines.append(f"- edge class {_r['edge_class']} ({_scope}): N {_r['n']}, {_r['wins']}W-{_r['losses']}L-{_r['pushes_voids']}P, hit rate {_r['hit_rate']}, avg model p {_r['average_model_probability']}, "
+                             f"avg implied p {_r['average_implied_probability']}, avg est. edge {_r['average_estimated_edge']}, P/L {_r['profit_loss']}, ROI {_r['roi']}, expected wins {_r['expected_wins']} vs actual {_r['actual_wins']}")
+    elif lcp and lcp.get("error"):
+        lines += ["", "## 14-day paper learning experiment", f"- its postmortem could not be built: {lcp['error']}"]
     rv = report.get("daily_review")
     if rv:
         lines += ["", f"## Daily review of {rv['review_date_et']} (Eastern)",

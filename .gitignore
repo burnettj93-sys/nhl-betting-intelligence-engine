@@ -140,6 +140,9 @@ operational/prospective_observations.db
 # a reproducible research artifact, never committed.
 operational/paper_bankroll.db
 
+# Temporary 14-day paper learning cohort ledger (owner authorisation 2026-10-20) -- accumulating operational data, never committed.
+operational/learning_cohort.db
+
 # User accounts / password hashes (P0.7, 2026-09-24 hardening block) --
 # real credential material (hashed, never plaintext, but still never
 # committed -- same rule as any other secret in this project).

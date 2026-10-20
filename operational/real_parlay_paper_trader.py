@@ -169,6 +169,11 @@ def run(now: dt.datetime | None = None) -> dict:
             manual_summary = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}", "processed": 0}
         stake_summary = daily_tickets.run_cycle(nhl_conn, bankroll_conn, now, collected=collected)
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
+        try:                                       # the temporary 14-day paper learning cohort (its own ledger; a no-op until the owner's approval is on file, and after 2026-11-02 Eastern)
+            from operational import learning_cohort
+            learning_summary = learning_cohort.run_cycle(nhl_conn, now, collected)
+        except Exception as exc:  # noqa: BLE001 - never stops the model book
+            learning_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
         if settlement_summary.get("settled"):
             daily_tickets.refresh_state_only(bankroll_conn, now)
         try:
@@ -189,7 +194,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh, "board_scorecard": scorecard_summary,
-              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary, "learning_cohort": learning_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],
@@ -197,10 +202,20 @@ def run(now: dt.datetime | None = None) -> dict:
         "insufficient_funds": stake_summary["insufficient_funds"], "status": "SUCCESS"})
     settled_count = (settlement_summary or {}).get("settled", 0)
     if (stake_summary["newly_recorded"] > 0 or settled_count > 0 or stake_summary["state_changed"]
-            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or df_summary.get("written") or _publish_heartbeat_due(now)):
+            or revalidation_summary.get("alerts_recorded") or manual_summary.get("processed") or df_summary.get("written") or _publish_heartbeat_due(now)
+            or _learning_changed(learning_summary)):
         from operational import cloud_publish_hook
         result["cloud_publish"] = cloud_publish_hook.publish_after("real_parlay_paper_trader")
     return result
+
+
+def _learning_changed(summary) -> bool:
+    """True when the learning cohort recorded or settled something this cycle (defensive: the summary's shape never matters to the model book's publish decision)."""
+    try:
+        rec, st = summary.get("recording"), summary.get("settlement")
+        return bool((isinstance(rec, dict) and rec.get("recorded_this_cycle")) or (isinstance(st, dict) and st.get("settled")))
+    except AttributeError:
+        return False
 
 
 if __name__ == "__main__":

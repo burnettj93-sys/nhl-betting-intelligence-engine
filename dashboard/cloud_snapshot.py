@@ -122,6 +122,10 @@ def day_status() -> dict:
     return _optional("day_status")
 
 
+def learning_experiment() -> dict:
+    return _optional("learning_experiment")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 
