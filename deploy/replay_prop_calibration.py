@@ -1,7 +1,8 @@
 """Does the review's recalibration of a skater probability help OUT OF TIME? (Replay of the player-prop intelligence on stored data.)
 
-The review (operational/eggy_intelligence.py `review_player`) replaces the skater model's calibrated probability with `model x factor` when history says the model ran high or low for players like this (one
-cell, 300+ cases, |z| >= 2). The evidence file's cells use all of 2025-26 and 2026-27 to date, so scoring the adjustment on those same rows would flatter it. This replay trains the cells on the games BEFORE a
+The review (operational/eggy_intelligence.py `review_player`) LOWERS the leg's own estimate to `model x factor` when history says the model ran HIGH for players like this (one cell, 300+ cases, |z| >= 2);
+it never raises an estimate (the leg's own number, capped by the anchor policy, is a ceiling). This replay scores that adopted rule ("lower_only") against the raw model and against the symmetric version first
+built. The evidence file's cells use all of 2025-26 and 2026-27 to date, so scoring the adjustment on those same rows would flatter it. This replay trains the cells on the games BEFORE a
 split date and scores raw against adjusted on the games AFTER it, for every market the review reads, with the same code (`analogue_cells`, `best_adjustment`) the review runs.
 
     python3 deploy/replay_prop_calibration.py --split 2026-02-01 --out docs/validation/eggy_prop_calibration_replay.json
@@ -47,8 +48,8 @@ def main() -> int:
     walked = walk(cfg, (2025, 2026), rows, with_baselines=False)
     idx = {(r["player_id"], r["date"]): r for r in rows}
     alphas, platt = val["dispersion"], val["platt_params"]
-    VARIANTS = {"full": lambda adj, p: min(max(p * adj["factor"], 0.001), 0.99), "half": lambda adj, p: min(max(p * (1 + 0.5 * (adj["factor"] - 1)), 0.001), 0.99),
-                "z3": lambda adj, p: (min(max(p * adj["factor"], 0.001), 0.99) if abs(adj["z"]) >= 3 else p)}
+    VARIANTS = {"symmetric": lambda adj, p: min(max(p * adj["factor"], 0.001), 0.99), "half_shrunk": lambda adj, p: min(max(p * (1 + 0.5 * (adj["factor"] - 1)), 0.001), 0.99),
+                "z3_only": lambda adj, p: (min(max(p * adj["factor"], 0.001), 0.99) if abs(adj["z"]) >= 3 else p), "lower_only": lambda adj, p: (min(max(p * adj["factor"], 0.001), 0.99) if adj["factor"] < 1 else p)}
     vb = {m: {v: 0.0 for v in VARIANTS} for m in B.P_BANDS}
     agg = {m: {"n": 0, "adjusted": 0, "up": 0, "down": 0, "raw_brier": 0.0, "adj_brier": 0.0, "raw_ll": 0.0, "adj_ll": 0.0, "y": 0.0, "raw_p": 0.0, "adj_p": 0.0, "adjusted_rows": {"n": 0, "y": 0.0, "raw_p": 0.0, "adj_p": 0.0, "raw_brier": 0.0, "adj_brier": 0.0}} for m in B.P_BANDS}
     bands: dict = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
@@ -68,7 +69,7 @@ def main() -> int:
             y = 1 if w["actual"][stat] >= k else 0
             cells = ei.analogue_cells(ctx, market, p, w["grp"], w["toi"], w["toi_pp"], team_p)
             adj = ei.best_adjustment(cells)
-            p2 = p if adj is None else min(max(p * adj["factor"], 0.001), 0.99)
+            p2 = p if adj is None else VARIANTS["lower_only"](adj, p)
             for vname, fn in VARIANTS.items():
                 vb[market][vname] += ((p if adj is None else fn(adj, p)) - y) ** 2
             g = agg[market]
@@ -80,9 +81,9 @@ def main() -> int:
             g["adj_brier"] += (p2 - y) ** 2
             g["raw_ll"] += _ll(p, y)
             g["adj_ll"] += _ll(p2, y)
-            if adj is not None:
+            if adj is not None and p2 != p:
                 g["adjusted"] += 1
-                g["up" if adj["factor"] > 1 else "down"] += 1
+                g["down"] += 1
                 s = g["adjusted_rows"]
                 s["n"] += 1
                 s["y"] += y
@@ -103,7 +104,7 @@ def main() -> int:
             continue
         s = g["adjusted_rows"]
         out["markets"][market] = {
-            "test_rows": n, "adjusted_rows": g["adjusted"], "adjusted_share": round(g["adjusted"] / n, 4), "adjusted_up": g["up"], "adjusted_down": g["down"], "observed_rate": round(g["y"] / n, 5),
+            "test_rows": n, "adjusted_rows": g["adjusted"], "adjusted_share": round(g["adjusted"] / n, 4), "adjusted_down": g["down"], "observed_rate": round(g["y"] / n, 5),
             "mean_raw": round(g["raw_p"] / n, 5), "mean_adjusted": round(g["adj_p"] / n, 5), "brier_raw": round(g["raw_brier"] / n, 6), "brier_adjusted": round(g["adj_brier"] / n, 6),
             "log_loss_raw": round(g["raw_ll"] / n, 6), "log_loss_adjusted": round(g["adj_ll"] / n, 6),
             "on_adjusted_rows": ({"n": s["n"], "observed_rate": round(s["y"] / s["n"], 5), "mean_raw": round(s["raw_p"] / s["n"], 5), "mean_adjusted": round(s["adj_p"] / s["n"], 5),
@@ -114,10 +115,10 @@ def main() -> int:
     print(f"replayed in {time.time() - t0:.0f}s")
     for m, v in out["markets"].items():
         ar = v["on_adjusted_rows"]
-        print(f"{m:11s} test {v['test_rows']:>6} adjusted {v['adjusted_share']:.1%} (up {v['adjusted_up']}, down {v['adjusted_down']}) | all rows Brier raw {v['brier_raw']:.5f} -> adj {v['brier_adjusted']:.5f} | "
+        print(f"{m:11s} test {v['test_rows']:>6} adjusted {v['adjusted_share']:.1%} (all lowered: {v['adjusted_down']}) | all rows Brier raw {v['brier_raw']:.5f} -> adj {v['brier_adjusted']:.5f} | "
               + (f"adjusted rows n={ar['n']}: observed {ar['observed_rate']:.4f}, raw {ar['mean_raw']:.4f}, adj {ar['mean_adjusted']:.4f}, Brier {ar['brier_raw']:.5f} -> {ar['brier_adjusted']:.5f}" if ar else "none adjusted"))
     for m, v in out["variants_brier"].items():
-        print(f"{m:11s} Brier raw {v['raw']:.6f} | full {v['full']:.6f} | half-shrunk {v['half']:.6f} | |z|>=3 only {v['z3']:.6f}")
+        print(f"{m:11s} Brier raw {v['raw']:.6f} | lower-only (adopted) {v['lower_only']:.6f} | symmetric {v['symmetric']:.6f} | half-shrunk {v['half_shrunk']:.6f} | |z|>=3 only {v['z3_only']:.6f}")
     return 0
 
 

@@ -16,9 +16,10 @@ from settled ticket results only. Historical results are never rewritten. Nothin
 Automatic end: on 2026-11-03 (Eastern) the experiment is over by date arithmetic alone, with no manual step: nothing new is recorded, the reset rule stops, open bets still settle. The normal paper-book policy was
 never changed and simply continues.
 
-Ranking (a transparent weighted score, not a recommendation): conservative probability 0.30, model probability 0.15, model edge at the last observed price 0.25, calibration confidence (how much evidence stands
-behind the estimate) 0.15, model quality 0.15; price age carries no weight. Diversification is a soft penalty while the day's bets are chosen (same game, same player, same market, same price band); a strong bet is never rejected only for sharing
-a game. Slots are released through the day with the puck-drop waves so early prices cannot use up all ten.
+Decisions and ranking (operational/eggy_intelligence.py; docs/EGGY_INTELLIGENCE.md): every eligible candidate is first REVIEWED (understand the game, the player, the market, why the model disagrees with the market,
+argue against the bet, does the thesis survive) and the review decides RECORD, LOWER_PRIORITY or PASS; a PASS is never recorded. The survivors are then ordered lexicographically (action, edge class, contradiction
+level, calibration confidence, hit chance, edge: there is NO weighted score) and a game that already holds three of the day's bets sends its further candidates behind every other game's. Each bet is stored with
+the review card it was recorded with. Slots are released through the day with the puck-drop waves so early prices cannot use up all ten; a LOWER_PRIORITY bet waits for the last 25 minutes before its own game.
 """
 from __future__ import annotations
 
@@ -34,6 +35,7 @@ from types import SimpleNamespace
 from operational import eastern_time as et
 from operational import eggy_intelligence as ei
 from operational import state_paths
+from research.product_models import matchup
 
 COHORT = "POSTMORTEM_LEARNING_14D"
 EXPERIMENT_ID = "LEARN-14D-2026-10-20"
@@ -76,13 +78,13 @@ POLICY = {
         "ranking": "lexicographic, no weighted score: action, edge class, contradiction level, calibration confidence, hit chance (nearest point), edge, then the bet's key",
         "same_game_soft_cap": ei.SAME_GAME_SOFT_CAP,
         "thresholds": {"edge_min": ei.EDGE_MIN, "z_significant": ei.Z_SIGNIFICANT, "min_cell_n": ei.MIN_CELL_N, "longshot_implied": ei.LONGSHOT_IMPLIED, "longshot_min_player_games": ei.LONGSHOT_MIN_PLAYER_GAMES,
-                       "thin_player_games": ei.THIN_PLAYER_GAMES},
-        "moneyline": "estimate = the market's no-vig probability (nothing shows a model beating it); the hockey model (eggy-matchup-v1) supplies the thesis: the model seeing value of 3+ points is a RECORD only while the "
-                     "model has led the market on the games priced so far (the evidence file); while the market has been the better guide, which is the case today, that disagreement is a LOWER_PRIORITY experiment; "
+                       "thin_player_games": ei.THIN_PLAYER_GAMES, "long_price_moneyline": [ei.LONG_PRICE_ML, ei.VERY_LONG_PRICE_ML], "long_price_prop": [ei.LONG_PRICE_PROP, ei.VERY_LONG_PRICE_PROP]},
+        "moneyline": "estimate = the market's no-vig probability (nothing shows a model beating it); the hockey model (eggy-matchup-v1) supplies the thesis: the model seeing value of 3+ points is a RECORD only once the "
+                     "model has led the market on the games priced so far by at least two standard errors (the evidence file); while it has not (the paired log-loss advantage is under two standard errors) that disagreement is a LOWER_PRIORITY experiment; "
                      "a fair-priced favourite is lower priority; a fair-priced underdog or a side the model thinks overpriced is a PASS; Elo plays no part",
         "props": "estimate = the calibrated skater model recalibrated by what happened to similar players in 2025-26 where history is clear (300+ cases, 2 standard errors), in either direction; a record needs 3+ points over the "
                  "price, contradiction no worse than MODERATE and calibration at least MEDIUM; a fair-priced event with a well-calibrated estimate is lower priority; a price far above the estimate is a PASS",
-        "evidence": "docs/validation/eggy_evidence.json",
+        "evidence": {"path": "docs/validation/eggy_evidence.json", "sha256": matchup.evidence_sha256(), "max_age_days": ei.EVIDENCE_MAX_AGE_DAYS, "stale_data_days": ei.STALE_DATA_DAYS},
     },
     "behaviour": {"relax_min": RELAX_MIN, "relaxed_reserve_max": RELAXED_RESERVE_MAX, "wave_span_min": WAVE_SPAN_MIN, "price_bands": [b[2] for b in PRICE_BANDS], "code_version": CODE_VERSION,
                   "exclusions": "one side of a game's moneyline; one threshold per player and statistic (PLAYER_SOG and PLAYER_SOG_ALTERNATE are the same statistic); the engine's leg gate (leg_is_eligible) applies unchanged",
@@ -538,7 +540,7 @@ def _record(conn, cand: dict, now: dt.datetime, day: int, rank: int, wave: int |
     reason = (f"{cand['edge_class']}; {card['action']['decision']} (rank {rank} of the day): {th['statement']} Action: {'; '.join(act['reasons'])}. Contradiction {card['contradiction']['level']}, calibration "
               f"{card['calibration_confidence']['level']}, decision confidence {card['decision_confidence']}. Price {po['status']} ({po['age_min']:.0f} min since last observed).")
     rk = cand["rank_key"]
-    components = json.dumps({"ranking": "lexicographic, no weighted score", "action": rk[0], "edge_class_order": rk[1], "contradiction_order": rk[2], "calibration_order": rk[3], "hit_chance_pct": -rk[4], "edge": -rk[5]})
+    components = json.dumps({"ranking": "lexicographic, no weighted score", "action": rk[0], "edge_class_order": rk[1], "contradiction_order": rk[2], "calibration_order": rk[3], "hit_chance": -rk[4], "edge": -rk[5]})
     conn.execute(
         """INSERT INTO bets (bet_id, idempotency_key, experiment_id, cohort, policy_digest, et_date, experiment_day, selection_rank, wave_index, created_at_utc, created_at_et, game_id, event_id, event_start_utc,
            market_family, settlement_market_id, threshold, side, participant_id, participant_name, team, opponent, american_price, decimal_price, stake, model_probability, conservative_probability,
@@ -665,7 +667,7 @@ def _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, re
         shortfall = {"target": DAILY_TARGET, "recorded": recorded_total, "slots_open": open_slots, "recommended_not_yet_recorded": len([c for c in cands if c not in recorded_now]),
                      "lower_priority_waiting_for_their_final_window": held_lower, "legs_in_pool": len(legs), "reasons_candidates_were_not_recorded": dict(reasons.most_common(14)), "wave_caps": waiting_caps,
                      "sources": {k: (v.get("exclusion_reasons") if isinstance(v, dict) else None) for k, v in (collected.get("sources") or {}).items() if isinstance(v, dict) and v.get("exclusion_reasons")},
-                     "why": ("fewer than 10 defensible bets exist so far today: Eggy records only what survives its review, and releases slots with the puck-drop waves (later waves' prices are not captured yet)"),
+                     "why": ("fewer than 10 defensible bets exist so far today: the cohort records only what survives its review, and releases slots with the puck-drop waves (later waves' prices are not captured yet)"),
                      **(extra or {})}
     conn.execute("INSERT INTO daily_records (et_date, experiment_day, target, recorded, eligible_now, slots_open, shortfall_json, updated_at_utc) VALUES (?,?,?,?,?,?,?,?) "
                  "ON CONFLICT(et_date) DO UPDATE SET recorded=excluded.recorded, eligible_now=excluded.eligible_now, slots_open=excluded.slots_open, shortfall_json=excluded.shortfall_json, updated_at_utc=excluded.updated_at_utc",
@@ -718,19 +720,28 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
             return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, [], [], reasons, 0, {"intelligence_unavailable": why_unusable})
     by_key: dict[str, dict] = {}
+    review_errors: Counter = Counter()
     for key, leg, pleg, basis in prelim:
-        card = ei.review_leg(ctx, pleg, basis, pleg.conservative_probability)
-        decision = card["action"]["decision"]
-        if decision == "PASS":
-            reasons[f"passed on judgment: {card['thesis']['type'].lower().replace('_', ' ')}"] += 1
+        try:                                         # one candidate's review (or a card of an unexpected shape) must cost only that candidate, never the cycle
+            card = ei.review_leg(ctx, pleg, basis, pleg.conservative_probability)
+            if card.get("kind") == "ERROR":
+                raise RuntimeError(card.get("error") or "the review failed")
+            decision = card["action"]["decision"]
+            if decision == "PASS":
+                reasons[f"passed on judgment: {card['thesis']['type'].lower().replace('_', ' ')}"] += 1
+                continue
+            ecls, ereason = ei.edge_class_of(card)
+            edge, _what = ei.edge_for_class(card)
+            est = float(card["estimate_used"])
+            mp = card.get("model_probability")
+            leg2 = dataclasses.replace(pleg, conservative_probability=round(est, 4), model_probability=(mp if mp is not None else pleg.model_probability))
+            entry = {"leg": leg2, "key": key, "card": card, "action": decision, "edge_class": ecls, "edge_reason": ereason, "edge": edge, "estimate": est, "band": band_of(leg.american_price),
+                     "wave": game_wave.get(str(leg.game_id)), "basis": basis, "source_p": float(leg.conservative_probability), "rank_key": ei.rank_key(card, ecls, est, edge, key)}
+        except Exception as exc:  # noqa: BLE001
+            review_errors[f"{exc.__class__.__name__}: {exc}"[:160]] += 1
+            reasons[f"the review failed ({exc.__class__.__name__}), not a judgment"] += 1
             continue
-        ecls, ereason = ei.edge_class_of(card)
-        edge, _what = ei.edge_for_class(card)
-        est = float(card["estimate_used"])
-        mp = card.get("model_probability")
-        leg2 = dataclasses.replace(pleg, conservative_probability=round(est, 4), model_probability=(mp if mp is not None else pleg.model_probability))
-        by_key[key] = {"leg": leg2, "key": key, "card": card, "action": decision, "edge_class": ecls, "edge_reason": ereason, "edge": edge, "estimate": est, "band": band_of(leg.american_price),
-                       "wave": game_wave.get(str(leg.game_id)), "basis": basis, "source_p": float(leg.conservative_probability), "rank_key": ei.rank_key(card, ecls, est, edge, key)}
+        by_key[key] = entry
     cands, claimed = [], set(held_exposure)
     for c in sorted(by_key.values(), key=lambda c: c["rank_key"]):          # the best-ranked of each exposure (both sides of a moneyline, thresholds of one player's statistic) claims it
         ek = exclusive_key(c["leg"].game_id, c["leg"].participant_id, c["leg"].market_family)
@@ -776,7 +787,12 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
             rank += 1
             c["rank"], c["reset"] = rank, reset
             recorded_now.append(c)
-    return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, recorded_now, cands, reasons, held_lower)
+    extra = {"review_errors": sum(review_errors.values()), "review_error_examples": dict(review_errors.most_common(3))} if review_errors else None
+    out = _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, recorded_now, cands, reasons, held_lower, extra)
+    if review_errors:
+        out["recording"]["review_errors"] = sum(review_errors.values())
+        out["recording"]["review_error_examples"] = dict(review_errors.most_common(3))
+    return out
 
 
 # --------------------------------------------------------------------------------------------------- settlement

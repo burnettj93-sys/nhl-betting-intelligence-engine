@@ -76,11 +76,17 @@ class TestWhatToLearn(unittest.TestCase):
         self.assertEqual(s["confidence"], "NOT_INCREASED")
 
     def test_a_bad_decision_that_lost_is_a_process_failure_and_the_loss_is_not_blamed_for_losing(self):
-        s = self.sig(BAD, "LOSS", p=0.14)
+        s = self.sig(BAD, "LOSS", p=0.86)                                  # p is the probability of what happened: a longshot (14% to win) that lost
         self.assertEqual(s["signal"], "BAD_DECISION_LOST")
         self.assertFalse(s["variance"])
         self.assertIn("likelier outcome", s["text"])
-        self.assertIn("86%", s["text"])
+        self.assertIn("14% to win", s["text"])
+
+    def test_the_text_follows_the_probability_a_likely_bet_that_lost_is_not_called_the_likelier_outcome(self):
+        s = self.sig(BAD, "LOSS", p=0.30)                                  # Eggy gave it 70% to win and it lost
+        self.assertIn("70% to win", s["text"])
+        self.assertIn("less likely outcome", s["text"])
+        self.assertNotIn("likelier outcome", s["text"].replace("less likely outcome", ""))
 
     def test_a_questionable_decision_that_lost_is_neither_punished_nor_excused(self):
         s = self.sig(QUESTIONABLE, "LOSS")
@@ -260,6 +266,28 @@ class TestAssess(unittest.TestCase):
         a = ed.assess(dict(BET, market_family="PLAYER_SOG_ALTERNATE"), c, ed.facts_for(BET, c, self.nhl, idx))
         self.assertEqual((a["decision_quality"]["label"], a["classification"], a["recommended_action"]), (GOOD, "NORMAL_VARIANCE", "NO_ACTION"))
         self.assertIn("earned", a["why"])
+
+    def test_a_data_integrity_defect_means_the_loss_is_never_earned_variance(self):
+        c = card(estimate=0.62, claims=PLAYER_CLAIMS)
+        idx = ed.index_rows([mp_skater("8480000", 16.5, 2.2, shots=1)], [], [2026020151])
+        facts = ed.facts_for(BET, c, self.nhl, idx)
+        clean = ed.assess(dict(BET, market_family="PLAYER_SOG_ALTERNATE"), c, facts)
+        self.assertEqual(clean["classification"], "NORMAL_VARIANCE")
+        defective = ed.assess(dict(BET, market_family="PLAYER_SOG_ALTERNATE"), c, facts, integrity_defect=True)
+        self.assertNotEqual(defective["classification"], "NORMAL_VARIANCE")
+        self.assertEqual(defective["lesson"]["signal"], "GOOD_DECISION_LOST_NOT_VARIANCE")
+        self.assertIn("integrity defect", defective["lesson"]["text"])
+
+    def test_a_null_box_score_value_is_unknown_not_a_did_not_play(self):
+        self.nhl.execute("INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played, revision_number, effective_at_utc, observed_at_utc, source) "
+                         "VALUES (2026020151,'8480000','VAN',NULL,NULL,NULL,NULL,NULL,1,'x','x','test')")
+        self.nhl.commit()
+        c = card(claims=PLAYER_CLAIMS)
+        facts = ed.facts_for(BET, c, self.nhl, ed.index_rows([], [], [2026020151]))
+        self.assertIsNone(facts["player"]["played"])
+        got = {x["id"]: x for x in ed.review_claims(c, BET, facts)}
+        self.assertNotIn("played", got)
+        self.assertNotIn("expected_toi", got)                                           # no ice time to compare: nothing is claimed
 
     def test_a_good_decision_that_lost_with_a_failed_claim_is_not_variance(self):
         c = card(estimate=0.62, claims=PLAYER_CLAIMS)

@@ -86,7 +86,7 @@ def _skater_facts(bet: dict, nhl_conn, index: dict | None) -> dict | None:
         p = nhl_conn.execute("SELECT toi_minutes, goals, assists, shots, played FROM player_game_stats WHERE game_id = ? AND player_id = ? ORDER BY revision_number DESC LIMIT 1", (gid, pid)).fetchone()
         if p:
             return {"source": "NHL box score", "toi": None if p["toi_minutes"] is None else round(p["toi_minutes"], 1), "toi_pp": None, "shots": p["shots"], "goals": p["goals"], "assists": p["assists"],
-                    "points": (p["goals"] or 0) + (p["assists"] or 0), "played": bool(p["played"])}
+                    "points": (p["goals"] or 0) + (p["assists"] or 0), "played": None if p["played"] is None else bool(p["played"])}
     return None
 
 
@@ -113,6 +113,28 @@ def facts_for(bet: dict, card: dict, nhl_conn, index: dict | None = None) -> dic
     if (card or {}).get("kind") == "PLAYER":
         out["player"] = _skater_facts(bet, nhl_conn, index)
     return out
+
+
+FACTS_SETTLE_DAYS = 3          # the MoneyPuck game logs (power-play time, expected goals) land within a day or two; after this many days a review is final whatever has landed
+
+
+def facts_are_complete(card: dict | None, facts: dict | None, *, bet_date: str | None = None, now_date: str | None = None) -> bool:
+    """True when every fact the review can ever use has landed (a skater's MoneyPuck line, a game's two team rows), or the bet is old enough that waiting longer would not help. A review built from the
+    official box score alone is provisional: the box score has no power-play time and no expected goals."""
+    if facts is None:
+        return False
+    try:
+        old_enough = bool(bet_date and now_date and (dt.date.fromisoformat(now_date) - dt.date.fromisoformat(bet_date)).days >= FACTS_SETTLE_DAYS)
+    except ValueError:
+        old_enough = False
+    kind = (card or {}).get("kind")
+    if kind == "PLAYER":
+        landed = (facts.get("player") or {}).get("source") == "MoneyPuck game log"
+    elif kind == "MONEYLINE":
+        landed = bool((facts.get("game") or {}).get("team_stats"))
+    else:
+        landed = True
+    return landed or old_enough
 
 
 # ------------------------------------------------------------------------------------------------ the thesis, checked against what happened
@@ -150,7 +172,7 @@ def review_claims(card: dict, bet: dict, facts: dict | None) -> list[dict]:
     pf = facts.get("player")
     if not pf:
         return [_claim("player", "the player's game", None, None, "NOT_TESTABLE", "the player's game data has not landed yet")]
-    if pf.get("played") is False or (pf.get("toi") in (None, 0) and pf.get("source") == "NHL box score"):
+    if pf.get("played") is False or (pf.get("toi") == 0 and pf.get("source") == "NHL box score"):          # an unknown (NULL) value is not a did-not-play
         out.append(_claim("played", "the player plays", True, False, "FAILED", "the player did not play"))
         return out
     exp = {c["id"]: c.get("value") for c in card.get("claims") or []}
@@ -159,9 +181,12 @@ def review_claims(card: dict, bet: dict, facts: dict | None) -> list[dict]:
         d = pf["toi"] - et_
         verdict = "HELD" if d >= -TOI_HELD else ("FAILED" if d <= -TOI_FAILED else "PARTLY_HELD")          # the claim is the opportunity he would get: more ice time than expected only supports the bet
         out.append(_claim("expected_toi", f"expected {et_:.1f} minutes on ice", round(et_, 1), pf["toi"], verdict, f"played {pf['toi']:.1f} ({d:+.1f})"))
-    if ep is not None and ep >= PP_MATERIAL and pf.get("toi_pp") is not None:
-        verdict = "HELD" if pf["toi_pp"] >= 0.5 * ep else ("FAILED" if pf["toi_pp"] < 0.25 else "PARTLY_HELD")
-        out.append(_claim("expected_pp", f"expected {ep:.2f} power-play minutes", round(ep, 2), pf["toi_pp"], verdict, f"had {pf['toi_pp']:.2f}"))
+    if ep is not None and ep >= PP_MATERIAL:
+        if pf.get("toi_pp") is None:
+            out.append(_claim("expected_pp", f"expected {ep:.2f} power-play minutes", round(ep, 2), None, "NOT_TESTABLE", "the box score carries no power-play time; the MoneyPuck game log lands later and completes this check"))
+        else:
+            verdict = "HELD" if pf["toi_pp"] >= 0.5 * ep else ("FAILED" if pf["toi_pp"] < 0.25 else "PARTLY_HELD")
+            out.append(_claim("expected_pp", f"expected {ep:.2f} power-play minutes", round(ep, 2), pf["toi_pp"], verdict, f"had {pf['toi_pp']:.2f}"))
     stat = {"PLAYER_SOG_ALTERNATE": "shots", "PLAYER_SOG": "shots", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals"}.get(bet["market_family"])
     if stat and es is not None and pf.get(stat) is not None:
         out.append(_claim("expected_stat", f"expected {stat} {es:.2f}", round(es, 2), pf[stat], "INFORMATION", f"had {pf[stat]:g}"))
@@ -188,7 +213,12 @@ def learning_signal(quality: str, outcome: str, claims: list[dict], p_outcome: f
         return {"signal": "QUESTIONABLE_DECISION_WON", "text": "a questionable decision that won: no reward; the win does not make the reasoning better.", "confidence": "NOT_INCREASED", "variance": None}
     # a loss
     if quality == BAD:
-        chance = "" if p_outcome is None else f" The loss itself was the likelier outcome (Eggy gave the bet {1 - p_outcome:.0%} to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game."
+        if p_outcome is None:
+            chance = ""
+        elif 1.0 - p_outcome <= 0.5:
+            chance = (f" The loss itself was the likelier outcome (Eggy gave the bet {1 - p_outcome:.0%} to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.")
+        else:
+            chance = (f" Eggy gave the bet {1 - p_outcome:.0%} to win, so the loss was the less likely outcome, but what is being judged is the decision, and the flaws in it were visible before the game.")
         return {"signal": "BAD_DECISION_LOST", "text": "a bad decision that lost: a process failure, not variance." + chance, "confidence": "REDUCED_FOR_THIS_PATTERN", "variance": False}
     if quality == QUESTIONABLE:
         return {"signal": "QUESTIONABLE_DECISION_LOST", "text": "a questionable decision that lost: no punishment for the loss itself, but the doubts in the review were real.", "confidence": "UNCHANGED", "variance": False}
@@ -228,15 +258,16 @@ def process_category(card: dict, claims: list[dict]) -> tuple[str, str]:
     return "UNKNOWN", "no specific cause could be established from the data"
 
 
-def assess(bet: dict, card: dict | None, facts: dict | None) -> dict:
-    """Everything the postmortem says about one bet's decision: quality, claims checked, the lesson, and the category/action when the loss is not earned variance."""
+def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False) -> dict:
+    """Everything the postmortem says about one bet's decision: quality, claims checked, the lesson, and the category/action when the loss is not earned variance. `integrity_defect` is the loss classifier's
+    verdict that the bet's data was defective (stale data treated as fresh, an identity failure, a pipeline failure): such a loss is never earned variance."""
     q = decision_quality(card or {})
     claims = review_claims(card or {}, bet, facts) if card else []
     est = (card or {}).get("estimate_used")
     outcome = bet.get("result_status")
     p_outcome = None if est is None or outcome not in ("WIN", "LOSS") else (est if outcome == "WIN" else 1.0 - est)
     cal = ((card or {}).get("calibration_confidence") or {}).get("level")
-    lesson = learning_signal(q["label"], outcome, claims, p_outcome, cal)
+    lesson = learning_signal(q["label"], outcome, claims, p_outcome, cal, integrity_defect)
     cat, why, action = None, None, "NO_ACTION"
     if outcome == "LOSS":
         if lesson["variance"]:

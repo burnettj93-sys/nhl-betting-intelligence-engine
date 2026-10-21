@@ -50,8 +50,10 @@ def threshold_from_label(label: str | None) -> int | None:
 def leg_dict_label(leg: dict, price=None) -> str:
     """bet_label for a leg dict of any surface (a ticket leg, a candidate leg, a ledger leg). The family is the leg's own (`market_family`, else its market key, else its candidate code); the threshold is the
     leg's own or, for an older frozen leg, the one in its label; the price is the leg's recorded or quoted one. A leg that names no market falls back to its own label, never to a guess."""
-    name = leg.get("participant_name") or leg.get("participant") or leg.get("name") or leg.get("team")
     fam = leg.get("market_family") or FAMILY_OF_KEY.get(leg.get("market_key")) or CODE_FAMILY.get(leg.get("code"))
+    name = leg.get("participant_name") or leg.get("participant") or leg.get("name")
+    if not name and fam == "MONEYLINE":
+        name = leg.get("team")                    # a team is the participant of a moneyline only: for any other market the team is NOT the bet's name
     if not name or not fam:
         return str(leg.get("label") or name or "unknown bet")
     threshold = leg.get("threshold")

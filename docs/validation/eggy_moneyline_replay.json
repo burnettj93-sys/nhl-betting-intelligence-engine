@@ -156,42 +156,42 @@
    "n": 0
   },
   "LOWER_PRIORITY": {
-   "n": 53,
-   "wins": 24,
-   "hit_rate": 0.4528,
-   "expected_wins_market": 26.64,
-   "expected_wins_hockey_model": 28.82,
-   "average_price_decimal": 1.94,
-   "flat_roi": -0.1255,
+   "n": 56,
+   "wins": 26,
+   "hit_rate": 0.4643,
+   "expected_wins_market": 28.11,
+   "expected_wins_hockey_model": 30.31,
+   "average_price_decimal": 1.941,
+   "flat_roi": -0.1023,
    "roi_95_interval": [
-    -0.372,
-    0.126
+    -0.352,
+    0.165
    ]
   },
   "PASS": {
-   "n": 80,
-   "wins": 33,
-   "hit_rate": 0.4125,
-   "expected_wins_market": 34.13,
-   "expected_wins_hockey_model": 30.33,
-   "average_price_decimal": 2.328,
-   "flat_roi": -0.1179,
+   "n": 77,
+   "wins": 31,
+   "hit_rate": 0.4026,
+   "expected_wins_market": 32.67,
+   "expected_wins_hockey_model": 28.85,
+   "average_price_decimal": 2.342,
+   "flat_roi": -0.1344,
    "roi_95_interval": [
-    -0.346,
-    0.123
+    -0.367,
+    0.106
    ]
   }
  },
  "new_actions_by_kind": {
   "underdogs": {
    "RECORD": 0,
-   "LOWER_PRIORITY": 19,
-   "PASS": 66
+   "LOWER_PRIORITY": 21,
+   "PASS": 64
   },
   "favourites": {
    "RECORD": 0,
-   "LOWER_PRIORITY": 34,
-   "PASS": 14
+   "LOWER_PRIORITY": 35,
+   "PASS": 13
   }
  },
  "longshots_plus_200_or_longer": {
@@ -472,7 +472,7 @@
    "old_class": "LEARNING_SAMPLE_NEGATIVE_EDGE",
    "new_action": "PASS",
    "new_thesis": "MODEL_SAYS_OVERPRICED",
-   "new_contradiction": "SEVERE"
+   "new_contradiction": "HIGH"
   },
   {
    "game_id": "2026020068",
@@ -509,7 +509,7 @@
    "old_edge": -0.0231,
    "old_class": "LEARNING_SAMPLE_NEGATIVE_EDGE",
    "new_action": "LOWER_PRIORITY",
-   "new_thesis": "LIKELY_WINNER_AT_FAIR_PRICE",
+   "new_thesis": "COIN_FLIP_AT_FAIR_PRICE",
    "new_contradiction": "LOW"
   },
   {
@@ -527,9 +527,9 @@
    "eligible": true,
    "old_edge": -0.0203,
    "old_class": "LEARNING_SAMPLE_NEGATIVE_EDGE",
-   "new_action": "PASS",
-   "new_thesis": "UNDERDOG_AT_FAIR_PRICE",
-   "new_contradiction": "HIGH"
+   "new_action": "LOWER_PRIORITY",
+   "new_thesis": "COIN_FLIP_AT_FAIR_PRICE",
+   "new_contradiction": "LOW"
   },
   {
    "game_id": "2026020070",
@@ -3434,9 +3434,9 @@
    "eligible": true,
    "old_edge": -0.0241,
    "old_class": "LEARNING_SAMPLE_NEGATIVE_EDGE",
-   "new_action": "PASS",
-   "new_thesis": "UNDERDOG_AT_FAIR_PRICE",
-   "new_contradiction": "HIGH"
+   "new_action": "LOWER_PRIORITY",
+   "new_thesis": "COIN_FLIP_AT_FAIR_PRICE",
+   "new_contradiction": "LOW"
   },
   {
    "game_id": "2026020149",
@@ -3453,8 +3453,8 @@
    "eligible": true,
    "old_edge": -0.023,
    "old_class": "LEARNING_SAMPLE_NEGATIVE_EDGE",
-   "new_action": "PASS",
-   "new_thesis": "UNDERDOG_AT_FAIR_PRICE",
+   "new_action": "LOWER_PRIORITY",
+   "new_thesis": "COIN_FLIP_AT_FAIR_PRICE",
    "new_contradiction": "LOW"
   },
   {

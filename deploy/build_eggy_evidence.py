@@ -5,7 +5,8 @@ Builds docs/validation/eggy_evidence.json: the historical evidence Eggy's intell
     python3 -m deploy.build_eggy_evidence            # writes docs/validation/eggy_evidence.json
 
 What it records (every number reproducible from the files; seeds fixed):
-  matchup     the team model `eggy-matchup-v1` (research/product_models/matchup.py): how its feature set and half-life were chosen (2014-2016 only), its fitted coefficients, its chronological test
+  matchup     the team model `eggy-matchup-v1` (research/product_models/matchup.py): how its feature set was chosen (2014-2016 only; the 30-game half-life and 10-game shrink were chosen in exploratory
+              work on the same seasons and are fixed constants in matchup.py, not re-derived here), its fitted coefficients, its chronological test
               (expanding window over 2017-2025) against the home-rate baseline, goal differential alone and goal + expected-goal differential, reliability by probability band, the spread of matchup
               sizes (for naming a gap SLIGHT .. DOMINANT), and a prospective comparison with the market on the games priced since October 8.
   skater      calibration "cells" for the validated skater model's probabilities (goals, points, shots), from the held-out 2025-26 season plus the current season to date: predicted against observed
@@ -30,13 +31,12 @@ if str(REPO) not in sys.path:
 
 OUT = REPO / "docs" / "validation" / "eggy_evidence.json"
 VERSION = "eggy-evidence-v1"
-VALIDATION_SEASONS = (2014, 2015, 2016)          # feature set and half-life were chosen on these only
+VALIDATION_SEASONS = (2014, 2015, 2016)          # the feature set is chosen on these only (the half-life and shrink are fixed constants of matchup.py)
 TEST_SEASONS = tuple(range(2017, 2026))          # 2020-21 included: the season is short but real
 CANDIDATES = {
     "gd": ("gd",), "gd+xgd": ("gd", "xgd"), "gd+xgd+b2b": ("gd", "xgd", "b2b"), "gd+xgd+hd+b2b": ("gd", "xgd", "hd", "b2b"),
     "gd+xgd+cf5+b2b": ("gd", "xgd", "cf5", "b2b"), "gd+xgd+pp+pk+b2b": ("gd", "xgd", "pp", "pk", "b2b"), "gd+xgd+fin+b2b": ("gd", "xgd", "fin", "b2b"),
 }
-FINAL = "gd+xgd+hd+b2b"
 
 
 def _np():
@@ -60,15 +60,24 @@ def walk_features(rows: list[dict]) -> list[dict]:
     games = _paired(rows)
     st = M.State()
     out = []
-    for g in games:
-        h, a = g["h"], g["a"]
-        f = {m: st.est(h["t"], m) - st.est(a["t"], m) for m in ("gd", "xgd", "hd", "cf5", "pp", "pk", "fin", "xgd5")}
-        rh, ra = st.rest_days(h["t"], h["d"]), st.rest_days(a["t"], a["d"])
-        f["b2b"] = float(ra <= 1) - float(rh <= 1)
-        y = None if h["gf"] == a["gf"] else int(h["gf"] > a["gf"])
-        out.append({"game": h["g"], "date": h["d"], "season": h["s"], "home": h["t"], "away": a["t"], "y": y, "f": f})
-        st.update(h)
-        st.update(a)
+    i = 0
+    while i < len(games):                      # a day at a time: every game of a date is featured from the state through the PREVIOUS date, exactly as the live review builds it
+        d = games[i]["h"]["d"]
+        j = i
+        while j < len(games) and games[j]["h"]["d"] == d:
+            j += 1
+        day = games[i:j]
+        for g in day:
+            h, a = g["h"], g["a"]
+            f = {m: st.est(h["t"], m) - st.est(a["t"], m) for m in ("gd", "xgd", "hd", "cf5", "pp", "pk", "fin", "xgd5")}
+            rh, ra = st.rest_days(h["t"], h["d"]), st.rest_days(a["t"], a["d"])
+            f["b2b"] = float(ra <= 1) - float(rh <= 1)
+            y = None if h["gf"] == a["gf"] else int(h["gf"] > a["gf"])
+            out.append({"game": h["g"], "date": h["d"], "season": h["s"], "home": h["t"], "away": a["t"], "y": y, "f": f})
+        for g in day:
+            st.update(g["h"])
+            st.update(g["a"])
+        i = j
     return out
 
 
@@ -131,6 +140,9 @@ def build_matchup(rows: list[dict], log=print) -> tuple[dict, dict]:
         val[name] = round(float(L.mean()), 5)
     log(f"  validation 2014-2016: {val}")
     chosen = min(val, key=val.get)
+    if CANDIDATES[chosen] != M.MODEL_FEATURES:
+        raise SystemExit(f"the validation chose {chosen} {CANDIDATES[chosen]} but research/product_models/matchup.py hard-codes MODEL_FEATURES = {M.MODEL_FEATURES}: "
+                         "change the model and this builder together (otherwise every moneyline would read as having no hockey view)")
     # 2. the test, only for the chosen set and the baselines
     test = {}
     base_losses = {}
@@ -236,12 +248,19 @@ def _prospective(coefs: dict, rows: list[dict], log=print) -> dict | None:
     sides = [(r["H"] - r["M"]) for r in out] + [-(r["H"] - r["M"]) for r in out]
     mean = sum(sides) / len(sides)
     res["disagreement_sd"] = round(math.sqrt(sum((s - mean) ** 2 for s in sides) / len(sides)), 4)
+    # the paired, per-game difference in log loss (market less model): positive when the model was the better guide. Only a difference well beyond its standard error counts as the model leading.
+    d = [ll(r["M"], r["y"]) - ll(r["H"], r["y"]) for r in out]
+    d_mean = sum(d) / len(d)
+    d_se = math.sqrt(sum((x - d_mean) ** 2 for x in d) / (len(d) - 1) / len(d)) if len(d) > 1 else None
+    res["paired_difference"] = {"market_minus_model_log_loss": round(d_mean, 5), "standard_error": None if d_se is None else round(d_se, 5), "z": None if not d_se else round(d_mean / d_se, 2), "games": len(d),
+                                "reading": "positive: the model was the better guide; the model counts as leading only when z is at least 2"}
     lg = lambda p: math.log(min(max(p, 1e-4), 1 - 1e-4) / (1 - min(max(p, 1e-4), 1 - 1e-4)))
-    grid = [i / 50.0 for i in range(-50, 101)]
+    grid = [i / 50.0 for i in range(-150, 151)]          # the weight on the disagreement, from -3 to +3: wide enough that the interval is never the grid's edge
     loss = {k: sum(ll(1 / (1 + math.exp(-(lg(r["M"]) + k * (lg(r["H"]) - lg(r["M"]))))), r["y"]) for r in out) for k in grid}
     best = min(loss, key=loss.get)
     ok = [k for k in grid if loss[k] - loss[best] <= 1.92]
-    res["weight_on_disagreement"] = {"best": round(best, 2), "ci95": [round(min(ok), 2), round(max(ok), 2)], "reading": "k=0 trusts the market, k=1 trusts the model; with this few games the interval is far too wide to say either"}
+    res["weight_on_disagreement"] = {"best": round(best, 2), "ci95": [round(min(ok), 2), round(max(ok), 2)], "grid": [grid[0], grid[-1]],
+                                     "reading": "k=0 trusts the market, k=1 trusts the model; with this few games the interval is far too wide to say either"}
     log(f"  prospective: {res['games']} games, log loss {res['log_loss']}, k {res['weight_on_disagreement']}")
     return res
 

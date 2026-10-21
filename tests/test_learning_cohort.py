@@ -286,6 +286,25 @@ class TestIntelligenceDecidesTheBets(Base):
         self.assertEqual(json.loads(r["score_components_json"])["ranking"], "lexicographic, no weighted score")
         self.assertEqual(r["selection_score"], 0.0)
 
+    def test_a_failed_review_is_an_error_not_a_judgment_and_costs_only_its_own_candidate(self):
+        def review(ctx, l, basis, est):
+            if l.participant_id == "8470001":
+                return {**fake_card(l, est), "kind": "ERROR", "error": "KeyError: 'x'", "action": {"decision": "PASS", "reasons": ["the review could not be completed"]}, "thesis": {"type": "NONE", "statement": "", "strength": "NONE"}}
+            if l.participant_id == "8470002":
+                card = fake_card(l, est)
+                del card["estimate_used"]                                               # a card of an unexpected shape
+                return card
+            return fake_card(l, est)
+        with mock.patch.object(lc.ei, "review_leg", side_effect=review):
+            out = self.cycle([leg(pid="8470001"), leg(pid="8470002"), leg(pid="8470003")])
+        self.assertEqual([r["participant_id"] for r in self.rows()], ["8470003"])        # the cycle went on
+        rec = out["recording"]
+        self.assertEqual(rec["review_errors"], 2)
+        self.assertTrue(any("KeyError" in k for k in rec["review_error_examples"]))
+        reasons = rec["shortfall"]["reasons_candidates_were_not_recorded"]
+        self.assertEqual(sum(v for k, v in reasons.items() if k.startswith("the review failed")), 2)
+        self.assertFalse(any("passed on judgment: none" in k for k in reasons))         # an engine error never reads as a judgment
+
     def test_the_review_card_is_locked_with_the_rest_of_the_entry(self):
         self.cycle([leg()])
         with self.assertRaises(sqlite3.DatabaseError):
@@ -620,7 +639,7 @@ class TestDecisionReviewInThePostmortem(Base):
         doc = self._build()
         bet = self.rows()[0]
         r = doc["bet_reviews"][bet["bet_id"]]
-        self.assertEqual((r["source"], r["result_status"], r["facts_complete"]), ("RECORDED", "LOSS", True))
+        self.assertEqual((r["source"], r["result_status"], r["facts_complete"]), ("RECORDED", "LOSS", False))          # from the box score alone: provisional until the MoneyPuck line lands
         self.assertEqual(r["card"]["thesis"]["type"], "MODEL_SEES_VALUE")
         self.assertEqual(r["facts"]["player"]["shots"], 1)
         self.assertEqual(r["facts"]["game"]["winner"], "TOR")
@@ -669,16 +688,44 @@ class TestDecisionReviewInThePostmortem(Base):
             line = self._build()["day_bets"][0]
         self.assertEqual(line["decision"], "INSUFFICIENT_EVIDENCE")
 
+    MP_LINE = {"player_id": "8478402", "game_id": 1, "toi": 19.0, "toi_pp": 2.0, "shots": 1.0, "goals": 0.0, "assists": 0.0, "points": 0.0}
+
     def test_a_finished_review_is_reused_not_recomputed(self):
         from operational import learning_postmortem as lpm
         self.cards["8478402"] = {"claims": self.CLAIMS}
         self.cycle([leg(pid="8478402", p=0.62)])
         self._final()
-        doc = self._build()
+        with mock.patch("operational.learning_postmortem._load_rows", return_value=([self.MP_LINE], [])):          # the MoneyPuck line has landed: the review is final
+            doc = self._build()
+        self.assertTrue(next(iter(doc["bet_reviews"].values()))["facts_complete"])
         with mock.patch("operational.eggy_decisions.assess", side_effect=AssertionError("recomputed")), mock.patch.object(lpm, "load", return_value=doc):
             again = lpm.build(self.conn, self.nhl, self.NOW)
         self.assertEqual(again["bet_reviews"], doc["bet_reviews"])
 
+    def test_a_box_score_only_review_is_provisional_and_is_completed_when_the_moneypuck_line_lands(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final()
+        first = self._build()                                                          # no MoneyPuck rows yet
+        r1 = next(iter(first["bet_reviews"].values()))
+        self.assertFalse(r1["facts_complete"])
+        pp = [c for c in r1["assessment"]["claims"] if c["id"] == "expected_pp"][0]
+        self.assertEqual(pp["verdict"], "NOT_TESTABLE")                                # said, not omitted
+        with mock.patch("operational.learning_postmortem._load_rows", return_value=([dict(self.MP_LINE, toi_pp=0.0)], [])), mock.patch.object(lpm, "load", return_value=first):
+            second = lpm.build(self.conn, self.nhl, self.NOW)
+        r2 = next(iter(second["bet_reviews"].values()))
+        self.assertTrue(r2["facts_complete"])
+        self.assertEqual([c for c in r2["assessment"]["claims"] if c["id"] == "expected_pp"][0]["verdict"], "FAILED")      # the power play that never happened is now caught
+
+    def test_a_review_is_final_after_three_days_whatever_has_landed(self):
+        from operational import eggy_decisions as ed
+        card, facts = {"kind": "PLAYER"}, {"game": {}, "player": {"source": "NHL box score"}}
+        self.assertFalse(ed.facts_are_complete(card, facts, bet_date="2026-10-20", now_date="2026-10-22"))
+        self.assertTrue(ed.facts_are_complete(card, facts, bet_date="2026-10-20", now_date="2026-10-23"))
+        self.assertFalse(ed.facts_are_complete(card, None, bet_date="2026-10-01", now_date="2026-10-23"))                    # no facts at all is never complete
+        self.assertTrue(ed.facts_are_complete({"kind": "MONEYLINE"}, {"game": {"team_stats": {"A": {}, "B": {}}}}))
+        self.assertFalse(ed.facts_are_complete({"kind": "MONEYLINE"}, {"game": {}}))
     def test_a_review_that_waited_for_the_games_data_is_completed_when_it_lands(self):
         from operational import learning_postmortem as lpm
         self.cards["8478402"] = {"claims": self.CLAIMS}
@@ -690,8 +737,8 @@ class TestDecisionReviewInThePostmortem(Base):
         with mock.patch.object(lpm, "load", return_value=first):
             second = lpm.build(self.conn, self.nhl, self.NOW)
         r2 = next(iter(second["bet_reviews"].values()))
-        self.assertEqual((r2["result_status"], r2["facts_complete"]), ("LOSS", True))
-
+        self.assertEqual(r2["result_status"], "LOSS")
+        self.assertIsNotNone(r2["facts"])                                              # the box score landed: the review now reads the game
     def test_the_big_data_files_are_not_read_for_a_bet_that_is_still_open(self):
         self.cycle([leg(pid="8478402")])
         with mock.patch("operational.learning_postmortem._load_rows", side_effect=AssertionError("read the files")):
@@ -741,6 +788,34 @@ class TestDecisionReviewInThePostmortem(Base):
         self.assertNotIn("answers", sec["cards"]["OTHER"])
         self.assertNotIn("answers", sec["postmortem"]["bet_reviews"][bid]["card"])
         self.assertIn("thesis", sec["postmortem"]["bet_reviews"][bid]["card"])
+
+    def test_the_snapshot_window_is_today_and_the_two_days_before_it(self):
+        from operational import learning_postmortem as lpm
+        base = {"card": {"thesis": {}}, "assessment": {}, "label": "x", "result_status": "LOSS"}
+        doc = {"bet_reviews": {f"B{d}": {**base, "et_date": f"2026-10-{d}", "bet_id": f"B{d}"} for d in (17, 18, 19, 21)}, "decision_review": {}}
+        with mock.patch.object(lpm, "load", return_value=doc), mock.patch.object(lpm.lc, "load_status", return_value=None), \
+                mock.patch.object(lpm.lc, "phase", return_value={"phase": "ACTIVE", "day": 2, "today": "2026-10-21"}):
+            kept = set(lpm.snapshot_section()["postmortem"]["bet_reviews"])
+        self.assertEqual(kept, {"B19", "B21"})                                        # three days: the 19th, 20th and 21st (nothing was recorded on the 20th here); the 18th is out
+        self.assertEqual(lpm.REVIEW_DAYS, 3)
+
+    def test_the_loss_classifiers_integrity_verdict_reaches_the_decision_review(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final(shots=1, toi=19.0)
+        bid = self.rows()[0]["bet_id"]
+        clean = self._build()["bet_reviews"][bid]["assessment"]["lesson"]["signal"]
+        self.assertEqual(clean, "GOOD_DECISION_LOST_NORMAL_VARIANCE")
+        real = lpm.classify_losses
+        def flagged(all_rows, nhl_conn, now):
+            out = real(all_rows, nhl_conn, now)
+            out["per_bet"][bid] = {**out["per_bet"].get(bid, {}), "category": "STALE_DATA", "integrity_defect": True}
+            return out
+        with mock.patch.object(lpm, "classify_losses", side_effect=flagged):
+            doc = self._build()
+        self.assertEqual(doc["bet_reviews"][bid]["assessment"]["lesson"]["signal"], "GOOD_DECISION_LOST_NOT_VARIANCE")
+        self.assertEqual(doc["decision_review"]["earned_normal_variance"], 0)
 
     def test_the_final_report_carries_the_decision_against_outcome_grid(self):
         from operational import learning_postmortem as lpm
@@ -840,6 +915,19 @@ class TestPaperPerformancePanel(unittest.TestCase):
                 self.assertIsNone(lpm.snapshot_section()["final_report"])
             with mock.patch.object(lpm.lc, "phase", return_value={"phase": "ENDED", "day": 14, "today": "2026-11-03"}):
                 self.assertEqual(lpm.snapshot_section()["final_report"]["statement"], "x")
+
+    def test_a_moneyline_card_shows_its_calibration_evidence_and_a_null_box_score_does_not_crash_the_page(self):
+        from tests.test_product_pages import run_page
+        sec = self._section_with_reviews()
+        rv = sec["postmortem"]["bet_reviews"]["B2"]
+        rv["card"]["calibration_confidence"] = {"level": "MEDIUM", "evidence": {"band": "0.00-0.25", "n": 517, "predicted": 0.2122, "observed": 0.1992, "standard_error": 0.0176, "seasons": "2017-2025"}}
+        sec["postmortem"]["bet_reviews"]["B1"]["facts"]["player"].update({"toi": None, "shots": None, "goals": None, "points": None})
+        at = run_page("33_Paper_Performance.py", self._snap(sec))
+        self.assertFalse(at.exception, at.exception)
+        blob = " ".join(x.value for x in at.caption) + " " + " ".join(x.value for x in at.markdown)
+        self.assertIn("the team model's probabilities in the 0.00-0.25 band", blob)
+        self.assertIn("517 cases; the model averaged 21.2%, 19.9% happened", blob)
+        self.assertIn("— min on ice", blob)
 
     def test_a_bet_without_a_review_says_so_instead_of_inventing_one(self):
         from tests.test_product_pages import run_page
@@ -1261,6 +1349,43 @@ class TestPriceAgeIsMetadata(Base):
             with self.assertRaises(sqlite3.DatabaseError):
                 m.execute("UPDATE bets SET price_status = 'CURRENT'")
             m.close()
+
+    def test_the_live_ledger_shape_is_migrated_price_columns_present_review_columns_missing_rows_kept(self):
+        """The shape of the production ledger when this release is promoted: it already has the price-metadata columns and its rows, and lacks the six review columns."""
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "live.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg(pid="8470001"), leg(pid="8470002")])
+            c.close()
+            old = sqlite3.connect(path)
+            old.row_factory = sqlite3.Row
+            rows = [dict(r) for r in self.rows()]
+            old.executescript("DROP TRIGGER IF EXISTS bets_entry_is_immutable;")
+            for col, _ in lc.INTEL_COLUMNS:
+                old.execute(f"ALTER TABLE bets DROP COLUMN {col}")
+            old.execute("DELETE FROM bets")
+            for r in rows:                                              # the rows as the old engine wrote them: no review columns
+                r = {k: v for k, v in r.items() if k not in {n for n, _t in lc.INTEL_COLUMNS}}
+                old.execute(f"INSERT INTO bets ({', '.join(r)}) VALUES ({', '.join('?' * len(r))})", list(r.values()))
+            old.commit()
+            cols = {r[1] for r in old.execute("PRAGMA table_info(bets)")}
+            self.assertFalse(cols & {n for n, _t in lc.INTEL_COLUMNS})
+            old.close()
+            m = lc.open_ledger(path)
+            cols = {r[1] for r in m.execute("PRAGMA table_info(bets)")}
+            self.assertTrue({n for n, _t in lc.INTEL_COLUMNS} <= cols)
+            kept = [dict(r) for r in m.execute("SELECT * FROM bets ORDER BY selection_rank")]
+            self.assertEqual(len(kept), 2)
+            self.assertTrue(all(r["intelligence_json"] is None and r["thesis_type"] is None for r in kept))       # old rows are not given a card they never had
+            self.assertEqual([r["bet_id"] for r in kept], [r["bet_id"] for r in rows])
+            for col in ("thesis_type", "action", "intelligence_json", "edge_class", "american_price"):
+                with self.assertRaises(sqlite3.DatabaseError, msg=col):
+                    m.execute(f"UPDATE bets SET {col} = 'x'")                                                   # the trigger was recreated with the new columns
+            self.assertEqual(m.execute("PRAGMA integrity_check").fetchone()[0], "ok")
+            m.close()
+            again = lc.open_ledger(path)                                                                        # a second open is a no-op
+            self.assertEqual(again.execute("SELECT COUNT(*) FROM bets").fetchone()[0], 2)
+            again.close()
 
     def test_postmortem_age_buckets_and_selection_versus_price_quality(self):
         from operational import learning_postmortem as lpm

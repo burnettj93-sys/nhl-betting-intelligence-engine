@@ -44,6 +44,11 @@ class TestCompleteLabels(unittest.TestCase):
         self.assertEqual(bl.leg_dict_label({"label": "x", "participant": "Quinn Hughes", "code": "PTS", "threshold": 1, "price": {"american": 155}}), "Quinn Hughes — POINTS 1+ — +155")        # an Eggy candidate leg
         self.assertEqual(bl.leg_dict_label({"label": "x", "participant": "A", "market_key": "player_shots_on_goal_alternate", "threshold": "2+", "price": {"american": -120}}), "A — SHOTS ON GOAL 2+ — -120")
 
+    def test_a_team_is_the_name_of_a_moneyline_only_never_of_a_player_prop(self):
+        old = {"label": "Matthew Knies 2+ shots on goal", "market_family": "PLAYER_SOG_ALTERNATE", "team": "TOR", "american_price": -130}          # an older dict with no participant_name
+        self.assertEqual(bl.leg_dict_label(old), "Matthew Knies 2+ shots on goal")                                                           # its own label, not "TOR — SHOTS ON GOAL 2+ — -130"
+        self.assertEqual(bl.leg_dict_label({"label": "TOR to win", "market_family": "MONEYLINE", "team": "TOR", "american_price": -140}), "TOR — MONEYLINE — -140")
+
     def test_a_leg_that_names_no_market_keeps_its_own_label_rather_than_a_guess(self):
         self.assertEqual(bl.leg_dict_label({"label": "mystery"}), "mystery")
         self.assertEqual(bl.leg_dict_label({"label": "A thing", "participant_name": "A"}), "A thing")
@@ -70,10 +75,20 @@ class TestNoShortLabelsLeft(unittest.TestCase):
             src = (ROOT / rel).read_text()
             self.assertFalse(self.SHORT.search(src), rel)
 
-    def test_the_surfaces_use_the_label_module(self):
-        for rel in ("dashboard/pages/23_Ledger.py", "dashboard/tickets_view.py", "operational/daily_review.py", "operational/daily_postmortem.py", "dashboard/ui.py"):
-            self.assertIn("bet_labels", (ROOT / rel).read_text(), rel)
-        self.assertIn("label_of", (ROOT / "operational/learning_postmortem.py").read_text())
+    def test_the_ticket_rows_the_pages_show_use_the_complete_label(self):
+        from dashboard import tickets_view as tv
+        leg = {"label": "Filip Chytil 2+ shots on goal", "market_family": "PLAYER_SOG_ALTERNATE", "participant_name": "Filip Chytil", "american_price": -130.0, "team": "VAN", "opponent": "CAR",
+               "game_start_utc": "2026-10-21T02:00:00Z", "quote_updated_utc": "2026-10-20T22:00:00Z", "retrieved_at_utc": "2026-10-20T22:01:00Z", "quote_age_min_at_entry": 5.0}
+        self.assertEqual(tv.leg_row(leg)["selection"], "Filip Chytil — SHOTS ON GOAL 2+ — -130")
+        single = {"label": "VAN to win", "market_family": "MONEYLINE", "participant_name": "VAN", "american_price": 240.0, "team": "VAN", "opponent": "CAR", "game_start_utc": "2026-10-21T02:00:00Z",
+                  "price_captured_at_utc": "2026-10-20T22:00:00Z", "probability": 0.28}
+        self.assertEqual(tv.single_row(single)["Selection"], "VAN — MONEYLINE — +240")
+
+    def test_the_daily_review_and_postmortem_name_a_leg_completely(self):
+        from operational import daily_postmortem as dpm
+        import inspect
+        self.assertIn("leg_dict_label", inspect.getsource(dpm))
+        self.assertEqual(bl.leg_dict_label({"participant_name": "Max Sasson", "market_family": "PLAYER_GOALS", "threshold": 1, "recorded_price": 800.0, "label": "x"}, 800.0), "Max Sasson — GOALS 1+ — +800")
 
 
 if __name__ == "__main__":

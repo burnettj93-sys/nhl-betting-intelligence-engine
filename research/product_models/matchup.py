@@ -11,8 +11,8 @@ docs/validation/eggy_evidence.json, written by deploy/build_eggy_evidence.py):
         xgd  expected-goal differential per game (all situations)
         hd   high-danger expected-goal differential per game (it carries the opposite sign of xgd in the fit: the stable part of expected goals is the NON-high-danger part)
         b2b  back-to-back: 1 when the away team played yesterday and the home team did not, -1 for the reverse
-  * a logistic fitted on every non-shootout game from 2009-10 to 2024-25. Feature set and half-life were chosen on 2014-2016 only; the final test (expanding window, each season predicted from the
-    seasons before it, 2017-2025, 10,305 games) beat goal differential alone by 0.0054 log loss (95% interval entirely below zero) and beat the home-rate baseline by 0.027.
+  * a logistic fitted on every non-shootout game from 2009-10 to 2025-26 (seasons are labelled by their starting year in the evidence file: 2009 to 2025). The feature set was chosen on 2014-2016 only (the 30-game half-life and 10-game shrink are fixed constants chosen in exploratory work on those seasons); the final test (expanding window, each season predicted from the
+    seasons before it, 2017-2025, 11,053 games) beat goal differential alone by 0.0054 log loss (95% interval entirely below zero) and beat the home-rate baseline by 0.0279.
 
 What it is NOT: evidence of an edge over a sportsbook. No historical prices exist. On the 87 games priced since October 8 the market (log loss 0.6438) was slightly ahead of this model (0.6467);
 the evidence file records that comparison and the interval is far too wide to conclude anything either way. The model is used to understand the matchup and to scrutinise disagreement with the
@@ -24,6 +24,7 @@ import csv
 import datetime as dt
 import glob
 import gzip
+import hashlib
 import json
 import math
 import os
@@ -204,9 +205,20 @@ def home_probability(coefs: dict, feats: dict) -> tuple[float, dict]:
 
 # ------------------------------------------------------------------------------------------------ evidence
 def load_evidence(path: Path = EVIDENCE_PATH) -> dict | None:
+    """The evidence file, with `_sha256` (the hash of its exact bytes, not stored in the file) so that a review can name the evidence it stood on and the cohort's policy digest can pin it."""
     try:
-        return json.loads(Path(path).read_text())
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
     except (OSError, ValueError):
+        return None
+    doc["_sha256"] = hashlib.sha256(raw).hexdigest()
+    return doc
+
+
+def evidence_sha256(path: Path = EVIDENCE_PATH) -> str | None:
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
         return None
 
 

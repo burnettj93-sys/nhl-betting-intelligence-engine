@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-21T16:34:03Z",
+ "generated": "2026-10-21T17:31:15Z",
  "what": "All ten bets the learning cohort recorded on 2026-10-20 (the old engine), each reviewed as the intelligence layer would have on that day's data, with the old and new rank.",
  "how": [
   "pre-bet review: operational/eggy_decisions.reconstruct_card on data strictly before 2026-10-20 (team and skater state), using the estimate the old engine itself recorded",
@@ -14,16 +14,15 @@
  "pool_at_1902": {
   "eligible": 10,
   "actions": {
-   "LOWER_PRIORITY": 4,
-   "PASS": 6
+   "LOWER_PRIORITY": 5,
+   "PASS": 5
   }
  },
  "pool_at_1933": {
   "eligible": 81,
   "actions": {
-   "RECORD": 1,
-   "LOWER_PRIORITY": 34,
-   "PASS": 46
+   "LOWER_PRIORITY": 16,
+   "PASS": 65
   }
  },
  "bets": [
@@ -42,6 +41,7 @@
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.39511,
    "new_estimate_used": 0.4486,
+   "new_edge_on_the_estimate_used": -0.0187,
    "new_model_edge_at_last_observed_price": -0.0557,
    "new_rank": 9,
    "new_rank_of": 10,
@@ -96,13 +96,13 @@
    ],
    "historical": [
     "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.40-0.45, that side won 42.8% of 2,884 (the model averaged 42.6%; standard error 0.9%)",
-    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.2, 1.96]: too few games to say. UNVALIDATED."
    ],
    "why_they_disagree": [
     "the model counts goal differential (decayed) as worth 0.17 log-odds in favour of STL; a market that weighs it differently, or knows news the model lacks, would price the game differently",
     "the model counts expected-goal differential as worth 0.03 log-odds in favour of WPG; a market that weighs it differently, or knows news the model lacks, would price the game differently",
     "the model counts high-danger chances (offsets xGD) as worth 0.05 log-odds in favour of STL; a market that weighs it differently, or knows news the model lacks, would price the game differently",
-    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (Eggy's review does not use them)"
    ],
    "decision_quality": {
     "label": "BAD_DECISION",
@@ -190,13 +190,14 @@
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.38395,
    "new_estimate_used": 0.3962,
+   "new_edge_on_the_estimate_used": -0.017,
    "new_model_edge_at_last_observed_price": -0.0376,
    "new_rank": 6,
    "new_rank_of": 10,
    "new_action": "PASS",
    "thesis": {
     "type": "UNDERDOG_AT_FAIR_PRICE",
-    "statement": "BOS is the weaker team by the hockey model (37.6%) and the market agrees (39.6%): a fair-priced underdog. The only argument for it is the price; the hockey picture favours DAL.",
+    "statement": "BOS is the weaker team by the hockey model (37.6%) and the market is within 3% of that (39.6%): a fair-priced underdog. The only argument for it is the price; the hockey picture favours DAL.",
     "strength": "NONE"
    },
    "most_likely_outcome": "DAL wins (62.4% by the hockey model; the market says 60.4% for DAL)",
@@ -240,7 +241,7 @@
    ],
    "historical": [
     "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.35-0.40, that side won 37.3% of 2,177 (the model averaged 37.7%; standard error 1.0%)",
-    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.2, 1.96]: too few games to say. UNVALIDATED."
    ],
    "why_they_disagree": [
     "They do not disagree: the model and the market are within 3% of each other on BOS."
@@ -330,6 +331,7 @@
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.38525,
    "new_estimate_used": 0.282,
+   "new_edge_on_the_estimate_used": -0.0121,
    "new_model_edge_at_last_observed_price": -0.1201,
    "new_rank": 10,
    "new_rank_of": 10,
@@ -352,6 +354,11 @@
       "name": "MODEL_SAYS_OVERPRICED",
       "level": "SEVERE",
       "text": "the model puts VAN +10.8 pts BELOW the market"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "MODERATE",
+      "text": "a +240 moneyline is +150 or longer: more skepticism is owed before trusting a disagreement with the price"
      }
     ]
    },
@@ -384,13 +391,13 @@
    ],
    "historical": [
     "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.00-0.25, that side won 19.9% of 517 (the model averaged 21.2%; standard error 1.8%)",
-    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.2, 1.96]: too few games to say. UNVALIDATED."
    ],
    "why_they_disagree": [
     "the model counts goal differential (decayed) as worth 0.80 log-odds in favour of CAR; a market that weighs it differently, or knows news the model lacks, would price the game differently",
     "the model counts expected-goal differential as worth 1.39 log-odds in favour of CAR; a market that weighs it differently, or knows news the model lacks, would price the game differently",
     "the model counts high-danger chances (offsets xGD) as worth 0.45 log-odds in favour of VAN; a market that weighs it differently, or knows news the model lacks, would price the game differently",
-    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (Eggy's review does not use them)"
    ],
    "decision_quality": {
     "label": "BAD_DECISION",
@@ -478,6 +485,7 @@
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.38973,
    "new_estimate_used": 0.4486,
+   "new_edge_on_the_estimate_used": -0.0187,
    "new_model_edge_at_last_observed_price": -0.0535,
    "new_rank": 8,
    "new_rank_of": 10,
@@ -531,11 +539,11 @@
    ],
    "historical": [
     "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.40-0.45, that side won 42.8% of 2,884 (the model averaged 42.6%; standard error 0.9%)",
-    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.2, 1.96]: too few games to say. UNVALIDATED."
    ],
    "why_they_disagree": [
     "the model counts high-danger chances (offsets xGD) as worth 0.18 log-odds in favour of EDM; a market that weighs it differently, or knows news the model lacks, would price the game differently",
-    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (Eggy's review does not use them)"
    ],
    "decision_quality": {
     "label": "BAD_DECISION",
@@ -622,24 +630,25 @@
    "old_edge": -0.0034,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.62889,
-   "new_estimate_used": 0.5901,
+   "new_estimate_used": 0.5618,
+   "new_edge_on_the_estimate_used": -0.0034,
    "new_model_edge_at_last_observed_price": -0.0034,
-   "new_rank": 4,
+   "new_rank": 2,
    "new_rank_of": 81,
    "new_action": "LOWER_PRIORITY",
    "thesis": {
     "type": "FAIR_PRICED",
-    "statement": "The price (56.5%) and our estimate (59.0%) are within 3% of each other: fair, no edge.",
+    "statement": "The price (56.5%) and our estimate (56.2%) are within 3% of each other: fair, no edge.",
     "strength": "WEAK"
    },
-   "most_likely_outcome": "Filip Chytil reaches 2+ shots on goal (59.0%)",
+   "most_likely_outcome": "Filip Chytil reaches 2+ shots on goal (56.2%)",
    "contradiction": {
     "level": "LOW",
     "flags": [
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_LOW",
       "level": "LOW",
-      "text": "for any player, model 50%-60% the model averaged 54.9% and 57.7% happened (7,616 cases, z +4.9): the model's 56.2% is recalibrated up to 59.0%; part of any gap to the price is the model's, not the market's"
+      "text": "for any player, model 50%-60% the model averaged 54.9% and 57.7% happened (7,668 cases, z +4.9): the model runs LOW for players like this. The estimate is NOT raised (history may lower an estimate, never lift it above the leg's own number), so part of any gap to the price may be the model's, not the market's"
      }
     ]
    },
@@ -665,25 +674,25 @@
    },
    "decision_confidence": "HIGH",
    "case_for": [
-    "calibrated model 56.2% (raw 57.0%); estimate used 59.0% (model probability record not usable) vs price-implied 56.5%",
+    "calibrated model 56.2% (raw 57.0%); estimate used 56.2% (model probability record not usable) vs price-implied 56.5%",
     "expected shots per game 1.97; season 2 in 2 games; last 5 2, 0, 1, 2, 1 (shots)",
     "reached 2+ shots on goal in 104 of his last 150 games (69.3%), 22 of last 30, 5 of last 10, 1 of 2 this season",
     "expected 15.5 min on ice (recent 19.5), power play 1.38 min (recent 1.03); inferred usage tier 1",
-    "history: any player, model 50%-60%: model averaged 54.9%, 57.7% happened (7,616 cases)",
-    "history: forwards, model 50%-60%: model averaged 55.1%, 57.5% happened (6,029 cases)",
-    "history: forwards expected to play 14-16 min, model 50%-60%: model averaged 54.4%, 57.3% happened (1,715 cases)",
-    "history: forwards with 1-2 expected power-play min, model 50%-60%: model averaged 54.6%, 56.0% happened (2,361 cases)",
-    "history: team win probability 0%-35%, model 50%-60%: model averaged 55.0%, 54.9% happened (756 cases)"
+    "history: any player, model 50%-60%: model averaged 54.9%, 57.7% happened (7,668 cases)",
+    "history: forwards, model 50%-60%: model averaged 55.1%, 57.5% happened (6,072 cases)",
+    "history: forwards expected to play 14-16 min, model 50%-60%: model averaged 54.4%, 57.4% happened (1,730 cases)",
+    "history: forwards with 1-2 expected power-play min, model 50%-60%: model averaged 54.6%, 55.9% happened (2,378 cases)",
+    "history: team win probability 0%-35%, model 50%-60%: model averaged 55.0%, 55.0% happened (763 cases)"
    ],
    "case_against": [
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 50%-60%: the model averaged 54.9%; 57.7% happened (7,616 cases; 2025-26 and 2026-27 to date)",
-    "forwards, model 50%-60%: the model averaged 55.1%; 57.5% happened (6,029 cases; 2025-26 and 2026-27 to date)",
-    "forwards expected to play 14-16 min, model 50%-60%: the model averaged 54.4%; 57.3% happened (1,715 cases; 2025-26 and 2026-27 to date)",
-    "forwards with 1-2 expected power-play min, model 50%-60%: the model averaged 54.6%; 56.0% happened (2,361 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 50%-60%: the model averaged 55.0%; 54.9% happened (756 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 50%-60%: the model averaged 54.9%; 57.7% happened (7,668 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 50%-60%: the model averaged 55.1%; 57.5% happened (6,072 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 50%-60%: the model averaged 54.4%; 57.4% happened (1,730 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 1-2 expected power-play min, model 50%-60%: the model averaged 54.6%; 55.9% happened (2,378 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 50%-60%: the model averaged 55.0%; 55.0% happened (763 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."
@@ -797,19 +806,20 @@
    "old_edge": 0.053,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.49854,
-   "new_estimate_used": 0.1369,
+   "new_estimate_used": 0.1375,
+   "new_edge_on_the_estimate_used": 0.0264,
    "new_model_edge_at_last_observed_price": 0.053,
-   "new_rank": 37,
+   "new_rank": 27,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
     "type": "FAIR_PRICED",
-    "statement": "The price (11.1%) and our estimate (13.7%) are within 3% of each other: fair, no edge.",
+    "statement": "The price (11.1%) and our estimate (13.8%) are within 3% of each other: fair, no edge.",
     "strength": "WEAK"
    },
-   "most_likely_outcome": "Max Sasson does NOT reach 1+ goals (anytime goal scorer) (86.3%); this is a longshot bet",
+   "most_likely_outcome": "Max Sasson does NOT reach 1+ goals (anytime goal scorer) (86.2%); this is a longshot bet",
    "contradiction": {
-    "level": "HIGH",
+    "level": "SEVERE",
     "flags": [
      {
       "name": "LOW_USAGE",
@@ -824,7 +834,12 @@
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
       "level": "HIGH",
-      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.4% is recalibrated to 13.7%"
+      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.2% happened (2,322 cases, z -3.5): the model's 16.4% is recalibrated to 13.8%"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "HIGH",
+      "text": "a +800 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"
      }
     ]
    },
@@ -850,28 +865,29 @@
    },
    "decision_confidence": "LOW",
    "case_for": [
-    "calibrated model 16.4% (raw 16.9%); estimate used 13.7% (model probability unanchored) vs price-implied 11.1%",
+    "calibrated model 16.4% (raw 16.9%); estimate used 13.8% (model probability unanchored) vs price-implied 11.1%",
     "expected goals per game 0.19; season 2 in 10 games; last 5 0, 0, 1, 0, 0 (goals)",
     "reached 1+ goals (anytime goal scorer) in 18 of his last 105 games (17.1%), 5 of last 30, 2 of last 10, 2 of 10 this season",
     "expected 13.1 min on ice (recent 12.0), power play 0.38 min (recent 0.05); inferred usage tier 4",
-    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
-    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
-    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.1% happened (2,298 cases)",
-    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
-    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.1% happened (9,944 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,454 cases)",
+    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.2% happened (2,322 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,426 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.5% happened (1,211 cases)"
    ],
    "case_against": [
     "inferred fourth-line usage (ice time ranks in the bottom third of his team's forwards)",
     "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
-    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.4% is recalibrated to 13.7%",
+    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.2% happened (2,322 cases, z -3.5): the model's 16.4% is recalibrated to 13.8%",
+    "a +800 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long",
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
-    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
-    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.1% happened (2,298 cases; 2025-26 and 2026-27 to date)",
-    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 15%-20%: the model averaged 17.4%; 17.1% happened (9,944 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,454 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.2% happened (2,322 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,426 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.5% happened (1,211 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."
@@ -879,7 +895,7 @@
    "decision_quality": {
     "label": "BAD_DECISION",
     "reasons": [
-     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+     "the contradiction was SEVERE"
     ]
    },
    "claims": [
@@ -977,19 +993,20 @@
    "old_edge": 0.0263,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.46702,
-   "new_estimate_used": 0.1411,
+   "new_estimate_used": 0.1418,
+   "new_edge_on_the_estimate_used": -0.0011,
    "new_model_edge_at_last_observed_price": 0.0263,
-   "new_rank": 40,
+   "new_rank": 29,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
     "type": "FAIR_PRICED",
-    "statement": "The price (14.3%) and our estimate (14.1%) are within 3% of each other: fair, no edge.",
+    "statement": "The price (14.3%) and our estimate (14.2%) are within 3% of each other: fair, no edge.",
     "strength": "WEAK"
    },
-   "most_likely_outcome": "Paul Cotter does NOT reach 1+ goals (anytime goal scorer) (85.9%); this is a longshot bet",
+   "most_likely_outcome": "Paul Cotter does NOT reach 1+ goals (anytime goal scorer) (85.8%); this is a longshot bet",
    "contradiction": {
-    "level": "HIGH",
+    "level": "SEVERE",
     "flags": [
      {
       "name": "GAME_ENVIRONMENT",
@@ -999,7 +1016,12 @@
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
       "level": "HIGH",
-      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.9% is recalibrated to 14.1%"
+      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.2% happened (2,322 cases, z -3.5): the model's 16.9% is recalibrated to 14.2%"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "HIGH",
+      "text": "a +600 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"
      }
     ]
    },
@@ -1025,27 +1047,28 @@
    },
    "decision_confidence": "LOW",
    "case_for": [
-    "calibrated model 16.9% (raw 17.4%); estimate used 14.1% (model probability unanchored) vs price-implied 14.3%",
+    "calibrated model 16.9% (raw 17.4%); estimate used 14.2% (model probability unanchored) vs price-implied 14.3%",
     "expected goals per game 0.19; season 4 in 10 games; last 5 0, 0, 0, 0, 0 (goals)",
     "reached 1+ goals (anytime goal scorer) in 20 of his last 150 games (13.3%), 5 of last 30, 3 of last 10, 3 of 10 this season",
     "expected 13.3 min on ice (recent 15.4), power play 0.72 min (recent 0.87); inferred usage tier 3",
-    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
-    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
-    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.1% happened (2,298 cases)",
-    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
-    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.1% happened (9,944 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,454 cases)",
+    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.2% happened (2,322 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,426 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.5% happened (1,211 cases)"
    ],
    "case_against": [
     "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
-    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.9% is recalibrated to 14.1%",
+    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.2% happened (2,322 cases, z -3.5): the model's 16.9% is recalibrated to 14.2%",
+    "a +600 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long",
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
-    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
-    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.1% happened (2,298 cases; 2025-26 and 2026-27 to date)",
-    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 15%-20%: the model averaged 17.4%; 17.1% happened (9,944 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,454 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.2% happened (2,322 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,426 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.5% happened (1,211 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."
@@ -1053,7 +1076,7 @@
    "decision_quality": {
     "label": "BAD_DECISION",
     "reasons": [
-     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+     "the contradiction was SEVERE"
     ]
    },
    "claims": [
@@ -1151,19 +1174,20 @@
    "old_edge": 0.0291,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.46518,
-   "new_estimate_used": 0.1357,
+   "new_estimate_used": 0.1351,
+   "new_edge_on_the_estimate_used": 0.0101,
    "new_model_edge_at_last_observed_price": 0.0291,
-   "new_rank": 39,
+   "new_rank": 28,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
     "type": "FAIR_PRICED",
-    "statement": "The price (12.5%) and our estimate (13.6%) are within 3% of each other: fair, no edge.",
+    "statement": "The price (12.5%) and our estimate (13.5%) are within 3% of each other: fair, no edge.",
     "strength": "WEAK"
    },
-   "most_likely_outcome": "Drew O'Connor does NOT reach 1+ goals (anytime goal scorer) (86.4%); this is a longshot bet",
+   "most_likely_outcome": "Drew O'Connor does NOT reach 1+ goals (anytime goal scorer) (86.5%); this is a longshot bet",
    "contradiction": {
-    "level": "HIGH",
+    "level": "SEVERE",
     "flags": [
      {
       "name": "POWER_PLAY_ASSUMPTION",
@@ -1178,7 +1202,12 @@
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
       "level": "HIGH",
-      "text": "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,400 cases, z -3.3): the model's 15.4% is recalibrated to 13.6%"
+      "text": "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,426 cases, z -3.2): the model's 15.4% is recalibrated to 13.5%"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "HIGH",
+      "text": "a +700 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"
      }
     ]
    },
@@ -1204,28 +1233,29 @@
    },
    "decision_confidence": "LOW",
    "case_for": [
-    "calibrated model 15.4% (raw 15.9%); estimate used 13.6% (model probability unanchored) vs price-implied 12.5%",
+    "calibrated model 15.4% (raw 15.9%); estimate used 13.5% (model probability unanchored) vs price-implied 12.5%",
     "expected goals per game 0.17; season 1 in 10 games; last 5 0, 0, 0, 0, 0 (goals)",
     "reached 1+ goals (anytime goal scorer) in 23 of his last 150 games (15.3%), 3 of last 30, 1 of last 10, 1 of 10 this season",
     "expected 15.6 min on ice (recent 15.3), power play 0.81 min (recent 0.04); inferred usage tier 3",
-    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
-    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
-    "history: forwards expected to play 14-16 min, model 15%-20%: model averaged 17.5%, 17.3% happened (4,239 cases)",
-    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
-    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.1% happened (9,944 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,454 cases)",
+    "history: forwards expected to play 14-16 min, model 15%-20%: model averaged 17.5%, 17.3% happened (4,273 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,426 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.5% happened (1,211 cases)"
    ],
    "case_against": [
     "the model expects 0.81 power-play min but he has had 0.04 lately",
     "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
-    "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,400 cases, z -3.3): the model's 15.4% is recalibrated to 13.6%",
+    "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,426 cases, z -3.2): the model's 15.4% is recalibrated to 13.5%",
+    "a +700 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long",
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
-    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
-    "forwards expected to play 14-16 min, model 15%-20%: the model averaged 17.5%; 17.3% happened (4,239 cases; 2025-26 and 2026-27 to date)",
-    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 15%-20%: the model averaged 17.4%; 17.1% happened (9,944 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,454 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 15%-20%: the model averaged 17.5%; 17.3% happened (4,273 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,426 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.5% happened (1,211 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."
@@ -1233,7 +1263,7 @@
    "decision_quality": {
     "label": "BAD_DECISION",
     "reasons": [
-     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+     "the contradiction was SEVERE"
     ]
    },
    "claims": [
@@ -1339,17 +1369,18 @@
    "old_edge": 0.0244,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.45766,
-   "new_estimate_used": 0.138,
+   "new_estimate_used": 0.1374,
+   "new_edge_on_the_estimate_used": 0.0124,
    "new_model_edge_at_last_observed_price": 0.0244,
-   "new_rank": 38,
+   "new_rank": 18,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
     "type": "FAIR_PRICED",
-    "statement": "The price (12.5%) and our estimate (13.8%) are within 3% of each other: fair, no edge.",
+    "statement": "The price (12.5%) and our estimate (13.7%) are within 3% of each other: fair, no edge.",
     "strength": "WEAK"
    },
-   "most_likely_outcome": "Liam Ohgren does NOT reach 1+ goals (anytime goal scorer) (86.2%); this is a longshot bet",
+   "most_likely_outcome": "Liam Ohgren does NOT reach 1+ goals (anytime goal scorer) (86.3%); this is a longshot bet",
    "contradiction": {
     "level": "HIGH",
     "flags": [
@@ -1361,7 +1392,12 @@
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
       "level": "MODERATE",
-      "text": "for forwards, model 12%-15% the model averaged 13.5% and 12.5% happened (5,559 cases, z -2.3): the model's 14.9% is recalibrated to 13.8%"
+      "text": "for forwards, model 12%-15% the model averaged 13.5% and 12.4% happened (5,598 cases, z -2.4): the model's 14.9% is recalibrated to 13.7%"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "HIGH",
+      "text": "a +700 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"
      }
     ]
    },
@@ -1387,27 +1423,28 @@
    },
    "decision_confidence": "LOW",
    "case_for": [
-    "calibrated model 14.9% (raw 15.5%); estimate used 13.8% (model probability unanchored) vs price-implied 12.5%",
+    "calibrated model 14.9% (raw 15.5%); estimate used 13.7% (model probability unanchored) vs price-implied 12.5%",
     "expected goals per game 0.17; season 2 in 10 games; last 5 0, 1, 0, 0, 0 (goals)",
     "reached 1+ goals (anytime goal scorer) in 13 of his last 107 games (12.1%), 5 of last 30, 2 of last 10, 2 of 10 this season",
     "expected 15.4 min on ice (recent 14.1), power play 1.14 min (recent 1.74); inferred usage tier 3 / power-play unit 2",
-    "history: any player, model 12%-15%: model averaged 13.5%, 12.7% happened (6,488 cases)",
-    "history: forwards, model 12%-15%: model averaged 13.5%, 12.5% happened (5,559 cases)",
-    "history: forwards expected to play 14-16 min, model 12%-15%: model averaged 13.7%, 15.2% happened (1,597 cases)",
-    "history: forwards with 1-2 expected power-play min, model 12%-15%: model averaged 13.7%, 14.6% happened (1,304 cases)",
-    "history: team win probability 0%-35%, model 12%-15%: model averaged 13.5%, 13.9% happened (696 cases)"
+    "history: any player, model 12%-15%: model averaged 13.5%, 12.6% happened (6,534 cases)",
+    "history: forwards, model 12%-15%: model averaged 13.5%, 12.4% happened (5,598 cases)",
+    "history: forwards expected to play 14-16 min, model 12%-15%: model averaged 13.7%, 15.0% happened (1,611 cases)",
+    "history: forwards with 1-2 expected power-play min, model 12%-15%: model averaged 13.7%, 14.4% happened (1,317 cases)",
+    "history: team win probability 0%-35%, model 12%-15%: model averaged 13.5%, 13.9% happened (700 cases)"
    ],
    "case_against": [
     "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
-    "for forwards, model 12%-15% the model averaged 13.5% and 12.5% happened (5,559 cases, z -2.3): the model's 14.9% is recalibrated to 13.8%",
+    "for forwards, model 12%-15% the model averaged 13.5% and 12.4% happened (5,598 cases, z -2.4): the model's 14.9% is recalibrated to 13.7%",
+    "a +700 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long",
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 12%-15%: the model averaged 13.5%; 12.7% happened (6,488 cases; 2025-26 and 2026-27 to date)",
-    "forwards, model 12%-15%: the model averaged 13.5%; 12.5% happened (5,559 cases; 2025-26 and 2026-27 to date)",
-    "forwards expected to play 14-16 min, model 12%-15%: the model averaged 13.7%; 15.2% happened (1,597 cases; 2025-26 and 2026-27 to date)",
-    "forwards with 1-2 expected power-play min, model 12%-15%: the model averaged 13.7%; 14.6% happened (1,304 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 12%-15%: the model averaged 13.5%; 13.9% happened (696 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 12%-15%: the model averaged 13.5%; 12.6% happened (6,534 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 12%-15%: the model averaged 13.5%; 12.4% happened (5,598 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 12%-15%: the model averaged 13.7%; 15.0% happened (1,611 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 1-2 expected power-play min, model 12%-15%: the model averaged 13.7%; 14.4% happened (1,317 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 12%-15%: the model averaged 13.5%; 13.9% happened (700 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."
@@ -1521,9 +1558,10 @@
    "old_edge": 0.0185,
    "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
    "old_selection_score": 0.41799,
-   "new_estimate_used": 0.0441,
+   "new_estimate_used": 0.0439,
+   "new_edge_on_the_estimate_used": 0.0054,
    "new_model_edge_at_last_observed_price": 0.0185,
-   "new_rank": 41,
+   "new_rank": 25,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
@@ -1543,7 +1581,12 @@
      {
       "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
       "level": "MODERATE",
-      "text": "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,792 cases, z -2.5): the model's 5.7% is recalibrated to 4.4%"
+      "text": "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,803 cases, z -2.3): the model's 5.7% is recalibrated to 4.4%"
+     },
+     {
+      "name": "LONG_PRICE",
+      "level": "HIGH",
+      "text": "a +2500 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"
      },
      {
       "name": "LONGSHOT_TAIL",
@@ -1578,24 +1621,25 @@
     "expected goals per game 0.06; season 1 in 9 games; last 5 0, 0, 0, 0, 0 (goals)",
     "reached 1+ goals (anytime goal scorer) in 8 of his last 150 games (5.3%), 3 of last 30, 1 of last 10, 1 of 9 this season",
     "expected 17.5 min on ice (recent 16.2), power play 0.17 min (recent 0.00); inferred usage tier 3",
-    "history: any player, model 4%-6%: model averaged 5.2%, 5.3% happened (3,572 cases)",
-    "history: defensemen, model 4%-6%: model averaged 5.2%, 5.3% happened (3,562 cases)",
-    "history: defensemen expected to play 16-18 min, model 4%-6%: model averaged 5.2%, 5.4% happened (776 cases)",
-    "history: defensemen with 0-0.25 expected power-play min, model 4%-6%: model averaged 5.2%, 4.0% happened (1,792 cases)",
-    "history: team win probability 0%-35%, model 4%-6%: model averaged 5.3%, 4.9% happened (429 cases)"
+    "history: any player, model 4%-6%: model averaged 5.2%, 5.3% happened (3,595 cases)",
+    "history: defensemen, model 4%-6%: model averaged 5.2%, 5.3% happened (3,585 cases)",
+    "history: defensemen expected to play 16-18 min, model 4%-6%: model averaged 5.2%, 5.4% happened (784 cases)",
+    "history: defensemen with 0-0.25 expected power-play min, model 4%-6%: model averaged 5.2%, 4.0% happened (1,803 cases)",
+    "history: team win probability 0%-35%, model 4%-6%: model averaged 5.3%, 4.8% happened (436 cases)"
    ],
    "case_against": [
     "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
-    "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,792 cases, z -2.5): the model's 5.7% is recalibrated to 4.4%",
+    "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,803 cases, z -2.3): the model's 5.7% is recalibrated to 4.4%",
+    "a +2500 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long",
     "a price of +2500 implies 3.8%: small errors in a tail probability become large relative edges",
     "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
    ],
    "historical": [
-    "any player, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,572 cases; 2025-26 and 2026-27 to date)",
-    "defensemen, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,562 cases; 2025-26 and 2026-27 to date)",
-    "defensemen expected to play 16-18 min, model 4%-6%: the model averaged 5.2%; 5.4% happened (776 cases; 2025-26 and 2026-27 to date)",
-    "defensemen with 0-0.25 expected power-play min, model 4%-6%: the model averaged 5.2%; 4.0% happened (1,792 cases; 2025-26 and 2026-27 to date)",
-    "team win probability 0%-35%, model 4%-6%: the model averaged 5.3%; 4.9% happened (429 cases; 2025-26 and 2026-27 to date)"
+    "any player, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,595 cases; 2025-26 and 2026-27 to date)",
+    "defensemen, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,585 cases; 2025-26 and 2026-27 to date)",
+    "defensemen expected to play 16-18 min, model 4%-6%: the model averaged 5.2%; 5.4% happened (784 cases; 2025-26 and 2026-27 to date)",
+    "defensemen with 0-0.25 expected power-play min, model 4%-6%: the model averaged 5.2%; 4.0% happened (1,803 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 4%-6%: the model averaged 5.3%; 4.8% happened (436 cases; 2025-26 and 2026-27 to date)"
    ],
    "why_they_disagree": [
     "They do not disagree by more than the engine's 3-point threshold."

@@ -38,6 +38,14 @@ LONGSHOT_IMPLIED = 0.05          # a price implying 5% or less (+1900 and longer
 LONGSHOT_MIN_PLAYER_GAMES = 100  # a tail probability needs a long record behind it
 THIN_PLAYER_GAMES = 40
 SAME_GAME_SOFT_CAP = 3           # bets per game before further ones in that game wait behind every other candidate (design choice: one game is one cluster of dependent outcomes)
+# The price-length ladder (owner, 2026-10-21: extra skepticism for a +150 or longer moneyline, a +300 prop, and +600 and longer). Long prices are where a small error in a probability is a large relative edge,
+# where the bookmaker's margin is widest, and where the favourite-longshot bias makes the market's price more often too short than too long.
+LONG_PRICE_ML, VERY_LONG_PRICE_ML = 150.0, 300.0
+LONG_PRICE_PROP, VERY_LONG_PRICE_PROP = 300.0, 600.0
+TOSSUP_BAND = 0.03               # a hockey probability within three points of 50% is a toss-up: there is no "better team" to argue for or against
+MODEL_LEADS_Z = 2.0              # the model counts as leading the market only when its paired log-loss advantage is at least two standard errors
+FACTOR_FLOOR = 0.25              # a recalibration never scales a probability by less than this (a cell with no events at all would otherwise scale it to zero)
+EVIDENCE_MAX_AGE_DAYS = 21       # the evidence file is a snapshot: past this age the layer is unusable until it is rebuilt (deploy/build_eggy_evidence.py)
 RECENT_GAMES = 6
 
 _STAT = {"PLAYER_SOG_ALTERNATE": "shots", "PLAYER_SOG": "shots", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals"}
@@ -158,7 +166,7 @@ def build_context(nhl_conn, now: dt.datetime, *, as_of: str | None = None, skate
     return ctx
 
 
-STALE_DATA_DAYS = 5              # the newest game in a data file may be at most this many days before the date being reviewed (the league never goes quiet longer than that inside the learning window)
+STALE_DATA_DAYS = 3              # the newest game in a data file may be at most this many days before the date being reviewed (the files refresh daily and the league never goes quiet that long inside the learning window)
 
 
 def _days_before(as_of: str, newest: str | None) -> int | None:
@@ -174,6 +182,14 @@ def usable(ctx: Context) -> tuple[bool, str]:
     problems = []
     if ctx.evidence is None:
         problems.append("evidence file missing")
+    elif ctx.now is not None and ctx.evidence.get("built_at_utc"):
+        try:
+            built = dt.datetime.fromisoformat(ctx.evidence["built_at_utc"].replace("Z", "+00:00"))
+            age = (ctx.now - built).days
+            if age > EVIDENCE_MAX_AGE_DAYS:
+                problems.append(f"the evidence file is {age} days old (built {ctx.evidence['built_at_utc']}): rebuild it with deploy/build_eggy_evidence.py")
+        except (ValueError, TypeError):
+            problems.append("the evidence file's build time is unreadable")
     if ctx.team_state is None:
         problems.append("team state unavailable")
     else:
@@ -195,6 +211,8 @@ def _cells(ctx: Context, market: str) -> list:
 
 
 def _band_of(edges: list, v: float) -> tuple:
+    if v < edges[0]:
+        return (edges[0], edges[1])
     for lo, hi in zip(edges, edges[1:]):
         if lo <= v < hi:
             return (lo, hi)
@@ -220,7 +238,7 @@ def analogue_cells(ctx: Context, market: str, p: float, grp: str, toi: float, pp
         if not c:
             continue
         n, pred, obs = c[-3], c[-2], c[-1]
-        se = math.sqrt(max(obs * (1 - obs), 1e-9) / n) if n else None
+        se = math.sqrt(max(pred * (1 - pred), 1e-9) / n) if n else None          # the standard error under what the model said: a cell with no events at all must not get a near-zero error and a huge z
         if dim == "toi":
             label = f"{'forwards' if grp == 'F' else 'defensemen'} expected to play {key[2]}-{key[3]} min, model {pct(pb[0], 0)}-{pct(min(pb[1], 1.0), 0)}"
         elif dim == "pp":
@@ -241,7 +259,7 @@ def best_adjustment(cells: list[dict]) -> dict | None:
     if not cand:
         return None
     c = max(cand, key=lambda x: abs(x["z"]))
-    return {**c, "factor": round(c["obs"] / c["pred"], 4)}
+    return {**c, "factor": round(max(c["obs"] / c["pred"], FACTOR_FLOOR), 4), "raw_factor": round(c["obs"] / c["pred"], 4)}
 
 
 # ------------------------------------------------------------------------------------------------ player facts
@@ -302,6 +320,12 @@ def _completeness(items: list[tuple[str, bool]]) -> dict:
     return {"present": present, "missing": missing, "k": len(present), "n": len(items), "fraction": round(len(present) / len(items), 3) if items else 0.0}
 
 
+def evidence_stamp(ctx: Context) -> str:
+    """Which evidence file a review stood on, readable and comparable across bets: version, build time, the data it runs through, and the first 12 hex digits of its hash."""
+    ev = ctx.evidence or {}
+    return f"{ev.get('version')} built {ev.get('built_at_utc')}, data through {ev.get('data_through')}, sha256 {str(ev.get('_sha256'))[:12]}"
+
+
 def _card_shell(leg, label: str, kind: str) -> dict:
     from research.real_market_parlay import engine as rmp
     return {"version": VERSION, "kind": kind, "bet": {"label": rmp.bet_label(leg.participant_name, leg.market_family, leg.threshold, leg.american_price), "player_or_team": leg.participant_name,
@@ -321,6 +345,15 @@ def _finish(card: dict, flags: list[dict], cal: str, comp: dict, thesis: dict, p
     return card
 
 
+def _price_length_flag(price: float, long_at: float, very_long_at: float, what: str) -> dict | None:
+    """MODERATE from `long_at`, HIGH from `very_long_at` (American price, positive). A name for the quantity the rule rests on: the price itself."""
+    if price >= very_long_at:
+        return {"name": "LONG_PRICE", "level": "HIGH", "text": f"a {price:+.0f} {what} is {very_long_at:+.0f} or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long"}
+    if price >= long_at:
+        return {"name": "LONG_PRICE", "level": "MODERATE", "text": f"a {price:+.0f} {what} is {long_at:+.0f} or longer: more skepticism is owed before trusting a disagreement with the price"}
+    return None
+
+
 # ----------------------------------------------------------------------------- moneyline
 def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: float) -> dict:
     from research.product_models import matchup
@@ -336,7 +369,8 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
     ev = ((ctx.evidence or {}).get("matchup") or {})
     pros = ev.get("prospective_vs_market") or {}
     pll = pros.get("log_loss") or {}
-    market_ahead = bool(pll.get("M") is not None and pll.get("H") is not None and pll["M"] <= pll["H"])          # on the games priced so far the market has been at least as good a guide as this model
+    pdiff = pros.get("paired_difference") or {}
+    model_leads = bool(pdiff.get("z") is not None and pdiff["z"] >= MODEL_LEADS_Z)          # the model counts as leading only when its paired log-loss advantage clears two standard errors: a gap of a few thousandths on 87 games is noise
     large = max(DISAGREE_LARGE_DEFAULT * 0.9, pros.get("disagreement_sd") or DISAGREE_LARGE_DEFAULT)
     card["bet"]["opponent_price_implied"] = opp_price
     card["bet"]["matchup"] = f"{away} @ {home}"
@@ -370,30 +404,40 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
     elif D <= -EDGE_MIN:
         ttype, strength = "MODEL_SAYS_OVERPRICED", "NONE"
         statement = f"The hockey model gives {side_team} {pct(H)} against the market's {pct(M)} ({pts(D)}): the model thinks {side_team} is OVERPRICED."
-    elif side_is_hockey_fav and M >= 0.5:
+    elif abs(H - 0.5) < TOSSUP_BAND:
+        ttype, strength = "COIN_FLIP_AT_FAIR_PRICE", "NONE"
+        statement = f"The hockey model sees a toss-up ({side_team} {pct(H)}) and the market agrees within {pct(EDGE_MIN, 0)} ({pct(M)}): no edge and no clear winner. The bookmaker's margin is the cost."
+    elif side_is_hockey_fav:
         ttype, strength = "LIKELY_WINNER_AT_FAIR_PRICE", "WEAK"
-        statement = f"{side_team} is the better team by the hockey model ({pct(H)}) and the market agrees ({pct(M)}): the likely winner at a fair price. No edge; the bookmaker's margin is the cost."
+        statement = f"{side_team} is the better team by the hockey model ({pct(H)}) and the market is within {pct(EDGE_MIN, 0)} of that ({pct(M)}): the likely winner at a fair price. No edge; the bookmaker's margin is the cost."
     else:
         ttype, strength = "UNDERDOG_AT_FAIR_PRICE", "NONE"
-        statement = (f"{side_team} is the weaker team by the hockey model ({pct(H)}) and the market agrees ({pct(M)}): a fair-priced underdog. The only argument for it is the price; the hockey picture favours {hockey_fav}.")
+        statement = (f"{side_team} is the weaker team by the hockey model ({pct(H)}) and the market is within {pct(EDGE_MIN, 0)} of that ({pct(M)}): a fair-priced underdog. The only argument for it is the price; the hockey picture favours {hockey_fav}.")
+    tossup = abs(H - 0.5) < TOSSUP_BAND
     # --- flags (each names the quantity it is a rule on)
-    if D >= EDGE_MIN and market_ahead:
+    if D >= EDGE_MIN and not model_leads:
         k = pros.get("weight_on_disagreement") or {}
-        flags.append({"name": "MARKET_BEAT_THE_MODEL", "level": "MODERATE", "text": (f"on the {pros.get('games')} games priced so far the market's no-vig probability had log loss {pll['M']} against this model's {pll['H']}: when they disagree the market has been "
-                                                                                    f"the better guide (a small sample; the weight a disagreement deserves is {k.get('best')}, 95% range {k.get('ci95')}). The model's disagreement has not been shown to mean anything")})
+        market_better = pll.get("M") is not None and pll.get("H") is not None and pll["M"] <= pll["H"]
+        flags.append({"name": "MODEL_NOT_SHOWN_TO_BEAT_MARKET", "level": "MODERATE",
+                      "text": (f"on the {pros.get('games', 'few')} games priced so far " + (f"the market's no-vig probability had log loss {pll['M']} against this model's {pll['H']}: when they disagree the market has been the better guide"
+                                                                                           if market_better else f"the model's log-loss advantage over the market is within noise (z {pdiff.get('z')}; two are needed)")
+                               + f" (the weight a disagreement deserves is {k.get('best')}, 95% range {k.get('ci95')}). The model's disagreement has not been shown to mean anything")})
     if D >= large:
         flags.append({"name": "MARKET_MAY_KNOW_MORE", "level": "HIGH", "text": f"the model is {pts(D)} above the market, at least the usual size of a model-market gap ({pts(large)}): the market may have injury, goalie or lineup news the model lacks"})
     elif D >= EDGE_MIN:
         flags.append({"name": "MARKET_MAY_KNOW_MORE", "level": "MODERATE", "text": f"the model is {pts(D)} above the market: a gap worth explaining before trusting it"})
-    if D >= EDGE_MIN and not side_is_hockey_fav:
+    if D >= EDGE_MIN and not side_is_hockey_fav and not tossup:
         flags.append({"name": "HOCKEY_PICTURE_AGAINST", "level": "MODERATE", "text": f"the model still rates {hockey_fav} the better team ({pct(p_fav)}); the case for {side_team} is only that the market overrates {hockey_fav}"})
-    if D < EDGE_MIN and not side_is_hockey_fav:
+    if D < EDGE_MIN and not side_is_hockey_fav and not tossup:
         flags.append({"name": "HOCKEY_PICTURE_AGAINST", "level": "HIGH", "text": f"{hockey_fav} is the better team ({pct(p_fav)}) and the price is fair: nothing argues for {side_team} but the odds"})
     if D <= -EDGE_MIN:
         flags.append({"name": "MODEL_SAYS_OVERPRICED", "level": "SEVERE" if D <= -large else "HIGH", "text": f"the model puts {side_team} {pts(-D)} BELOW the market"})
     votes = mv.get("indicator_votes") or {}
     if votes.get(side_team, 0) < votes.get(opp, 0) and D >= EDGE_MIN:
         flags.append({"name": "INDICATORS_FAVOUR_OPPONENT", "level": "MODERATE", "text": f"more of the indicators favour {opp} ({votes.get(opp, 0)}) than {side_team} ({votes.get(side_team, 0)})"})
+    price_flag = _price_length_flag(float(leg.american_price), LONG_PRICE_ML, VERY_LONG_PRICE_ML, "moneyline")
+    if price_flag:
+        flags.append(price_flag)
     if mv["rest"].get(side_team, 7) <= 1 < mv["rest"].get(opp, 7):
         flags.append({"name": "BACK_TO_BACK", "level": "LOW", "text": f"{side_team} played yesterday and {opp} did not (already in the model)"})
     elo_worst = bool(pll and "E" in pll and pll["E"] >= max(pll.values()))
@@ -410,7 +454,7 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
     if abs(mv["xg_net_log_odds_toward_home"]) >= 0.03:
         (case_for if xg_fav == side_team else case_against).append(f"net expected-goal strength favours {xg_fav}")
     case_for.append(f"decayed goal differential per game: {side_team} {me['gd']:+.2f} (league rank {me['ranks']['gd']}), {opp} {th['gd']:+.2f} (rank {th['ranks']['gd']})")
-    if not side_is_hockey_fav:
+    if not side_is_hockey_fav and not tossup:
         case_against.append(f"{hockey_fav} is the better team on the model's own terms ({pct(p_fav)}, a {mv['gap'].lower()} gap)")
     if ttype == "UNDERDOG_AT_FAIR_PRICE":
         case_against.append("the price is fair, so the expected value is the bookmaker's margin, a loss on average")
@@ -442,11 +486,12 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
         historical.append(sh)
     # --- the card
     pass_when = [f"the model-market gap on {side_team} falls below {pct(EDGE_MIN, 0)} (it is {pts(D)} now)", f"the price moves so that {side_team}'s no-vig probability rises above the model's {pct(H)} (about {american_from_prob(H)})",
-                 "a starting-goalie or lineup report that favours the opponent (neither team's starter is confirmed: the confirmation feed is off)", f"{opp} not being the better team on the next refresh of the team data"]
+                 "a starting-goalie or lineup report that favours the opponent (Eggy's review does not use starter, lineup or injury reports)", f"{opp} not being the better team on the next refresh of the team data"]
     comp = _completeness([("team game-by-game data (2008 to date)", True), ("both sides of the market", opp_implied is not None), ("team model evidence file", ev.get("coefficients") is not None), ("rest / back-to-back", True),
                           ("confirmed starting goalies", False), ("injuries and lineup", False), ("this season's games", me["games"] >= 8 and th["games"] >= 8)])
     card.update({
-        "most_likely_outcome": f"{hockey_fav} wins ({pct(p_fav)} by the hockey model; the market says {pct(max(M, 1 - M))} for {market_fav})",
+        "most_likely_outcome": (f"a toss-up: {hockey_fav} {pct(p_fav)} by the hockey model; the market says {pct(max(M, 1 - M))} for {market_fav}" if tossup else
+                                f"{hockey_fav} wins ({pct(p_fav)} by the hockey model; the market says {pct(max(M, 1 - M))} for {market_fav})"),
         "why_tonight": [f"{away} at {home}; {mv['gap'].lower()} gap in favour of {hockey_fav}", f"rest: {home} {mv['rest'][home]}d, {away} {mv['rest'][away]}d",
                         f"last five: {home} {', '.join(('W' if g['gf'] > g['ga'] else 'L') for g in ind[home]['last10'])}; {away} {', '.join(('W' if g['gf'] > g['ga'] else 'L') for g in ind[away]['last10'])}"],
         "hockey_view": {"available": True, "favourite": hockey_fav, "p_favourite": p_fav, "gap": mv["gap"], "drivers": mv["drivers"], "indicators": ind, "model": mv["model"], "data_through": mv["data_through"],
@@ -455,8 +500,8 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
         "market": market_block(leg, estimate_used, H, opp_implied),
         "why_they_disagree": _why_disagree_moneyline(mv, side_team, opp, D),
         "case_for": case_for, "case_against": case_against, "historical": historical,
-        "model_state": {"matchup_model": mv["model"], "evidence_version": ev.get("version"), "team_data_through": mv["data_through"], "skater_state_through": (ctx.skater_state or {}).get("newest_game_date"),
-                        "elo": f"Elo ({'moneyline-t35-v1'}) sees only this season's results (no prior seasons loaded): excluded from the decision"},
+        "model_state": {"matchup_model": mv["model"], "evidence": evidence_stamp(ctx), "team_data_through": mv["data_through"], "skater_state_through": (ctx.skater_state or {}).get("newest_game_date"),
+                        "elo": f"Elo ({'moneyline-t35-v1'}), as the production moneyline model is configured, sees only this season's results (no prior seasons loaded): excluded from the decision"},
         "pass_conditions": pass_when,
     })
     thesis = {"type": ttype, "statement": statement, "strength": strength}
@@ -491,7 +536,7 @@ def _why_disagree_moneyline(mv: dict, side: str, opp: str, D: float) -> list[str
         v = d["log_odds_toward_home"]
         if d["feature"] != "home_ice" and abs(v) >= 0.03:
             out.append(f"the model counts {d['label']} as worth {abs(v):.2f} log-odds in favour of {d.get('favours')}; a market that weighs it differently, or knows news the model lacks, would price the game differently")
-    out.append("the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)")
+    out.append("the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (Eggy's review does not use them)")
     return out
 
 
@@ -508,6 +553,8 @@ def _moneyline_action(ttype: str, contradiction: str, cal: str, completeness: fl
         if contradiction in ("LOW", "MODERATE") and cal in ("HIGH", "MEDIUM"):
             return {"decision": "RECORD", "reasons": ["the model sees value and the thesis survives scrutiny; recorded as an experiment in whether model-market disagreement predicts"]}
         return {"decision": "LOWER_PRIORITY", "reasons": [f"the model sees value but the contradiction is {contradiction} or the calibration is {cal}"]}
+    if ttype == "COIN_FLIP_AT_FAIR_PRICE":
+        return {"decision": "LOWER_PRIORITY", "reasons": ["a toss-up at a fair price: a low-information control sample, no edge"]}
     return {"decision": "LOWER_PRIORITY", "reasons": ["a likely winner at a fair price: a low-variance control sample, no edge"]}
 
 
@@ -547,8 +594,11 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     toi_e, pp_e = ex.get("toi"), ex.get("toi_pp")
     cells = analogue_cells(ctx, market, p_model, grp, toi_e or 0.0, pp_e or 0.0, team_p) if (p_model is not None and toi_e is not None) else []
     adj = best_adjustment(cells)
-    # The estimate is the calibrated model recalibrated by history where history is clear (either direction); otherwise the leg's own estimate (for shots, the player's record held to the model).
-    p_used = estimate_used if (adj is None or p_model is None) else round(min(max(p_model * adj["factor"], 0.001), 0.99), 4)
+    # The estimate is the leg's own (for shots, the player's record held to the model plus at most 0.02: the anchor policy's cap), LOWERED where history is clear that the model runs HIGH for players like this.
+    # History never raises it: a recalibration that lifted an estimate above the leg's own number would be the review manufacturing an edge the capped estimate does not have.
+    recal = bool(adj is not None and p_model is not None and adj["factor"] < 1.0)
+    p_recal = round(min(max(p_model * adj["factor"], 0.001), 0.99), 4) if recal else None
+    p_used = estimate_used if not recal else min(estimate_used, p_recal)
     implied = implied_from_american(float(leg.american_price))
     edge = p_used - implied
     # --- player facts
@@ -578,15 +628,19 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         flags.append({"name": "POWER_PLAY_ASSUMPTION", "level": "MODERATE", "text": f"the model expects {pp_e:.2f} power-play min but he has had {r_pp:.2f} lately"})
     if stat in ("goals", "points") and grp == "F" and p.get("usage_tier") == 4:
         flags.append({"name": "LOW_USAGE", "level": "MODERATE", "text": "inferred fourth-line usage (ice time ranks in the bottom third of his team's forwards)"})
-    env_in_estimate = bool(adj and adj["dimension"] == "env")
+    env_in_estimate = bool(recal and adj["dimension"] == "env")
     if stat in ("goals", "points") and team_p is not None and team_p < 0.35:
         flags.append({"name": "GAME_ENVIRONMENT", "level": "LOW" if env_in_estimate else "MODERATE", "text": f"{team} is a clear underdog tonight ({pct(team_p)} to win): fewer goals for its skaters on average" + (" (history for such teams is already in the estimate)" if env_in_estimate else "")})
     elif stat in ("goals", "points") and team_p is not None and team_p < 0.42:
         flags.append({"name": "GAME_ENVIRONMENT", "level": "LOW", "text": f"{team} is an underdog tonight ({pct(team_p)} to win)"})
-    if adj and adj["factor"] < 1.0:
-        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_HIGH", "level": "HIGH" if adj["z"] <= -3 else "MODERATE", "text": f"for {adj['label']} the model averaged {pct(adj['pred'])} and {pct(adj['obs'])} happened ({adj['n']:,} cases, z {adj['z']:+.1f}): the model's {pct(p_model)} is recalibrated to {pct(p_used)}"})
+    if recal:
+        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_HIGH", "level": "HIGH" if adj["z"] <= -3 else "MODERATE",
+                      "text": (f"for {adj['label']} the model averaged {pct(adj['pred'])} and {pct(adj['obs'])} happened ({adj['n']:,} cases, z {adj['z']:+.1f}): the model's {pct(p_model)} is recalibrated to {pct(p_recal)}"
+                               + (f"; the leg's own estimate ({pct(estimate_used)}) is already lower and is the one used" if estimate_used < p_recal else ""))})
     elif adj:
-        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_LOW", "level": "LOW", "text": f"for {adj['label']} the model averaged {pct(adj['pred'])} and {pct(adj['obs'])} happened ({adj['n']:,} cases, z {adj['z']:+.1f}): the model's {pct(p_model)} is recalibrated up to {pct(p_used)}; part of any gap to the price is the model's, not the market's"})
+        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_LOW", "level": "LOW",
+                      "text": (f"for {adj['label']} the model averaged {pct(adj['pred'])} and {pct(adj['obs'])} happened ({adj['n']:,} cases, z {adj['z']:+.1f}): the model runs LOW for players like this. The estimate is NOT raised "
+                               f"(history may lower an estimate, never lift it above the leg's own number), so part of any gap to the price may be the model's, not the market's")})
     if games_obs < 20:
         flags.append({"name": "THIN_HISTORY", "level": "HIGH", "text": f"only {games_obs} games of history"})
     elif games_obs < THIN_PLAYER_GAMES:
@@ -595,6 +649,9 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         flags.append({"name": "MODEL_FAR_ABOVE_MARKET", "level": "HIGH" if p_used >= 2.0 * implied else "MODERATE", "text": f"our {pct(p_used)} is {p_used / implied:.1f}x the {pct(implied)} the price implies (that figure already includes the bookmaker's margin, so the market's own chance is lower still)"})
     if edge <= -0.05:
         flags.append({"name": "PRICE_ABOVE_ESTIMATE", "level": "HIGH", "text": f"the price implies {pct(implied)}, {pts(-edge)} above our {pct(p_used)}: the market sees more than we do (or charges a large margin)"})
+    price_flag = _price_length_flag(float(leg.american_price), LONG_PRICE_PROP, VERY_LONG_PRICE_PROP, "prop")
+    if price_flag:
+        flags.append(price_flag)
     longshot = implied <= LONGSHOT_IMPLIED
     if longshot:
         flags.append({"name": "LONGSHOT_TAIL", "level": "MODERATE", "text": f"a price of {leg.american_price:+.0f} implies {pct(implied)}: small errors in a tail probability become large relative edges"})
@@ -603,10 +660,16 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     spec = [c for c in cells if c["dimension"] in ("toi", "pp", "grp", "p") and c["n"] >= MIN_CELL_N]
     if spec:
         best_cell = {c["dimension"]: c for c in spec}.get("toi") or {c["dimension"]: c for c in spec}.get("pp") or spec[-1]
-    if adj is not None:
-        cal = "HIGH" if adj["n"] >= 1000 else "MEDIUM"          # recalibrated to what happened to 300+ (1000+) players like this: the estimate IS the observed rate
+    if recal:
+        # lowered to what happened to 300+ players like this; HIGH needs a cell with 1000+ cases that is specific to the player (his ice time, his power play, his team's environment) beside the population-level band, which says little about him
+        cal = "HIGH" if any(c["dimension"] in ("toi", "pp", "env") and c["n"] >= 1000 for c in cells) else "MEDIUM"
     elif best_cell:
-        cal = calibration_level(best_cell["n"], best_cell["pred"], best_cell["obs"], best_cell["se"])
+        # The question is whether the estimate can be OVERSTATED. A model that ran LOW in this cell (more happened than it said) cannot make a capped estimate too high, so that direction is not held against it
+        # (the flag HISTORY_SAYS_MODEL_RUNS_LOW already says the estimate is conservative); a model that ran HIGH is tested two-sided as before.
+        seen = best_cell["obs"] if best_cell["obs"] < best_cell["pred"] else best_cell["pred"]
+        cal = calibration_level(best_cell["n"], best_cell["pred"], seen, best_cell["se"])
+        if best_cell["dimension"] == "p" and cal == "HIGH":
+            cal = "MEDIUM"          # only the population-level cell exists: it vouches for the model in this band, not for this player
     else:
         cal = "INSUFFICIENT"
     if stat == "shots" and cal in ("INSUFFICIENT", "LOW") and leg.empirical_games and leg.empirical_games >= 20 and estimate_basis == "ANCHORED_RECORD_ESTIMATE":
@@ -616,11 +679,18 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     if longshot and not (cal == "HIGH" and games_obs >= LONGSHOT_MIN_PLAYER_GAMES):
         cal = "LOW" if cal in ("HIGH", "MEDIUM") else cal
     # --- thesis
+    lowered = recal and p_used < estimate_used
     if edge >= EDGE_MIN:
         ttype, strength = "MODEL_SEES_VALUE", ("STRONG" if edge >= 2 * EDGE_MIN else "MODERATE")
-        statement = (f"{leg.participant_name}'s {market_name_short(stat, k)} is priced as {pct(implied)} but the calibrated model{' (recalibrated by history)' if adj else ''} says {pct(p_used)}: {pts(edge)} at the last observed price"
-                     f"{' (the price implies the book margin, so the true gap is larger)' if leg.market_family != 'MONEYLINE' else ''}. It is a longshot that loses most of the time; the case is value, not likelihood." if p_used < 0.25 else
-                     f"{leg.participant_name} is likely to reach {market_name_short(stat, k)} ({pct(p_used)}) and the price implies only {pct(implied)}: {pts(edge)}.")
+        head = f"{leg.participant_name}'s {market_name_short(stat, k)} is priced as {pct(implied)}"
+        if p_used >= 0.5:
+            statement = f"{leg.participant_name} is likely to reach {market_name_short(stat, k)} ({pct(p_used)}{', lowered by history' if lowered else ''}) and the price implies only {pct(implied)}: {pts(edge)}."
+        elif p_used >= 0.25:
+            statement = (f"{head} but the estimate{' (lowered by history)' if lowered else ''} is {pct(p_used)}: {pts(edge)} at the last observed price. It is less likely than not to happen; the case is value, not likelihood"
+                         f"{' (the price implies the book margin, so the true gap is larger)' if leg.market_family != 'MONEYLINE' else ''}.")
+        else:
+            statement = (f"{head} but the estimate{' (lowered by history)' if lowered else ''} is {pct(p_used)}: {pts(edge)} at the last observed price"
+                         f"{' (the price implies the book margin, so the true gap is larger)' if leg.market_family != 'MONEYLINE' else ''}. It is a longshot that loses most of the time; the case is value, not likelihood.")
     elif edge > -EDGE_MIN:
         ttype, strength = "FAIR_PRICED", "WEAK"
         statement = f"The price ({pct(implied)}) and our estimate ({pct(p_used)}) are within {pct(EDGE_MIN, 0)} of each other: fair, no edge."
@@ -660,11 +730,11 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         "player_view": {"position": p["position"], "games_total": p["games_total"], "usage_tier": p.get("usage_tier"), "pp_usage": p.get("pp_usage"), "season": season, "expected": ex, "recent_toi": round(r_toi, 2),
                         "recent_pp": round(r_pp, 2), "last_games": recent, "hit_rates": hr},
         "hockey_view": ({"available": True, "favourite": mv["favourite"], "p_favourite": mv["p_favourite"], "gap": mv["gap"], "team_win_probability": team_p, "data_through": mv["data_through"], "model": mv["model"]} if mv and mv.get("available") else {"available": False}),
-        "probabilities": {"model": p_model, "model_raw": probs.get("raw"), "estimate_used": p_used, "leg_estimate_before_recalibration": round(estimate_used, 4), "estimate_basis": estimate_basis, "recalibration": adj},
+        "probabilities": {"model": p_model, "model_raw": probs.get("raw"), "estimate_used": p_used, "leg_estimate_before_recalibration": round(estimate_used, 4), "estimate_basis": estimate_basis, "recalibration": (None if adj is None else {**adj, "applied": recal, "applied_as": ("lowered the estimate" if lowered else ("the leg's own estimate was already lower" if recal else "not applied: history never raises an estimate"))})},
         "market": market_block(leg, p_used, p_model),
-        "why_they_disagree": _why_disagree_prop(leg, p_used, implied, edge, adj, stat),
+        "why_they_disagree": _why_disagree_prop(leg, p_used, implied, edge, adj if recal else None, stat),
         "case_for": case_for, "case_against": case_against, "historical": historical,
-        "model_state": {"skater_model": "player-rate-toi-v2 + Platt calibration", "skater_state_through": ctx.skater_state.get("newest_game_date"), "team_model": (mv or {}).get("model"), "evidence_version": (ctx.evidence or {}).get("version"),
+        "model_state": {"skater_model": "player-rate-toi-v2 + Platt calibration", "skater_state_through": ctx.skater_state.get("newest_game_date"), "team_model": (mv or {}).get("model"), "evidence": evidence_stamp(ctx),
                         "estimate_basis": estimate_basis},
         "pass_conditions": pass_when,
         "claims": [{"id": "expected_toi", "text": "expected ice time", "value": toi_e}, {"id": "expected_pp", "text": "expected power-play minutes", "value": pp_e}, {"id": "expected_stat", "text": f"expected {stat}", "value": ex.get(stat)},
@@ -725,7 +795,7 @@ def review_saves(ctx: Context, leg, estimate_basis: str, estimate_used: float) -
     edge = estimate_used - implied
     card.update({"most_likely_outcome": f"{leg.participant_name} makes {leg.threshold}+ saves ({pct(estimate_used)})" if estimate_used >= 0.5 else f"{leg.participant_name} makes fewer than {leg.threshold} saves ({pct(1 - estimate_used)})",
                  "probabilities": {"model": round(estimate_used, 4), "estimate_used": round(estimate_used, 4), "estimate_basis": estimate_basis}, "market": market_block(leg, estimate_used, estimate_used),
-                 "case_for": [f"goalie model {pct(estimate_used)} vs price-implied {pct(implied)}"], "case_against": ["the starter is not confirmed by an official feed (Eggy's feed is off); the adapter's own starter gate still applies"],
+                 "case_for": [f"goalie model {pct(estimate_used)} vs price-implied {pct(implied)}"], "case_against": ["Eggy's review does not use a starter confirmation; the adapter's own starter gate still applies"],
                  "historical": [], "why_tonight": [f"{leg.team} vs {leg.opponent}"], "why_they_disagree": [], "pass_conditions": ["the starter changes"], "model_state": {"goalie_model": "goalie-team-v1"}, "claims": []})
     card["thesis"] = {"type": "FAIR_PRICED" if abs(edge) < EDGE_MIN else ("MODEL_SEES_VALUE" if edge > 0 else "PRICE_ABOVE_ESTIMATE"), "statement": f"estimate {pct(estimate_used)} vs price {pct(implied)} ({pts(edge)})", "strength": "WEAK"}
     card["contradiction"] = {"level": "MODERATE", "flags": [{"name": "STARTER_UNCONFIRMED", "level": "MODERATE", "text": "starting goalie not officially confirmed"}]}
@@ -808,6 +878,7 @@ def review_leg(ctx: Context, leg, estimate_basis: str, estimate_used: float) -> 
         return card
     except Exception as exc:  # noqa: BLE001
         card = _card_shell(leg, "", "ERROR")
+        card["error"] = f"{exc.__class__.__name__}: {exc}"
         card.update({"most_likely_outcome": "unknown", "thesis": {"type": "NONE", "statement": f"the review failed: {exc.__class__.__name__}: {exc}", "strength": "NONE"},
                      "contradiction": {"level": "SEVERE", "flags": [{"name": "REVIEW_FAILED", "level": "SEVERE", "text": f"{exc.__class__.__name__}: {exc}"}]}, "calibration_confidence": {"level": "INSUFFICIENT"},
                      "data_completeness": {"present": [], "missing": ["review"], "k": 0, "n": 1, "fraction": 0.0}, "decision_confidence": "LOW", "case_for": [], "case_against": [str(exc)], "historical": [],

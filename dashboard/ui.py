@@ -620,11 +620,16 @@ def intelligence_card(card: dict | None, review: dict | None = None) -> None:
     st.markdown(" ".join(chips), unsafe_allow_html=True)
     if card.get("reconstructed"):
         st.caption(esc(card.get("reconstruction_note") or ""))
+    reasons = (card.get("action") or {}).get("reasons") or []
+    if reasons:
+        st.caption(("Why Eggy recorded it: " if act in ("RECORD", "LOWER_PRIORITY") else "Why the review passes: ") + esc("; ".join(reasons)))
     a = (review or {}).get("assessment") or {}
     if a and (a.get("outcome") in ("WIN", "LOSS", "VOID", "UNRESOLVED")):
         dq = (a.get("decision_quality") or {}).get("label")
         st.markdown(f"**OUTCOME** {chip(_words(a['outcome']), _OUTCOME_TONE.get(a['outcome'], 'muted'))} &nbsp; **DECISION RESULT** {chip(_words(dq), _DECISION_TONE.get(dq, 'muted'))}", unsafe_allow_html=True)
         st.caption("Two separate results: what the game did, and whether the choice was a good one given what was known before it. " + esc("; ".join((a.get("decision_quality") or {}).get("reasons") or [])))
+        if not (review or {}).get("facts_complete"):
+            st.caption("Provisional: the official box score is in, but power-play time and expected goals land with the MoneyPuck file (usually the next day) and may change this review.")
     ans = card.get("answers") or ei.standard_answers(card)
     for key, label in _ANSWER_LABELS:
         v = ans.get(key)
@@ -648,7 +653,9 @@ def intelligence_card(card: dict | None, review: dict | None = None) -> None:
         st.markdown(f"**Data completeness** {dc.get('k', 0)} of {dc.get('n', 0)} inputs present · missing: " + (", ".join(esc(x) for x in dc.get("missing") or []) or "none"))
         ev = (card.get("calibration_confidence") or {}).get("evidence")
         if ev:
-            st.caption("Calibration evidence: " + esc(ev.get("label") or "") + f" ({ev.get('n', 0):,} cases; the model averaged {_lx_pct(ev.get('pred'), 1)}, {_lx_pct(ev.get('obs'), 1)} happened)")
+            what = ev.get("label") or (f"the team model's probabilities in the {ev.get('band')} band ({ev.get('seasons')})" if ev.get("band") else "")
+            pred, obs = ev.get("pred", ev.get("predicted")), ev.get("obs", ev.get("observed"))
+            st.caption("Calibration evidence: " + esc(what) + f" ({int(ev.get('n') or 0):,} cases; the model averaged {_lx_pct(pred, 1)}, {_lx_pct(obs, 1)} happened)")
         ms = card.get("model_state") or {}
         if ms:
             st.caption("Model state: " + " · ".join(f"{_words(k)}: {esc(v)}" for k, v in ms.items() if v))
@@ -665,7 +672,8 @@ def intelligence_card(card: dict | None, review: dict | None = None) -> None:
             st.markdown(esc(line))
         pf = facts.get("player")
         if pf:
-            st.markdown(esc(f"{pf.get('toi')} min on ice" + (f", {pf['toi_pp']} on the power play" if pf.get("toi_pp") is not None else "") + f", {pf.get('shots'):g} shots, {pf.get('goals'):g} goals, {pf.get('points'):g} points ({pf.get('source')})"))
+            num = lambda v: "—" if v is None else f"{v:g}"
+            st.markdown(esc(f"{num(pf.get('toi'))} min on ice" + (f", {pf['toi_pp']} on the power play" if pf.get("toi_pp") is not None else "") + f", {num(pf.get('shots'))} shots, {num(pf.get('goals'))} goals, {num(pf.get('points'))} points ({pf.get('source')})"))
         claims = a.get("claims") or []
         if claims:
             st.markdown("**WAS THE THESIS RIGHT?** (each factual claim checked against what happened)")
@@ -745,6 +753,8 @@ def learning_experiment_panel(doc: dict | None) -> None:
                        "so a day can record fewer than 10 bets.")
             if sf.get("intelligence_unavailable"):
                 st.warning("Eggy's review could not run this cycle, so nothing was recorded: " + esc(sf["intelligence_unavailable"]))
+            if sf.get("review_errors"):
+                st.warning(f"{sf['review_errors']} candidate review(s) FAILED (an engine error, not a judgment): " + esc("; ".join(f"{k} (x{v})" for k, v in (sf.get("review_error_examples") or {}).items())))
     bets = doc.get("bets_today") or []
     if bets:
         st.markdown("**Today's experiment bets**")

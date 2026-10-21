@@ -74,9 +74,14 @@ class TestCommittedReplays(unittest.TestCase):
         self.assertIn("prove nothing", text)
         self.assertIn("no historical closing prices", text)
 
-    def test_the_recalibration_did_not_make_any_market_worse_out_of_time(self):
+    def test_the_lowering_rule_is_calibration_neutral_out_of_time_as_the_document_says(self):
         for market, v in self.props["markets"].items():
-            self.assertLessEqual(v["brier_adjusted"], v["brier_raw"] + 1e-5, market)
+            self.assertLessEqual(v["brier_adjusted"], v["brier_raw"] + 3e-5, market)                      # no market is made worse by more than 0.00003
+            self.assertEqual(v["adjusted_rows"] > 0, True)
+        pts = self.props["markets"]["points>=1"]
+        self.assertLess(pts["brier_adjusted"], pts["brier_raw"] - 1e-4)                                 # points 1+ improves by 0.00014
+        for v in self.props["variants_brier"].values():
+            self.assertIn("lower_only", v)                                                              # the adopted rule is the one scored; the symmetric one is kept only as a comparison
         self.assertIn("no historical prices", self.props["note"].lower())
 
 

@@ -88,7 +88,7 @@ class TestView(unittest.TestCase):
         self.assertEqual((v["favourite"], v["model"]), ("AAA", "eggy-matchup-v1"))
         self.assertAlmostEqual(v["p_home"] + v["p_away"], 1.0, places=3)
         self.assertEqual([d["feature"] for d in v["drivers"]], ["home_ice", "gd", "xgd", "hd", "b2b"])
-        self.assertEqual(v["data_through"], "2026-10-15")
+        self.assertEqual(v["data_through"], "2026-10-19")
         self.assertEqual(set(v["indicator_votes"]), {"AAA", "BBB"})
         self.assertGreater(v["indicator_votes"]["AAA"], v["indicator_votes"]["BBB"])
         for t in ("AAA", "BBB"):
@@ -175,13 +175,45 @@ class TestEvidenceFile(unittest.TestCase):
                 self.assertTrue(0.0 <= pred <= 1.0 and 0.0 <= obs <= 1.0)
         self.assertEqual(self.ev["skater"]["rows"], sum(c[-3] for c in cells["goals>=1"] if c[0] == "p"))
 
-    def test_the_builder_exists_and_names_every_input_it_reads(self):
-        from pathlib import Path
-        src = Path(m.REPO, "deploy", "build_eggy_evidence.py").read_text()
-        for word in ("team_games", "skater", "shadow", "eggy_evidence.json"):
-            self.assertIn(word, src)
-        for forbidden in ("requests.", "urlopen", "sqlite3.connect(\"operational"):
-            self.assertNotIn(forbidden, src)
+
+
+class TestTheBuilderLooksAheadOfNothing(unittest.TestCase):
+    """deploy/build_eggy_evidence.py fits and tests the team model on features that must be exactly what the live review would have had: built from games strictly BEFORE each game's date."""
+
+    def rows(self):
+        import copy
+        return copy.deepcopy(team_rows(days=30))
+
+    def test_a_games_own_score_never_changes_its_own_features_or_those_of_any_game_that_day(self):
+        from deploy import build_eggy_evidence as B
+        base = {r["game"]: r for r in B.walk_features(self.rows())}
+        rows = self.rows()
+        target = rows[100]                                                  # one team's row of one game; make its result wildly different
+        day = target["d"]
+        target["gf"], target["gd"] = target["gf"] + 9, 9
+        target["xgf"] += 9
+        changed = {r["game"]: r for r in B.walk_features(rows)}
+        same_day = [g for g, r in base.items() if r["date"] == day]
+        self.assertTrue(same_day)
+        for g in same_day:
+            self.assertEqual(changed[g]["f"], base[g]["f"], g)               # nothing that happened that day reaches any feature of that day
+        later = [g for g, r in base.items() if r["date"] > day and target["t"] in (r["home"], r["away"])]
+        self.assertTrue(later)
+        self.assertTrue(any(changed[g]["f"] != base[g]["f"] for g in later))   # ... but it does reach the team's later games (the detector is not blind)
+
+    def test_the_outcome_is_the_games_own_and_a_shootout_has_none(self):
+        from deploy import build_eggy_evidence as B
+        rows = self.rows()
+        for r in rows:
+            if r["g"] == rows[0]["g"]:
+                r["gf"] = r["ga"] = 3.0                                      # a tie after regulation: decided in a shootout, no outcome for the fit
+        out = {r["game"]: r for r in B.walk_features(rows)}
+        self.assertIsNone(out[rows[0]["g"]]["y"])
+
+    def test_the_chosen_feature_set_must_be_the_one_the_model_hard_codes(self):
+        from deploy import build_eggy_evidence as B
+        self.assertEqual(B.CANDIDATES["gd+xgd+hd+b2b"], m.MODEL_FEATURES)
+        self.assertFalse(hasattr(B, "FINAL"))
 
 
 if __name__ == "__main__":

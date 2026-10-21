@@ -2,6 +2,7 @@
 every ordering and every "never" is pinned. No data file is read except the committed evidence file (docs/validation/eggy_evidence.json), and only for the team model's fitted coefficients."""
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import inspect
 import json
@@ -17,7 +18,7 @@ AS_OF = "2026-10-20"
 
 
 # ------------------------------------------------------------------------------------------------ synthetic teams
-def team_rows(days: int = 45, start: dt.date = dt.date(2026, 9, 1)) -> list[dict]:
+def team_rows(days: int = 45, start: dt.date = dt.date(2026, 9, 5)) -> list[dict]:
     """Six teams playing every day: AAA strong, BBB weak, CCC to FFF average. Deterministic."""
     teams = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
     att = {"AAA": 3.8, "BBB": 2.2, "CCC": 3.0, "DDD": 3.0, "EEE": 3.0, "FFF": 3.0}
@@ -108,18 +109,34 @@ class TestRules(unittest.TestCase):
 
     def test_stale_state_makes_the_layer_unusable_and_says_how_old(self):
         ok, why = ei.usable(make_ctx())
-        self.assertTrue(ok, why)                                                              # synthetic team data ends 2026-10-15, reviewed as of 2026-10-20: five days is still current
+        self.assertTrue(ok, why)                                                              # synthetic team data ends 2026-10-19, reviewed as of 2026-10-20: one day old
         late = make_ctx()
-        late.as_of = "2026-10-22"
+        late.as_of = "2026-10-22"                                                             # three days after the newest game is still current ...
+        self.assertTrue(ei.usable(late)[0])
+        late.as_of = "2026-10-23"                                                             # ... four is not
         ok, why = ei.usable(late)
         self.assertFalse(ok)
-        self.assertIn("team data is 7 days old", why)
+        self.assertIn("team data is 4 days old", why)
         stale_skaters = make_ctx()
         stale_skaters.skater_state = {"players": {}, "newest_game_date": "2026-10-10"}
         ok, why = ei.usable(stale_skaters)
         self.assertFalse(ok)
         self.assertIn("skater data is 10 days old", why)
-        self.assertEqual(ei.STALE_DATA_DAYS, 5)
+        self.assertEqual(ei.STALE_DATA_DAYS, 3)
+
+    def test_an_old_evidence_file_makes_the_layer_unusable_until_it_is_rebuilt(self):
+        import copy
+        ev = copy.deepcopy(matchup.load_evidence())
+        ctx = make_ctx(evidence=ev)
+        ev["built_at_utc"] = "2026-10-01T00:00:00Z"
+        ctx.now = dt.datetime(2026, 10, 20, 21, 0, tzinfo=dt.timezone.utc)                   # 19 days later: inside the 21-day life
+        self.assertTrue(ei.usable(ctx)[0])
+        ctx.now = dt.datetime(2026, 10, 25, 21, 0, tzinfo=dt.timezone.utc)                   # 24 days
+        ok, why = ei.usable(ctx)
+        self.assertFalse(ok)
+        self.assertIn("evidence file is 24 days old", why)
+        ev["built_at_utc"] = "garbage"
+        self.assertIn("unreadable", ei.usable(ctx)[1])
 
     def test_there_is_no_weighted_intelligence_score(self):
         src = inspect.getsource(ei)
@@ -162,6 +179,19 @@ class TestSkaterAnalogues(unittest.TestCase):
     def test_too_few_cases_or_a_small_gap_adjusts_nothing(self):
         self.assertIsNone(ei.best_adjustment([{"dimension": "toi", "label": "", "n": 299, "pred": 0.15, "obs": 0.05, "se": 0.01, "z": -10.0}]))
         self.assertIsNone(ei.best_adjustment([{"dimension": "toi", "label": "", "n": 5000, "pred": 0.15, "obs": 0.14, "se": 0.01, "z": -1.9}]))
+
+    def test_a_cell_with_no_events_does_not_get_a_near_zero_error_and_a_huge_z(self):
+        ev = self.evidence([["p", 0.1, 0.2, 5000, 0.15, 0.15], ["toi", "F", 12, 16, 0.1, 0.2, 377, 0.015, 0.0]])
+        cells = ei.analogue_cells(make_ctx(evidence=ev), "goals>=1", 0.015 + 0.1, "F", 14.0, 0.1, None)
+        toi = [c for c in cells if c["dimension"] == "toi"][0]
+        self.assertLess(abs(toi["z"]), 5)                                                   # the error is the one under what the model said, not under the zero that happened
+        adj = ei.best_adjustment([{**toi, "n": 377, "pred": 0.015, "obs": 0.0, "z": -2.4}])
+        self.assertEqual((adj["factor"], adj["raw_factor"]), (ei.FACTOR_FLOOR, 0.0))        # never scaled all the way to zero
+
+    def test_a_probability_below_the_first_band_is_in_the_first_band(self):
+        self.assertEqual(ei._band_of([0.1, 0.2, 0.3], 0.05), (0.1, 0.2))
+        self.assertEqual(ei._band_of([0.1, 0.2, 0.3], 0.25), (0.2, 0.3))
+        self.assertEqual(ei._band_of([0.1, 0.2, 0.3], 0.9), (0.2, 0.3))
 
     def test_an_unknown_market_has_no_cells(self):
         self.assertEqual(ei.analogue_cells(make_ctx(evidence={"skater": {"p_bands": {}}}), "goals>=1", 0.2, "F", 14.0, 0.1, None), [])
@@ -234,6 +264,49 @@ class TestActionRules(unittest.TestCase):
         self.assertEqual(A("LIKELY_WINNER_AT_FAIR_PRICE", "LOW", "HIGH", 0.7, True, 0.0)["decision"], "LOWER_PRIORITY")
         self.assertEqual(A("MODEL_SEES_VALUE", "LOW", "INSUFFICIENT", 0.7, True, 0.04)["decision"], "PASS")
         self.assertEqual(A("MODEL_SEES_VALUE", "LOW", "HIGH", 0.4, True, 0.04)["decision"], "PASS")
+
+
+class TestPriceLengthLadder(unittest.TestCase):
+    """Owner, 2026-10-21: extra skepticism for a +150 or longer moneyline, a +300 prop, and +600 and longer."""
+
+    def test_the_rungs(self):
+        f = ei._price_length_flag
+        for price, level in ((149.0, None), (150.0, "MODERATE"), (299.0, "MODERATE"), (300.0, "HIGH"), (900.0, "HIGH")):
+            got = f(price, ei.LONG_PRICE_ML, ei.VERY_LONG_PRICE_ML, "moneyline")
+            self.assertEqual(got["level"] if got else None, level, price)
+        for price, level in ((299.0, None), (300.0, "MODERATE"), (599.0, "MODERATE"), (600.0, "HIGH"), (2500.0, "HIGH")):
+            got = f(price, ei.LONG_PRICE_PROP, ei.VERY_LONG_PRICE_PROP, "prop")
+            self.assertEqual(got["level"] if got else None, level, price)
+        self.assertEqual(f(-130.0, 300.0, 600.0, "prop"), None)
+        self.assertEqual((ei.LONG_PRICE_ML, ei.VERY_LONG_PRICE_ML, ei.LONG_PRICE_PROP, ei.VERY_LONG_PRICE_PROP), (150.0, 300.0, 300.0, 600.0))
+
+    def test_a_long_moneyline_underdog_carries_the_flag(self):
+        ctx = make_ctx()
+        leg = ml_leg(ctx, "BBB", -0.01)                                              # the weaker team: a long price in this synthetic league
+        self.assertGreaterEqual(leg.american_price, 300.0)
+        c = ei.review_leg(ctx, leg, "MARKET_NO_VIG", leg.conservative_probability)
+        flags = {f["name"]: f["level"] for f in c["contradiction"]["flags"]}
+        self.assertEqual(flags["LONG_PRICE"], "HIGH")
+
+    def test_a_valued_longshot_prop_cannot_be_a_record(self):
+        ctx = make_ctx()
+        ctx.skater_state = {"players": {"9": skater()}, "newest_game_date": "2026-10-19"}
+        ctx.by_player = {"9": history_rows()}
+        leg = prop_leg(fam="PLAYER_GOALS", k=1, price=650.0, p=0.20)
+        with mock.patch("research.product_models.live.project_matchup", return_value=projection(0.20, market="goals>=1")):
+            c = ei.review_leg(ctx, leg, "MODEL_PROBABILITY_UNANCHORED", 0.20)
+        flags = {f["name"]: f["level"] for f in c["contradiction"]["flags"]}
+        self.assertEqual(flags["LONG_PRICE"], "HIGH")
+        self.assertEqual(c["thesis"]["type"], "MODEL_SEES_VALUE")
+        self.assertEqual(c["action"]["decision"], "LOWER_PRIORITY")                  # an edge exists, the price is very long: weaker than a record
+
+    def test_a_short_priced_prop_is_untouched_by_the_ladder(self):
+        ctx = make_ctx()
+        ctx.skater_state = {"players": {"9": skater()}, "newest_game_date": "2026-10-19"}
+        ctx.by_player = {"9": history_rows()}
+        with mock.patch("research.product_models.live.project_matchup", return_value=projection(0.72)):
+            c = ei.review_leg(ctx, prop_leg(price=-110.0, p=0.72), "ANCHORED_RECORD_ESTIMATE", 0.72)
+        self.assertNotIn("LONG_PRICE", [f["name"] for f in c["contradiction"]["flags"]])
 
 
 class TestEdgeClassAndRanking(unittest.TestCase):
@@ -343,11 +416,11 @@ class TestMoneylineReview(unittest.TestCase):
         self.assertEqual(c["action"]["decision"], "LOWER_PRIORITY")
         self.assertEqual(c["contradiction"]["level"], "LOW")
 
-    def test_a_model_edge_is_only_lower_priority_while_the_market_has_beaten_the_model(self):
+    def test_a_model_edge_is_only_lower_priority_until_the_model_has_beaten_the_market(self):
         c = self.review("AAA", shift=-0.045)
         self.assertEqual(c["thesis"]["type"], "MODEL_SEES_VALUE")
         names = {f["name"]: f["level"] for f in c["contradiction"]["flags"]}
-        self.assertEqual((names["MARKET_MAY_KNOW_MORE"], names["MARKET_BEAT_THE_MODEL"]), ("MODERATE", "MODERATE"))          # a gap worth explaining, and a record that says the market was the better guide
+        self.assertEqual((names["MARKET_MAY_KNOW_MORE"], names["MODEL_NOT_SHOWN_TO_BEAT_MARKET"]), ("MODERATE", "MODERATE"))          # a gap worth explaining, and a record that has not shown the model beating the market
         self.assertEqual((c["contradiction"]["level"], c["action"]["decision"]), ("HIGH", "LOWER_PRIORITY"))                 # two moderate doubts compound
         prospective = [h for h in c["historical"] if h["kind"] == "MODEL_VS_MARKET_PROSPECTIVE"]
         self.assertTrue(prospective)                                                           # the card quotes the record of this model against the market ...
@@ -355,16 +428,70 @@ class TestMoneylineReview(unittest.TestCase):
         self.assertIn("EXPERIMENT", c["thesis"]["statement"])
         self.assertNotEqual(c["decision_confidence"], "HIGH")                                  # an unvalidated edge never earns HIGH confidence
 
-    def test_the_same_edge_is_recorded_once_the_model_has_led_the_market(self):
+    def _with_paired(self, z, h=0.60, m=0.64):
         import copy
         ev = copy.deepcopy(matchup.load_evidence())
-        ev["matchup"]["prospective_vs_market"]["log_loss"].update({"H": 0.60, "M": 0.64})               # the evidence changes: the model now leads
+        ev["matchup"]["prospective_vs_market"]["log_loss"].update({"H": h, "M": m})
+        ev["matchup"]["prospective_vs_market"]["paired_difference"] = {"market_minus_model_log_loss": m - h, "standard_error": 0.01, "z": z, "games": 87}
+        ctx = make_ctx(evidence=ev)
+        leg = ml_leg(ctx, "AAA", -0.045)
+        return ei.review_leg(ctx, leg, "MARKET_NO_VIG", leg.conservative_probability)
+
+    def test_the_same_edge_is_recorded_once_the_model_has_led_the_market_by_two_standard_errors(self):
+        c = self._with_paired(z=3.0)
+        self.assertNotIn("MODEL_NOT_SHOWN_TO_BEAT_MARKET", [f["name"] for f in c["contradiction"]["flags"]])
+        self.assertEqual((c["contradiction"]["level"], c["action"]["decision"]), ("MODERATE", "RECORD"))
+        self.assertIn("ahead of the market", " ".join(h["text"] for h in c["historical"]))
+
+    def test_a_lead_within_noise_is_not_a_lead_and_the_rule_does_not_flip_on_a_few_thousandths(self):
+        for z in (-0.2, 0.4, 1.99):                                                          # the market ahead, level, or the model ahead by less than two standard errors
+            c = self._with_paired(z=z, h=0.6400 if z < 0 else 0.6360, m=0.6390 if z < 0 else 0.6400)
+            self.assertIn("MODEL_NOT_SHOWN_TO_BEAT_MARKET", [f["name"] for f in c["contradiction"]["flags"]], z)
+            self.assertEqual(c["action"]["decision"], "LOWER_PRIORITY", z)
+        within = [f for f in self._with_paired(z=1.0, h=0.636, m=0.640)["contradiction"]["flags"] if f["name"] == "MODEL_NOT_SHOWN_TO_BEAT_MARKET"][0]
+        self.assertIn("within noise", within["text"])
+        worse = [f for f in self._with_paired(z=-1.0, h=0.644, m=0.640)["contradiction"]["flags"] if f["name"] == "MODEL_NOT_SHOWN_TO_BEAT_MARKET"][0]
+        self.assertIn("the better guide", worse["text"])
+
+    def test_an_evidence_file_without_the_paired_statistic_never_lets_the_model_lead(self):
+        import copy
+        ev = copy.deepcopy(matchup.load_evidence())
+        del ev["matchup"]["prospective_vs_market"]["paired_difference"]
         ctx = make_ctx(evidence=ev)
         leg = ml_leg(ctx, "AAA", -0.045)
         c = ei.review_leg(ctx, leg, "MARKET_NO_VIG", leg.conservative_probability)
-        self.assertNotIn("MARKET_BEAT_THE_MODEL", [f["name"] for f in c["contradiction"]["flags"]])
-        self.assertEqual((c["contradiction"]["level"], c["action"]["decision"]), ("MODERATE", "RECORD"))
-        self.assertIn("ahead of the market", " ".join(h["text"] for h in c["historical"]))
+        self.assertIn("MODEL_NOT_SHOWN_TO_BEAT_MARKET", [f["name"] for f in c["contradiction"]["flags"]])
+
+    def _toss_card(self, team, market_p, p_home=0.505):
+        ctx = make_ctx()
+        v = ei.team_view(ctx, "AAA", "BBB")
+        opp = "BBB" if team == "AAA" else "AAA"
+        leg = base_leg(participant_id=team, participant_name=team, team=team, opponent=opp, side="HOME" if team == "AAA" else "AWAY", market_probability=market_p, conservative_probability=market_p,
+                       american_price=float(prob_to_american(market_p * 1.04)))
+        fake = {**v, "p_home": p_home, "p_away": round(1 - p_home, 4), "favourite": "AAA" if p_home >= 0.5 else "BBB", "p_favourite": max(p_home, 1 - p_home)}
+        with mock.patch.object(ei, "team_view", return_value=fake):
+            return ei.review_leg(ctx, leg, "MARKET_NO_VIG", market_p)
+
+    def test_a_toss_up_is_a_toss_up_not_a_weaker_team(self):
+        for team, m in (("AAA", 0.505), ("AAA", 0.52), ("BBB", 0.495), ("BBB", 0.48)):
+            c = self._toss_card(team, m)
+            self.assertEqual(c["thesis"]["type"], "COIN_FLIP_AT_FAIR_PRICE", (team, m))
+            self.assertNotIn("weaker team", c["thesis"]["statement"])
+            self.assertNotIn("HOCKEY_PICTURE_AGAINST", [f["name"] for f in c["contradiction"]["flags"]])
+            self.assertEqual(c["action"]["decision"], "LOWER_PRIORITY")
+            self.assertTrue(c["most_likely_outcome"].startswith("a toss-up"))
+
+    def test_a_marginal_hockey_favourite_the_market_slightly_doubts_is_not_called_the_weaker_team(self):
+        c = self._toss_card("AAA", 0.485)                                                    # model 50.5%, market 48.5%: two points, a toss-up either way
+        self.assertNotEqual(c["thesis"]["type"], "UNDERDOG_AT_FAIR_PRICE")
+        self.assertNotIn("the weaker team", c["thesis"]["statement"])
+
+    def test_a_clear_hockey_favourite_is_a_likely_winner_and_a_clear_underdog_is_an_underdog(self):
+        fav = self._toss_card("AAA", 0.58, p_home=0.60)
+        self.assertEqual(fav["thesis"]["type"], "LIKELY_WINNER_AT_FAIR_PRICE")
+        dog = self._toss_card("BBB", 0.42, p_home=0.60)
+        self.assertEqual((dog["thesis"]["type"], dog["action"]["decision"]), ("UNDERDOG_AT_FAIR_PRICE", "PASS"))
+        self.assertIn("HOCKEY_PICTURE_AGAINST", [f["name"] for f in dog["contradiction"]["flags"]])
 
     def test_a_huge_model_market_gap_is_treated_with_more_suspicion_not_less(self):
         c = self.review("AAA", shift=-0.14)
@@ -508,6 +635,69 @@ class TestPlayerReview(unittest.TestCase):
     def test_a_failed_review_still_answers_every_question(self):
         c = ei.review_leg(make_ctx(), base_leg(market_family="PUCK_LINE", participant_id="9"), "X", 0.5)
         self.assertEqual(set(c["answers"]), set(ANSWER_KEYS))
+
+    EV = {"p_bands": {"shots>=2": [0, 0.5, 0.8, 1.01]}, "toi_bands": [0, 16, 20, 99], "pp_bands": [0, 0.25, 1.0, 99], "env_bands": [0, 0.35, 0.55, 1.01]}
+
+    def evidence_with(self, cells):
+        ev = matchup.load_evidence()
+        return {**ev, "skater": {**self.EV, "cells": {"shots>=2": cells}}}
+
+    def review_with_cells(self, cells, estimate=0.62, p_model=0.60, price=-110.0):
+        ctx = self.ctx()
+        ctx.evidence = self.evidence_with(cells)
+        leg = prop_leg(price=price, p=estimate)
+        with mock.patch("research.product_models.live.project_matchup", return_value=projection(p_model)):
+            return ei.review_leg(ctx, leg, "ANCHORED_RECORD_ESTIMATE", estimate)
+
+    def test_history_can_lower_an_estimate_but_never_raise_it_above_the_legs_own(self):
+        low = [["p", 0.5, 0.8, 5000, 0.60, 0.70], ["toi", "F", 16, 20, 0.5, 0.8, 3000, 0.60, 0.70]]          # the model ran LOW for players like this
+        c = self.review_with_cells(low)
+        self.assertEqual(c["estimate_used"], 0.62)                                                      # not 0.70
+        self.assertFalse(c["probabilities"]["recalibration"]["applied"])
+        self.assertIn("never raise", c["probabilities"]["recalibration"]["applied_as"])
+        self.assertIn("HISTORY_SAYS_MODEL_RUNS_LOW", [f["name"] for f in c["contradiction"]["flags"]])
+        self.assertAlmostEqual(c["market"]["edge_vs_price"], 0.62 - ei.implied_from_american(-110.0), places=3)
+        high = [["p", 0.5, 0.8, 5000, 0.60, 0.50], ["toi", "F", 16, 20, 0.5, 0.8, 3000, 0.60, 0.50]]          # the model ran HIGH
+        c = self.review_with_cells(high)
+        self.assertAlmostEqual(c["estimate_used"], 0.50, places=3)                                         # 0.60 x (0.50 / 0.60)
+        self.assertTrue(c["probabilities"]["recalibration"]["applied"])
+        self.assertIn("HISTORY_SAYS_MODEL_RUNS_HIGH", [f["name"] for f in c["contradiction"]["flags"]])
+        c = self.review_with_cells(high, estimate=0.45)                                                    # the leg's own estimate is already lower: it stays
+        self.assertAlmostEqual(c["estimate_used"], 0.45, places=3)
+        self.assertIn("already lower", " ".join(f["text"] for f in c["contradiction"]["flags"]))
+
+    def test_calibration_is_high_only_when_the_cell_is_specific_to_the_player(self):
+        pop = [["p", 0.5, 0.8, 5000, 0.60, 0.50]]
+        self.assertEqual(self.review_with_cells(pop)["calibration_confidence"]["level"], "MEDIUM")           # a population-level band alone vouches for the model in the band, not for him
+        spec = [["p", 0.5, 0.8, 5000, 0.60, 0.50], ["toi", "F", 16, 20, 0.5, 0.8, 3000, 0.60, 0.50]]
+        self.assertEqual(self.review_with_cells(spec)["calibration_confidence"]["level"], "HIGH")
+        few = [["p", 0.5, 0.8, 5000, 0.60, 0.50], ["toi", "F", 16, 20, 0.5, 0.8, 400, 0.60, 0.50]]
+        self.assertEqual(self.review_with_cells(few)["calibration_confidence"]["level"], "MEDIUM")           # a specific cell with fewer than 1000 cases
+        calibrated = [["p", 0.5, 0.8, 5000, 0.60, 0.601]]
+        self.assertEqual(self.review_with_cells(calibrated)["calibration_confidence"]["level"], "MEDIUM")    # well calibrated, but only at the population level
+
+    def test_the_thesis_wording_follows_the_probability(self):
+        likely = self.review_with_cells([], estimate=0.72, p_model=0.72, price=-110.0)["thesis"]["statement"]
+        self.assertIn("is likely to reach", likely)
+        middling = self.review_with_cells([], estimate=0.40, p_model=0.40, price=+200.0)
+        self.assertEqual(middling["thesis"]["type"], "MODEL_SEES_VALUE")
+        self.assertNotIn("is likely to reach", middling["thesis"]["statement"])
+        self.assertIn("less likely than not", middling["thesis"]["statement"])
+        self.assertTrue(middling["most_likely_outcome"].startswith("Test Player does NOT reach"))        # the card never says both "likely" and "does not"
+
+    def test_an_engine_error_is_an_error_card_with_its_own_field(self):
+        ctx = make_ctx()
+        with mock.patch.object(ei, "review_moneyline", side_effect=ValueError("bad shape")):
+            c = ei.review_leg(ctx, ml_leg(ctx, "AAA"), "MARKET_NO_VIG", 0.6)
+        self.assertEqual((c["kind"], c["error"]), ("ERROR", "ValueError: bad shape"))
+
+    def test_every_card_names_the_evidence_it_stood_on(self):
+        c = self.review_with_cells([])
+        stamp = c["model_state"]["evidence"]
+        self.assertIn(matchup.load_evidence()["_sha256"][:12], stamp)
+        self.assertIn("built", stamp)
+        mlc = ei.review_leg(make_ctx(), ml_leg(make_ctx(), "AAA"), "MARKET_NO_VIG", 0.6)
+        self.assertIn(matchup.load_evidence()["_sha256"][:12], mlc["model_state"]["evidence"])
 
     def test_the_card_says_what_is_missing(self):
         c = self.review(prop_leg(price=-110.0, p=0.72), 0.72)

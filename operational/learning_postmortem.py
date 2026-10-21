@@ -11,6 +11,7 @@ import json
 import math
 from collections import defaultdict
 
+from operational import eastern_time as et
 from operational import eggy_decisions as ed
 from operational import learning_cohort as lc
 from operational import state_paths
@@ -253,7 +254,7 @@ def _load_rows() -> tuple[list, list]:
         return [], []
 
 
-def build_reviews(all_rows: list[dict], nhl_conn, now: dt.datetime, previous: dict | None) -> dict:
+def build_reviews(all_rows: list[dict], nhl_conn, now: dt.datetime, previous: dict | None, integrity: dict | None = None) -> dict:
     """The review of every bet: the card it was recorded with (or, for a bet recorded before the review existed, the card reconstructed from its own day's data, labelled as such), the facts of what happened
     once its game is final, and the assessment of the DECISION apart from the outcome. A finished review is reused from the previous document; only new or newly settled bets are worked out."""
     prior = (previous or {}).get("bet_reviews") or {}
@@ -288,8 +289,9 @@ def build_reviews(all_rows: list[dict], nhl_conn, now: dt.datetime, previous: di
                 except Exception as exc:  # noqa: BLE001
                     card = {"kind": "ERROR", "reconstruction_error": f"{exc.__class__.__name__}: {exc}"}
         facts = ed.facts_for(b, card, nhl_conn, files()[2]) if (card and b["result_status"] in SETTLED) else None
-        out[b["bet_id"]] = {"bet_id": b["bet_id"], "et_date": b["et_date"], "label": lc.label_of(b), "result_status": b["result_status"], "source": source, "card": card, "facts": facts, "facts_complete": facts is not None,
-                            "assessment": ed.assess(b, card, facts)}
+        out[b["bet_id"]] = {"bet_id": b["bet_id"], "et_date": b["et_date"], "label": lc.label_of(b), "result_status": b["result_status"], "source": source, "card": card, "facts": facts,
+                            "facts_complete": ed.facts_are_complete(card, facts, bet_date=b["et_date"], now_date=now.astimezone(et.EASTERN).date().isoformat()),
+                            "assessment": ed.assess(b, card, facts, integrity_defect=bool((integrity or {}).get(b["bet_id"])))}
     return out
 
 
@@ -320,7 +322,7 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     target_date = for_date or (dt.date.fromisoformat(today) - dt.timedelta(days=1)).isoformat()
     day_bets = [b for b in all_rows if b["et_date"] == target_date]
     cls = classify_losses(all_rows, nhl_conn, now) if nhl_conn is not None else {"per_bet": {}, "summary": {}, "policy_note": None}
-    reviews = build_reviews(all_rows, nhl_conn, now, load())
+    reviews = build_reviews(all_rows, nhl_conn, now, load(), {k: v.get("integrity_defect") for k, v in cls["per_bet"].items()})
     bal = lc.balance(conn)
     cumulative = metrics(all_rows)
     final_class: dict = {}
@@ -403,7 +405,7 @@ def snapshot_section() -> dict:
     cb = pm.get("cumulative_breakdowns") or {}
     keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "day_price_age", "cumulative_price_age", "cumulative_price_age_provider", "cumulative_price_status", "dependence", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
     keep["decision_review"] = pm.get("decision_review")
-    since = (dt.date.fromisoformat(lc.phase()["today"]) - dt.timedelta(days=REVIEW_DAYS)).isoformat()
+    since = (dt.date.fromisoformat(lc.phase()["today"]) - dt.timedelta(days=REVIEW_DAYS - 1)).isoformat()          # today and the REVIEW_DAYS - 1 days before it
     keep["bet_reviews"] = {k: {**v, "card": _slim(v.get("card"))} for k, v in (pm.get("bet_reviews") or {}).items() if (v.get("et_date") or "") >= since}
     status = dict(status)
     status["cards"] = {k: _slim(c) for k, c in (status.get("cards") or {}).items() if k not in keep["bet_reviews"]}          # one copy of each card in the published document
