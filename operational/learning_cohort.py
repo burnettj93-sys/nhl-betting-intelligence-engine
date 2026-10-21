@@ -62,12 +62,15 @@ EDGE_CLASSES = (EDGE_POSITIVE, EDGE_NEUTRAL, EDGE_NEGATIVE)
 EDGE_BAND = ei.EDGE_MIN                # +-3 points: the main engine's own threshold. (The first band was +-2 points, which split the bookmaker's margin on a moneyline: a -135 favourite reads -2.3 points of "edge",
                                        # a +114 underdog -1.9, so the favourite was classed NEGATIVE and the underdog NEUTRAL, which is how the old ranking came to prefer underdogs.)
 PRICE_BANDS = ((-150, -131, "-150 to -131"), (-130, -111, "-130 to -111"), (-110, 100, "-110 to +100"), (101, 150, "+101 to +150"), (151, 10 ** 6, "+151 and longer"))
+UNIT = "PARLAY"                     # the learning unit (owner 2026-10-21): up to 10 learning PARLAYS a day, built from the reviewed candidate legs (operational/learning_parlays.py). "STRAIGHT" is the earlier unit
+PARLAY_LEG_FLOOR = -150.0           # the price floor applied to each LEG of a parlay. UNCHANGED from the straight-bet floor pending the owner's decision: legs like the owner's example (1+ shots at -300 and shorter)
+                                    # cannot enter below it, and tonight's pool then yields no parlay (docs/EGGY_INTELLIGENCE.md)
 ELIGIBLE_FAMILIES = ("MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "PLAYER_POINTS", "PLAYER_GOALS", "GOALIE_SAVES")
 
 POLICY = {
     "policy_id": "postmortem-learning-14d-2026-10-20", "cohort": COHORT, "experiment_id": EXPERIMENT_ID, "timezone": "America/Toronto",
     "start_date": START_DATE, "end_date": END_DATE, "days": 14, "daily_target": DAILY_TARGET, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
-    "odds_floor_american": ODDS_FLOOR, "paper_only": True, "real_money": "NOT authorised",
+    "odds_floor_american": ODDS_FLOOR, "unit": UNIT, "parlay_leg_floor_american": PARLAY_LEG_FLOOR, "paper_only": True, "real_money": "NOT authorised",
     "eggy": {"official_picks_per_day": 1, "changed": False}, "initial_bankroll_usd": INITIAL_BANKROLL, "reset_to_usd": RESET_TO, "reset_when_below_usd": STAKE, "reset_reason": RESET_REASON,
     "eligible_market_families": list(ELIGIBLE_FAMILIES),
     "slot_release": "cumulative cap ceil(10 x games through the wave / games today), by puck-drop wave; within the last 25 minutes before a wave the cap relaxes to 10 less one reserved slot per later wave (at most two)",
@@ -188,6 +191,21 @@ import re as _re
 ENTRY_TRIGGER_SQL = _re.search(r"CREATE TRIGGER IF NOT EXISTS bets_entry_is_immutable.*?END;", SCHEMA, _re.S).group(0)
 
 
+PARLAY_COLUMNS = ("parlay_id", "idempotency_key", "cohort", "policy_digest", "et_date", "experiment_day", "parlay_rank", "wave_index", "created_at_utc", "n_legs", "legs_json", "leg_keys", "price_status",
+                  "reference_decimal", "combined_probability", "probability_basis", "dependence_level", "dependence_json", "weakest_leg_json", "construction_quality", "quality_reasons", "action", "ranking_probability")
+PARLAY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS parlays (
+    parlay_id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, cohort TEXT NOT NULL, policy_digest TEXT NOT NULL, et_date TEXT NOT NULL, experiment_day INTEGER NOT NULL, parlay_rank INTEGER NOT NULL,
+    wave_index INTEGER, created_at_utc TEXT NOT NULL, n_legs INTEGER NOT NULL, legs_json TEXT NOT NULL, leg_keys TEXT NOT NULL, price_status TEXT NOT NULL, reference_decimal REAL,
+    combined_probability REAL, probability_basis TEXT, dependence_level TEXT, dependence_json TEXT, weakest_leg_json TEXT, construction_quality TEXT, quality_reasons TEXT, action TEXT, ranking_probability REAL,
+    result_status TEXT NOT NULL DEFAULT 'PENDING', legs_hit INTEGER, settled_at_utc TEXT, settlement_json TEXT
+);
+CREATE TRIGGER IF NOT EXISTS parlays_entry_is_immutable BEFORE UPDATE ON parlays WHEN @PARLAY_CHANGED@ BEGIN SELECT RAISE(ABORT, 'a learning parlay entry is immutable; only its result may be recorded'); END;
+CREATE TRIGGER IF NOT EXISTS parlays_never_replaced BEFORE INSERT ON parlays WHEN EXISTS (SELECT 1 FROM parlays WHERE parlay_id = NEW.parlay_id OR idempotency_key = NEW.idempotency_key) BEGIN SELECT RAISE(ABORT, 'parlay already recorded'); END;
+CREATE TRIGGER IF NOT EXISTS parlays_are_never_deleted BEFORE DELETE ON parlays BEGIN SELECT RAISE(ABORT, 'learning-cohort parlays are never deleted'); END;
+""".replace("@PARLAY_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in PARLAY_COLUMNS))
+
+
 def open_ledger(path) -> sqlite3.Connection:
     """The ledger connection: rows by name, the triggers installed, and recursive triggers ON so that even INSERT OR REPLACE cannot silently replace a bet."""
     conn = sqlite3.connect(str(path), timeout=30)
@@ -195,6 +213,7 @@ def open_ledger(path) -> sqlite3.Connection:
     conn.execute("PRAGMA recursive_triggers = ON")
     _migrate(conn)
     conn.executescript(SCHEMA)
+    conn.executescript(PARLAY_SCHEMA)
     return conn
 
 
@@ -421,8 +440,9 @@ def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
     why = []
     if leg.market_family not in ELIGIBLE_FAMILIES:
         why.append("market not supported for the cohort")
-    if leg.american_price < ODDS_FLOOR:
-        why.append(f"price worse than the {ODDS_FLOOR:+.0f} floor")
+    floor = PARLAY_LEG_FLOOR if UNIT == "PARLAY" else ODDS_FLOOR
+    if leg.american_price < floor:
+        why.append(f"price worse than the {floor:+.0f} floor")
     for flag, label in (("provider_contract_verified", "market contract not verified"), ("model_threshold_eligible", "no eligible model estimate for this threshold"), ("identity_resolved", "identity not resolved"),
                         ("event_not_started", "event started")):
         if not getattr(leg, flag, False):
@@ -601,6 +621,7 @@ def run_cycle(nhl_conn, now: dt.datetime, collected: dict | None, *, conn=None, 
         if auth:
             ensure_funded(conn, now)
         summary["settlement"] = settle_due(conn, nhl_conn, now)
+        summary["parlay_settlement"] = settle_parlays(conn, nhl_conn, now)
         if not auth:
             summary.update(status="NOT_AUTHORISED", recording={"status": "NOT_RECORDING", "reason": "the policy has not been approved, or its digest changed since approval; open bets still settle"})
         elif ph["phase"] != "ACTIVE":
@@ -729,6 +750,8 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         if not ok:                                  # no review, no bet: the cohort never falls back to unreviewed ranking
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
             return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, [], [], reasons, 0, {"intelligence_unavailable": why_unusable})
+    if UNIT == "PARLAY":
+        return _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx)
     by_key: dict[str, dict] = {}
     review_errors: Counter = Counter()
     for key, leg, pleg, basis in prelim:
@@ -806,6 +829,129 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     return out
 
 
+# --------------------------------------------------------------------------------------------------- learning parlays
+def _today_parlays(conn, et_date: str) -> list[dict]:
+    return [dict(r) for r in conn.execute("SELECT * FROM parlays WHERE et_date = ? ORDER BY parlay_rank", (et_date,)).fetchall()]
+
+
+def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx) -> dict:
+    """The learning unit is the PARLAY: review every eligible leg (as for a straight bet), build up to 10 tickets from the survivors (operational/learning_parlays.py), record each once, UNPRICED. Nothing is
+    staked and no return is claimed: the system has no combined sportsbook price. Fewer than 10 is a correct answer."""
+    from operational import learning_parlays as lp
+    today, day = ph["today"], ph["day"]
+    rows = _today_parlays(conn, today)
+    cands, review_errors = [], Counter()
+    for key, leg, pleg, basis in prelim:
+        try:
+            card = ei.review_leg(ctx, pleg, basis, pleg.conservative_probability)
+            if card.get("kind") == "ERROR":
+                raise RuntimeError(card.get("error") or "the review failed")
+            ecls, _r = ei.edge_class_of(card)
+            edge, _w = ei.edge_for_class(card)
+            est = float(card["estimate_used"])
+            mp = card.get("model_probability")
+            leg2 = dataclasses.replace(pleg, conservative_probability=round(est, 4), model_probability=(mp if mp is not None else pleg.model_probability))
+            cands.append({"leg": leg2, "key": key, "card": card, "action": card["action"]["decision"], "rank_key": ei.rank_key(card, ecls, est, edge, key)})
+        except Exception as exc:  # noqa: BLE001
+            review_errors[f"{exc.__class__.__name__}: {exc}"[:160]] += 1
+            reasons[f"the review failed ({exc.__class__.__name__}), not a judgment"] += 1
+    already = [{"key": r["idempotency_key"], "leg_keys": json.loads(r["leg_keys"])} for r in rows]
+    out = lp.build(cands, already, slots=DAILY_TARGET)
+    recorded_now, rank = [], len(rows)
+    waiting = 0
+    for p in out["parlays"]:
+        first = min(p["legs"], key=lambda l: l.game_start_utc or "")
+        sure = all(c["action"] == "RECORD" for c in p["cands"])
+        if not sure and not _own_final_window(first, now):
+            waiting += 1                                                           # a ticket with a lesser leg waits for its first game's last 25 minutes: no better price can still arrive
+            continue
+        w = game_wave.get(str(first.game_id))
+        cap = min(strict_caps.get(w, DAILY_TARGET), DAILY_TARGET) if w is not None else DAILY_TARGET
+        if sum(1 for r in rows if r["wave_index"] is not None and r["wave_index"] <= (w if w is not None else 99)) + sum(1 for r in recorded_now if (r["wave"] or 0) <= (w or 0)) >= cap and w is not None:
+            continue
+        rec = lp.record_dict(p)
+        rank += 1
+        pid = "P" + p["key"][:15].upper()
+        try:
+            conn.execute("""INSERT INTO parlays (parlay_id, idempotency_key, cohort, policy_digest, et_date, experiment_day, parlay_rank, wave_index, created_at_utc, n_legs, legs_json, leg_keys, price_status,
+                            reference_decimal, combined_probability, probability_basis, dependence_level, dependence_json, weakest_leg_json, construction_quality, quality_reasons, action, ranking_probability)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         (pid, p["key"], COHORT, policy_digest(), today, day, rank, w, _utc(now), p["n_legs"], json.dumps(rec["legs"], default=str), json.dumps(sorted(c["key"] for c in p["cands"])),
+                          p["price"]["status"], p["price"]["reference_decimal"], p["combined_probability"], p["probability_basis"], p["dependence_level"], json.dumps(rec["dependence"], default=str),
+                          json.dumps(rec["weakest_leg"]), p["construction_quality"], json.dumps(p["quality_reasons"]), p["action"], p["ranking_probability"]))
+            recorded_now.append({"wave": w, "parlay_id": pid})
+        except sqlite3.IntegrityError:
+            reasons["duplicate refused by the ledger"] += 1
+            rank -= 1
+    conn.commit()
+    reasons[f"legs not eligible for a parlay: {sum(out['legs_not_eligible'].values())}"] += 0
+    extra = {"parlay_legs_eligible": out["eligible_legs"], "parlay_legs_not_eligible": out["legs_not_eligible"], "parlays_constructed": out["constructed"], "parlays_waiting_for_their_final_window": waiting,
+             "unit": "PARLAY (unpriced learning parlays: no stake, no return, no ROI)"}
+    if review_errors:
+        extra.update(review_errors=sum(review_errors.values()), review_error_examples=dict(review_errors.most_common(3)))
+    res = _write_day(conn, now, today, day, collected, legs, {}, game_wave, rows, recorded_now, [], reasons, 0, extra)
+    res["recording"].update(unit="PARLAY", parlays_recorded_today=len(rows) + len(recorded_now))
+    return res
+
+
+def _parlay_public(r: dict) -> dict:
+    legs = json.loads(r["legs_json"])
+    st = json.loads(r["settlement_json"]) if r.get("settlement_json") else {}
+    return {"parlay_id": r["parlay_id"], "rank": r["parlay_rank"], "n_legs": r["n_legs"], "legs": [{"label": ei_label(l["leg"]), "key": l["key"], "estimate": l["estimate"], "action": l["action"]} for l in legs],
+            "price_status": r["price_status"], "reference_decimal": r["reference_decimal"], "combined_probability": r["combined_probability"], "probability_basis": r["probability_basis"],
+            "dependence_level": r["dependence_level"], "dependence": json.loads(r["dependence_json"]), "weakest_leg": json.loads(r["weakest_leg_json"]), "construction_quality": r["construction_quality"],
+            "quality_reasons": json.loads(r["quality_reasons"] or "[]"), "action": r["action"], "result_status": r["result_status"], "legs_hit": r["legs_hit"], "leg_results": st.get("leg_results"), "killed_by": st.get("killed_by")}
+
+
+def _flagship_public(conn, today: str) -> dict | None:
+    """Eggy's flagship from the learning pool: the strongest GOOD ticket recorded today by the construction order (quality, fewer legs, strongest weakest leg, likelier). DISPLAY ONLY: Eggy's official pick and
+    its policy digest are unchanged until the owner approves wiring it in. At most one; None is a correct answer."""
+    from operational import learning_parlays as lp
+    best = [r for r in _today_parlays(conn, today) if r["construction_quality"] == "GOOD" and r["action"] == "RECORD"]
+    if not best:
+        return None
+    best.sort(key=lambda r: (r["n_legs"], -json.loads(r["weakest_leg_json"])["estimate"], -(r["ranking_probability"] or 0), r["idempotency_key"]))
+    return {**_parlay_public(best[0]), "note": "proposed flagship from the learning pool; Eggy's official pick is chosen by its own policy and is not changed by this"}
+
+
+def settle_parlays(conn, nhl_conn, now: dt.datetime) -> dict:
+    """Settle every open learning parlay through the same resolvers as every other combo (any losing leg is a MISS, all legs winning is a HIT, voids drop out). Records each leg's result and the leg(s) that
+    killed the ticket. A ticket is never given a price, a return or an ROI."""
+    from operational import learning_parlays as lp
+    from operational import paper_bet_settlement_driver as drv
+    out = {"scanned": 0, "settled": 0, "still_pending": 0}
+    for r in conn.execute("SELECT * FROM parlays WHERE result_status IN ('PENDING','UNRESOLVED')").fetchall():
+        out["scanned"] += 1
+        legs = json.loads(r["legs_json"])
+        res = drv.resolve_combo_bet(nhl_conn, {"legs_json": json.dumps([l["leg"] for l in legs])})
+        by = {}
+        for lr in res.get("leg_results") or []:
+            L = lr.get("leg") or {}
+            by[(str(L.get("game_id")), str(L.get("participant_id")), L.get("market_family"), L.get("threshold"))] = lr
+        leg_results = []
+        for l in legs:
+            L = l["leg"]
+            lr = by.get((str(L["game_id"]), str(L["participant_id"]), L["market_family"], L.get("threshold")), {})
+            outcome = "WIN" if lr.get("outcome_hit") else ("LOSS" if lr.get("status") == "RESOLVED" and lr.get("outcome_hit") is False else (lr.get("outcome") if lr.get("outcome") in ("VOID", "UNRESOLVED") else "PENDING"))
+            leg_results.append({"label": ei_label(L), "outcome": outcome, "actual_value": lr.get("actual_value"), "key": l["key"]})
+        verdict = lp.settle(leg_results)
+        if verdict["result"] == "PENDING":
+            out["still_pending"] += 1
+            continue
+        if verdict["result"] == "UNRESOLVED" and r["result_status"] == "UNRESOLVED":
+            continue
+        conn.execute("UPDATE parlays SET result_status=?, legs_hit=?, settled_at_utc=?, settlement_json=? WHERE parlay_id=? AND result_status IN ('PENDING','UNRESOLVED')",
+                     (verdict["result"], verdict["legs_hit"], _utc(now), json.dumps({"leg_results": leg_results, "killed_by": verdict["killed_by"]}, default=str), r["parlay_id"]))
+        out["settled"] += 1
+    conn.commit()
+    return out
+
+
+def ei_label(leg: dict) -> str:
+    from operational.bet_labels import bet_label
+    return bet_label(leg.get("participant_name"), leg.get("market_family"), leg.get("threshold"), leg.get("american_price"))
+
+
 # --------------------------------------------------------------------------------------------------- settlement
 def settle_due(conn, nhl_conn, now: dt.datetime) -> dict:
     """Settle every open bet whose game is final, through the same resolvers and payout formulas as the normal paper book (idempotent: a settled bet is never touched again)."""
@@ -869,18 +1015,23 @@ def status_doc(now: dt.datetime | None = None, conn=None) -> dict:
         resets = [dict(r) for r in conn.execute("SELECT at_et, kind, balance_before, amount, balance_after, experiment_day, reason FROM funding_events WHERE kind = 'RESET' ORDER BY id").fetchall()]
         since = (dt.date.fromisoformat(today) - dt.timedelta(days=CARD_DAYS - 1)).isoformat()
         cards = {r["bet_id"]: json.loads(r["intelligence_json"]) for r in conn.execute("SELECT bet_id, intelligence_json FROM bets WHERE et_date >= ? AND intelligence_json IS NOT NULL", (since,)).fetchall()}
+        if UNIT == "PARLAY":                                    # one copy of each leg's review card (a leg may sit in two tickets), keyed by the leg
+            for r in conn.execute("SELECT legs_json FROM parlays WHERE et_date >= ?", (since,)).fetchall():
+                for l in json.loads(r["legs_json"]):
+                    cards[l["key"]] = {k: v for k, v in l["card"].items() if k != "answers"}
     finally:
         if own:
             conn.close()
     wins, losses = int(settled[0] or 0), int(settled[1] or 0)
     return {"generated_at_utc": _utc(now), "cohort": COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "authorised": is_authorised(), "policy_digest": policy_digest(), "phase": ph["phase"], "day": ph["day"], "days": 14,
             "start_date": START_DATE, "end_date": END_DATE, "target_per_day": DAILY_TARGET, "stake_usd": STAKE, "odds_requirement": f"{int(ODDS_FLOOR)} or better",
-            "recorded_today": len(rows), "exposure_today_usd": round(len(rows) * STAKE, 2), "bankroll": bal, "resets": resets, "bets_total": total,
+            "recorded_today": (len(_today_parlays(conn, today)) if UNIT == "PARLAY" else len(rows)), "exposure_today_usd": (0.0 if UNIT == "PARLAY" else round(len(rows) * STAKE, 2)), "bankroll": bal, "resets": resets, "bets_total": total,
             "record": {"wins": wins, "losses": losses, "voids": int(settled[2] or 0), "open": int(settled[3] or 0), "hit_rate": round(wins / (wins + losses), 4) if wins + losses else None},
             "edge_classes_today": dict(Counter(r["edge_class"] for r in rows)),
             "bets_today": [{k: r[k] for k in ("bet_id", "selection_rank", "market_family", "participant_name", "team", "opponent", "threshold", "american_price", "conservative_probability", "model_probability", "implied_probability", "edge",
                                               "edge_class", "price_status", "price_age_at_recording_min", "result_status", "profit_loss", "eggy_relation", "thesis_type", "action", "contradiction_level", "calibration_level",
                                               "decision_confidence")} | {"label": label_of(r)} for r in rows],
+            "unit": UNIT, "parlays_today": [_parlay_public(r) for r in _today_parlays(conn, today)] if UNIT == "PARLAY" else [], "eggy_flagship": _flagship_public(conn, today) if UNIT == "PARLAY" else None,
             "cards": cards, "intelligence": {"version": ei.VERSION, "architecture": "game -> player -> market -> disagreement -> argue against -> decide -> rank and record"},
             "shortfall_today": (json.loads(daily["shortfall_json"]) if daily and daily["shortfall_json"] else None),
             "eggy": {"official_picks_per_day": 1, "note": "Eggy's Parlay Pick of the Day is separate: one official pick a day, its own ledger"},

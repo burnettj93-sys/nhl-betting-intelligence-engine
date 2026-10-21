@@ -88,3 +88,16 @@ python3 deploy/replay_eggy_review.py --instant 2026-10-20T23:33:49Z --date 2026-
 python3 deploy/replay_moneyline_log.py --out /tmp/ml.json      # old class split against new actions on the shadow log
 python3 deploy/replay_prop_calibration.py --split 2026-02-01 --out /tmp/props.json   # the recalibration, out of time
 ```
+
+## 10. Learning parlays (the learning unit, 2026-10-21)
+
+The reviewed candidate legs are the raw material; the learning unit is a PARLAY (`operational/learning_parlays.py`, recorded in the cohort ledger's `parlays` table, up to 10 a day, none forced). No new scoring framework, data, API, scheduler or database.
+
+- **A leg qualifies** only if the hockey/player review survives it (contradiction LOW or MODERATE once the straight bet's price-versus-estimate flags are set aside, calibration at least MEDIUM) and the event is likely (estimate 55% or more). No lottery legs; no leg is added to lengthen the payout.
+- **3 legs are preferred.** A 4th is added only if it independently passes the same review, is at least as strong as the ticket's weakest leg, and adds no strong dependence.
+- **Weakest leg** = the lowest estimate. It sets the quality: GOOD needs it at 62% or better and at most one MODERATE doubt; BAD (any leg under 55% or a HIGH doubt) is a PASS.
+- **Dependence** comes from the existing `eggy_candidates.classify_pair`. Different games: independent, probability = product of the leg estimates. Two legs of one game are never multiplied: the combined probability is NOT GIVEN, only assumption-free Frechet bounds are, and an unclear pair (opposing players) is labelled UNCERTAIN. One player twice, a goal and a point, or both sides of a game are refused.
+- **Price.** No combined sportsbook price exists anywhere in the system, so every parlay is an UNPRICED LEARNING PARLAY. The product of the legs' own quoted prices is kept as a labelled reference, never a quote; nothing is staked and no return or ROI is claimed. The ticket is settled by its legs (HIT / MISS / VOID / UNRESOLVED) and records the leg(s) that killed it. The $500 bankroll is untouched by parlays.
+- **Eggy's flagship** is the strongest GOOD ticket of the day by the same order (quality, fewer legs, strongest weakest leg, likelier). It is shown as a proposal only; Eggy's official pick and its policy digest are unchanged until the owner approves wiring it in.
+- **Postmortem**: a PARLAY SUMMARY (legs, priced or not, hit or miss, weakest leg, killers, GOOD / QUESTIONABLE / BAD PARLAY judged from the construction, never the result) sits above the unchanged leg-level reviews, which every leg keeps.
+- **Open decision**: `PARLAY_LEG_FLOOR` stays at -150 (the straight-bet floor). Legs like the 1+ shots at -300 in the owner's example cannot enter below it; on tonight's pool the floor of -150 yields no parlay and a floor of -500 yields five GOOD or QUESTIONABLE 3-leg tickets.

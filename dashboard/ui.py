@@ -697,6 +697,35 @@ def leg_reviews(legs: list[dict]) -> None:
             intelligence_card(card)
 
 
+def parlay_panel(parlays: list[dict], cards: dict, reviews: dict | None = None, *, title: str = "Today's learning parlays") -> None:
+    """The learning unit: unpriced learning PARLAYS built from the reviewed legs. Each shows its legs, the weakest leg, the dependence between them, the estimated combined probability only where it is supportable
+    (else bounds, and why not), the reference product of the legs' prices (never a quote), the construction quality and, once settled, hit or miss and the leg(s) that killed it. Every leg opens into its review."""
+    if not parlays:
+        return
+    st.markdown(f"**{title}**")
+    st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Construction": p.get("verdict") or _words(p["construction_quality"]), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
+                   "Dependence": _words(p["dependence_level"]), "Combined probability": (_lx_pct(p["combined_probability"], 1) if p.get("combined_probability") is not None else f"not given (bounds {_lx_pct(p['dependence']['joint_bounds']['low'], 0)}–{_lx_pct(p['dependence']['joint_bounds']['high'], 0)})"),
+                   "Price": "UNPRICED", "Result": _words(p["result_status"])} for p in parlays], hide_index=True, width="stretch")
+    st.caption("Unpriced learning parlays: the system has no combined sportsbook price, so none is made up. The product of the legs' own prices is shown only as a reference, and no stake, return or ROI is claimed. "
+               "Each ticket is settled by its legs and records whether the whole ticket would have hit.")
+    for p in parlays:
+        with st.expander(f"Parlay {p['rank']} · {len(p['legs'])} legs · {p.get('verdict') or _words(p['construction_quality'])} · {_words(p['result_status'])}"):
+            st.markdown(f"**Weakest leg** · {esc(p['weakest_leg']['label'])} at {p['weakest_leg']['estimate']:.0%} (contradiction {_words(p['weakest_leg']['contradiction'])})")
+            st.markdown(f"**Dependence** · {_words(p['dependence_level'])}: " + esc("; ".join(f"{x['a']} / {x['b']}: {_words(x['kind'])} ({x['strength']})" for x in (p['dependence'].get('pairs') or [])) or "none"))
+            st.markdown("**Combined probability** · " + ("estimated " + _lx_pct(p["combined_probability"], 1) + f" ({esc(p['probability_basis'])})" if p.get("combined_probability") is not None else
+                        f"NOT GIVEN: {esc(p['probability_basis'])}. Assumption-free bounds {_lx_pct(p['dependence']['joint_bounds']['low'], 1)} to {_lx_pct(p['dependence']['joint_bounds']['high'], 1)}; dependence is UNCERTAIN, not assumed away"))
+            st.markdown("**Price** · " + esc(p.get("price_text") or "UNPRICED learning parlay: reference product " + f"{p.get('reference_decimal') or 0:.2f}x, a reference not a quote"))
+            if p.get("quality_reasons"):
+                st.caption("Why not GOOD: " + esc("; ".join(p["quality_reasons"])))
+            if p.get("hit_text"):
+                st.markdown(f"**Result** · {esc(p['hit_text'])}")
+            rv = {x["key"]: x for x in p.get("leg_reviews") or []}
+            for l in p["legs"]:
+                x = rv.get(l["key"]) or {}
+                with st.expander(f"{l['label']} · {_words((cards.get(l['key']) or {}).get('action', {}).get('decision'))}" + (f" · {_words(x.get('outcome'))}" if x.get("outcome") else "")):
+                    intelligence_card(cards.get(l["key"]) or (x.get("card")), {"assessment": x.get("assessment"), "facts": x.get("facts"), "facts_complete": p.get("facts_complete")} if x else None)
+
+
 def _bet_expanders(bets: list[dict], cards: dict, reviews: dict, *, label_key: str = "label") -> None:
     """One expander per bet, titled with its complete name ('Filip Chytil — SHOTS ON GOAL 2+ — -130'); clicking it opens the whole review."""
     for x in bets:
@@ -755,6 +784,11 @@ def learning_experiment_panel(doc: dict | None) -> None:
                 st.warning("Eggy's review could not run this cycle, so nothing was recorded: " + esc(sf["intelligence_unavailable"]))
             if sf.get("review_errors"):
                 st.warning(f"{sf['review_errors']} candidate review(s) FAILED (an engine error, not a judgment): " + esc("; ".join(f"{k} (x{v})" for k, v in (sf.get("review_error_examples") or {}).items())))
+    parlay_panel(doc.get("parlays_today") or [], doc.get("cards") or {})
+    fl = doc.get("eggy_flagship")
+    if fl:
+        st.markdown("**Eggy's flagship parlay, from the learning pool** (proposed; Eggy's official pick is unchanged)")
+        st.markdown(" + ".join(esc(l["label"]) for l in fl["legs"]) + f" · weakest leg {esc(fl['weakest_leg']['label'])} ({fl['weakest_leg']['estimate']:.0%}) · unpriced")
     bets = doc.get("bets_today") or []
     if bets:
         st.markdown("**Today's experiment bets**")
@@ -804,6 +838,12 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
         dm = pm["day_metrics"]
         with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
+            pdays = [p for p in (pm.get("parlays") or []) if p.get("et_date") == pm.get("postmortem_for")]
+            if pdays:
+                st.markdown("**PARLAY SUMMARY** (the leg-level reviews follow inside each parlay)")
+                st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Priced": "no (unpriced)", "Hit / miss": p.get("hit_text"), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
+                               "Killed by": ", ".join(p.get("killed_by") or []) or "—", "Construction": p.get("verdict")} for p in pdays], hide_index=True, width="stretch")
+                parlay_panel(pdays, doc.get("cards") or {}, title="Parlays, with their leg reviews")
             st.write(f"{dm['placed']} placed, {dm['settled']} settled: {dm['wins']} won, {dm['losses']} lost, {dm['voids']} void/push, {dm['unresolved']} unresolved, {dm['open']} open · hit rate {_lx_pct(dm.get('hit_rate'))} · "
                      f"staked {money(dm['staked'])}, returned {money(dm['returned'])}, P/L {signed_money(dm['profit_loss'])} (ROI {_lx_pct(dm.get('roi'), 1)}) · expected wins {dm['expected_wins']} vs actual {dm['actual_wins']}")
             st.caption(pm.get("closing_price_movement") or "")

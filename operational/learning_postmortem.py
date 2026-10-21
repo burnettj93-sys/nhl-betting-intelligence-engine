@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import math
+import sqlite3
 from collections import defaultdict
 
 from operational import eastern_time as et
@@ -295,6 +296,48 @@ def build_reviews(all_rows: list[dict], nhl_conn, now: dt.datetime, previous: di
     return out
 
 
+PARLAY_WORD = {"GOOD": "GOOD PARLAY", "QUESTIONABLE": "QUESTIONABLE PARLAY", "BAD": "BAD PARLAY"}
+
+
+def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) -> list[dict]:
+    """The PARLAY SUMMARY that sits above the leg-level reviews: legs, priced or not, the reference product (never a quote), the estimated combined probability where supportable (else the bounds and why not),
+    hit or miss, the weakest leg, the leg(s) that killed it, the construction quality and its verdict (judged from the ticket as it was built, never from the result). Each leg keeps its own review: the card it
+    was recorded with and the assessment of that leg's decision, from the same engine as every other bet."""
+    try:
+        rows = [dict(r) for r in conn.execute("SELECT * FROM parlays ORDER BY et_date, parlay_rank").fetchall()]
+    except sqlite3.OperationalError:
+        return []
+    prior = {x["parlay_id"]: x for x in (previous or {}).get("parlays") or []}
+    out, data = [], {}
+    for r in rows:
+        old = prior.get(r["parlay_id"])
+        if old and old.get("result_status") == r["result_status"] and (old.get("facts_complete") or r["result_status"] not in ("HIT", "MISS")):
+            out.append(old)
+            continue
+        legs = json.loads(r["legs_json"])
+        st = json.loads(r["settlement_json"]) if r.get("settlement_json") else {}
+        by_key = {x["key"]: x for x in st.get("leg_results") or []}
+        settled = r["result_status"] in ("HIT", "MISS")
+        if settled and "files" not in data:
+            skater_rows, team_rows = _load_rows()
+            data["files"] = (skater_rows, team_rows, ed.index_rows(skater_rows, team_rows, {int(l["leg"]["game_id"]) for q in rows for l in json.loads(q["legs_json"])}))
+        reviews, complete = [], True
+        for l in legs:
+            L, card = l["leg"], l["card"]
+            res = by_key.get(l["key"], {})
+            bet = {"game_id": L["game_id"], "participant_id": L["participant_id"], "market_family": L["market_family"], "threshold": L.get("threshold"), "team": L.get("team"),
+                   "result_status": res.get("outcome") or "PENDING"}
+            facts = ed.facts_for(bet, card, nhl_conn, data["files"][2]) if settled and res.get("outcome") in ("WIN", "LOSS") else None
+            reviews.append({"key": l["key"], "label": lc.ei_label(L), "estimate": l["estimate"], "outcome": bet["result_status"], "facts": facts, "assessment": ed.assess(bet, card, facts)})
+            complete = complete and (not settled or ed.facts_are_complete(card, facts, bet_date=r["et_date"], now_date=now.astimezone(et.EASTERN).date().isoformat()))
+        pub = lc._parlay_public(r)
+        out.append({**pub, "et_date": r["et_date"], "verdict": PARLAY_WORD.get(r["construction_quality"]), "priced": False,
+                    "price_text": f"UNPRICED learning parlay (no sportsbook combined price exists here); reference product of the legs' quoted prices {r['reference_decimal']:.2f}x, a reference not a quote: no return or ROI is claimed",
+                    "hit_text": {"HIT": "HIT: every leg won", "MISS": f"MISS: killed by {', '.join(st.get('killed_by') or [])}", "PENDING": "open"}.get(r["result_status"], r["result_status"]),
+                    "leg_reviews": reviews, "facts_complete": complete})
+    return out
+
+
 def combined_classification(old: dict | None, a: dict) -> tuple[str | None, str | None, str]:
     """(category, why, action) for a settled bet. The decision review's verdict, held to the older signal classifier's evidence: NORMAL_VARIANCE stands only when the review EARNED it and the classifier found no
     specific cause; a specific cause the signals found is never overruled; a loss with no review and no evidence is UNKNOWN, not variance."""
@@ -322,6 +365,7 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     target_date = for_date or (dt.date.fromisoformat(today) - dt.timedelta(days=1)).isoformat()
     day_bets = [b for b in all_rows if b["et_date"] == target_date]
     cls = classify_losses(all_rows, nhl_conn, now) if nhl_conn is not None else {"per_bet": {}, "summary": {}, "policy_note": None}
+    parlays = parlay_summaries(conn, nhl_conn, now, load()) if nhl_conn is not None else []
     reviews = build_reviews(all_rows, nhl_conn, now, load(), {k: v.get("integrity_defect") for k, v in cls["per_bet"].items()})
     bal = lc.balance(conn)
     cumulative = metrics(all_rows)
@@ -347,7 +391,9 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
             "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows),
             "day_price_age": price_age_table(day_bets), "cumulative_price_age": price_age_table(all_rows), "cumulative_price_age_provider": price_age_table(all_rows, "provider_quote_age_at_recording_min"),
-            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
+            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "parlays": parlays, "parlay_day": [p for p in parlays if p["et_date"] == target_date],
+            "parlay_totals": {"recorded": len(parlays), "hit": sum(1 for p in parlays if p["result_status"] == "HIT"), "miss": sum(1 for p in parlays if p["result_status"] == "MISS"), "open": sum(1 for p in parlays if p["result_status"] == "PENDING"),
+                              "note": "unpriced learning parlays: hit or miss only; no stake, return or ROI"}, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),
             "scorecard": daily_rows(all_rows, ph["day"] if ph["phase"] == "ACTIVE" else (14 if ph["phase"] == "ENDED" else 0)),
             "bankroll": {**bal, "label": "separate experiment bankroll (not Eggy's paper bankroll)", "note": "betting P/L is from settled tickets only; resets and the initial funding are funding events, never profit"},
@@ -409,6 +455,8 @@ def snapshot_section() -> dict:
     keep["bet_reviews"] = {k: {**v, "card": _slim(v.get("card"))} for k, v in (pm.get("bet_reviews") or {}).items() if (v.get("et_date") or "") >= since}
     status = dict(status)
     status["cards"] = {k: _slim(c) for k, c in (status.get("cards") or {}).items() if k not in keep["bet_reviews"]}          # one copy of each card in the published document
+    keep["parlays"] = [{**p, "leg_reviews": [{**x, "facts": x.get("facts")} for x in p.get("leg_reviews") or []]} for p in (pm.get("parlays") or []) if (p.get("et_date") or "") >= since]
+    keep["parlay_totals"] = pm.get("parlay_totals")
     keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
     keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
     return {**status, "postmortem": keep, "final_report": load_final() if lc.phase()["phase"] == "ENDED" else None}          # a final report on disk is shown only once the window has really ended

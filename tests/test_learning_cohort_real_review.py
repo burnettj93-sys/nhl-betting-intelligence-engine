@@ -37,7 +37,7 @@ class RealReviewBase(unittest.TestCase):
         self.nhl = nhl()
         self.addCleanup(self.conn.close)
         self.addCleanup(self.nhl.close)
-        for p in (mock.patch.object(lc, "is_authorised", return_value=True), mock.patch("operational.learning_postmortem._load_rows", return_value=([], []))):
+        for p in (mock.patch.object(lc, "UNIT", "STRAIGHT"), mock.patch.object(lc, "is_authorised", return_value=True), mock.patch("operational.learning_postmortem._load_rows", return_value=([], []))):
             p.start()
             self.addCleanup(p.stop)
         ctx = ei.Context(now=D1, as_of="2026-10-20", evidence=matchup.load_evidence())
