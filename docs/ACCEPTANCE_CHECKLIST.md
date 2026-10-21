@@ -36,6 +36,19 @@ Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integri
 | Activation dry run (~20:12 ET, no `--apply`) | **EXTERNAL (owner authorization needed to activate)**: `all_pass: true`, 16 of 16, run by the author from the release checkout; **not applied**: recording is paused and no activation log exists |
 | Sanitized ZIP | informational: code at dc5697c, 24.2 MB, 2052 files, `~/Downloads/nhl_engine_audit_dc5697cd5d.zip`; it contains the checklist as of the build (before this PR) |
 
+## Tuesday 2026-10-20 (releases 9d855b9, then 9783635 at 18:52 ET and 7a7d19b on Oct 21 08:28 ET; no manual trigger)
+| Wave 0 (game 2026020145, target 17:30 ET, deadline 18:00) | captured **17:37:58 ET** unattended (+8 min, inside the deadline); shots, goals and saves priced for the funded game; planned 3 credits = charged 3 | **VERIFIED LIVE (unattended)** |
+| Wave 1 (game 2026020150, target 19:30, deadline 20:00) | captured **19:33:48 ET** unattended (+4 min); 3 credits planned = charged | **VERIFIED LIVE (unattended)** |
+| Wave 2 (game 2026020151, target 21:00, deadline 21:30) | captured **21:06:53 ET** unattended (+7 min); 3 credits planned = charged | **VERIFIED LIVE (unattended)** |
+| Credits for the day | 13 charged (one 2-credit league pull at 08:00, three 3-credit prop captures, one 2-credit moneyline pull with wave 0); every ledger row planned = charged; provider header 169 to 156, 154 after Wednesday's 08:00 pull | **VERIFIED LIVE** |
+| Trader cadence | 111 cycles between 06:00 and 24:00 ET; **largest gap 11.7 minutes (22:51 to 23:02 UTC), none over 12** | **VERIFIED LIVE** |
+| Publication time after each capture | the data branch keeps only recent history, so the first publication after each wave could not be read back afterwards; the trader and publication watchdog checks were OK throughout (last success within 9 minutes at the Wednesday check) | **NOT RE-VERIFIABLE** for the exact minute |
+| Watchdog and daily chain (Wednesday 09:16 ET) | `jobs_loaded` OK (11 jobs); `daily_chain` OK (sync, settlement, postmortem, backup COMPLETED); `power` OK on AC | **VERIFIED LIVE** |
+| `python3 -m operational.live_audit` (Wednesday 09:16 ET) | 0 failures, 2 warnings (no price on both surfaces yet; no captured wave yet on the new day) | **VERIFIED LIVE** |
+| Automatic paper recording | **ACTIVE since 15:30:06 ET Oct 20** by the owner's instruction (policy digest 1fad3ba03503cf94, one qualifying Eggy parlay a day, $10, +100 to +500). Experiment 2 is still the single active $500 experiment with 0 tickets (no Eggy parlay qualified); `activate_recording` dry run all_pass | **VERIFIED LIVE** |
+| 14-day paper learning experiment (POSTMORTEM_LEARNING_14D, owner-authorised Oct 20) | separate ledger and $500 experiment bankroll (reset to $500 when it cannot fund the next $10), up to 10 bets a day at -150 or better, edge classes, price age recorded not gated (owner policy Oct 21), ends automatically after Nov 2; activated 18:53 ET Oct 20, re-approved for the new digest `ed9232bf53bb1dd8` on Oct 21 08:28 ET. Day 1 finished 10 of 10 (2W-8L, +$7.69). Eggy still at most one pick a day. See docs/LEARNING_EXPERIMENT.md | **VERIFIED LIVE** (Day 1) |
+| Daily-job recovery, Eggy stage A, loss postmortem classification | **FIXED+TESTED, deployed**; the Tuesday 07:15 settlement and 07:30 postmortem ran unattended (`daily_chain` COMPLETED) | **VERIFIED LIVE** |
+
 ## Player and matchup integrity
 | Item | State |
 |---|---|
@@ -70,7 +83,7 @@ Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integri
 | Credit guard (header minus later charges), reservations, planned = charged | **VERIFIED LIVE** (balance 179 = provider header after the last capture) |
 | $500 Experiment 2, archive intact, idempotent reset | **VERIFIED LIVE** |
 | Tests cannot touch production ledgers | **FIXED+TESTED**; production model-book hash identical before and after a full 4,219-test run |
-| Recording | **PAUSED**. Earlier chat authorisation (2026-10-18) allowed paper recording once safeguards pass (one parlay per Eastern day, $10, +100 to +500, digest above); the owner's later instruction (2026-10-19) is to keep it paused unless explicitly authorised, and that later instruction governs. `python3 -m deploy.activate_recording` runs the safeguards and writes the activation log only with `--apply` |
+| Recording | **SUPERSEDED: ACTIVE since 2026-10-20 15:30 ET (see the Tuesday section).** Historical note, Monday: **PAUSED**. Earlier chat authorisation (2026-10-18) allowed paper recording once safeguards pass (one parlay per Eastern day, $10, +100 to +500, digest above); the owner's later instruction (2026-10-19) is to keep it paused unless explicitly authorised, and that later instruction governs. `python3 -m deploy.activate_recording` runs the safeguards and writes the activation log only with `--apply` |
 | Settlement, reconciliation, prediction scoring and postmortem as games finish | **AWAITING OBSERVATION** (Oct 18 games: tomorrow's 07:15 settlement and 07:30 postmortem jobs; Experiment 2 has no tickets) |
 
 ## Hosted app
