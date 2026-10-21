@@ -63,10 +63,10 @@ def walk_features(rows: list[dict]) -> list[dict]:
     i = 0
     while i < len(games):                      # a day at a time: every game of a date is featured from the state through the PREVIOUS date, exactly as the live review builds it
         d = games[i]["h"]["d"]
-        j = i
+        j, day = i, []
         while j < len(games) and games[j]["h"]["d"] == d:
+            day.append(games[j])
             j += 1
-        day = games[i:j]
         for g in day:
             h, a = g["h"], g["a"]
             f = {m: st.est(h["t"], m) - st.est(a["t"], m) for m in ("gd", "xgd", "hd", "cf5", "pp", "pk", "fin", "xgd5")}

@@ -821,7 +821,7 @@ def standard_answers(card: dict) -> dict:
     be = mk.get("breakeven_price_for_3pt_edge")
     price_text = None if price is None or implied is None else (f"{price:+.0f} implies {pct(implied)}"
                                                                   + (f"; with the bookmaker's margin removed the market says {pct(mk['no_vig'])}" if mk.get("no_vig") is not None else ", and a one-sided price INCLUDES the bookmaker's margin, so the market's own chance is lower")
-                                                                  + (f". A 3-point edge on our estimate would need a price near {be:+.0f}" if be is not None else ""))
+                                                                  + (f". On our estimate the edge is 3 points at a price near {be:+.0f} (the quoted price is {price:+.0f})" if be is not None else ""))
     hv = card.get("hockey_view") or {}
     if kind == "MONEYLINE":
         why_market = ("The moneyline is a two-sided market, so the bookmaker's margin can be removed and the market's own probability compared with the hockey model's. It is the one market where Eggy's team model "
@@ -831,14 +831,14 @@ def standard_answers(card: dict) -> dict:
         who = card.get("most_likely_outcome")
     elif kind == "PLAYER":
         fam = bet.get("market_family")
-        why_market = {"PLAYER_SOG_ALTERNATE": "A shots threshold depends on ice time and shot volume, which are steadier from game to game than scoring, so it is the skater market Eggy can estimate with the least noise. Only the Over side is posted, so the price includes the margin.",
+        why_market = {"PLAYER_SOG_ALTERNATE": "A shots threshold depends on ice time and shot volume, which are steadier from game to game than scoring, so it is steadier to estimate than goals or points. Only the Over side is posted, so the price includes the margin.",
                       "PLAYER_SOG": "A shots threshold depends on ice time and shot volume, which are steadier from game to game than scoring.",
                       "PLAYER_GOALS": "An anytime-goal market asks for one rare event, so a single game says little; the goal model was calibrated on held-out seasons, including the tails, but the edge it can show is small against the price's margin.",
                       "PLAYER_POINTS": "Points depend on goals and assists, rarer and noisier than shots, and on the power-play role."}.get(fam, "This market is reviewed lightly.")
         pv = card.get("player_view") or {}
         ex = pv.get("expected") or {}
         believes = None if pr.get("model") is None else (f"{pct(pr['model'])} from the calibrated skater model; estimate used {pct(pr.get('estimate_used'))}"
-                                                          + (f" (history recalibrated it: {pr['recalibration']['label']})" if pr.get("recalibration") else "")
+                                                          + (f" (history lowered it: {pr['recalibration']['label']})" if (pr.get("recalibration") or {}).get("applied") else (" (history says the model runs low for such players; the estimate is not raised)" if pr.get("recalibration") else ""))
                                                           + (f"; expects {ex.get('toi'):.1f} min on ice, {ex.get('toi_pp'):.2f} on the power play" if ex.get("toi") is not None and ex.get("toi_pp") is not None else ""))
         mkt = None if implied is None else f"{pct(implied)} implied by {price:+.0f}, margin included"
         who = (card.get("most_likely_outcome") or "") + (f". In the game, {hv['favourite']} is the likelier winner ({pct(hv['p_favourite'])})" if hv.get("available") and hv.get("favourite") else "")
