@@ -99,7 +99,7 @@ def rehearsal(now: dt.datetime) -> dict:
     try:
         # collecting legs is read-only apart from the shadow log the trader itself appends every cycle; that append is suppressed here so the rehearsal changes nothing at all
         with mock.patch("operational.moneyline_model_path.record_shadow"):
-            collected = daily_tickets.collect_candidate_legs(nhl, now)
+            collected = daily_tickets.collect_candidate_legs(nhl, now, advisory_price_age=True)          # the cohort's own pool: real quotes kept with their age
         with mock.patch.object(lc, "is_authorised", return_value=True), mock.patch.object(lc, "write_status"), mock.patch("operational.learning_postmortem.refresh", return_value={"status": "REHEARSAL_SKIPPED"}):
             out = lc.run_cycle(nhl, now, collected, conn=m)
         bets = [dict(r) for r in m.execute("SELECT selection_rank, market_family, participant_name, team, threshold, american_price, conservative_probability, edge, selection_score, wave_index, game_id FROM bets ORDER BY selection_rank")]

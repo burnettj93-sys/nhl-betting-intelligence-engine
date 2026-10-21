@@ -98,7 +98,7 @@ def _game_info(nhl_conn, game_id: str) -> dict | None:
     return {"home": row["home_team"], "away": row["away_team"], "start_utc": start}
 
 
-def _adapter_legs(nhl_conn, now: dt.datetime) -> tuple[list[rmp.ParlayLeg], dict]:
+def _adapter_legs(nhl_conn, now: dt.datetime, *, advisory: bool = False) -> tuple[list[rmp.ParlayLeg], dict]:
     from operational.real_prop_orchestrator import _recent_archive_payloads
     from research.live_sog_pricing import market_parser
     from research.real_market_parlay import real_slate_adapter as adapter
@@ -118,14 +118,15 @@ def _adapter_legs(nhl_conn, now: dt.datetime) -> tuple[list[rmp.ParlayLeg], dict
     from operational import moneyline_model_path
     from operational import best_bets
     # Under the anchor policy a moneyline is a ticket leg for as long as its quote is fresh by the same limit as a shots price (morning and daytime pulls count); otherwise the T-35 tiers apply.
-    limit = best_bets.price_age_limit_min if getattr(ticket_policy.active(), "mode", "legacy") == "anchor" else None
+    limit = best_bets.price_age_limit_min if (advisory or getattr(ticket_policy.active(), "mode", "legacy") == "anchor") else None
     add("MONEYLINE", moneyline_model_path.version(), adapter.moneyline_candidate_legs(nhl_conn, now=now, freshness_limit_min=limit))
-    sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
+    kw = {"newest_per_event": True, "tag_retrieval": True} if advisory else {}          # the learning cohort's pool: only the newest capture of each event and market, tagged with when it was observed
+    sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("PLAYER_SOG_ALTERNATE", "sog-alternate-validated-v1",
         adapter.sog_alternate_candidate_legs(nhl_conn, sog_alt, now=now))
-    sog_std = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY, max_age_hours=24.0, now=now)
+    sog_std = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("PLAYER_SOG", "sog-standard-validated-v1", adapter.sog_standard_candidate_legs(nhl_conn, sog_std, now=now))
-    saves = _recent_archive_payloads(market_parser.SAVES_MARKET_KEY, max_age_hours=24.0, now=now)
+    saves = _recent_archive_payloads(market_parser.SAVES_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("GOALIE_SAVES", "goalie-saves-validated-v1", adapter.goalie_saves_candidate_legs(nhl_conn, saves, now=now))
     return legs, report
 
@@ -175,9 +176,16 @@ def _merge_and_add_context(nhl_conn, adapter_legs: list[rmp.ParlayLeg], bb_legs:
     return out, notes
 
 
-def collect_candidate_legs(nhl_conn, now: dt.datetime) -> dict:
+def collect_candidate_legs(nhl_conn, now: dt.datetime, *, advisory_price_age: bool = False) -> dict:
+    """`advisory_price_age=True` is for the temporary 14-day learning cohort ONLY (operational/learning_cohort.py): a quote that is merely old is kept as a leg that says how old it is, instead of
+    being excluded. Every other caller (the model book, Eggy, the boards) uses the default strict limits."""
     from operational import best_bets
-    adapter_legs, report = _adapter_legs(nhl_conn, now)
+    from research.real_market_parlay import real_slate_adapter
+    if advisory_price_age:
+        with real_slate_adapter.advisory_price_age():
+            adapter_legs, report = _adapter_legs(nhl_conn, now, advisory=True)
+    else:
+        adapter_legs, report = _adapter_legs(nhl_conn, now)
     try:
         bb_legs, bb_report = best_bets.candidate_legs(nhl_conn, now)
     except Exception as exc:  # noqa: BLE001 -- no MoneyPuck history on disk etc.: report it, don't hide it
@@ -290,7 +298,7 @@ def code_version() -> str:
         return "unknown"
 
 
-def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> list[str]:
+def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime, *, price_age_is_advisory: bool = False) -> list[str]:
     """Reasons a selected ticket may NOT be recorded right now, judged on the clock at the moment of recording (a cycle can spend minutes capturing prices after it
     selected). Every leg must be a fresh price: not provisional (aged), the provider's own quote time inside the limit that applies at this distance from puck drop, and
     the game not started. A morning price that is still fresh may be used (subject to EARLY_TICKET_CAP); one that has aged out is not, however good the ticket looked."""
@@ -304,7 +312,7 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
             if iv["status"] != player_integrity.OK:                  # nothing is staked on a player who is not VERIFIED on a current official roster (a stale roster is a withdrawn leg, an unreachable one a held ticket)
                 reasons.append(f"{rmp.leg_label(l)}: player identity not verified ({iv['status']}: {iv['detail']})")
                 continue
-        if getattr(l, "provisional", False):
+        if getattr(l, "provisional", False) and not price_age_is_advisory:
             reasons.append(f"{rmp.leg_label(l)}: price is provisional (from an earlier look); it is re-checked on a pregame price first")
             continue
         start = best_bets.effective_start(l.provider_start_utc or l.game_start_utc, l.game_start_utc) if (l.provider_start_utc or l.game_start_utc) else None
@@ -313,6 +321,8 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime) -> li
             continue
         if start is None or not l.quote_updated_utc:
             continue                      # no timestamps to re-judge: the gate that built the leg already refused a missing or malformed quote time
+        if price_age_is_advisory:
+            continue                      # the learning cohort records the quote's age as metadata; identity, game start and the timestamp checks above and in the cohort stay hard
         hours = (start - now).total_seconds() / 3600.0
         a = quote_freshness.assess(l.quote_updated_utc, l.retrieved_at_utc or l.captured_at_utc, now, best_bets.price_age_limit_min(hours))
         if not a["fresh"]:

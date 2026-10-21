@@ -42,6 +42,23 @@ from research.real_market_parlay.engine import SAVES_VALIDATED_THRESHOLDS, Parla
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+# ADVISORY PRICE AGE (owner policy 2026-10-21, 14-day learning book ONLY). Normal use: a quote older than the engine's limit is EXCLUDED. Inside `advisory_price_age()` a quote that is merely OLD is kept
+# as a leg that says so (price_fresh False, freshness_status STALE_QUOTE / STALE_RETRIEVAL, its real age), so the learning cohort can record it with the age as metadata. A missing, malformed or future
+# quote time, a started event and every other gate are exactly as before. Nothing outside the learning cohort ever enters this context (Eggy and the normal book keep the strict limits).
+import contextvars
+_ADVISORY_PRICE_AGE: contextvars.ContextVar[bool] = contextvars.ContextVar("advisory_price_age", default=False)
+OLD_BUT_REAL = ("STALE_QUOTE", "STALE_RETRIEVAL")
+
+
+class advisory_price_age:
+    def __enter__(self):
+        self._token = _ADVISORY_PRICE_AGE.set(True)
+        return self
+
+    def __exit__(self, *exc):
+        _ADVISORY_PRICE_AGE.reset(self._token)
+        return False
+
 
 def _quote_time(market) -> str | None:
     """The provider's own update time for the quote: the market-level last_update (what the real DraftKings
@@ -71,7 +88,10 @@ def _price_freshness(quote_updated_utc: str | None, game_start_utc: str, now: dt
     reason = None if verdict["fresh"] else (
         "STALE_PRICE" if verdict["status"] in (quote_freshness.STALE_QUOTE, quote_freshness.STALE_RETRIEVAL)
         else verdict["status"])                      # STALE_PRICE keeps this adapter's established reason vocabulary
-    return {"fresh": verdict["fresh"], "reason": reason,
+    if not verdict["fresh"] and _ADVISORY_PRICE_AGE.get() and verdict["status"] in OLD_BUT_REAL:
+        return {"fresh": True, "advisory_old": True, "status": verdict["status"], "reason": None,           # kept, labelled with its real age (learning cohort only)
+                "age_minutes": verdict["quote_age_min"], "max_age_minutes": max_age, "quote_updated_utc": verdict["quote_updated_utc"]}
+    return {"fresh": verdict["fresh"], "advisory_old": False, "status": verdict["status"], "reason": reason,
             "age_minutes": verdict["quote_age_min"], "max_age_minutes": max_age,
             "quote_updated_utc": verdict["quote_updated_utc"]}
 
@@ -156,8 +176,9 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
         label = f"{pred.away_team} @ {pred.home_team} ({pred.game_date[:10]})"
         hours_out = (dt.datetime.fromisoformat(pred.scheduled_start_utc).replace(tzinfo=dt.timezone.utc) - now).total_seconds() / 3600.0
         limit = freshness_limit_min(hours_out) if freshness_limit_min is not None else None
+        advisory = _ADVISORY_PRICE_AGE.get() and limit is not None
         reports = pricing_engine.evaluate_moneyline_for_game(
-            conn, pred, label, max_staleness_minutes=pricing_policy.PROVISIONAL_MAX_AGE_MIN if limit is not None else None)
+            conn, pred, label, max_staleness_minutes=(24 * 60.0 if advisory else pricing_policy.PROVISIONAL_MAX_AGE_MIN) if limit is not None else None)
         for report in reports:
             identifier = f"game:{game_id}:{report.selection}"
             if report.action == "DATA_UNAVAILABLE":
@@ -190,9 +211,10 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 from operational import moneyline_model_path as mmp
                 is_home = report.selection == pred.home_team
                 p_home = mmp.strength_probability(pred.home_team, pred.away_team)
-                mmp.record_shadow(now, str(game_id), today_et, pred.home_team, pred.away_team, report.selection, report.model_true_probability,
-                                  None if p_home is None else (p_home if is_home else 1.0 - p_home), report.market_no_vig_probability,
-                                  report.current_draftkings_price)
+                if not _ADVISORY_PRICE_AGE.get():              # the learning cohort's second look never writes the shadow log twice
+                    mmp.record_shadow(now, str(game_id), today_et, pred.home_team, pred.away_team, report.selection, report.model_true_probability,
+                                      None if p_home is None else (p_home if is_home else 1.0 - p_home), report.market_no_vig_probability,
+                                      report.current_draftkings_price)
                 _true, conservative = mmp.apply_switch(report, is_home, pred.home_team, pred.away_team)
             except Exception:  # noqa: BLE001 - the shadow record and the switch must never remove a leg
                 _true, conservative = report.model_true_probability, report.model_conservative_probability
@@ -204,7 +226,9 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 if not fresh:
                     wide = quote_freshness.assess(captured_at_utc, captured_at_utc, now, pricing_policy.PROVISIONAL_MAX_AGE_MIN)
                     provisional = bool(wide["fresh"]) and et.eastern_today(quote_freshness.parse_utc(captured_at_utc) or now) == today_et
-                    if not provisional:
+                    if advisory and status in OLD_BUT_REAL:
+                        provisional = False                                  # kept as an old-but-real quote with its age (learning cohort only)
+                    elif not provisional:
                         excluded.append({"identifier": identifier, "market_family": "MONEYLINE", "reason": f"STALE_PRICE: {status} ({age} min old, limit {limit:.0f})"})
                         continue
                 else:
@@ -224,7 +248,34 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 provider_contract_verified=True, model_threshold_eligible=True,
                 identity_resolved=True, price_fresh=fresh, event_not_started=True,
             ))
+    if _ADVISORY_PRICE_AGE.get() and legs:
+        legs = latest_pull_filter(legs, excluded)
     return legs, excluded
+
+
+PULL_TOLERANCE_S = 600.0       # rows written by one league pull are stamped within seconds of each other; a game whose row is older than the newest pull by more than this was not in that pull
+
+
+def latest_pull_filter(legs: list, excluded: list) -> list:
+    """Advisory-mode accuracy rule for moneylines: an old quote is only usable if it comes from the LATEST league pull that covered the slate (a game missing from the newest pull may have been withdrawn) and
+    both sides of a game come from the same pull (the no-vig chance needs both). The pull is identified by the time this system wrote the rows (retrieved_at_utc), not the provider's per-event quote time,
+    which differs from game to game within one pull. Anything else is an accuracy problem, not an age problem."""
+    from operational import quote_freshness
+    pull = lambda l: quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc)
+    newest = max((pull(l) for l in legs if pull(l)), default=None)
+    by_game: dict = {}
+    for l in legs:
+        by_game.setdefault(l.game_id, []).append(l)
+    kept = []
+    for gid, gl in by_game.items():
+        times = [pull(l) for l in gl]
+        if None in times or (max(times) - min(times)).total_seconds() > 60.0:
+            excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "SIDES_FROM_DIFFERENT_PULLS"})
+        elif newest is not None and (newest - max(times)).total_seconds() > PULL_TOLERANCE_S:
+            excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "NOT_IN_LATEST_PULL (the market may have been withdrawn)"})
+        else:
+            kept.extend(gl)
+    return kept
 
 
 def _sog_model_inputs():
@@ -369,8 +420,8 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                     threshold=threshold, american_price=market.american_price,
                     conservative_probability=conservative_prob, sportsbook=bookmaker,
                     captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                    quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=True,
-                    model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                    retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=True,
+                    model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                     event_not_started=True,
                 ))
     return legs, excluded
@@ -514,8 +565,8 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
-                model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
+                model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                 event_not_started=True, model_version=tg.MODEL_VERSION,
             ))
     return legs, excluded
@@ -674,8 +725,8 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                quote_age_min=freshness["age_minutes"], freshness_status="FRESH", provider_contract_verified=contract_verified,
-                model_threshold_eligible=True, identity_resolved=True, price_fresh=True,
+                retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
+                model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                 event_not_started=True, model_version=tg.MODEL_VERSION,
             ))
     return legs, excluded

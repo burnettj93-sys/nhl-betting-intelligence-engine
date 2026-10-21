@@ -9,6 +9,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import db
@@ -106,17 +107,11 @@ class TestWindowAndAutoEnd(unittest.TestCase):
 
 class TestIntegrityGatesStayClosed(Base):
     def test_each_failed_gate_keeps_a_leg_out(self):
-        bad = [leg(price=-155.0), leg(provider_contract_verified=False), leg(model_threshold_eligible=False), leg(identity_resolved=False), leg(price_fresh=False), leg(event_not_started=False),
-               leg(provisional=True), leg(freshness_status="STALE_QUOTE"), leg(p=0.0), leg(fam="PUCK_LINE"), leg(fam="PLAYER_ASSISTS", k=1)]
+        bad = [leg(price=-155.0), leg(provider_contract_verified=False), leg(model_threshold_eligible=False), leg(identity_resolved=False), leg(event_not_started=False),
+               leg(freshness_status="MISSING_QUOTE_TIMESTAMP"), leg(p=0.0), leg(fam="PUCK_LINE"), leg(fam="PLAYER_ASSISTS", k=1)]
         for l in bad:
             self.assertTrue(lc.eligibility_reasons(l, D1), (l.market_family, l.american_price))
         self.assertEqual(lc.eligibility_reasons(leg(), D1), [])
-
-    def test_a_quote_that_aged_out_since_the_cycle_started_is_refused_at_recording_time(self):
-        old = leg(quote_updated_utc="2026-10-20T17:00:00Z", retrieved_at_utc="2026-10-20T17:01:00Z", quote_age_min=5.0)
-        self.assertTrue(lc.eligibility_reasons(old, D1))
-        self.cycle([old], fresh=False)
-        self.assertEqual(self.rows(), [])
 
     def test_a_started_game_is_never_recorded(self):
         late = D1 + dt.timedelta(hours=3)
@@ -394,7 +389,7 @@ class TestPostmortemAndScorecard(Base):
         for i, price in enumerate([-145.0, -120.0, -105.0, 120.0, 200.0]):
             self._bet(i + 1, "1", str(i), price, 0.6, "WIN" if i % 2 else "LOSS")
         b = lpm.breakdowns(lpm.rows(self.conn))
-        self.assertEqual(set(b), {"edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "game", "team", "player", "data_freshness", "selection_rank"})
+        self.assertEqual(set(b), {"edge_class", "price_status", "market_type", "price_band", "model_probability_band", "edge_band", "game", "team", "player", "data_freshness", "selection_rank"})
         self.assertEqual({r["group"] for r in b["price_band"]}, {"-150 to -131", "-130 to -111", "-110 to +100", "+101 to +150", "+151 and longer"})
         self.assertEqual({r["group"] for r in b["selection_rank"]}, {"ranks 1-3", "ranks 4-6"})
 
@@ -498,10 +493,12 @@ class TestPaperPerformancePanel(unittest.TestCase):
                 "record": {"wins": 6, "losses": 4, "voids": 0, "open": 7, "hit_rate": 0.6}, "resets": [{"at_et": "x EDT", "experiment_day": 2, "balance_before": 5.0, "amount": 495.0, "balance_after": 500.0, "reason": lc.RESET_REASON}],
                 "shortfall_today": {"target": 10, "recorded": 7, "slots_open": 3, "why": "fewer than 10 legitimate eligible bets exist so far today", "not_eligible_reasons": {"price not fresh": 4}, "eligible_not_yet_recorded": 0, "legs_in_pool": 11},
                 "bets_today": [{"selection_rank": 1, "market_family": "PLAYER_SOG_ALTERNATE", "participant_name": "A Player", "team": "TOR", "threshold": 2, "american_price": -135.0, "conservative_probability": 0.7,
-                                "edge": 0.05, "result_status": "PENDING", "profit_loss": None, "eggy_relation": "EGGY_NOT_INVOLVED"}],
+                                "edge": 0.05, "result_status": "PENDING", "profit_loss": None, "eggy_relation": "EGGY_NOT_INVOLVED", "price_status": "LAST_KNOWN_PREGAME", "price_age_at_recording_min": 34.0}],
                 "postmortem": {"scorecard": sc, "cumulative": cu, "postmortem_for": "2026-10-20", "day_metrics": {**cu, "unresolved": 0, "open": 0, "staked": 100.0, "returned": 112.0}, "day_bets": [], "closing_price_movement": "not available",
                                "cumulative_breakdowns": {"market_type": [{"group": "PLAYER_SOG_ALTERNATE", "placed": 10, "settled": 10, "wins": 6, "losses": 4, "hit_rate": 0.6, "profit_loss": 12.0, "roi": 0.12, "expected_wins": 5.9}]},
-                                "calibration": [{"band": "55-65%", "n": 10, "predicted": 0.59, "actual": 0.6, "delta_wins": 0.1}], "day_breakdowns": {}}, "final_report": None}
+                                "calibration": [{"band": "55-65%", "n": 10, "predicted": 0.59, "actual": 0.6, "delta_wins": 0.1}], "day_breakdowns": {},
+                               "cumulative_price_age": [{"bucket": "31-60 min", "n": 4, "settled": 4, "wins": 3, "losses": 1, "pushes_voids": 0, "hit_rate": 0.75, "profit_loss": 9.0, "roi": 0.22,
+                                                         "average_model_probability": 0.7, "average_implied_probability": 0.6, "average_estimated_edge": 0.04, "expected_wins": 2.8, "actual_wins": 3}]}, "final_report": None}
 
     def _text(self, at):
         from tests.test_product_pages import text
@@ -512,7 +509,7 @@ class TestPaperPerformancePanel(unittest.TestCase):
         at = run_page("33_Paper_Performance.py", self._snap(self._section()))
         self.assertFalse(at.exception)
         t = self._text(at)
-        for needle in ("14-DAY POSTMORTEM LEARNING EXPERIMENT", "Day 2 of 14", "Today's target", "7/10", "-150 or better", "Current cash", "Betting P/L", "Reset count", "Total reset funding", "Eggy"):
+        for needle in ("14-DAY POSTMORTEM LEARNING EXPERIMENT", "Day 2 of 14", "Today's target", "7/10", "-150 or better", "Current cash", "Betting P/L", "Reset count", "Total reset funding", "Eggy", "By price age at recording", "Price age is recorded, never a reason to skip a bet"):
             self.assertIn(needle, t, needle)
         self.assertIn("Available cash", t)           # the model book is still there
 
@@ -698,7 +695,7 @@ class TestEdgeClasses(Base):
     def test_a_negative_edge_candidate_still_needs_every_gate(self):
         late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)
         bad = dataclasses.replace(self._neg(), identity_resolved=False)
-        self.cycle([bad, dataclasses.replace(self._neg(pid="8470010"), price_fresh=False), dataclasses.replace(self._neg(pid="8470011"), american_price=-155.0)], now=late)
+        self.cycle([bad, dataclasses.replace(self._neg(pid="8470010"), identity_resolved=False), dataclasses.replace(self._neg(pid="8470011"), american_price=-155.0)], now=late)
         self.assertEqual(self.rows(), [])
 
     def test_the_edge_class_is_locked_on_the_ledger(self):
@@ -805,6 +802,334 @@ class TestEdgeClassReviewFixes(Base):
         lc.ensure_funded(self.conn, D1)
         row = self.conn.execute("SELECT amount, note FROM funding_events WHERE kind='INITIAL'").fetchone()
         self.assertEqual((row["amount"], "500.00" in row["note"]), (500.0, True))
+
+
+class TestPriceAgeIsMetadata(Base):
+    def _old(self, minutes, **kw):
+        """A real quote last observed `minutes` before D1 (the legs keep their own times: cycle(fresh=False))."""
+        t = D1 - dt.timedelta(minutes=minutes)
+        stamp = t.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return leg(quote_updated_utc=stamp, retrieved_at_utc=stamp, captured_at_utc=stamp, quote_age_min=float(minutes), freshness_status="STALE_QUOTE" if minutes > 10 else "FRESH", price_fresh=minutes <= 10, **kw)
+
+    def test_an_old_real_quote_is_recorded_with_its_age_and_status(self):
+        self.cycle([self._old(34)], fresh=False)
+        r = self.rows()[0]
+        self.assertEqual((r["price_status"], r["price_age_bucket"], r["price_age_at_recording_min"]), ("LAST_KNOWN_PREGAME", "31-60 min", 34.0))
+        self.assertEqual(r["price_capture_timestamp"], (D1 - dt.timedelta(minutes=34)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        self.assertEqual(r["price_source"], "LIVE_DRAFTKINGS")
+        self.assertIn("LAST_KNOWN_PREGAME", r["selection_reason"])
+        self.assertEqual(r["american_price"], -130.0)               # the actual last observed price, never adjusted
+
+    def test_a_very_old_pregame_quote_is_still_a_valid_learning_bet(self):
+        self.cycle([self._old(480)], fresh=False)                   # a morning price
+        r = self.rows()[0]
+        self.assertEqual((r["price_status"], r["price_age_bucket"]), ("VERY_OLD_PREGAME", "120+ min"))
+
+    def test_status_and_bucket_boundaries(self):
+        self.assertEqual([lc.price_age_status(x) for x in (0, 5, 5.1, 30, 31, 120, 121)], ["CURRENT", "CURRENT", "RECENT", "RECENT", "LAST_KNOWN_PREGAME", "LAST_KNOWN_PREGAME", "VERY_OLD_PREGAME"])
+        self.assertEqual([lc.price_age_bucket(x) for x in (0, 5, 6, 15, 16, 30, 31, 60, 61, 120, 121)],
+                         ["0-5 min", "0-5 min", "6-15 min", "6-15 min", "16-30 min", "16-30 min", "31-60 min", "31-60 min", "61-120 min", "61-120 min", "120+ min"])
+
+    def test_accuracy_gates_remain_hard_for_an_old_quote(self):
+        for bad in (self._old(34, identity_resolved=False), self._old(34, event_not_started=False), self._old(34, model_threshold_eligible=False), self._old(34, provider_contract_verified=False),
+                    self._old(34, price=-155.0), self._old(34, fam="PUCK_LINE"), self._old(34, k=9)):
+            self.assertTrue(lc.eligibility_reasons(bad, D1), (bad.market_family, bad.threshold))
+        self.assertEqual(lc.eligibility_reasons(self._old(34), D1), [])
+
+    def test_a_quote_without_a_real_observation_time_is_rejected(self):
+        for kw in ({"freshness_status": "MISSING_QUOTE_TIMESTAMP"}, {"freshness_status": "MALFORMED_QUOTE_TIMESTAMP"}, {"freshness_status": "FUTURE_QUOTE_TIMESTAMP"},
+                   {"quote_updated_utc": None, "retrieved_at_utc": None, "captured_at_utc": None},
+                   {"quote_updated_utc": "garbage", "retrieved_at_utc": "garbage", "captured_at_utc": "garbage"},
+                   {"quote_updated_utc": "2026-10-20T23:30:00Z", "retrieved_at_utc": "2026-10-20T23:30:00Z"}):          # in the future
+            self.assertTrue(lc.eligibility_reasons(dataclasses.replace(self._old(34), **kw), D1), kw)
+
+    def test_a_started_game_with_an_old_quote_is_not_recorded(self):
+        late = D1 + dt.timedelta(hours=3)
+        self.assertTrue(lc.eligibility_reasons(self._old(34), late))
+
+    def test_ranking_ignores_price_age(self):
+        a, b = self._old(2), self._old(300)
+        self.assertEqual(lc.score_leg(a, D1)["score"], lc.score_leg(b, D1)["score"])
+        self.assertEqual(lc.SELECTION_WEIGHTS["freshness"], 0.0)
+        self.assertAlmostEqual(sum(lc.SELECTION_WEIGHTS.values()), 1.0)
+
+    def test_the_strict_engine_paths_are_unchanged_outside_the_cohort(self):
+        from operational import daily_tickets as dtk
+        from research.real_market_parlay import real_slate_adapter as adapter
+        start = "2026-10-20T23:00:00Z"
+        old = (D1 - dt.timedelta(minutes=300)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.assertFalse(adapter._price_freshness(old, start, D1)["fresh"])                    # default: an old quote is excluded
+        with adapter.advisory_price_age():
+            v = adapter._price_freshness(old, start, D1)
+            self.assertTrue(v["fresh"] and v["advisory_old"] and v["status"] == "STALE_QUOTE")
+            self.assertFalse(adapter._price_freshness(None, start, D1)["fresh"])               # a missing time is never advisory
+            self.assertFalse(adapter._price_freshness("2026-10-21T05:00:00Z", start, D1)["fresh"])          # nor a future one
+        self.assertFalse(adapter._price_freshness(old, start, D1)["fresh"])                    # and the context does not leak
+        combo = SimpleNamespace(legs=[self._old(300)])
+        self.assertTrue(dtk.revalidate_before_recording(combo, D1))                            # the normal book still refuses an old quote at recording
+        self.assertEqual(dtk.revalidate_before_recording(combo, D1, price_age_is_advisory=True), [])
+
+    def test_the_cohort_collects_its_own_pool_and_the_normal_pool_is_untouched(self):
+        seen = []
+        out = lc.run_cycle(self.nhl, D1, {"legs": []}, conn=self.conn, collector=lambda: seen.append(1) or {"legs": [self._old(300)], "sources": {}})
+        self.assertEqual(seen, [1])
+        self.assertEqual(out["recording"]["recorded_today"], 1)
+        bad = lc.run_cycle(self.nhl, D1, {"legs": []}, conn=self.conn, collector=lambda: (_ for _ in ()).throw(RuntimeError("x")))
+        self.assertEqual(bad["recording"]["status"], "POOL_UNAVAILABLE")
+
+    def test_an_old_ledger_is_migrated_and_the_new_fields_are_then_protected(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "old.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg()])                                    # prove the helper works on memory; now build the old-shape ledger by hand
+            c.close()
+            old = sqlite3.connect(path)
+            old.row_factory = sqlite3.Row
+            old.executescript("DROP TRIGGER IF EXISTS bets_entry_is_immutable;")
+            for col, _ in lc.PRICE_COLUMNS:
+                old.execute(f"ALTER TABLE bets DROP COLUMN {col}")
+            row = dict(self.rows()[0])
+            for col, _ in lc.PRICE_COLUMNS:
+                row.pop(col)
+            old.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            old.commit()
+            old.close()
+            m = lc.open_ledger(path)
+            r = m.execute("SELECT price_status, price_age_at_recording_min, price_age_bucket FROM bets").fetchone()
+            self.assertEqual(r["price_status"], "RECENT")
+            self.assertEqual(r["price_age_at_recording_min"], 9.0)          # observed 9 minutes before it was recorded
+            with self.assertRaises(sqlite3.DatabaseError):
+                m.execute("UPDATE bets SET price_status = 'CURRENT'")
+            m.close()
+
+    def test_postmortem_age_buckets_and_selection_versus_price_quality(self):
+        from operational import learning_postmortem as lpm
+        specs = [(3, "WIN"), (10, "LOSS"), (20, "WIN"), (45, "LOSS"), (90, "WIN"), (200, "LOSS"), (4, "LOSS")]
+        for i, (age, st) in enumerate(specs):
+            self._bet(i + 1, "1", f"x{i}", -120.0, 0.6, st)
+            self.conn.execute("DROP TRIGGER bets_entry_is_immutable") if i == 0 else None
+            self.conn.execute("UPDATE bets SET price_age_at_recording_min = ?, price_status = ? WHERE bet_id = ?", (float(age), lc.price_age_status(age), f"B{i + 1}1x{i}"))
+        t = {r["bucket"]: r for r in lpm.price_age_table(lpm.rows(self.conn))}
+        self.assertEqual(list(t), ["0-5 min", "6-15 min", "16-30 min", "31-60 min", "61-120 min", "120+ min"])
+        self.assertEqual((t["0-5 min"]["n"], t["0-5 min"]["wins"], t["0-5 min"]["losses"]), (2, 1, 1))
+        for k in ("hit_rate", "profit_loss", "roi", "average_model_probability", "average_implied_probability", "average_estimated_edge", "calibration_delta", "expected_ev_per_stake"):
+            self.assertIn(k, t["0-5 min"])
+        self.assertEqual([r["price_status"] for r in lpm.price_status_table(lpm.rows(self.conn))], ["CURRENT", "RECENT", "LAST_KNOWN_PREGAME", "VERY_OLD_PREGAME"])
+
+    def test_dependence_is_measured_not_assumed(self):
+        from operational import learning_postmortem as lpm
+        for i, st in enumerate(["WIN", "WIN", "LOSS"]):
+            self._bet(i + 1, "7", f"d{i}", -120.0, 0.6, st)
+        d = lpm.dependence_report(lpm.rows(self.conn))
+        g = d["games_with_multiple_bets"][0]
+        self.assertEqual((g["bets"], g["actual_hits"], g["pairs"], g["pairs_both_hit"]), (3, 2, 3, 1))
+        self.assertAlmostEqual(g["pairs_both_hit_if_independent"], 3 * 0.36, places=2)
+        self.assertIn("not enough", d["reading"])
+        self.assertIn("not captured", d["not_captured"].lower())
+
+    def test_the_policy_says_age_is_not_a_gate_and_the_digest_moved(self):
+        self.assertFalse(lc.POLICY["price_age_policy"]["gate"])
+        self.assertIn("MODEL EDGE AT LAST OBSERVED PRICE", lc.POLICY["price_age_policy"]["edge_label"])
+        self.assertNotEqual(lc.policy_digest(), "df96584493d9d3e8")
+
+
+class TestPriceAgeReviewFixes(Base):
+    _old = TestPriceAgeIsMetadata._old
+
+    def test_the_newest_observation_of_a_bet_is_the_price_even_if_it_fails_a_gate(self):
+        older = self._old(300, price=-140.0)
+        newer = self._old(10, price=-165.0)                                    # the last observed price is past the -150 floor
+        self.cycle([older, newer], fresh=False)
+        self.assertEqual(self.rows(), [])                                      # the older, better price must not stand in for it
+
+    def test_the_newest_observation_wins_when_both_pass(self):
+        self.cycle([self._old(300, price=-140.0), self._old(10, price=-135.0)], fresh=False)
+        self.assertEqual([r["american_price"] for r in self.rows()], [-135.0])
+
+    def test_a_price_flagged_for_a_reason_other_than_age_is_rejected(self):
+        self.assertTrue(lc.eligibility_reasons(dataclasses.replace(self._old(34), price_fresh=False, freshness_status="FRESH"), D1))
+
+    def test_an_unreadable_retrieval_time_is_corrupt_data(self):
+        bad = dataclasses.replace(self._old(34), retrieved_at_utc="not-a-time")
+        self.assertIsNone(lc.price_observation(bad.retrieved_at_utc, bad.quote_updated_utc, D1))
+        self.assertTrue(lc.eligibility_reasons(bad, D1))
+
+    def test_status_and_bucket_use_the_stored_rounded_age(self):
+        t = (D1 - dt.timedelta(minutes=5, seconds=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        po = lc.price_observation(t, t, D1)
+        self.assertEqual((po["age_min"], po["status"], po["bucket"]), (5.0, "CURRENT", "0-5 min"))
+
+    def test_an_old_quote_loss_is_not_labelled_stale_data(self):
+        from operational import learning_postmortem as lpm
+        self.cycle([self._old(300, k=2, p=0.8)], fresh=False)
+        self.nhl.execute("UPDATE games SET game_state='FINAL', home_score=3, away_score=2, final_period_type='REG' WHERE game_id='1'")
+        self.nhl.execute("INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played, revision_number, effective_at_utc, observed_at_utc, source) "
+                         "VALUES ('1','8478402','TOR',20.0,0,0,1,1,1,'2026-10-21T03:00:00Z','2026-10-21T03:00:00Z','test')")
+        self.nhl.commit()
+        lc.settle_due(self.conn, self.nhl, D1 + dt.timedelta(hours=8))
+        self.assertEqual(self.rows()[0]["result_status"], "LOSS")
+        self.assertEqual(self.rows()[0]["price_status"], "VERY_OLD_PREGAME")
+        doc = lpm.build(self.conn, self.nhl, dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc))
+        self.assertNotEqual(doc["day_bets"][0]["classification"], "STALE_DATA")
+        self.assertFalse(doc["loss_classification"].get("integrity_defects"))
+
+    def test_a_half_finished_migration_is_completed_on_the_next_open(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "half.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            for k in ("price_capture_timestamp", "price_provider_update_utc", "price_age_at_recording_min", "provider_quote_age_at_recording_min", "price_status", "price_age_bucket"):
+                row[k] = None                                         # columns exist, values were never filled (an interrupted earlier attempt)
+            c.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            c.commit()
+            c.close()
+            m = lc.open_ledger(path)
+            self.assertEqual(m.execute("SELECT price_status FROM bets").fetchone()[0], "RECENT")
+            m.close()
+
+    def test_the_archive_reader_keeps_only_the_newest_capture_per_event_and_tags_when_it_was_observed(self):
+        from operational import real_prop_orchestrator as rpo
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            for name, when, bms in (("a.json", "2026-10-20T20:00:00Z", [{"key": "draftkings", "markets": [{"key": "player_total_saves"}]}]), ("b.json", "2026-10-20T21:00:00Z", []),
+                                    ("c.json", "2026-10-20T20:30:00Z", [{"key": "draftkings", "markets": [{"key": "player_total_saves"}]}])):
+                (d / name).write_text(json.dumps({"meta": {"market_filter": "player_total_saves", "retrieved_at_utc": when}, "response": {"id": "E1" if name != "c.json" else "E2", "bookmakers": bms}}))
+            with mock.patch.object(rpo, "RUNTIME_ARCHIVE_DIR", d), mock.patch.object(rpo, "LEGACY_ARCHIVE_DIR", d / "none"):
+                got = rpo._recent_archive_payloads("player_total_saves", now=D1, newest_per_event=True, tag_retrieval=True)
+                plain = rpo._recent_archive_payloads("player_total_saves", now=D1)
+        by = {r["id"]: r for r in got}
+        self.assertEqual(by["E1"]["bookmakers"], [])                           # the newer capture lacks the market: withdrawn, the older one does not resurrect it
+        self.assertEqual(by["E1"]["__retrieved_at_utc"], "2026-10-20T21:00:00Z")
+        self.assertEqual(len(got), 2)
+        self.assertEqual(len(plain), 3)                                        # the default reader is unchanged
+        self.assertNotIn("__retrieved_at_utc", plain[0])
+
+    def test_the_advisory_moneyline_keeps_an_old_real_quote_and_refuses_what_could_be_withdrawn_or_mismatched(self):
+        from pricing.engine import BetReport
+        from research.real_market_parlay import real_slate_adapter as adapter
+        from operational import best_bets
+        from tests.test_real_slate_adapter import _fresh_db_with_game, _pred
+        start = "2026-10-11T23:10:00"
+        now = dt.datetime(2026, 10, 11, 17, 0, tzinfo=dt.timezone.utc)
+
+        def run(captured_by_side, *, advisory):
+            conn = _fresh_db_with_game(start_utc=start)
+            reports = []
+            for sel, captured in captured_by_side.items():
+                cur = conn.execute("INSERT INTO odds_snapshots (game_id, sportsbook, data_provider, market, selection, event_start_utc, price_american, status, captured_at_utc, received_at_utc, snapshot_label) "
+                                   "VALUES (1, 'draftkings', 'test', 'MONEYLINE', ?, ?, -120, 'ACTIVE', ?, ?, 'morning')", (sel, start, captured, captured))
+                reports.append(BetReport(game_label="MTL @ TOR", market="MONEYLINE", selection=sel, action="PASS", model_true_probability=0.56, model_conservative_probability=0.50,
+                                         market_no_vig_probability=0.55, current_draftkings_price=-120, odds_snapshot_id_selection=cur.lastrowid))
+            conn.commit()
+            with mock.patch("run_slate.build_prediction_for_game", return_value=_pred(start_utc=start)), mock.patch("pricing.engine.evaluate_moneyline_for_game", return_value=reports) as ev, \
+                    mock.patch("operational.eastern_time.eastern_today", return_value="2026-10-11"), mock.patch("operational.moneyline_model_path.record_shadow") as shadow:
+                ctx = adapter.advisory_price_age() if advisory else mock.MagicMock()
+                with ctx:
+                    out = adapter.moneyline_candidate_legs(conn, now=now, freshness_limit_min=best_bets.price_age_limit_min)
+            return out, ev, shadow
+
+        old = "2026-10-10T21:00:00"                                         # last evening's quote: excluded by the strict path, kept (with its age) by the advisory one
+        (legs, excluded), _, _ = run({"TOR": old, "MTL": old}, advisory=False)
+        self.assertEqual(legs, [])
+        (legs, excluded), ev, shadow = run({"TOR": old, "MTL": old}, advisory=True)
+        self.assertEqual(len(legs), 2)
+        self.assertTrue(all((not l.price_fresh) and l.freshness_status == "STALE_QUOTE" and not l.provisional for l in legs))
+        self.assertEqual(ev.call_args.kwargs["max_staleness_minutes"], 1440.0)
+        shadow.assert_not_called()                                         # the cohort's second look never writes the shadow log
+        (legs, excluded), _, _ = run({"TOR": "2026-10-11T12:00:00", "MTL": "2026-10-11T12:30:00"}, advisory=True)
+        self.assertEqual(legs, [])
+        self.assertEqual([e["reason"] for e in excluded], ["SIDES_FROM_DIFFERENT_PULLS"])
+
+
+class TestPriceAgeSecondReviewFixes(Base):
+    def test_the_latest_pull_rule_uses_the_pull_time_not_the_providers_per_game_quote_time(self):
+        from research.real_market_parlay import real_slate_adapter as adapter
+        pull = "2026-10-20T12:00:05Z"
+
+        def ml_leg(game, team, quote, retrieved):
+            return dataclasses.replace(ml(team=team, game=game), captured_at_utc=quote, quote_updated_utc=quote, retrieved_at_utc=retrieved)
+        legs = [ml_leg("1", "TOR", "2026-10-20T11:58:00Z", pull), ml_leg("1", "MTL", "2026-10-20T11:58:00Z", pull),
+                ml_leg("2", "EDM", "2026-10-20T11:30:00Z", pull), ml_leg("2", "CHI", "2026-10-20T11:30:00Z", pull)]        # provider quote times differ by 28 minutes inside ONE pull
+        excluded = []
+        self.assertEqual(len(adapter.latest_pull_filter(legs, excluded)), 4)
+        self.assertEqual(excluded, [])
+        later = "2026-10-20T17:38:00Z"                                              # a newer pull that did not include game 2: it may have been withdrawn
+        legs = [ml_leg("1", "TOR", "2026-10-20T17:30:00Z", later), ml_leg("1", "MTL", "2026-10-20T17:30:00Z", later), ml_leg("2", "EDM", "2026-10-20T11:30:00Z", pull), ml_leg("2", "CHI", "2026-10-20T11:30:00Z", pull)]
+        excluded = []
+        kept = adapter.latest_pull_filter(legs, excluded)
+        self.assertEqual({l.game_id for l in kept}, {"1"})
+        self.assertIn("NOT_IN_LATEST_PULL", excluded[0]["reason"])
+        mixed = [ml_leg("1", "TOR", "x", pull), ml_leg("1", "MTL", "x", later)]
+        excluded = []
+        self.assertEqual(adapter.latest_pull_filter(mixed, excluded), [])
+        self.assertEqual(excluded[0]["reason"], "SIDES_FROM_DIFFERENT_PULLS")
+
+    def test_the_exact_market_is_matched_so_an_alternate_only_capture_is_not_a_withdrawn_standard_market(self):
+        from operational import real_prop_orchestrator as rpo
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            docs = (("std.json", "2026-10-20T20:00:00Z", "player_shots_on_goal,player_total_saves", [{"key": "draftkings", "markets": [{"key": "player_shots_on_goal"}]}]),
+                    ("alt.json", "2026-10-20T21:00:00Z", "player_shots_on_goal_alternate,player_points", []))
+            for name, when, flt, bms in docs:
+                (d / name).write_text(json.dumps({"meta": {"market_filter": flt, "retrieved_at_utc": when}, "response": {"id": "E1", "bookmakers": bms}}))
+            (d / "noid.json").write_text(json.dumps({"meta": {"market_filter": "player_shots_on_goal", "retrieved_at_utc": "2026-10-20T21:30:00Z"}, "response": {"bookmakers": []}}))
+            with mock.patch.object(rpo, "RUNTIME_ARCHIVE_DIR", d), mock.patch.object(rpo, "LEGACY_ARCHIVE_DIR", d / "none"):
+                got = rpo._recent_archive_payloads("player_shots_on_goal", now=D1, newest_per_event=True)
+                default = rpo._recent_archive_payloads("player_shots_on_goal", now=D1)
+        self.assertEqual([r["bookmakers"] for r in got], [[{"key": "draftkings", "markets": [{"key": "player_shots_on_goal"}]}]])          # the standard capture, not the newer alternate-only one
+        self.assertEqual(len(default), 3)                                              # the default reader is unchanged (substring match, id-less responses included)
+
+    def test_a_corrupt_retrieval_time_never_wins_the_newest_observation_collapse(self):
+        good = self._old(30)
+        corrupt = dataclasses.replace(self._old(5), retrieved_at_utc="garbage")
+        self.assertLess(lc._observed_at(corrupt), lc._observed_at(good))
+
+    def _old(self, minutes, **kw):
+        return TestPriceAgeIsMetadata._old(self, minutes, **kw)
+
+    def test_migration_adds_the_columns_and_the_full_trigger_even_when_the_old_ledger_has_no_bets(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "empty_old.db"
+            c = lc.open_ledger(path)
+            c.execute("DROP TRIGGER bets_entry_is_immutable")
+            for col, _ in lc.PRICE_COLUMNS:
+                c.execute(f"ALTER TABLE bets DROP COLUMN {col}")
+            c.commit()
+            c.close()
+            m = lc.open_ledger(path)
+            self.assertTrue({n for n, _ in lc.PRICE_COLUMNS} <= {r[1] for r in m.execute("PRAGMA table_info(bets)")})
+            self.assertIn("bets_entry_is_immutable", {r[0] for r in m.execute("SELECT name FROM sqlite_master WHERE type='trigger'")})
+            m.close()
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            m = lc.open_ledger(path)
+            m.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            with self.assertRaises(sqlite3.DatabaseError):
+                m.execute("UPDATE bets SET price_status = 'VERY_OLD_PREGAME'")          # the new columns are protected from the first bet on
+            m.close()
+
+    def test_an_underivable_entry_does_not_keep_taking_the_write_lock(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "x.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            row.update(created_at_utc="not-a-time", bet_id="Bx", idempotency_key="Kx", price_status=None, price_capture_timestamp=None, price_age_bucket=None, price_age_at_recording_min=None)
+            c.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            c.commit()
+            c.close()
+            statements = []
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            conn.set_trace_callback(statements.append)
+            lc._migrate(conn)
+            conn.close()
+            self.assertFalse([s for s in statements if "BEGIN IMMEDIATE" in s or "DROP TRIGGER" in s], statements)
+
+    def test_reasons_are_specific_not_just_non_empty(self):
+        self.assertIn("price flagged for a reason other than its age", lc.eligibility_reasons(dataclasses.replace(self._old(34), price_fresh=False, freshness_status="FRESH"), D1))
+        self.assertIn("price cannot be tied to a real observation (missing, malformed or future time)", lc.eligibility_reasons(dataclasses.replace(self._old(34), retrieved_at_utc="not-a-time"), D1))
 
 
 if __name__ == "__main__":
