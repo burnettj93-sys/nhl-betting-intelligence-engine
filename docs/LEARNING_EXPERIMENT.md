@@ -4,12 +4,20 @@ Owner authorisation (chat, 2026-10-20): 10 real, eligible paper bets per Eastern
 Paper only. No real-money wagering. Eggy stays at one official pick a day on its own ledger.
 
 ## What it is
-- A separate ledger (`operational/learning_cohort.db`), a separately labelled experiment bankroll that starts at $500.00, and a distinct cohort name on every bet.
+- A separate ledger (`operational/runtime/learning_cohort.db`, shared with the pinned release by the runtime symlink), a separately labelled experiment bankroll that starts at $500.00, and a distinct cohort name on every bet.
 - It is not Eggy and not a betting recommendation: many singles, no flagship conviction bar, a price floor. Eggy's pick, record and bankroll are untouched.
 
 ## What it never relaxes
-Every integrity gate of the normal book: real current event, real market with a verified contract, a fresh quote judged at the moment of recording, a verified identity on a current official roster, an event not
-started, a settlement path, no duplicate, a model estimate for the threshold, no demo data, no fabricated price. If fewer than 10 legitimate bets exist the day records fewer and states why.
+Every accuracy and integrity gate: real event, real market with a verified contract, verified identity on a current official roster, a real DraftKings observation with a valid, non-future time taken from the newest capture of that market
+(an older capture never resurrects a withdrawn market; a moneyline must come from the latest league pull with both sides from the same pull), event not started, a settlement path, no duplicate, a model estimate for the threshold,
+no demo data, no fabricated price. If fewer than 10 legitimate bets exist the day records fewer and states why.
+
+## Price age is metadata, not a gate (owner policy 2026-10-21)
+For this cohort only, a real quote is not rejected because it is "old" by a minute threshold. Every bet stores the actual last observed price with price_capture_timestamp (when this system last saw it),
+price_provider_update_utc, price_age_at_recording_min, provider_quote_age_at_recording_min, price_status (CURRENT <=5 min, RECENT <=30, LAST_KNOWN_PREGAME <=120, VERY_OLD_PREGAME beyond) and the age bucket
+(0-5, 6-15, 16-30, 31-60, 61-120, 120+). Price age carries no ranking weight. Edges are always "model edge at the last observed price", never a current execution price. The cohort collects its own pool
+(`collect_candidate_legs(advisory_price_age=True)`); Eggy and the normal book use the strict limits, unchanged. The postmortem reports results by age bucket and keeps SELECTION quality (hit rate against the model's
+probability) apart from PRICE/VALUE quality (ROI against the edge at the last observed price), and measures same-game dependence rather than assuming independence.
 
 ## Ranking and slots
 Score = 0.25 conservative probability + 0.10 model probability + 0.25 edge + 0.15 calibration confidence + 0.10 freshness + 0.15 model quality, with soft diversification penalties (same game / player /
