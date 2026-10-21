@@ -67,6 +67,7 @@ def metrics(bets: list[dict]) -> dict:
             "average_american_odds_of_average_decimal": (round(((sum(dec) / len(dec)) - 1) * 100) if dec and sum(dec) / len(dec) >= 2 else (round(-100 / ((sum(dec) / len(dec)) - 1)) if dec else None)),
             "average_implied_probability": avg([b["implied_probability"] for b in bets]), "average_model_probability": avg([_model_p(b) for b in bets if _model_p(b) is not None]),
             "average_conservative_probability": avg(cons), "average_edge_at_placement": avg([b["edge"] for b in bets]),
+            "expected_ev_per_stake": avg([b["conservative_probability"] * b["decimal_price"] - 1.0 for b in settled]),
             "expected_wins": round(exp_wins, 3), "expected_wins_conservative": round(sum(cons), 3), "actual_wins": wins, "calibration_delta": round(wins - exp_wins, 3) if settled else None,
             "calibration_z": round((wins - exp_wins) / math.sqrt(var), 2) if var > 0 else None, "brier": round(brier, 4) if brier is not None else None}
 
@@ -85,6 +86,7 @@ def breakdown(bets: list[dict], key) -> list[dict]:
 def breakdowns(bets: list[dict]) -> dict:
     return {
         "edge_class": breakdown(bets, lambda b: b.get("edge_class") or "unknown"),
+        "price_status": breakdown(bets, lambda b: b.get("price_status") or "unknown"),
         "market_type": breakdown(bets, lambda b: b["market_family"]),
         "price_band": breakdown(bets, lambda b: lc.band_of(b["american_price"])),
         "model_probability_band": breakdown(bets, lambda b: _band(_model_p(b), PROB_BANDS)),
@@ -109,6 +111,61 @@ def edge_class_table(bets: list[dict]) -> list[dict]:
                     "average_estimated_edge": m["average_edge_at_placement"], "profit_loss": m["profit_loss"], "roi": m["roi"], "expected_wins": m["expected_wins"], "expected_wins_conservative": m["expected_wins_conservative"],
                     "actual_wins": m["actual_wins"], "calibration_delta": m["calibration_delta"], "calibration_z": m["calibration_z"], "brier": m["brier"]})
     return out
+
+
+AGE_ORDER = [b[1] for b in lc.PRICE_AGE_BUCKETS] + ["120+ min", "unknown"]
+
+
+def _metric_row(label_key: str, label: str, v: list[dict]) -> dict:
+    m = metrics(v)
+    return {label_key: label, "n": m["placed"], "settled": m["settled"], "wins": m["wins"], "losses": m["losses"], "pushes_voids": m["voids"], "hit_rate": m["hit_rate"], "profit_loss": m["profit_loss"],
+            "roi": m["roi"], "average_model_probability": m["average_model_probability"], "average_implied_probability": m["average_implied_probability"], "average_estimated_edge": m["average_edge_at_placement"],
+            "expected_wins": m["expected_wins"], "actual_wins": m["actual_wins"], "calibration_delta": m["calibration_delta"], "calibration_z": m["calibration_z"],
+            "expected_ev_per_stake": m["expected_ev_per_stake"]}
+
+
+def price_age_table(bets: list[dict], field: str = "price_age_at_recording_min") -> list[dict]:
+    """Results by how old the last observed price was when the bet was recorded (0-5, 6-15, 16-30, 31-60, 61-120, 120+ minutes). Two questions are kept apart: SELECTION quality (hit rate against the model's
+    probability: did the outcome occur as often as estimated) and PRICE/VALUE quality (actual ROI against the expected value at the last observed price). Nothing is assumed about which way age points."""
+    out = []
+    for name in AGE_ORDER:
+        v = [b for b in bets if lc.price_age_bucket(b.get(field)) == name]
+        if v:
+            out.append(_metric_row("bucket", name, v))
+    return out
+
+
+def price_status_table(bets: list[dict]) -> list[dict]:
+    return [_metric_row("price_status", st, [b for b in bets if b.get("price_status") == st]) for st in ("CURRENT", "RECENT", "LAST_KNOWN_PREGAME", "VERY_OLD_PREGAME")
+            if any(b.get("price_status") == st for b in bets)]
+
+
+def dependence_report(bets: list[dict]) -> dict:
+    """Same-game dependence among the bets, never assumed away. For every game with 2+ bets: bets, expected and actual hits, and for each PAIR of bets in the game the observed share where both hit against the
+    share expected if they were independent (the product of their probabilities). Also the shots-threshold ladder. Offered same-game parlay prices are not captured by this system, so none are claimed."""
+    from itertools import combinations
+    games: dict = defaultdict(list)
+    for b in bets:
+        if b["result_status"] in SETTLED:
+            games[b["game_id"]].append(b)
+    rows, pair_obs, pair_exp, pairs_n = [], 0, 0.0, 0
+    for gid, v in games.items():
+        if len(v) < 2:
+            continue
+        hit = lambda b: 1 if b["result_status"] == "WIN" else 0
+        pe = sum(_model_p(a) * _model_p(b) for a, b in combinations(v, 2) if _model_p(a) is not None and _model_p(b) is not None)
+        po = sum(hit(a) * hit(b) for a, b in combinations(v, 2))
+        pair_obs, pair_exp, pairs_n = pair_obs + po, pair_exp + pe, pairs_n + len(list(combinations(v, 2)))
+        rows.append({"game_id": gid, "bets": len(v), "expected_hits": round(sum(_model_p(b) or 0 for b in v), 2), "actual_hits": sum(hit(b) for b in v), "pairs": len(list(combinations(v, 2))),
+                     "pairs_both_hit": po, "pairs_both_hit_if_independent": round(pe, 2), "players": sorted({b["participant_name"] or str(b["participant_id"]) for b in v})})
+    shots = [b for b in bets if b["market_family"] in ("PLAYER_SOG", "PLAYER_SOG_ALTERNATE")]
+    ladder = [_metric_row("threshold", f"{k}+ shots", [b for b in shots if b["threshold"] == k]) for k in sorted({b["threshold"] for b in shots if b["threshold"] is not None})]
+    return {"games_with_multiple_bets": sorted(rows, key=lambda r: -r["bets"]), "pairs": pairs_n, "pairs_both_hit": pair_obs, "pairs_both_hit_if_independent": round(pair_exp, 2),
+            "reading": ("not enough settled same-game pairs to say anything about dependence" if pairs_n < 20 else
+                        f"{pair_obs} same-game pairs both hit against {pair_exp:.1f} expected if independent: " + ("more joint hits than independence predicts (positive dependence)" if pair_obs > pair_exp * 1.15
+                                                                                                                   else "fewer joint hits than independence predicts" if pair_obs < pair_exp * 0.85 else "close to independence")),
+            "shots_threshold_ladder": ladder,
+            "not_captured": "One-plus shots ladders and offered same-game parlay prices are not captured by this system (1+ shots is not a validated threshold, and no parlay-price source exists); no parlay value is claimed."}
 
 
 def daily_rows(bets: list[dict], today_day: int) -> list[dict]:
@@ -189,9 +246,11 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
         c = cls["per_bet"].get(b["bet_id"])
         day_lines.append({"rank": b["selection_rank"], "market": b["market_family"], "bet": f"{b['participant_name']} {'' if b['threshold'] is None else str(b['threshold']) + '+'} ({b['team']} vs {b['opponent']})",
                           "price": b["american_price"], "model_probability": _model_p(b), "edge": b["edge"], "result": b["result_status"], "profit_loss": b["profit_loss"],
-                          "edge_class": b.get("edge_class"), "classification": (c or {}).get("category"), "action": (c or {}).get("recommended_action")})
+                          "edge_class": b.get("edge_class"), "price_status": b.get("price_status"), "price_age_min": b.get("price_age_at_recording_min"), "classification": (c or {}).get("category"), "action": (c or {}).get("recommended_action")})
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
-            "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows), "day_bets": day_lines, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
+            "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows),
+            "day_price_age": price_age_table(day_bets), "cumulative_price_age": price_age_table(all_rows), "cumulative_price_age_provider": price_age_table(all_rows, "provider_quote_age_at_recording_min"),
+            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),
             "scorecard": daily_rows(all_rows, ph["day"] if ph["phase"] == "ACTIVE" else (14 if ph["phase"] == "ENDED" else 0)),
             "bankroll": {**bal, "label": "separate experiment bankroll (not Eggy's paper bankroll)", "note": "betting P/L is from settled tickets only; resets and the initial funding are funding events, never profit"},
@@ -242,7 +301,7 @@ def snapshot_section() -> dict:
                                   "start_date": lc.START_DATE, "end_date": lc.END_DATE}
     pm = load() or {}
     cb = pm.get("cumulative_breakdowns") or {}
-    keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
+    keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "day_price_age", "cumulative_price_age", "cumulative_price_age_provider", "cumulative_price_status", "dependence", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
     keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
     keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
     return {**status, "postmortem": keep, "final_report": load_final()}
@@ -308,6 +367,16 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         verdict = "positive-edge bets did outperform" if gap > 0 else "positive-edge bets did NOT outperform"
         edge_reading = (f"{verdict}: positive-edge ROI {p_['roi']:.1%} vs negative-edge ROI {n_['roi']:.1%} (gap {gap:+.1%}); positive-edge calibration z {p_['calibration_z']}, negative-edge z {n_['calibration_z']}. "
                         "With 30-ish bets per class a ROI gap of 30 points or more is within noise; same-game bets are correlated and the vig is not removed, so this is suggestive only")
+    age_rows = [r for r in (doc.get("cumulative_price_age") or []) if r["settled"] >= 1]
+    young = [b for b in all_rows if b["result_status"] in SETTLED and (b.get("price_age_at_recording_min") or 0) <= 30]
+    old = [b for b in all_rows if b["result_status"] in SETTLED and (b.get("price_age_at_recording_min") or 0) > 30]
+    my, mo = metrics(young), metrics(old)
+    if my["settled"] < 30 or mo["settled"] < 30:
+        age_reading = (f"not enough settled bets to compare price ages (observed within 30 min: {my['settled']}; older: {mo['settled']}; at least 30 each are needed). The buckets are reported separately and no conclusion is drawn")
+    else:
+        age_reading = (f"observed within 30 min: hit rate {my['hit_rate']:.1%} vs {my['expected_wins'] / my['settled']:.1%} expected, ROI {my['roi']:.1%}; older: hit rate {mo['hit_rate']:.1%} vs "
+                       f"{mo['expected_wins'] / mo['settled']:.1%} expected, ROI {mo['roi']:.1%}. Selection quality (hit against expectation) and price value (ROI against the edge at the last observed price) are separate "
+                       "questions; with this many bets a gap this size can be noise, so read it as suggestive")
     answers = {
         "1_markets_that_made_money": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) > 0],
         "2_markets_that_lost": [{"market": f, "n": m["settled"], "profit_loss": m["profit_loss"], "roi": m["roi"]} for f, m in mk_metrics.items() if (m["profit_loss"] or 0) <= 0],
@@ -330,6 +399,9 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         "market_verdicts": {f: {"recommendation": v, "reason": r} for f, (v, r) in verdicts.items()},
         "edge_class_results": edge_classes,
         "did_positive_edge_outperform": edge_reading,
+        "price_age_results": doc.get("cumulative_price_age"),
+        "does_price_age_matter": age_reading,
+        "same_game_dependence": doc.get("dependence"),
     }
     pos = [f for f, (v, _) in verdicts.items() if v == "PROMOTE_CANDIDATE"]
 

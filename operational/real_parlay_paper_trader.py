@@ -171,7 +171,7 @@ def run(now: dt.datetime | None = None) -> dict:
         settlement_summary = settlement.settle_due_bets(bankroll_conn, nhl_conn)
         try:                                       # the temporary 14-day paper learning cohort (its own ledger; a no-op until the owner's approval is on file, and after 2026-11-02 Eastern)
             from operational import learning_cohort
-            learning_summary = learning_cohort.run_cycle(nhl_conn, now, collected)
+            learning_summary = learning_cohort.run_cycle(nhl_conn, now, collected, collector=lambda: daily_tickets.collect_candidate_legs(nhl_conn, now, advisory_price_age=True))
         except Exception as exc:  # noqa: BLE001 - never stops the model book
             learning_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
         if settlement_summary.get("settled"):

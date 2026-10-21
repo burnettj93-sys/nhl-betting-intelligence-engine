@@ -5,8 +5,9 @@ observations to learn where the model is right and wrong. It is NOT a betting re
 leg that also appears here is only labelled (the instruments differ: a parlay there, a single here, and the ledgers are separate, so nothing is ever staked twice on the same ticket).
 
 What is different from the normal paper book, and only that: more bets per day, no flagship conviction bar, a price floor of -150, singles allowed. What is NOT different, ever: every integrity gate. A bet is recorded
-only on a REAL, FRESH quote for a real, not-yet-started game, with a verified identity, a market the engine has a certified contract, a model estimate and a settlement path for, once (no duplicate), at the actual
-captured price. It never fabricates a bet to reach 10: if fewer legitimate bets exist the day records fewer and says exactly why.
+only on a REAL DraftKings price (the last one this system observed, with a valid time) for a real, not-yet-started game, with a verified identity, a market the engine has a certified contract, a model estimate and a
+settlement path for, once (no duplicate), at that actual price. The price's AGE is not a gate here (owner policy 2026-10-21: accuracy over arbitrary freshness): it is recorded with every bet (capture time, age at
+recording, price status) so the postmortem can learn empirically whether older pregame quotes degrade results. Edges are always "model edge at the last observed price", never a current execution price. It never fabricates a bet to reach 10: if fewer legitimate bets exist the day records fewer and says exactly why.
 
 Accounting (a separate, clearly labelled ledger, `learning_cohort.db`): its own experiment bankroll of $500.00. Whenever the bankroll cannot fund the next $10 bet it is reset to $500.00 by a
 funding event that is logged (time, balance before, amount, balance after, experiment day, reason LEARNING_EXPERIMENT_BANKROLL_RESET) and is never profit or returned stake: betting P/L, ROI, hit rate and calibration come
@@ -15,8 +16,8 @@ from settled ticket results only. Historical results are never rewritten. Nothin
 Automatic end: on 2026-11-03 (Eastern) the experiment is over by date arithmetic alone, with no manual step: nothing new is recorded, the reset rule stops, open bets still settle. The normal paper-book policy was
 never changed and simply continues.
 
-Ranking (a transparent weighted score, not a recommendation): conservative probability 0.25, model probability 0.10, edge at the real price 0.25, calibration confidence (how much evidence stands behind the estimate)
-0.15, price freshness 0.10, model quality 0.15. Diversification is a soft penalty while the day's bets are chosen (same game, same player, same market, same price band); a strong bet is never rejected only for sharing
+Ranking (a transparent weighted score, not a recommendation): conservative probability 0.30, model probability 0.15, model edge at the last observed price 0.25, calibration confidence (how much evidence stands
+behind the estimate) 0.15, model quality 0.15; price age carries no weight. Diversification is a soft penalty while the day's bets are chosen (same game, same player, same market, same price band); a strong bet is never rejected only for sharing
 a game. Slots are released through the day with the puck-drop waves so early prices cannot use up all ten.
 """
 from __future__ import annotations
@@ -49,8 +50,11 @@ LOG_NAME = "learning_experiment_activation_log.jsonl"
 RELAX_MIN = 25          # in the last 25 minutes before a wave's first puck drop its prices can no longer be used afterwards, so only a small reserve is held for later waves
 RELAXED_RESERVE_MAX = 2
 WAVE_SPAN_MIN = 90
-CODE_VERSION = "learning-cohort-2026-10-20.2"
-SELECTION_WEIGHTS = {"conservative_probability": 0.25, "model_probability": 0.10, "edge": 0.25, "calibration_confidence": 0.15, "freshness": 0.10, "model_quality": 0.15}
+CODE_VERSION = "learning-cohort-2026-10-21.3-price-age-advisory"
+SELECTION_WEIGHTS = {"conservative_probability": 0.30, "model_probability": 0.15, "edge": 0.25, "calibration_confidence": 0.15, "freshness": 0.0, "model_quality": 0.15}          # price age is recorded, never ranked (owner policy 2026-10-21)
+PRICE_AGE_STATUS = ((5.0, "CURRENT"), (30.0, "RECENT"), (120.0, "LAST_KNOWN_PREGAME"))          # by minutes since this system last observed the price; older is VERY_OLD_PREGAME
+PRICE_AGE_BUCKETS = ((5.0, "0-5 min"), (15.0, "6-15 min"), (30.0, "16-30 min"), (60.0, "31-60 min"), (120.0, "61-120 min"))          # then "120+ min"
+OLD_BUT_REAL_STATUSES = ("FRESH", "OK", "STALE_QUOTE", "STALE_RETRIEVAL", "")          # a quote that is merely old; a missing, malformed or future time is never in this list
 # A ranking prior for how much evidence stands behind each market's estimate. It is a judgement written down and fixed in the policy digest, NOT a measurement: shots legs carry the player's own record
 # held to the model (validated on 2025, anchor.py); the others use the calibrated model's own probability, which has no capped record-based estimate; a moneyline is the market's own no-vig chance (no model
 # here beats the market). One purpose of this experiment is to measure all of them.
@@ -81,8 +85,13 @@ POLICY = {
                                    "LEARNING_SAMPLE_NEGATIVE_EDGE": f"edge < -{EDGE_BAND}"},
                   "negative_edge": "a LEARNING_SAMPLE_NEGATIVE_EDGE candidate passes every integrity and support gate like any other, is recorded only to fill the day's sample after positive and neutral candidates, "
                                    "and only once no better price for its wave can still arrive (the final 25 minutes before the wave's puck drop); it is tagged at recording time and reported separately"},
-    "integrity_gates": ["real current event", "real sportsbook market with a verified contract", "fresh quote judged at the moment of recording", "verified identity on a current official roster", "event not started",
-                        "supported settlement path", "no duplicate bet", "model estimate present and eligible", "no demo or simulated data", "no fabricated or approximated price", "no stale quote treated as current"],
+    "integrity_gates": ["real current event", "real sportsbook market with a verified contract", "a real DraftKings price observation with a valid, non-future time (its AGE is recorded, never a gate)",
+                        "verified identity on a current official roster", "event not started", "supported settlement path", "no duplicate bet", "model estimate present and eligible", "no demo or simulated data",
+                        "no fabricated or approximated price", "market not withdrawn (a price is only used from the newest capture of its market)"],
+    "price_age_policy": {"gate": False, "recorded": ["price_capture_timestamp", "price_provider_update_utc", "price_age_at_recording_min", "provider_quote_age_at_recording_min", "price_status", "price_age_bucket"],
+                         "statuses": "CURRENT <=5 min, RECENT <=30, LAST_KNOWN_PREGAME <=120, VERY_OLD_PREGAME beyond (minutes since this system last observed the price)",
+                         "buckets": [b[1] for b in PRICE_AGE_BUCKETS] + ["120+ min"], "ranking": "price age carries no ranking weight",
+                         "edge_label": "MODEL EDGE AT LAST OBSERVED PRICE (never presented as a current execution price)", "eggy": "unchanged: Eggy keeps its strict freshness limits"},
     "ends": "automatically on 2026-11-03 Eastern (date arithmetic; no manual step)",
 }
 
@@ -130,6 +139,7 @@ CREATE TABLE IF NOT EXISTS bets (
     model_probability REAL, conservative_probability REAL NOT NULL, implied_probability REAL NOT NULL, edge REAL NOT NULL, ev REAL NOT NULL,
     selection_score REAL NOT NULL, score_components_json TEXT NOT NULL, selection_reason TEXT NOT NULL, freshness_status TEXT, quote_updated_utc TEXT, retrieved_at_utc TEXT, quote_age_min REAL,
     model_version TEXT, price_source TEXT NOT NULL, dependence_json TEXT, eggy_relation TEXT, leg_json TEXT NOT NULL, probability_basis TEXT, source_conservative_probability REAL, edge_class TEXT NOT NULL, edge_class_reason TEXT,
+    price_capture_timestamp TEXT, price_provider_update_utc TEXT, price_age_at_recording_min REAL, provider_quote_age_at_recording_min REAL, price_status TEXT, price_age_bucket TEXT,
     result_status TEXT NOT NULL DEFAULT 'PENDING', settled_at_utc TEXT, settled_odds REAL, profit_loss REAL, return_amount REAL, closing_odds REAL, clv REAL, notes TEXT, settlement_json TEXT
 );
 CREATE TABLE IF NOT EXISTS funding_events (
@@ -155,7 +165,10 @@ CREATE TRIGGER IF NOT EXISTS bets_are_never_deleted BEFORE DELETE ON bets BEGIN 
 ENTRY_COLUMNS = ("bet_id", "idempotency_key", "experiment_id", "cohort", "policy_digest", "et_date", "experiment_day", "selection_rank", "wave_index", "created_at_utc", "created_at_et", "game_id", "event_id",
                  "event_start_utc", "market_family", "settlement_market_id", "threshold", "side", "participant_id", "participant_name", "team", "opponent", "american_price", "decimal_price", "stake",
                  "model_probability", "conservative_probability", "implied_probability", "edge", "ev", "selection_score", "score_components_json", "selection_reason", "freshness_status", "quote_updated_utc",
-                 "retrieved_at_utc", "quote_age_min", "model_version", "price_source", "dependence_json", "eggy_relation", "leg_json", "probability_basis", "source_conservative_probability", "edge_class", "edge_class_reason")
+                 "retrieved_at_utc", "quote_age_min", "model_version", "price_source", "dependence_json", "eggy_relation", "leg_json", "probability_basis", "source_conservative_probability", "edge_class", "edge_class_reason",
+                 "price_capture_timestamp", "price_provider_update_utc", "price_age_at_recording_min", "provider_quote_age_at_recording_min", "price_status", "price_age_bucket")
+PRICE_COLUMNS = (("price_capture_timestamp", "TEXT"), ("price_provider_update_utc", "TEXT"), ("price_age_at_recording_min", "REAL"), ("provider_quote_age_at_recording_min", "REAL"),
+                 ("price_status", "TEXT"), ("price_age_bucket", "TEXT"))
 RESULT_COLUMNS = ("result_status", "settled_at_utc", "settled_odds", "profit_loss", "return_amount", "closing_odds", "clv", "notes", "settlement_json")
 SCHEMA = (SCHEMA.replace("@ENTRY_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in ENTRY_COLUMNS))
           .replace("@RESULT_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in RESULT_COLUMNS)))
@@ -166,8 +179,67 @@ def open_ledger(path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA recursive_triggers = ON")
+    _migrate(conn)
     conn.executescript(SCHEMA)
     return conn
+
+
+def _parse(value):
+    from operational import quote_freshness
+    return quote_freshness.parse_utc(value)
+
+
+def price_age_status(age_min: float | None) -> str | None:
+    if age_min is None:
+        return None
+    for limit, name in PRICE_AGE_STATUS:
+        if age_min <= limit:
+            return name
+    return "VERY_OLD_PREGAME"
+
+
+def price_age_bucket(age_min: float | None) -> str:
+    if age_min is None:
+        return "unknown"
+    for limit, name in PRICE_AGE_BUCKETS:
+        if age_min <= limit:
+            return name
+    return "120+ min"
+
+
+def price_observation(retrieved_utc, provider_utc, now: dt.datetime) -> dict | None:
+    """The real price observation behind a leg: when this system last SAW the price (the capture it was read from) and the provider's own last-update time for it, and their ages at `now`.
+    None when no real observation time can be established (a missing or malformed time), or when it lies in the future: those are accuracy problems, not age. The age itself never disqualifies."""
+    obs, prov = _parse(retrieved_utc) or _parse(provider_utc), _parse(provider_utc)
+    if obs is None or (obs - now).total_seconds() > 60.0:
+        return None
+    if prov is not None and (prov - now).total_seconds() > 60.0:
+        return None
+    age = max((now - obs).total_seconds(), 0.0) / 60.0
+    prov_age = None if prov is None else max((now - prov).total_seconds(), 0.0) / 60.0
+    return {"captured_utc": obs.strftime("%Y-%m-%dT%H:%M:%SZ"), "provider_update_utc": None if prov is None else prov.strftime("%Y-%m-%dT%H:%M:%SZ"), "age_min": round(age, 1),
+            "provider_age_min": None if prov_age is None else round(prov_age, 1), "status": price_age_status(age), "bucket": price_age_bucket(age)}
+
+
+def _migrate(conn) -> None:
+    """An existing ledger (the Day-1 bets recorded before the price-age metadata existed) gains the new columns. Their values are derived deterministically from the entry's own frozen leg and its own recording
+    time, so nothing about what was recorded changes; the entry-immutability trigger is dropped for this one derivation and recreated straight after."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
+    if not cols:
+        return
+    missing = [(n, t) for n, t in PRICE_COLUMNS if n not in cols]
+    if not missing:
+        return
+    for n, t in missing:
+        conn.execute(f"ALTER TABLE bets ADD COLUMN {n} {t}")
+    conn.execute("DROP TRIGGER IF EXISTS bets_entry_is_immutable")
+    for r in conn.execute("SELECT bet_id, created_at_utc, retrieved_at_utc, quote_updated_utc FROM bets WHERE price_status IS NULL").fetchall():
+        created = _parse(r["created_at_utc"])
+        info = price_observation(r["retrieved_at_utc"], r["quote_updated_utc"], created) if created else None
+        if info:
+            conn.execute("UPDATE bets SET price_capture_timestamp=?, price_provider_update_utc=?, price_age_at_recording_min=?, provider_quote_age_at_recording_min=?, price_status=?, price_age_bucket=? WHERE bet_id=?",
+                         (info["captured_utc"], info["provider_update_utc"], info["age_min"], info["provider_age_min"], info["status"], info["bucket"], r["bet_id"]))
+    conn.commit()
 
 
 def connect(path=None) -> sqlite3.Connection:
@@ -324,7 +396,9 @@ def score_leg(leg, now: dt.datetime, basis: str | None = None) -> dict:
 
 
 def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
-    """Why a leg is NOT a legitimate cohort bet right now (empty = eligible). Every integrity gate, plus the price floor and the market list."""
+    """Why a leg is NOT a legitimate cohort bet right now (empty = eligible). Every accuracy and integrity gate stays hard: event, identity, market, threshold, contract, a real price observation with a
+    valid time, game not started, settlement path, estimate. The quote's AGE is not a gate here (owner policy 2026-10-21): it is recorded with the bet (price_observation). A quote with a missing,
+    malformed or future time cannot be tied to a real observation and is rejected."""
     from operational import daily_tickets
     from research.real_market_parlay import engine as rmp
     why = []
@@ -333,21 +407,21 @@ def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
     if leg.american_price < ODDS_FLOOR:
         why.append(f"price worse than the {ODDS_FLOOR:+.0f} floor")
     for flag, label in (("provider_contract_verified", "market contract not verified"), ("model_threshold_eligible", "no eligible model estimate for this threshold"), ("identity_resolved", "identity not resolved"),
-                        ("price_fresh", "price not fresh"), ("event_not_started", "event started")):
+                        ("event_not_started", "event started")):
         if not getattr(leg, flag, False):
             why.append(label)
-    if getattr(leg, "provisional", False):
-        why.append("price is provisional (from an earlier look)")
-    if str(getattr(leg, "freshness_status", "FRESH") or "FRESH").upper() not in ("FRESH", "OK"):
-        why.append(f"quote status {leg.freshness_status}")
+    if str(getattr(leg, "freshness_status", "") or "").upper() not in OLD_BUT_REAL_STATUSES:
+        why.append(f"quote time not valid ({leg.freshness_status})")
+    elif price_observation(leg.retrieved_at_utc, leg.quote_updated_utc or leg.captured_at_utc, now) is None:
+        why.append("price cannot be tied to a real observation (missing, malformed or future time)")
     if not (0.0 < float(leg.conservative_probability) < 1.0):
         why.append("no usable probability estimate")
     if settlement_market_id(leg) is None:
         why.append("no settlement path")
-    if not why and not rmp.leg_is_eligible(leg):          # the engine's own gate, literally: market and threshold allowlists as well as the flags
+    if not why and not rmp.leg_is_eligible(dataclasses.replace(leg, price_fresh=True)):          # the engine's own gate, literally (market and threshold allowlists, flags); only the age verdict is waived
         why.append("not eligible under the engine's leg gate (market, threshold or estimate)")
     if not why:
-        why += daily_tickets.revalidate_before_recording(SimpleNamespace(legs=[leg]), now)        # identity on a current official roster, started, and freshness re-judged at this very moment
+        why += daily_tickets.revalidate_before_recording(SimpleNamespace(legs=[leg]), now, price_age_is_advisory=True)        # identity on a current official roster and game start, at this very moment
     return why
 
 
@@ -442,18 +516,23 @@ def _record(conn, cand: dict, now: dt.datetime, day: int, rank: int, wave: int |
     leg, sc = cand["leg"], cand["scored"]
     bet_id = "L" + cand["key"][:15].upper()
     rel = eggy.get((str(leg.game_id), str(leg.participant_id), leg.market_family))
-    reason = (f"{cand['edge_class']}; rank {rank} of the day: score {sc['score']:.3f} (conservative p {leg.conservative_probability:.0%}, edge {sc['edge_value']:+.1%} at {leg.american_price:+.0f}, "
+    po = price_observation(leg.retrieved_at_utc, leg.quote_updated_utc or leg.captured_at_utc, now)
+    if po is None:                                          # eligibility already required a real observation; this is only a guard against a clock edge case
+        raise sqlite3.IntegrityError("no real price observation to record")
+    reason = (f"{cand['edge_class']}; price {po['status']} ({po['age_min']:.0f} min since last observed); rank {rank} of the day: score {sc['score']:.3f} (conservative p {leg.conservative_probability:.0%}, edge {sc['edge_value']:+.1%} at {leg.american_price:+.0f}, "
               f"{leg.market_family} {leg.participant_name}{'' if leg.threshold is None else ' ' + str(leg.threshold) + '+'}); diversification penalty {cand.get('penalty', 0.0):.3f}")
     conn.execute(
         """INSERT INTO bets (bet_id, idempotency_key, experiment_id, cohort, policy_digest, et_date, experiment_day, selection_rank, wave_index, created_at_utc, created_at_et, game_id, event_id, event_start_utc,
            market_family, settlement_market_id, threshold, side, participant_id, participant_name, team, opponent, american_price, decimal_price, stake, model_probability, conservative_probability,
            implied_probability, edge, ev, selection_score, score_components_json, selection_reason, freshness_status, quote_updated_utc, retrieved_at_utc, quote_age_min, model_version, price_source,
-           dependence_json, eggy_relation, leg_json, probability_basis, source_conservative_probability, edge_class, edge_class_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           dependence_json, eggy_relation, leg_json, probability_basis, source_conservative_probability, edge_class, edge_class_reason,
+           price_capture_timestamp, price_provider_update_utc, price_age_at_recording_min, provider_quote_age_at_recording_min, price_status, price_age_bucket) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (bet_id, cand["key"], EXPERIMENT_ID, COHORT, policy_digest(), et.eastern_today(now), day, rank, wave, _utc(now), _et(now), str(leg.game_id), leg.event_id, leg.game_start_utc,
          leg.market_family, settlement_market_id(leg), leg.threshold, leg.side, str(leg.participant_id), leg.participant_name, leg.team, leg.opponent, leg.american_price, sc["decimal"], STAKE,
          leg.model_probability, float(leg.conservative_probability), sc["implied"], sc["edge_value"], sc["ev"], sc["score"], json.dumps(sc["components"]), reason, leg.freshness_status,
          leg.quote_updated_utc, leg.retrieved_at_utc, leg.quote_age_min, leg.model_version, "LIVE_DRAFTKINGS", json.dumps(dep, sort_keys=True),
-         f"SAME_PLAYER_AND_MARKET_AS_EGGY_PICK_LEG:{rel} (a single here, a parlay leg there; separate ledgers, nothing staked twice)" if rel else "EGGY_NOT_INVOLVED", json.dumps(dataclasses.asdict(leg), default=str), cand.get("basis"), cand.get("source_p"), cand["edge_class"], cand["edge_reason"]))
+         f"SAME_PLAYER_AND_MARKET_AS_EGGY_PICK_LEG:{rel} (a single here, a parlay leg there; separate ledgers, nothing staked twice)" if rel else "EGGY_NOT_INVOLVED", json.dumps(dataclasses.asdict(leg), default=str), cand.get("basis"), cand.get("source_p"), cand["edge_class"], cand["edge_reason"],
+         po["captured_utc"], po["provider_update_utc"], po["age_min"], po["provider_age_min"], po["status"], po["bucket"]))
     return bet_id
 
 
@@ -474,7 +553,7 @@ def _paused() -> bool:
     return bool(recording_pause.is_paused())
 
 
-def run_cycle(nhl_conn, now: dt.datetime, collected: dict | None, *, conn=None) -> dict:
+def run_cycle(nhl_conn, now: dt.datetime, collected: dict | None, *, conn=None, collector=None) -> dict:
     """One trader cycle: settle whatever is open (always, whether or not the policy is currently approved or the window is open), then, only while the experiment is approved, inside its window and not
     paused by the owner, record up to the day's remaining slots from the best eligible bets, then publish the status document. Never raises into the trader."""
     own = conn is None
@@ -496,7 +575,15 @@ def run_cycle(nhl_conn, now: dt.datetime, collected: dict | None, *, conn=None) 
         elif _paused():
             summary["recording"] = {"status": "PAUSED_BY_OWNER", "reason": "recording is paused by the owner; open bets still settle"}
         else:
-            summary.update(_record_cycle(conn, nhl_conn, now, collected or {}, ph))
+            pool = collected
+            if collector is not None:                  # the learning cohort's own pool: real quotes kept with their age (the normal pool excludes old quotes)
+                try:
+                    pool = collector()
+                except Exception as exc:  # noqa: BLE001
+                    pool = None
+                    summary["recording"] = {"status": "POOL_UNAVAILABLE", "reason": f"{exc.__class__.__name__}: {exc}"}
+            if pool is not None:
+                summary.update(_record_cycle(conn, nhl_conn, now, pool or {}, ph))
         try:
             write_status(status_doc(now, conn=conn))
             if auth:
@@ -710,7 +797,7 @@ def status_doc(now: dt.datetime | None = None, conn=None) -> dict:
             "start_date": START_DATE, "end_date": END_DATE, "target_per_day": DAILY_TARGET, "stake_usd": STAKE, "odds_requirement": f"{int(ODDS_FLOOR)} or better",
             "recorded_today": len(rows), "exposure_today_usd": round(len(rows) * STAKE, 2), "bankroll": bal, "resets": resets, "bets_total": total,
             "record": {"wins": wins, "losses": losses, "voids": int(settled[2] or 0), "open": int(settled[3] or 0), "hit_rate": round(wins / (wins + losses), 4) if wins + losses else None},
-            "edge_classes_today": dict(Counter(r["edge_class"] for r in rows)), "bets_today": [{k: r[k] for k in ("selection_rank", "market_family", "participant_name", "team", "threshold", "american_price", "conservative_probability", "edge", "edge_class", "result_status", "profit_loss", "eggy_relation")} for r in rows],
+            "edge_classes_today": dict(Counter(r["edge_class"] for r in rows)), "bets_today": [{k: r[k] for k in ("selection_rank", "market_family", "participant_name", "team", "threshold", "american_price", "conservative_probability", "edge", "edge_class", "price_status", "price_age_at_recording_min", "result_status", "profit_loss", "eggy_relation")} for r in rows],
             "shortfall_today": (json.loads(daily["shortfall_json"]) if daily and daily["shortfall_json"] else None),
             "eggy": {"official_picks_per_day": 1, "note": "Eggy's Parlay Pick of the Day is separate: one official pick a day, its own ledger"},
             "ends_automatically": "2026-11-03 (Eastern): no new bets, the reset rule stops, open bets still settle"}
