@@ -120,12 +120,13 @@ def _adapter_legs(nhl_conn, now: dt.datetime, *, advisory: bool = False) -> tupl
     # Under the anchor policy a moneyline is a ticket leg for as long as its quote is fresh by the same limit as a shots price (morning and daytime pulls count); otherwise the T-35 tiers apply.
     limit = best_bets.price_age_limit_min if (advisory or getattr(ticket_policy.active(), "mode", "legacy") == "anchor") else None
     add("MONEYLINE", moneyline_model_path.version(), adapter.moneyline_candidate_legs(nhl_conn, now=now, freshness_limit_min=limit))
-    sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now)
+    kw = {"newest_per_event": True, "tag_retrieval": True} if advisory else {}          # the learning cohort's pool: only the newest capture of each event and market, tagged with when it was observed
+    sog_alt = _recent_archive_payloads(market_parser.ALTERNATE_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("PLAYER_SOG_ALTERNATE", "sog-alternate-validated-v1",
         adapter.sog_alternate_candidate_legs(nhl_conn, sog_alt, now=now))
-    sog_std = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY, max_age_hours=24.0, now=now)
+    sog_std = _recent_archive_payloads(market_parser.STANDARD_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("PLAYER_SOG", "sog-standard-validated-v1", adapter.sog_standard_candidate_legs(nhl_conn, sog_std, now=now))
-    saves = _recent_archive_payloads(market_parser.SAVES_MARKET_KEY, max_age_hours=24.0, now=now)
+    saves = _recent_archive_payloads(market_parser.SAVES_MARKET_KEY, max_age_hours=24.0, now=now, **kw)
     add("GOALIE_SAVES", "goalie-saves-validated-v1", adapter.goalie_saves_candidate_legs(nhl_conn, saves, now=now))
     return legs, report
 

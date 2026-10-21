@@ -933,5 +933,114 @@ class TestPriceAgeIsMetadata(Base):
         self.assertNotEqual(lc.policy_digest(), "df96584493d9d3e8")
 
 
+class TestPriceAgeReviewFixes(TestPriceAgeIsMetadata):
+    """Inherits the helpers (and re-runs the first group, which is cheap); adds the second review's regressions."""
+
+    def test_the_newest_observation_of_a_bet_is_the_price_even_if_it_fails_a_gate(self):
+        older = self._old(300, price=-140.0)
+        newer = self._old(10, price=-165.0)                                    # the last observed price is past the -150 floor
+        self.cycle([older, newer], fresh=False)
+        self.assertEqual(self.rows(), [])                                      # the older, better price must not stand in for it
+
+    def test_the_newest_observation_wins_when_both_pass(self):
+        self.cycle([self._old(300, price=-140.0), self._old(10, price=-135.0)], fresh=False)
+        self.assertEqual([r["american_price"] for r in self.rows()], [-135.0])
+
+    def test_a_price_flagged_for_a_reason_other_than_age_is_rejected(self):
+        self.assertTrue(lc.eligibility_reasons(dataclasses.replace(self._old(34), price_fresh=False, freshness_status="FRESH"), D1))
+
+    def test_an_unreadable_retrieval_time_is_corrupt_data(self):
+        bad = dataclasses.replace(self._old(34), retrieved_at_utc="not-a-time")
+        self.assertIsNone(lc.price_observation(bad.retrieved_at_utc, bad.quote_updated_utc, D1))
+        self.assertTrue(lc.eligibility_reasons(bad, D1))
+
+    def test_status_and_bucket_use_the_stored_rounded_age(self):
+        t = (D1 - dt.timedelta(minutes=5, seconds=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        po = lc.price_observation(t, t, D1)
+        self.assertEqual((po["age_min"], po["status"], po["bucket"]), (5.0, "CURRENT", "0-5 min"))
+
+    def test_an_old_quote_loss_is_not_labelled_stale_data(self):
+        from operational import learning_postmortem as lpm
+        self.cycle([self._old(300, k=2, p=0.8)], fresh=False)
+        self.nhl.execute("UPDATE games SET game_state='FINAL', home_score=3, away_score=2, final_period_type='REG' WHERE game_id='1'")
+        self.nhl.execute("INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played, revision_number, effective_at_utc, observed_at_utc, source) "
+                         "VALUES ('1','8478402','TOR',20.0,0,0,1,1,1,'2026-10-21T03:00:00Z','2026-10-21T03:00:00Z','test')")
+        self.nhl.commit()
+        lc.settle_due(self.conn, self.nhl, D1 + dt.timedelta(hours=8))
+        self.assertEqual(self.rows()[0]["result_status"], "LOSS")
+        self.assertEqual(self.rows()[0]["price_status"], "VERY_OLD_PREGAME")
+        doc = lpm.build(self.conn, self.nhl, dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc))
+        self.assertNotEqual(doc["day_bets"][0]["classification"], "STALE_DATA")
+        self.assertFalse(doc["loss_classification"].get("integrity_defects"))
+
+    def test_a_half_finished_migration_is_completed_on_the_next_open(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "half.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            for k in ("price_capture_timestamp", "price_provider_update_utc", "price_age_at_recording_min", "provider_quote_age_at_recording_min", "price_status", "price_age_bucket"):
+                row[k] = None                                         # columns exist, values were never filled (an interrupted earlier attempt)
+            c.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            c.commit()
+            c.close()
+            m = lc.open_ledger(path)
+            self.assertEqual(m.execute("SELECT price_status FROM bets").fetchone()[0], "RECENT")
+            m.close()
+
+    def test_the_archive_reader_keeps_only_the_newest_capture_per_event_and_tags_when_it_was_observed(self):
+        from operational import real_prop_orchestrator as rpo
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            for name, when, bms in (("a.json", "2026-10-20T20:00:00Z", [{"key": "draftkings", "markets": [{"key": "player_total_saves"}]}]), ("b.json", "2026-10-20T21:00:00Z", []),
+                                    ("c.json", "2026-10-20T20:30:00Z", [{"key": "draftkings", "markets": [{"key": "player_total_saves"}]}])):
+                (d / name).write_text(json.dumps({"meta": {"market_filter": "player_total_saves", "retrieved_at_utc": when}, "response": {"id": "E1" if name != "c.json" else "E2", "bookmakers": bms}}))
+            with mock.patch.object(rpo, "RUNTIME_ARCHIVE_DIR", d), mock.patch.object(rpo, "LEGACY_ARCHIVE_DIR", d / "none"):
+                got = rpo._recent_archive_payloads("player_total_saves", now=D1, newest_per_event=True, tag_retrieval=True)
+                plain = rpo._recent_archive_payloads("player_total_saves", now=D1)
+        by = {r["id"]: r for r in got}
+        self.assertEqual(by["E1"]["bookmakers"], [])                           # the newer capture lacks the market: withdrawn, the older one does not resurrect it
+        self.assertEqual(by["E1"]["__retrieved_at_utc"], "2026-10-20T21:00:00Z")
+        self.assertEqual(len(got), 2)
+        self.assertEqual(len(plain), 3)                                        # the default reader is unchanged
+        self.assertNotIn("__retrieved_at_utc", plain[0])
+
+    def test_the_advisory_moneyline_keeps_an_old_real_quote_and_refuses_what_could_be_withdrawn_or_mismatched(self):
+        from pricing.engine import BetReport
+        from research.real_market_parlay import real_slate_adapter as adapter
+        from operational import best_bets
+        from tests.test_real_slate_adapter import _fresh_db_with_game, _pred
+        start = "2026-10-11T23:10:00"
+        now = dt.datetime(2026, 10, 11, 17, 0, tzinfo=dt.timezone.utc)
+
+        def run(captured_by_side, *, advisory):
+            conn = _fresh_db_with_game(start_utc=start)
+            reports = []
+            for sel, captured in captured_by_side.items():
+                cur = conn.execute("INSERT INTO odds_snapshots (game_id, sportsbook, data_provider, market, selection, event_start_utc, price_american, status, captured_at_utc, received_at_utc, snapshot_label) "
+                                   "VALUES (1, 'draftkings', 'test', 'MONEYLINE', ?, ?, -120, 'ACTIVE', ?, ?, 'morning')", (sel, start, captured, captured))
+                reports.append(BetReport(game_label="MTL @ TOR", market="MONEYLINE", selection=sel, action="PASS", model_true_probability=0.56, model_conservative_probability=0.50,
+                                         market_no_vig_probability=0.55, current_draftkings_price=-120, odds_snapshot_id_selection=cur.lastrowid))
+            conn.commit()
+            with mock.patch("run_slate.build_prediction_for_game", return_value=_pred(start_utc=start)), mock.patch("pricing.engine.evaluate_moneyline_for_game", return_value=reports) as ev, \
+                    mock.patch("operational.eastern_time.eastern_today", return_value="2026-10-11"), mock.patch("operational.moneyline_model_path.record_shadow") as shadow:
+                ctx = adapter.advisory_price_age() if advisory else mock.MagicMock()
+                with ctx:
+                    out = adapter.moneyline_candidate_legs(conn, now=now, freshness_limit_min=best_bets.price_age_limit_min)
+            return out, ev, shadow
+
+        old = "2026-10-10T21:00:00"                                         # last evening's quote: excluded by the strict path, kept (with its age) by the advisory one
+        (legs, excluded), _, _ = run({"TOR": old, "MTL": old}, advisory=False)
+        self.assertEqual(legs, [])
+        (legs, excluded), ev, shadow = run({"TOR": old, "MTL": old}, advisory=True)
+        self.assertEqual(len(legs), 2)
+        self.assertTrue(all((not l.price_fresh) and l.freshness_status == "STALE_QUOTE" and not l.provisional for l in legs))
+        self.assertEqual(ev.call_args.kwargs["max_staleness_minutes"], 1440.0)
+        shadow.assert_not_called()                                         # the cohort's second look never writes the shadow log
+        (legs, excluded), _, _ = run({"TOR": "2026-10-11T12:00:00", "MTL": "2026-10-11T12:30:00"}, advisory=True)
+        self.assertEqual(legs, [])
+        self.assertEqual([e["reason"] for e in excluded], ["SIDES_FROM_DIFFERENT_PULLS"])
+
+
 if __name__ == "__main__":
     unittest.main()

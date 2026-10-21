@@ -128,8 +128,9 @@ def price_age_table(bets: list[dict], field: str = "price_age_at_recording_min")
     """Results by how old the last observed price was when the bet was recorded (0-5, 6-15, 16-30, 31-60, 61-120, 120+ minutes). Two questions are kept apart: SELECTION quality (hit rate against the model's
     probability: did the outcome occur as often as estimated) and PRICE/VALUE quality (actual ROI against the expected value at the last observed price). Nothing is assumed about which way age points."""
     out = []
+    stored = field == "price_age_at_recording_min"          # the observation-age bucket was stored at recording time; the provider-age bucket is derived from its stored age
     for name in AGE_ORDER:
-        v = [b for b in bets if lc.price_age_bucket(b.get(field)) == name]
+        v = [b for b in bets if (b.get("price_age_bucket") or lc.price_age_bucket(b.get(field))) == name] if stored else [b for b in bets if lc.price_age_bucket(b.get(field)) == name]
         if v:
             out.append(_metric_row("bucket", name, v))
     return out
@@ -203,7 +204,8 @@ def _synthetic_postmortems(losses: list[dict]) -> list[dict]:
         stored = json.loads(b["settlement_json"]) if b.get("settlement_json") else {}
         results = stored.get("leg_results") or []
         r = results[0] if results else {}
-        frozen = dict(leg, quote_age_min_at_entry=leg.get("quote_age_min"), game_id=b["game_id"])
+        # The price's age is analysed on its own (price_age_table); it is not an integrity signal for a learning bet, so the classifier is given no freshness verdict to misread as "stale data".
+        frozen = dict(leg, quote_age_min_at_entry=None, freshness_status="FRESH", game_id=b["game_id"])
         summary = {"participant_id": b["participant_id"], "market_family": b["market_family"], "participant_name": b["participant_name"], "threshold": b["threshold"], "side": b["side"],
                    "game_id": b["game_id"], "actual_value": r.get("actual_value"), "resolver_status": r.get("status"), "predicted_probability": b["conservative_probability"],
                    "recorded_price": b["american_price"], "model_version": b["model_version"]}
@@ -368,8 +370,9 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         edge_reading = (f"{verdict}: positive-edge ROI {p_['roi']:.1%} vs negative-edge ROI {n_['roi']:.1%} (gap {gap:+.1%}); positive-edge calibration z {p_['calibration_z']}, negative-edge z {n_['calibration_z']}. "
                         "With 30-ish bets per class a ROI gap of 30 points or more is within noise; same-game bets are correlated and the vig is not removed, so this is suggestive only")
     age_rows = [r for r in (doc.get("cumulative_price_age") or []) if r["settled"] >= 1]
-    young = [b for b in all_rows if b["result_status"] in SETTLED and (b.get("price_age_at_recording_min") or 0) <= 30]
-    old = [b for b in all_rows if b["result_status"] in SETTLED and (b.get("price_age_at_recording_min") or 0) > 30]
+    aged = [b for b in all_rows if b["result_status"] in SETTLED and b.get("price_age_at_recording_min") is not None]
+    young = [b for b in aged if b["price_age_at_recording_min"] <= 30]
+    old = [b for b in aged if b["price_age_at_recording_min"] > 30]
     my, mo = metrics(young), metrics(old)
     if my["settled"] < 30 or mo["settled"] < 30:
         age_reading = (f"not enough settled bets to compare price ages (observed within 30 min: {my['settled']}; older: {mo['settled']}; at least 30 each are needed). The buckets are reported separately and no conclusion is drawn")
@@ -390,8 +393,9 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         "10_role_context_data_issues": {"role_toi_team_shot_goalie_starter": share("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR", "TEAM_SHOT_ENVIRONMENT_ERROR", "GOALIE_WORKLOAD_ERROR", "STARTER_ERROR"),
                                         "data_identity_pipeline": share("STALE_DATA", "IDENTITY_LINEUP_ERROR", "DATA_PIPELINE_ERROR"), "unknown": cats.get("UNKNOWN", 0),
                                         "note": "role/ice-time/team-shot categories are proxies against the player's or team's own recent average and are capped at WATCH"},
-        "11_stale_or_moved_prices": {"stale_data_losses": cats.get("STALE_DATA", 0), "market_moved_losses": cats.get("MARKET_MOVED", 0),
-                                     "answer": ("no loss was classified as stale data; closing prices were not captured, so market movement cannot be measured" if not cats.get("STALE_DATA") else "stale-data losses exist: see the integrity defects")},
+        "11_old_or_moved_prices": {"market_moved_losses": cats.get("MARKET_MOVED", 0), "data_integrity_losses": cats.get("STALE_DATA", 0) + cats.get("DATA_PIPELINE_ERROR", 0),
+                                   "answer": ("Price age is recorded and analysed separately (see does_price_age_matter and price_age_results); an old price is not treated as a data defect. Closing prices were not captured, so market movement "
+                                              "against the recorded price cannot be measured directly")},
         "12_promote": [f for f, (v, _) in verdicts.items() if v == "PROMOTE_CANDIDATE"],
         "13_watch": [f for f, (v, _) in verdicts.items() if v == "WATCH"],
         "14_challenger_work": [f for f, (v, _) in verdicts.items() if v == "CHALLENGER_IDEA"],

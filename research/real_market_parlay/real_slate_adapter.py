@@ -248,6 +248,23 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 provider_contract_verified=True, model_threshold_eligible=True,
                 identity_resolved=True, price_fresh=fresh, event_not_started=True,
             ))
+    if _ADVISORY_PRICE_AGE.get() and legs:
+        # An old moneyline price is only usable if it is from the LATEST league pull that covered the slate (a game missing from the newest pull may have been withdrawn) and both sides come from the same pull
+        # (the no-vig chance needs both). Anything else is an accuracy problem, not an age problem.
+        newest = max((quote_freshness.parse_utc(l.captured_at_utc) for l in legs if quote_freshness.parse_utc(l.captured_at_utc)), default=None)
+        by_game: dict = {}
+        for l in legs:
+            by_game.setdefault(l.game_id, []).append(l)
+        kept = []
+        for gid, gl in by_game.items():
+            times = {quote_freshness.parse_utc(l.captured_at_utc) for l in gl}
+            if len(times) > 1 or None in times:
+                excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "SIDES_FROM_DIFFERENT_PULLS"})
+            elif newest is not None and (newest - next(iter(times))).total_seconds() > 300.0:
+                excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "NOT_IN_LATEST_PULL (the market may have been withdrawn)"})
+            else:
+                kept.extend(gl)
+        legs = kept
     return legs, excluded
 
 
@@ -393,7 +410,7 @@ def sog_alternate_candidate_legs(conn, archive_payloads: list[dict],
                     threshold=threshold, american_price=market.american_price,
                     conservative_probability=conservative_prob, sportsbook=bookmaker,
                     captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                    quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=True,
+                    retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=True,
                     model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                     event_not_started=True,
                 ))
@@ -538,7 +555,7 @@ def sog_standard_candidate_legs(conn, archive_payloads: list[dict],
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
+                retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                 event_not_started=True, model_version=tg.MODEL_VERSION,
             ))
@@ -698,7 +715,7 @@ def goalie_saves_candidate_legs(conn, archive_payloads: list[dict],
                 threshold=threshold, american_price=market.american_price,
                 conservative_probability=conservative_prob, sportsbook=bookmaker,
                 captured_at_utc=freshness["quote_updated_utc"] or market.captured_at_utc, quote_updated_utc=freshness["quote_updated_utc"],
-                quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
+                retrieved_at_utc=payload.get("__retrieved_at_utc"), quote_age_min=freshness["age_minutes"], freshness_status=freshness["status"] if freshness.get("advisory_old") else "FRESH", provider_contract_verified=contract_verified,
                 model_threshold_eligible=True, identity_resolved=True, price_fresh=not freshness.get("advisory_old"),
                 event_not_started=True, model_version=tg.MODEL_VERSION,
             ))

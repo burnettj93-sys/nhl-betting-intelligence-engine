@@ -193,7 +193,8 @@ def _build_goalie_identity_index() -> dict[str, list[dict]]:
 
 
 def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
-                              max_age_hours: float = 24.0, now: dt.datetime | None = None) -> list[dict]:
+                              max_age_hours: float = 24.0, now: dt.datetime | None = None, *,
+                              newest_per_event: bool = False, tag_retrieval: bool = False) -> list[dict]:
     """Reads every real archived Odds API event-odds response whose real
     `meta.market_filter` requested `market_key` and whose real
     `meta.retrieved_at_utc` is within `max_age_hours`. Scans BOTH
@@ -207,6 +208,7 @@ def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
     been captured recently, or (today) ever."""
     now = now or dt.datetime.now(dt.timezone.utc)
     payloads = []
+    newest: dict = {}          # newest_per_event: only the newest capture of each provider event survives (a market absent from it has been withdrawn; an older capture must not resurrect it)
     for archive_dir in (RUNTIME_ARCHIVE_DIR, LEGACY_ARCHIVE_DIR):
         if not archive_dir.is_dir():
             continue
@@ -230,7 +232,17 @@ def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
                 continue
             if (now - captured).total_seconds() > max_age_hours * 3600.0:
                 continue
+            if tag_retrieval:
+                resp = dict(resp, __retrieved_at_utc=retrieved_at)          # when this system observed the response (the learning cohort records it as the price's capture time)
+            if newest_per_event:
+                eid = resp.get("id")
+                if eid in newest and newest[eid][0] >= captured:
+                    continue
+                newest[eid] = (captured, resp)
+                continue
             payloads.append(resp)
+    if newest_per_event:
+        payloads = [r for _c, r in newest.values()]
     return payloads
 
 

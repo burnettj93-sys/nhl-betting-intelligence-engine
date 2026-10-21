@@ -189,6 +189,11 @@ def _parse(value):
     return quote_freshness.parse_utc(value)
 
 
+def _observed_at(leg) -> dt.datetime:
+    """When this system last observed the leg's price (retrieval time, else the provider's quote time, else the capture time); the earliest instant when unknown."""
+    return _parse(leg.retrieved_at_utc) or _parse(leg.quote_updated_utc) or _parse(leg.captured_at_utc) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+
 def price_age_status(age_min: float | None) -> str | None:
     if age_min is None:
         return None
@@ -210,36 +215,51 @@ def price_age_bucket(age_min: float | None) -> str:
 def price_observation(retrieved_utc, provider_utc, now: dt.datetime) -> dict | None:
     """The real price observation behind a leg: when this system last SAW the price (the capture it was read from) and the provider's own last-update time for it, and their ages at `now`.
     None when no real observation time can be established (a missing or malformed time), or when it lies in the future: those are accuracy problems, not age. The age itself never disqualifies."""
+    if retrieved_utc and _parse(retrieved_utc) is None:
+        return None                                  # a retrieval time that is present but unreadable is corrupt data, not a reason to fall back to another time
     obs, prov = _parse(retrieved_utc) or _parse(provider_utc), _parse(provider_utc)
     if obs is None or (obs - now).total_seconds() > 60.0:
         return None
     if prov is not None and (prov - now).total_seconds() > 60.0:
         return None
-    age = max((now - obs).total_seconds(), 0.0) / 60.0
-    prov_age = None if prov is None else max((now - prov).total_seconds(), 0.0) / 60.0
-    return {"captured_utc": obs.strftime("%Y-%m-%dT%H:%M:%SZ"), "provider_update_utc": None if prov is None else prov.strftime("%Y-%m-%dT%H:%M:%SZ"), "age_min": round(age, 1),
-            "provider_age_min": None if prov_age is None else round(prov_age, 1), "status": price_age_status(age), "bucket": price_age_bucket(age)}
+    age = round(max((now - obs).total_seconds(), 0.0) / 60.0, 1)          # status and bucket come from the same rounded number that is stored
+    prov_age = None if prov is None else round(max((now - prov).total_seconds(), 0.0) / 60.0, 1)
+    return {"captured_utc": obs.strftime("%Y-%m-%dT%H:%M:%SZ"), "provider_update_utc": None if prov is None else prov.strftime("%Y-%m-%dT%H:%M:%SZ"), "age_min": age,
+            "provider_age_min": prov_age, "status": price_age_status(age), "bucket": price_age_bucket(age)}
 
 
 def _migrate(conn) -> None:
     """An existing ledger (the Day-1 bets recorded before the price-age metadata existed) gains the new columns. Their values are derived deterministically from the entry's own frozen leg and its own recording
-    time, so nothing about what was recorded changes; the entry-immutability trigger is dropped for this one derivation and recreated straight after."""
+    time, so nothing about what was recorded changes; the entry-immutability trigger is dropped for this one derivation and recreated straight after. One transaction: a crash leaves either the old ledger or the
+    complete migration, and the backfill is keyed on the missing values, not on the missing columns, so a half-finished earlier attempt is completed on the next open."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
     if not cols:
         return
     missing = [(n, t) for n, t in PRICE_COLUMNS if n not in cols]
-    if not missing:
-        return
-    for n, t in missing:
-        conn.execute(f"ALTER TABLE bets ADD COLUMN {n} {t}")
-    conn.execute("DROP TRIGGER IF EXISTS bets_entry_is_immutable")
-    for r in conn.execute("SELECT bet_id, created_at_utc, retrieved_at_utc, quote_updated_utc FROM bets WHERE price_status IS NULL").fetchall():
-        created = _parse(r["created_at_utc"])
-        info = price_observation(r["retrieved_at_utc"], r["quote_updated_utc"], created) if created else None
-        if info:
-            conn.execute("UPDATE bets SET price_capture_timestamp=?, price_provider_update_utc=?, price_age_at_recording_min=?, provider_quote_age_at_recording_min=?, price_status=?, price_age_bucket=? WHERE bet_id=?",
-                         (info["captured_utc"], info["provider_update_utc"], info["age_min"], info["provider_age_min"], info["status"], info["bucket"], r["bet_id"]))
-    conn.commit()
+    if not missing and conn.execute("SELECT 1 FROM bets WHERE price_status IS NULL LIMIT 1").fetchone() is None:
+        return                                                      # nothing to do: no write lock is taken on an ordinary open
+    prior = conn.isolation_level
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            for n, t in missing:
+                conn.execute(f"ALTER TABLE bets ADD COLUMN {n} {t}")
+            todo = conn.execute("SELECT bet_id, created_at_utc, retrieved_at_utc, quote_updated_utc FROM bets WHERE price_status IS NULL").fetchall()
+            if todo:
+                conn.execute("DROP TRIGGER IF EXISTS bets_entry_is_immutable")
+                for r in todo:
+                    created = _parse(r["created_at_utc"])
+                    info = price_observation(r["retrieved_at_utc"], r["quote_updated_utc"], created) if created else None
+                    if info:
+                        conn.execute("UPDATE bets SET price_capture_timestamp=?, price_provider_update_utc=?, price_age_at_recording_min=?, provider_quote_age_at_recording_min=?, price_status=?, price_age_bucket=? WHERE bet_id=?",
+                                     (info["captured_utc"], info["provider_update_utc"], info["age_min"], info["provider_age_min"], info["status"], info["bucket"], r["bet_id"]))
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.isolation_level = prior
 
 
 def connect(path=None) -> sqlite3.Connection:
@@ -410,8 +430,11 @@ def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
                         ("event_not_started", "event started")):
         if not getattr(leg, flag, False):
             why.append(label)
-    if str(getattr(leg, "freshness_status", "") or "").upper() not in OLD_BUT_REAL_STATUSES:
+    status = str(getattr(leg, "freshness_status", "") or "").upper()
+    if status not in OLD_BUT_REAL_STATUSES:
         why.append(f"quote time not valid ({leg.freshness_status})")
+    elif not getattr(leg, "price_fresh", True) and status not in ("STALE_QUOTE", "STALE_RETRIEVAL"):
+        why.append("price flagged for a reason other than its age")
     elif price_observation(leg.retrieved_at_utc, leg.quote_updated_utc or leg.captured_at_utc, now) is None:
         why.append("price cannot be tied to a real observation (missing, malformed or future time)")
     if not (0.0 < float(leg.conservative_probability) < 1.0):
@@ -644,9 +667,16 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     have_keys = {r["idempotency_key"] for r in conn.execute("SELECT idempotency_key FROM bets")}          # all days: a rescheduled game keeps its game_id
     held_exposure = {exclusive_key(r["game_id"], r["participant_id"], r["market_family"]) for r in rows}
     reasons: Counter = Counter()
-    by_key: dict[str, dict] = {}
+    # ONE observation per bet: the NEWEST real observation of that exact line, judged on its own. An older observation of the same bet (a better price from the morning, say) never stands in for a newer one
+    # that fails a gate (a price that moved past the floor, a withdrawn market): the last observed price is the price.
+    newest: dict[str, object] = {}
     for leg in legs:
-        key = economic_key(leg)
+        k = economic_key(leg)
+        cur = newest.get(k)
+        if cur is None or _observed_at(leg) > _observed_at(cur):
+            newest[k] = leg
+    by_key: dict[str, dict] = {}
+    for key, leg in newest.items():
         if str(leg.game_id) not in game_wave:
             reasons["game is not on today's Eastern schedule"] += 1
             continue
@@ -661,11 +691,9 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
             reasons["no usable probability estimate"] += 1
             continue
         sc = score_leg(pleg, now, basis)
-        cur = by_key.get(key)
-        if cur is None or (leg.captured_at_utc or "") > (cur["leg"].captured_at_utc or ""):
-            ecls, ereason = edge_class(sc["edge_value"], basis)
-            by_key[key] = {"leg": pleg, "key": key, "scored": sc, "score": sc["score"], "band": band_of(leg.american_price), "wave": game_wave.get(str(leg.game_id)), "basis": basis,
-                           "source_p": float(leg.conservative_probability), "edge_class": ecls, "edge_reason": ereason}
+        ecls, ereason = edge_class(sc["edge_value"], basis)
+        by_key[key] = {"leg": pleg, "key": key, "scored": sc, "score": sc["score"], "band": band_of(leg.american_price), "wave": game_wave.get(str(leg.game_id)), "basis": basis,
+                       "source_p": float(leg.conservative_probability), "edge_class": ecls, "edge_reason": ereason}
     cands, claimed = [], set(held_exposure)
     for c in sorted(by_key.values(), key=lambda c: (c["edge_class"] == EDGE_NEGATIVE, -c["score"], c["key"])):          # a negative-edge candidate never shadows a better-classed alternative of the same exposure
         ek = exclusive_key(c["leg"].game_id, c["leg"].participant_id, c["leg"].market_family)
