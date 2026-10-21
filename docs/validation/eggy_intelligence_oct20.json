@@ -1,0 +1,1691 @@
+{
+ "generated": "2026-10-21T16:34:03Z",
+ "what": "All ten bets the learning cohort recorded on 2026-10-20 (the old engine), each reviewed as the intelligence layer would have on that day's data, with the old and new rank.",
+ "how": [
+  "pre-bet review: operational/eggy_decisions.reconstruct_card on data strictly before 2026-10-20 (team and skater state), using the estimate the old engine itself recorded",
+  "new rank: deploy/replay_eggy_review.py on the as-of candidate pool at each recording instant (23:02:42Z for the four moneylines, 23:33:49Z for the six props), every eligibility gate applied",
+  "outcomes and facts: the official results and the MoneyPuck game logs (ice time, power play time, shots, expected goals)"
+ ],
+ "caveats": [
+  "The roster identity gate cannot be replayed (the roster file on disk is today's): NHL_ENGINE_ROSTER_GATE=off in the replay.",
+  "The evidence file's skater cells include 2026-27 games through Oct 20 (under 1% of its 51,516 rows); the team model's coefficients were fitted on 2009-2025 only.",
+  "The old ranking was a weighted score that no longer exists in the code: the old rank and score are those frozen on each ledger row."
+ ],
+ "pool_at_1902": {
+  "eligible": 10,
+  "actions": {
+   "LOWER_PRIORITY": 4,
+   "PASS": 6
+  }
+ },
+ "pool_at_1933": {
+  "eligible": 81,
+  "actions": {
+   "RECORD": 1,
+   "LOWER_PRIORITY": 34,
+   "PASS": 46
+  }
+ },
+ "bets": [
+  {
+   "old_rank": 1,
+   "label": "WPG \u2014 MONEYLINE \u2014 +114",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 114.0,
+   "implied_probability_with_margin": 0.4673,
+   "market_probability_no_vig": 0.4486,
+   "model_probability": 0.4116,
+   "estimate_the_old_engine_used": 0.4486,
+   "old_engine_model_probability_elo": 0.4672163671355898,
+   "old_edge": -0.0187,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.39511,
+   "new_estimate_used": 0.4486,
+   "new_model_edge_at_last_observed_price": -0.0557,
+   "new_rank": 9,
+   "new_rank_of": 10,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "MODEL_SAYS_OVERPRICED",
+    "statement": "The hockey model gives WPG 41.2% against the market's 44.9% (-3.7 pts): the model thinks WPG is OVERPRICED.",
+    "strength": "NONE"
+   },
+   "most_likely_outcome": "STL wins (58.8% by the hockey model; the market says 55.1% for STL)",
+   "contradiction": {
+    "level": "SEVERE",
+    "flags": [
+     {
+      "name": "HOCKEY_PICTURE_AGAINST",
+      "level": "HIGH",
+      "text": "STL is the better team (58.8%) and the price is fair: nothing argues for WPG but the odds"
+     },
+     {
+      "name": "MODEL_SAYS_OVERPRICED",
+      "level": "HIGH",
+      "text": "the model puts WPG +3.7 pts BELOW the market"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "team game-by-game data (2008 to date)",
+     "both sides of the market",
+     "team model evidence file",
+     "rest / back-to-back",
+     "this season's games"
+    ],
+    "missing": [
+     "confirmed starting goalies",
+     "injuries and lineup"
+    ],
+    "k": 5,
+    "n": 7,
+    "fraction": 0.714
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "expected-goal differential favours WPG",
+    "decayed goal differential per game: WPG -0.27 (league rank 22), STL +0.13 (rank 14)"
+   ],
+   "case_against": [
+    "STL is the better team on the model's own terms (58.8%, a slight gap)",
+    "our own model says WPG is overpriced by +3.7 pts",
+    "Elo, the old moneyline model, says 46.7% for WPG, +5.6 pts from the hockey model. Elo is rebuilt from this season's results only (no earlier seasons), so after a handful of games its ratings are mostly noise; it has the worst record of every estimate priced so far and plays no part in this decision"
+   ],
+   "historical": [
+    "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.40-0.45, that side won 42.8% of 2,884 (the model averaged 42.6%; standard error 0.9%)",
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+   ],
+   "why_they_disagree": [
+    "the model counts goal differential (decayed) as worth 0.17 log-odds in favour of STL; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the model counts expected-goal differential as worth 0.03 log-odds in favour of WPG; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the model counts high-danger chances (offsets xGD) as worth 0.05 log-odds in favour of STL; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "Eggy's own model said the side was overpriced",
+     "the contradiction was SEVERE"
+    ]
+   },
+   "claims": [
+    {
+     "id": "favourite",
+     "claim": "STL is the better team (p 59%)",
+     "stated": "STL",
+     "actual": "STL",
+     "verdict": "HELD",
+     "note": "STL won"
+    },
+    {
+     "id": "disagreement",
+     "claim": "the model sees more in this side than the market does",
+     "stated": -0.037,
+     "actual": "STL",
+     "verdict": "NOT_TESTABLE",
+     "note": "one game cannot show whether a model-market gap means anything; the shadow log accumulates the evidence"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 45% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the estimate that made the side look attractive was not the best available one (Elo said 47%); the hockey model and the market did not agree with it, and that was known before the game",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "STL",
+     "away": "WPG",
+     "home_score": 2,
+     "away_score": 1,
+     "period_type": "REG",
+     "winner": "STL",
+     "team_stats": {
+      "STL": {
+       "xg_for": 2.97,
+       "xg_against": 2.55,
+       "shot_attempts_5v5": [
+        42,
+        50
+       ],
+       "high_danger_xg": [
+        0.62,
+        0.0
+       ]
+      },
+      "WPG": {
+       "xg_for": 2.55,
+       "xg_against": 2.97,
+       "shot_attempts_5v5": [
+        50,
+        42
+       ],
+       "high_danger_xg": [
+        0.0,
+        0.62
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "old_rank": 2,
+   "label": "BOS \u2014 MONEYLINE \u2014 +142",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 142.0,
+   "implied_probability_with_margin": 0.4132,
+   "market_probability_no_vig": 0.3962,
+   "model_probability": 0.3756,
+   "estimate_the_old_engine_used": 0.3962,
+   "old_engine_model_probability_elo": 0.4658259603838981,
+   "old_edge": -0.017,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.38395,
+   "new_estimate_used": 0.3962,
+   "new_model_edge_at_last_observed_price": -0.0376,
+   "new_rank": 6,
+   "new_rank_of": 10,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "UNDERDOG_AT_FAIR_PRICE",
+    "statement": "BOS is the weaker team by the hockey model (37.6%) and the market agrees (39.6%): a fair-priced underdog. The only argument for it is the price; the hockey picture favours DAL.",
+    "strength": "NONE"
+   },
+   "most_likely_outcome": "DAL wins (62.4% by the hockey model; the market says 60.4% for DAL)",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "HOCKEY_PICTURE_AGAINST",
+      "level": "HIGH",
+      "text": "DAL is the better team (62.4%) and the price is fair: nothing argues for BOS but the odds"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "team game-by-game data (2008 to date)",
+     "both sides of the market",
+     "team model evidence file",
+     "rest / back-to-back",
+     "this season's games"
+    ],
+    "missing": [
+     "confirmed starting goalies",
+     "injuries and lineup"
+    ],
+    "k": 5,
+    "n": 7,
+    "fraction": 0.714
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "decayed goal differential per game: BOS +0.28 (league rank 8), DAL +0.31 (rank 6)"
+   ],
+   "case_against": [
+    "net expected-goal strength favours DAL",
+    "DAL is the better team on the model's own terms (62.4%, a clear gap)",
+    "the price is fair, so the expected value is the bookmaker's margin, a loss on average",
+    "Elo, the old moneyline model, says 46.6% for BOS, +9.0 pts from the hockey model. Elo is rebuilt from this season's results only (no earlier seasons), so after a handful of games its ratings are mostly noise; it has the worst record of every estimate priced so far and plays no part in this decision",
+    "BOS's results flatter its chance quality: goal differential rank 8, expected-goal rank 25"
+   ],
+   "historical": [
+    "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.35-0.40, that side won 37.3% of 2,177 (the model averaged 37.7%; standard error 1.0%)",
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+   ],
+   "why_they_disagree": [
+    "They do not disagree: the model and the market are within 3% of each other on BOS."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "the only argument was the price of a fair-priced underdog"
+    ]
+   },
+   "claims": [
+    {
+     "id": "favourite",
+     "claim": "DAL is the better team (p 62%)",
+     "stated": "DAL",
+     "actual": "DAL",
+     "verdict": "HELD",
+     "note": "DAL won"
+    },
+    {
+     "id": "disagreement",
+     "claim": "the model sees more in this side than the market does",
+     "stated": -0.0206,
+     "actual": "DAL",
+     "verdict": "NOT_TESTABLE",
+     "note": "one game cannot show whether a model-market gap means anything; the shadow log accumulates the evidence"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 40% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the estimate that made the side look attractive was not the best available one (Elo said 47%); the hockey model and the market did not agree with it, and that was known before the game",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "DAL",
+     "away": "BOS",
+     "home_score": 3,
+     "away_score": 2,
+     "period_type": "OT",
+     "winner": "DAL",
+     "team_stats": {
+      "BOS": {
+       "xg_for": 2.2,
+       "xg_against": 4.06,
+       "shot_attempts_5v5": [
+        32,
+        51
+       ],
+       "high_danger_xg": [
+        0.44,
+        1.45
+       ]
+      },
+      "DAL": {
+       "xg_for": 4.06,
+       "xg_against": 2.2,
+       "shot_attempts_5v5": [
+        51,
+        32
+       ],
+       "high_danger_xg": [
+        1.45,
+        0.44
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "old_rank": 3,
+   "label": "VAN \u2014 MONEYLINE \u2014 +240",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 240.0,
+   "implied_probability_with_margin": 0.2941,
+   "market_probability_no_vig": 0.282,
+   "model_probability": 0.174,
+   "estimate_the_old_engine_used": 0.282,
+   "old_engine_model_probability_elo": 0.41832840315001596,
+   "old_edge": -0.0121,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.38525,
+   "new_estimate_used": 0.282,
+   "new_model_edge_at_last_observed_price": -0.1201,
+   "new_rank": 10,
+   "new_rank_of": 10,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "MODEL_SAYS_OVERPRICED",
+    "statement": "The hockey model gives VAN 17.4% against the market's 28.2% (-10.8 pts): the model thinks VAN is OVERPRICED.",
+    "strength": "NONE"
+   },
+   "most_likely_outcome": "CAR wins (82.6% by the hockey model; the market says 71.8% for CAR)",
+   "contradiction": {
+    "level": "SEVERE",
+    "flags": [
+     {
+      "name": "HOCKEY_PICTURE_AGAINST",
+      "level": "HIGH",
+      "text": "CAR is the better team (82.6%) and the price is fair: nothing argues for VAN but the odds"
+     },
+     {
+      "name": "MODEL_SAYS_OVERPRICED",
+      "level": "SEVERE",
+      "text": "the model puts VAN +10.8 pts BELOW the market"
+     }
+    ]
+   },
+   "calibration": "MEDIUM",
+   "data_completeness": {
+    "present": [
+     "team game-by-game data (2008 to date)",
+     "both sides of the market",
+     "team model evidence file",
+     "rest / back-to-back",
+     "this season's games"
+    ],
+    "missing": [
+     "confirmed starting goalies",
+     "injuries and lineup"
+    ],
+    "k": 5,
+    "n": 7,
+    "fraction": 0.714
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "decayed goal differential per game: VAN -1.08 (league rank 32), CAR +0.83 (rank 1)"
+   ],
+   "case_against": [
+    "net expected-goal strength favours CAR",
+    "CAR is the better team on the model's own terms (82.6%, a dominant gap)",
+    "our own model says VAN is overpriced by +10.8 pts",
+    "Elo, the old moneyline model, says 41.8% for VAN, +24.4 pts from the hockey model. Elo is rebuilt from this season's results only (no earlier seasons), so after a handful of games its ratings are mostly noise; it has the worst record of every estimate priced so far and plays no part in this decision"
+   ],
+   "historical": [
+    "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.00-0.25, that side won 19.9% of 517 (the model averaged 21.2%; standard error 1.8%)",
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+   ],
+   "why_they_disagree": [
+    "the model counts goal differential (decayed) as worth 0.80 log-odds in favour of CAR; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the model counts expected-goal differential as worth 1.39 log-odds in favour of CAR; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the model counts high-danger chances (offsets xGD) as worth 0.45 log-odds in favour of VAN; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "Eggy's own model said the side was overpriced",
+     "the contradiction was SEVERE"
+    ]
+   },
+   "claims": [
+    {
+     "id": "favourite",
+     "claim": "CAR is the better team (p 83%)",
+     "stated": "CAR",
+     "actual": "CAR",
+     "verdict": "HELD",
+     "note": "CAR won"
+    },
+    {
+     "id": "disagreement",
+     "claim": "the model sees more in this side than the market does",
+     "stated": -0.108,
+     "actual": "CAR",
+     "verdict": "NOT_TESTABLE",
+     "note": "one game cannot show whether a model-market gap means anything; the shadow log accumulates the evidence"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 28% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the estimate that made the side look attractive was not the best available one (Elo said 42%); the hockey model and the market did not agree with it, and that was known before the game",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "old_rank": 4,
+   "label": "MIN \u2014 MONEYLINE \u2014 +114",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 114.0,
+   "implied_probability_with_margin": 0.4673,
+   "market_probability_no_vig": 0.4486,
+   "model_probability": 0.4138,
+   "estimate_the_old_engine_used": 0.4486,
+   "old_engine_model_probability_elo": 0.4134649508558109,
+   "old_edge": -0.0187,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.38973,
+   "new_estimate_used": 0.4486,
+   "new_model_edge_at_last_observed_price": -0.0535,
+   "new_rank": 8,
+   "new_rank_of": 10,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "MODEL_SAYS_OVERPRICED",
+    "statement": "The hockey model gives MIN 41.4% against the market's 44.9% (-3.5 pts): the model thinks MIN is OVERPRICED.",
+    "strength": "NONE"
+   },
+   "most_likely_outcome": "EDM wins (58.6% by the hockey model; the market says 55.1% for EDM)",
+   "contradiction": {
+    "level": "SEVERE",
+    "flags": [
+     {
+      "name": "HOCKEY_PICTURE_AGAINST",
+      "level": "HIGH",
+      "text": "EDM is the better team (58.6%) and the price is fair: nothing argues for MIN but the odds"
+     },
+     {
+      "name": "MODEL_SAYS_OVERPRICED",
+      "level": "HIGH",
+      "text": "the model puts MIN +3.5 pts BELOW the market"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "team game-by-game data (2008 to date)",
+     "both sides of the market",
+     "team model evidence file",
+     "rest / back-to-back",
+     "this season's games"
+    ],
+    "missing": [
+     "confirmed starting goalies",
+     "injuries and lineup"
+    ],
+    "k": 5,
+    "n": 7,
+    "fraction": 0.714
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "decayed goal differential per game: MIN +0.29 (league rank 7), EDM +0.34 (rank 5)"
+   ],
+   "case_against": [
+    "net expected-goal strength favours EDM",
+    "EDM is the better team on the model's own terms (58.6%, a slight gap)",
+    "our own model says MIN is overpriced by +3.5 pts"
+   ],
+   "historical": [
+    "In 2017-2025 (expanding window: each season predicted from the seasons before it), when the model gave a side about 0.40-0.45, that side won 42.8% of 2,884 (the model averaged 42.6%; standard error 0.9%)",
+    "On the 87 games priced since 2026-10-08, log loss: market 0.6438, this model 0.6467, goalie-team strength 0.6456, Elo 0.6726. The market was at least as good as every model; the weight a model's disagreement deserves is 0.34 with a 95% range of [-1.0, 1.96]: too few games to say. UNVALIDATED."
+   ],
+   "why_they_disagree": [
+    "the model counts high-danger chances (offsets xGD) as worth 0.18 log-odds in favour of EDM; a market that weighs it differently, or knows news the model lacks, would price the game differently",
+    "the market also knows what the model cannot see here: injuries, confirmed goalies, line changes (those feeds are not available to Eggy)"
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "Eggy's own model said the side was overpriced",
+     "the contradiction was SEVERE"
+    ]
+   },
+   "claims": [
+    {
+     "id": "favourite",
+     "claim": "EDM is the better team (p 59%)",
+     "stated": "EDM",
+     "actual": "EDM",
+     "verdict": "HELD",
+     "note": "EDM won"
+    },
+    {
+     "id": "disagreement",
+     "claim": "the model sees more in this side than the market does",
+     "stated": -0.0348,
+     "actual": "EDM",
+     "verdict": "NOT_TESTABLE",
+     "note": "one game cannot show whether a model-market gap means anything; the shadow log accumulates the evidence"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 45% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the estimate that made the side look attractive was not the best available one (Elo said 41%); the hockey model and the market did not agree with it, and that was known before the game",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "EDM",
+     "away": "MIN",
+     "home_score": 4,
+     "away_score": 3,
+     "period_type": "OT",
+     "winner": "EDM",
+     "team_stats": {
+      "EDM": {
+       "xg_for": 4.47,
+       "xg_against": 4.31,
+       "shot_attempts_5v5": [
+        45,
+        51
+       ],
+       "high_danger_xg": [
+        1.17,
+        1.74
+       ]
+      },
+      "MIN": {
+       "xg_for": 4.31,
+       "xg_against": 4.47,
+       "shot_attempts_5v5": [
+        51,
+        45
+       ],
+       "high_danger_xg": [
+        1.74,
+        1.17
+       ]
+      }
+     }
+    }
+   }
+  },
+  {
+   "old_rank": 5,
+   "label": "Filip Chytil \u2014 SHOTS ON GOAL 2+ \u2014 -130",
+   "outcome": "WIN",
+   "profit_loss": 7.6923076923076925,
+   "price": -130.0,
+   "implied_probability_with_margin": 0.5652,
+   "market_probability_no_vig": null,
+   "model_probability": 0.5618,
+   "estimate_the_old_engine_used": 0.5618,
+   "old_engine_model_probability_elo": null,
+   "old_edge": -0.0034,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.62889,
+   "new_estimate_used": 0.5901,
+   "new_model_edge_at_last_observed_price": -0.0034,
+   "new_rank": 4,
+   "new_rank_of": 81,
+   "new_action": "LOWER_PRIORITY",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (56.5%) and our estimate (59.0%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Filip Chytil reaches 2+ shots on goal (59.0%)",
+   "contradiction": {
+    "level": "LOW",
+    "flags": [
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_LOW",
+      "level": "LOW",
+      "text": "for any player, model 50%-60% the model averaged 54.9% and 57.7% happened (7,616 cases, z +4.9): the model's 56.2% is recalibrated up to 59.0%; part of any gap to the price is the model's, not the market's"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "HIGH",
+   "case_for": [
+    "calibrated model 56.2% (raw 57.0%); estimate used 59.0% (model probability record not usable) vs price-implied 56.5%",
+    "expected shots per game 1.97; season 2 in 2 games; last 5 2, 0, 1, 2, 1 (shots)",
+    "reached 2+ shots on goal in 104 of his last 150 games (69.3%), 22 of last 30, 5 of last 10, 1 of 2 this season",
+    "expected 15.5 min on ice (recent 19.5), power play 1.38 min (recent 1.03); inferred usage tier 1",
+    "history: any player, model 50%-60%: model averaged 54.9%, 57.7% happened (7,616 cases)",
+    "history: forwards, model 50%-60%: model averaged 55.1%, 57.5% happened (6,029 cases)",
+    "history: forwards expected to play 14-16 min, model 50%-60%: model averaged 54.4%, 57.3% happened (1,715 cases)",
+    "history: forwards with 1-2 expected power-play min, model 50%-60%: model averaged 54.6%, 56.0% happened (2,361 cases)",
+    "history: team win probability 0%-35%, model 50%-60%: model averaged 55.0%, 54.9% happened (756 cases)"
+   ],
+   "case_against": [
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 50%-60%: the model averaged 54.9%; 57.7% happened (7,616 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 50%-60%: the model averaged 55.1%; 57.5% happened (6,029 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 50%-60%: the model averaged 54.4%; 57.3% happened (1,715 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 1-2 expected power-play min, model 50%-60%: the model averaged 54.6%; 56.0% happened (2,361 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 50%-60%: the model averaged 55.0%; 54.9% happened (756 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "QUESTIONABLE_DECISION",
+    "reasons": [
+     "lower priority: estimate and price agree and the estimate is well calibrated: a calibration control, no edge"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 15.5 minutes on ice",
+     "stated": 15.5,
+     "actual": 18.7,
+     "verdict": "HELD",
+     "note": "played 18.7 (+3.2)"
+    },
+    {
+     "id": "expected_pp",
+     "claim": "expected 1.38 power-play minutes",
+     "stated": 1.38,
+     "actual": 0.0,
+     "verdict": "FAILED",
+     "note": "had 0.00"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected shots 1.97",
+     "stated": 1.97,
+     "actual": 2.0,
+     "verdict": "INFORMATION",
+     "note": "had 2"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "QUESTIONABLE_DECISION_WON",
+    "text": "a questionable decision that won: no reward; the win does not make the reasoning better.",
+    "confidence": "NOT_INCREASED",
+    "variance": null
+   },
+   "classification": null,
+   "classification_why": null,
+   "recommended_action": "NO_ACTION",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 18.7,
+     "toi_pp": 0.0,
+     "shots": 2.0,
+     "goals": 0.0,
+     "assists": 0.0,
+     "points": 0.0
+    }
+   }
+  },
+  {
+   "old_rank": 6,
+   "label": "Max Sasson \u2014 GOALS 1+ \u2014 +800",
+   "outcome": "WIN",
+   "profit_loss": 80.0,
+   "price": 800.0,
+   "implied_probability_with_margin": 0.1111,
+   "market_probability_no_vig": null,
+   "model_probability": 0.1641,
+   "estimate_the_old_engine_used": 0.1641,
+   "old_engine_model_probability_elo": null,
+   "old_edge": 0.053,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.49854,
+   "new_estimate_used": 0.1369,
+   "new_model_edge_at_last_observed_price": 0.053,
+   "new_rank": 37,
+   "new_rank_of": 81,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (11.1%) and our estimate (13.7%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Max Sasson does NOT reach 1+ goals (anytime goal scorer) (86.3%); this is a longshot bet",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "LOW_USAGE",
+      "level": "MODERATE",
+      "text": "inferred fourth-line usage (ice time ranks in the bottom third of his team's forwards)"
+     },
+     {
+      "name": "GAME_ENVIRONMENT",
+      "level": "MODERATE",
+      "text": "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average"
+     },
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
+      "level": "HIGH",
+      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.4% is recalibrated to 13.7%"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "calibrated model 16.4% (raw 16.9%); estimate used 13.7% (model probability unanchored) vs price-implied 11.1%",
+    "expected goals per game 0.19; season 2 in 10 games; last 5 0, 0, 1, 0, 0 (goals)",
+    "reached 1+ goals (anytime goal scorer) in 18 of his last 105 games (17.1%), 5 of last 30, 2 of last 10, 2 of 10 this season",
+    "expected 13.1 min on ice (recent 12.0), power play 0.38 min (recent 0.05); inferred usage tier 4",
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
+    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.1% happened (2,298 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+   ],
+   "case_against": [
+    "inferred fourth-line usage (ice time ranks in the bottom third of his team's forwards)",
+    "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
+    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.4% is recalibrated to 13.7%",
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.1% happened (2,298 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 13.1 minutes on ice",
+     "stated": 13.1,
+     "actual": 13.7,
+     "verdict": "HELD",
+     "note": "played 13.7 (+0.6)"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected goals 0.19",
+     "stated": 0.19,
+     "actual": 1.0,
+     "verdict": "INFORMATION",
+     "note": "had 1"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_WON_LUCK",
+    "text": "a bad decision that won: this was LUCK. Eggy must not become more confident in this pattern, and the process behind the bet still needs fixing.",
+    "confidence": "NOT_INCREASED",
+    "variance": null
+   },
+   "classification": "LUCKY_WIN",
+   "classification_why": "a bad decision that won: this was LUCK. Eggy must not become more confident in this pattern, and the process behind the bet still needs fixing.",
+   "recommended_action": "WATCH",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 13.7,
+     "toi_pp": 0.0,
+     "shots": 3.0,
+     "goals": 1.0,
+     "assists": 0.0,
+     "points": 1.0
+    }
+   }
+  },
+  {
+   "old_rank": 7,
+   "label": "Paul Cotter \u2014 GOALS 1+ \u2014 +600",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 600.0,
+   "implied_probability_with_margin": 0.1429,
+   "market_probability_no_vig": null,
+   "model_probability": 0.1692,
+   "estimate_the_old_engine_used": 0.1692,
+   "old_engine_model_probability_elo": null,
+   "old_edge": 0.0263,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.46702,
+   "new_estimate_used": 0.1411,
+   "new_model_edge_at_last_observed_price": 0.0263,
+   "new_rank": 40,
+   "new_rank_of": 81,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (14.3%) and our estimate (14.1%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Paul Cotter does NOT reach 1+ goals (anytime goal scorer) (85.9%); this is a longshot bet",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "GAME_ENVIRONMENT",
+      "level": "MODERATE",
+      "text": "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average"
+     },
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
+      "level": "HIGH",
+      "text": "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.9% is recalibrated to 14.1%"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "calibrated model 16.9% (raw 17.4%); estimate used 14.1% (model probability unanchored) vs price-implied 14.3%",
+    "expected goals per game 0.19; season 4 in 10 games; last 5 0, 0, 0, 0, 0 (goals)",
+    "reached 1+ goals (anytime goal scorer) in 20 of his last 150 games (13.3%), 5 of last 30, 3 of last 10, 3 of 10 this season",
+    "expected 13.3 min on ice (recent 15.4), power play 0.72 min (recent 0.87); inferred usage tier 3",
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
+    "history: forwards expected to play 12-14 min, model 15%-20%: model averaged 17.0%, 14.1% happened (2,298 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+   ],
+   "case_against": [
+    "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
+    "for forwards expected to play 12-14 min, model 15%-20% the model averaged 17.0% and 14.1% happened (2,298 cases, z -3.9): the model's 16.9% is recalibrated to 14.1%",
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 12-14 min, model 15%-20%: the model averaged 17.0%; 14.1% happened (2,298 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 13.3 minutes on ice",
+     "stated": 13.3,
+     "actual": 15.4,
+     "verdict": "HELD",
+     "note": "played 15.4 (+2.1)"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected goals 0.19",
+     "stated": 0.19,
+     "actual": 0.0,
+     "verdict": "INFORMATION",
+     "note": "had 0"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 14% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the pre-bet review flagged the model as running high for this kind of bet (history said so before the game)",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 15.4,
+     "toi_pp": 0.0,
+     "shots": 0.0,
+     "goals": 0.0,
+     "assists": 0.0,
+     "points": 0.0
+    }
+   }
+  },
+  {
+   "old_rank": 8,
+   "label": "Drew O'Connor \u2014 GOALS 1+ \u2014 +700",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 700.0,
+   "implied_probability_with_margin": 0.125,
+   "market_probability_no_vig": null,
+   "model_probability": 0.1541,
+   "estimate_the_old_engine_used": 0.1541,
+   "old_engine_model_probability_elo": null,
+   "old_edge": 0.0291,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.46518,
+   "new_estimate_used": 0.1357,
+   "new_model_edge_at_last_observed_price": 0.0291,
+   "new_rank": 39,
+   "new_rank_of": 81,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (12.5%) and our estimate (13.6%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Drew O'Connor does NOT reach 1+ goals (anytime goal scorer) (86.4%); this is a longshot bet",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "POWER_PLAY_ASSUMPTION",
+      "level": "MODERATE",
+      "text": "the model expects 0.81 power-play min but he has had 0.04 lately"
+     },
+     {
+      "name": "GAME_ENVIRONMENT",
+      "level": "MODERATE",
+      "text": "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average"
+     },
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
+      "level": "HIGH",
+      "text": "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,400 cases, z -3.3): the model's 15.4% is recalibrated to 13.6%"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "calibrated model 15.4% (raw 15.9%); estimate used 13.6% (model probability unanchored) vs price-implied 12.5%",
+    "expected goals per game 0.17; season 1 in 10 games; last 5 0, 0, 0, 0, 0 (goals)",
+    "reached 1+ goals (anytime goal scorer) in 23 of his last 150 games (15.3%), 3 of last 30, 1 of last 10, 1 of 10 this season",
+    "expected 15.6 min on ice (recent 15.3), power play 0.81 min (recent 0.04); inferred usage tier 3",
+    "history: any player, model 15%-20%: model averaged 17.4%, 17.2% happened (9,865 cases)",
+    "history: forwards, model 15%-20%: model averaged 17.4%, 17.2% happened (9,381 cases)",
+    "history: forwards expected to play 14-16 min, model 15%-20%: model averaged 17.5%, 17.3% happened (4,239 cases)",
+    "history: forwards with 0.25-1 expected power-play min, model 15%-20%: model averaged 16.9%, 14.9% happened (3,400 cases)",
+    "history: team win probability 0%-35%, model 15%-20%: model averaged 17.5%, 15.2% happened (1,196 cases)"
+   ],
+   "case_against": [
+    "the model expects 0.81 power-play min but he has had 0.04 lately",
+    "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
+    "for forwards with 0.25-1 expected power-play min, model 15%-20% the model averaged 16.9% and 14.9% happened (3,400 cases, z -3.3): the model's 15.4% is recalibrated to 13.6%",
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,865 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 15%-20%: the model averaged 17.4%; 17.2% happened (9,381 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 15%-20%: the model averaged 17.5%; 17.3% happened (4,239 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 0.25-1 expected power-play min, model 15%-20%: the model averaged 16.9%; 14.9% happened (3,400 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 15%-20%: the model averaged 17.5%; 15.2% happened (1,196 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 15.6 minutes on ice",
+     "stated": 15.6,
+     "actual": 16.4,
+     "verdict": "HELD",
+     "note": "played 16.4 (+0.8)"
+    },
+    {
+     "id": "expected_pp",
+     "claim": "expected 0.81 power-play minutes",
+     "stated": 0.81,
+     "actual": 0.0,
+     "verdict": "FAILED",
+     "note": "had 0.00"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected goals 0.17",
+     "stated": 0.17,
+     "actual": 0.0,
+     "verdict": "INFORMATION",
+     "note": "had 0"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 14% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "ROLE_CHANGE_MISSED",
+   "classification_why": "the power-play role the thesis assumed did not exist",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 16.4,
+     "toi_pp": 0.0,
+     "shots": 2.0,
+     "goals": 0.0,
+     "assists": 0.0,
+     "points": 0.0
+    }
+   }
+  },
+  {
+   "old_rank": 9,
+   "label": "Liam Ohgren \u2014 GOALS 1+ \u2014 +700",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 700.0,
+   "implied_probability_with_margin": 0.125,
+   "market_probability_no_vig": null,
+   "model_probability": 0.1494,
+   "estimate_the_old_engine_used": 0.1494,
+   "old_engine_model_probability_elo": null,
+   "old_edge": 0.0244,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.45766,
+   "new_estimate_used": 0.138,
+   "new_model_edge_at_last_observed_price": 0.0244,
+   "new_rank": 38,
+   "new_rank_of": 81,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (12.5%) and our estimate (13.8%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Liam Ohgren does NOT reach 1+ goals (anytime goal scorer) (86.2%); this is a longshot bet",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "GAME_ENVIRONMENT",
+      "level": "MODERATE",
+      "text": "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average"
+     },
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
+      "level": "MODERATE",
+      "text": "for forwards, model 12%-15% the model averaged 13.5% and 12.5% happened (5,559 cases, z -2.3): the model's 14.9% is recalibrated to 13.8%"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "calibrated model 14.9% (raw 15.5%); estimate used 13.8% (model probability unanchored) vs price-implied 12.5%",
+    "expected goals per game 0.17; season 2 in 10 games; last 5 0, 1, 0, 0, 0 (goals)",
+    "reached 1+ goals (anytime goal scorer) in 13 of his last 107 games (12.1%), 5 of last 30, 2 of last 10, 2 of 10 this season",
+    "expected 15.4 min on ice (recent 14.1), power play 1.14 min (recent 1.74); inferred usage tier 3 / power-play unit 2",
+    "history: any player, model 12%-15%: model averaged 13.5%, 12.7% happened (6,488 cases)",
+    "history: forwards, model 12%-15%: model averaged 13.5%, 12.5% happened (5,559 cases)",
+    "history: forwards expected to play 14-16 min, model 12%-15%: model averaged 13.7%, 15.2% happened (1,597 cases)",
+    "history: forwards with 1-2 expected power-play min, model 12%-15%: model averaged 13.7%, 14.6% happened (1,304 cases)",
+    "history: team win probability 0%-35%, model 12%-15%: model averaged 13.5%, 13.9% happened (696 cases)"
+   ],
+   "case_against": [
+    "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
+    "for forwards, model 12%-15% the model averaged 13.5% and 12.5% happened (5,559 cases, z -2.3): the model's 14.9% is recalibrated to 13.8%",
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 12%-15%: the model averaged 13.5%; 12.7% happened (6,488 cases; 2025-26 and 2026-27 to date)",
+    "forwards, model 12%-15%: the model averaged 13.5%; 12.5% happened (5,559 cases; 2025-26 and 2026-27 to date)",
+    "forwards expected to play 14-16 min, model 12%-15%: the model averaged 13.7%; 15.2% happened (1,597 cases; 2025-26 and 2026-27 to date)",
+    "forwards with 1-2 expected power-play min, model 12%-15%: the model averaged 13.7%; 14.6% happened (1,304 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 12%-15%: the model averaged 13.5%; 13.9% happened (696 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 15.4 minutes on ice",
+     "stated": 15.4,
+     "actual": 11.1,
+     "verdict": "FAILED",
+     "note": "played 11.1 (-4.3)"
+    },
+    {
+     "id": "expected_pp",
+     "claim": "expected 1.14 power-play minutes",
+     "stated": 1.14,
+     "actual": 0.0,
+     "verdict": "FAILED",
+     "note": "had 0.00"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected goals 0.17",
+     "stated": 0.17,
+     "actual": 0.0,
+     "verdict": "INFORMATION",
+     "note": "had 0"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 14% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "TOI_PROJECTION_ERROR",
+   "classification_why": "the ice time the thesis assumed did not happen",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 11.1,
+     "toi_pp": 0.0,
+     "shots": 0.0,
+     "goals": 0.0,
+     "assists": 0.0,
+     "points": 0.0
+    }
+   }
+  },
+  {
+   "old_rank": 10,
+   "label": "Jamie Oleksiak \u2014 GOALS 1+ \u2014 +2500",
+   "outcome": "LOSS",
+   "profit_loss": -10.0,
+   "price": 2500.0,
+   "implied_probability_with_margin": 0.0385,
+   "market_probability_no_vig": null,
+   "model_probability": 0.057,
+   "estimate_the_old_engine_used": 0.057,
+   "old_engine_model_probability_elo": null,
+   "old_edge": 0.0185,
+   "old_edge_class": "NEUTRAL_UNCERTAIN_EDGE",
+   "old_selection_score": 0.41799,
+   "new_estimate_used": 0.0441,
+   "new_model_edge_at_last_observed_price": 0.0185,
+   "new_rank": 41,
+   "new_rank_of": 81,
+   "new_action": "PASS",
+   "thesis": {
+    "type": "FAIR_PRICED",
+    "statement": "The price (3.8%) and our estimate (4.4%) are within 3% of each other: fair, no edge.",
+    "strength": "WEAK"
+   },
+   "most_likely_outcome": "Jamie Oleksiak does NOT reach 1+ goals (anytime goal scorer) (95.6%); this is a longshot bet",
+   "contradiction": {
+    "level": "HIGH",
+    "flags": [
+     {
+      "name": "GAME_ENVIRONMENT",
+      "level": "MODERATE",
+      "text": "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average"
+     },
+     {
+      "name": "HISTORY_SAYS_MODEL_RUNS_HIGH",
+      "level": "MODERATE",
+      "text": "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,792 cases, z -2.5): the model's 5.7% is recalibrated to 4.4%"
+     },
+     {
+      "name": "LONGSHOT_TAIL",
+      "level": "MODERATE",
+      "text": "a price of +2500 implies 3.8%: small errors in a tail probability become large relative edges"
+     }
+    ]
+   },
+   "calibration": "HIGH",
+   "data_completeness": {
+    "present": [
+     "skater model state",
+     "games of history",
+     "ice-time history",
+     "power-play role (inferred from ice time)",
+     "team model for the game",
+     "historical analogues",
+     "hit-rate record",
+     "price observation"
+    ],
+    "missing": [
+     "confirmed lineup",
+     "injury news"
+    ],
+    "k": 8,
+    "n": 10,
+    "fraction": 0.8
+   },
+   "decision_confidence": "LOW",
+   "case_for": [
+    "calibrated model 5.7% (raw 6.1%); estimate used 4.4% (model probability unanchored) vs price-implied 3.8%",
+    "expected goals per game 0.06; season 1 in 9 games; last 5 0, 0, 0, 0, 0 (goals)",
+    "reached 1+ goals (anytime goal scorer) in 8 of his last 150 games (5.3%), 3 of last 30, 1 of last 10, 1 of 9 this season",
+    "expected 17.5 min on ice (recent 16.2), power play 0.17 min (recent 0.00); inferred usage tier 3",
+    "history: any player, model 4%-6%: model averaged 5.2%, 5.3% happened (3,572 cases)",
+    "history: defensemen, model 4%-6%: model averaged 5.2%, 5.3% happened (3,562 cases)",
+    "history: defensemen expected to play 16-18 min, model 4%-6%: model averaged 5.2%, 5.4% happened (776 cases)",
+    "history: defensemen with 0-0.25 expected power-play min, model 4%-6%: model averaged 5.2%, 4.0% happened (1,792 cases)",
+    "history: team win probability 0%-35%, model 4%-6%: model averaged 5.3%, 4.9% happened (429 cases)"
+   ],
+   "case_against": [
+    "VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average",
+    "for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,792 cases, z -2.5): the model's 5.7% is recalibrated to 4.4%",
+    "a price of +2500 implies 3.8%: small errors in a tail probability become large relative edges",
+    "opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%"
+   ],
+   "historical": [
+    "any player, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,572 cases; 2025-26 and 2026-27 to date)",
+    "defensemen, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,562 cases; 2025-26 and 2026-27 to date)",
+    "defensemen expected to play 16-18 min, model 4%-6%: the model averaged 5.2%; 5.4% happened (776 cases; 2025-26 and 2026-27 to date)",
+    "defensemen with 0-0.25 expected power-play min, model 4%-6%: the model averaged 5.2%; 4.0% happened (1,792 cases; 2025-26 and 2026-27 to date)",
+    "team win probability 0%-35%, model 4%-6%: the model averaged 5.3%; 4.9% happened (429 cases; 2025-26 and 2026-27 to date)"
+   ],
+   "why_they_disagree": [
+    "They do not disagree by more than the engine's 3-point threshold."
+   ],
+   "decision_quality": {
+    "label": "BAD_DECISION",
+    "reasons": [
+     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+    ]
+   },
+   "claims": [
+    {
+     "id": "expected_toi",
+     "claim": "expected 17.5 minutes on ice",
+     "stated": 17.5,
+     "actual": 22.9,
+     "verdict": "HELD",
+     "note": "played 22.9 (+5.4)"
+    },
+    {
+     "id": "expected_stat",
+     "claim": "expected goals 0.06",
+     "stated": 0.06,
+     "actual": 0.0,
+     "verdict": "INFORMATION",
+     "note": "had 0"
+    },
+    {
+     "id": "team_result",
+     "claim": "VAN win probability 17%",
+     "stated": 0.174,
+     "actual": "lost",
+     "verdict": "INFORMATION",
+     "note": "VAN 3, CAR 6"
+    }
+   ],
+   "lesson": {
+    "signal": "BAD_DECISION_LOST",
+    "text": "a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 4% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game.",
+    "confidence": "REDUCED_FOR_THIS_PATTERN",
+    "variance": false
+   },
+   "classification": "MODEL_CALIBRATION",
+   "classification_why": "the pre-bet review flagged the model as running high for this kind of bet (history said so before the game)",
+   "recommended_action": "INVESTIGATE",
+   "facts": {
+    "game": {
+     "home": "VAN",
+     "away": "CAR",
+     "home_score": 3,
+     "away_score": 6,
+     "period_type": "REG",
+     "winner": "CAR",
+     "team_stats": {
+      "CAR": {
+       "xg_for": 5.27,
+       "xg_against": 1.67,
+       "shot_attempts_5v5": [
+        52,
+        33
+       ],
+       "high_danger_xg": [
+        1.54,
+        0.0
+       ]
+      },
+      "VAN": {
+       "xg_for": 1.67,
+       "xg_against": 5.27,
+       "shot_attempts_5v5": [
+        33,
+        52
+       ],
+       "high_danger_xg": [
+        0.0,
+        1.54
+       ]
+      }
+     }
+    },
+    "player": {
+     "source": "MoneyPuck game log",
+     "toi": 22.9,
+     "toi_pp": 0.0,
+     "shots": 2.0,
+     "goals": 0.0,
+     "assists": 0.0,
+     "points": 0.0
+    }
+   }
+  }
+ ]
+}

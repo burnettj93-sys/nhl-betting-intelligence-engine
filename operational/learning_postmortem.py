@@ -11,6 +11,7 @@ import json
 import math
 from collections import defaultdict
 
+from operational import eggy_decisions as ed
 from operational import learning_cohort as lc
 from operational import state_paths
 
@@ -213,7 +214,7 @@ def _synthetic_postmortems(losses: list[dict]) -> list[dict]:
         out.append({"ticket_id": b["bet_id"], "paper_bet_id": b["bet_id"], "settled_at_utc": b["settled_at_utc"], "stake": b["stake"], "profit_loss": b["profit_loss"],
                     "conservative_probability": b["conservative_probability"], "recorded_price": b["american_price"], "model_version": b["model_version"],
                     "missed_legs": [summary] if hit_missed else [], "hit_legs": [], "other_legs": [] if hit_missed else [summary], "frozen_legs": [frozen],
-                    "why": f"{b['participant_name']} {b['market_family']} {b['threshold']}+: actual={r.get('actual_value')}, predicted {b['conservative_probability']:.0%}"})
+                    "why": f"{lc.label_of(b)}: actual={r.get('actual_value')}, predicted {b['conservative_probability']:.0%}"})
     return out
 
 
@@ -232,6 +233,84 @@ def classify_losses(all_rows: list[dict], nhl_conn, now: dt.datetime) -> dict:
     return {"per_bet": per_bet, "summary": {k: summary.get(k) for k in ("classified_failures", "by_category", "by_action", "integrity_defects")}, "policy_note": tlc.POLICY_NOTE}
 
 
+# ----------------------------------------------------------------------------------------------- decision review
+REVIEW_DAYS = 3                    # the hosted snapshot carries the full per-bet review of the last three Eastern days' bets; the postmortem document on disk carries all of them
+
+
+def _card_of(b: dict) -> dict | None:
+    try:
+        return json.loads(b["intelligence_json"]) if b.get("intelligence_json") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _load_rows() -> tuple[list, list]:
+    """The MoneyPuck skater and team game files (cached on disk), for the facts of what happened. Missing files give empty lists: claims then read NOT_TESTABLE rather than guessed."""
+    try:
+        from research.product_models import history, matchup
+        return history.skater_games(), matchup.team_games()
+    except Exception:  # noqa: BLE001 - the postmortem must still be written
+        return [], []
+
+
+def build_reviews(all_rows: list[dict], nhl_conn, now: dt.datetime, previous: dict | None) -> dict:
+    """The review of every bet: the card it was recorded with (or, for a bet recorded before the review existed, the card reconstructed from its own day's data, labelled as such), the facts of what happened
+    once its game is final, and the assessment of the DECISION apart from the outcome. A finished review is reused from the previous document; only new or newly settled bets are worked out."""
+    prior = (previous or {}).get("bet_reviews") or {}
+    out, todo = {}, []
+    for b in all_rows:
+        old = prior.get(b["bet_id"])
+        settled = b["result_status"] in SETTLED
+        if old and old.get("result_status") == b["result_status"] and (old.get("facts_complete") or not settled):
+            out[b["bet_id"]] = old
+        else:
+            todo.append(b)
+    if not todo:
+        return out
+    data: dict = {}
+
+    def files() -> tuple:
+        """The MoneyPuck files and the lookup of the todo games' rows, loaded once and only when a bet needs them (a bet still open needs neither)."""
+        if "rows" not in data:
+            skater_rows, team_rows = _load_rows()
+            data["rows"] = (skater_rows, team_rows, ed.index_rows(skater_rows, team_rows, {b["game_id"] for b in todo}))
+        return data["rows"]
+    ctx_cache: dict = {}
+    for b in todo:
+        old = prior.get(b["bet_id"]) or {}
+        card, source = _card_of(b), "RECORDED"
+        if card is None:
+            card, source = old.get("card"), "RECONSTRUCTED"
+            if card is None:
+                try:
+                    skater_rows, team_rows, _ = files()
+                    card = ed.reconstruct_card(nhl_conn, b, ctx_cache, team_rows=team_rows, skater_rows=skater_rows) if nhl_conn is not None else None
+                except Exception as exc:  # noqa: BLE001
+                    card = {"kind": "ERROR", "reconstruction_error": f"{exc.__class__.__name__}: {exc}"}
+        facts = ed.facts_for(b, card, nhl_conn, files()[2]) if (card and b["result_status"] in SETTLED) else None
+        out[b["bet_id"]] = {"bet_id": b["bet_id"], "et_date": b["et_date"], "label": lc.label_of(b), "result_status": b["result_status"], "source": source, "card": card, "facts": facts, "facts_complete": facts is not None,
+                            "assessment": ed.assess(b, card, facts)}
+    return out
+
+
+def combined_classification(old: dict | None, a: dict) -> tuple[str | None, str | None, str]:
+    """(category, why, action) for a settled bet. The decision review's verdict, held to the older signal classifier's evidence: NORMAL_VARIANCE stands only when the review EARNED it and the classifier found no
+    specific cause; a specific cause the signals found is never overruled; a loss with no review and no evidence is UNKNOWN, not variance."""
+    old_cat = (old or {}).get("category")
+    old_action = (old or {}).get("recommended_action") or "NO_ACTION"
+    specific = old_cat not in (None, "UNKNOWN", "NORMAL_VARIANCE")
+    cat, why, action = a.get("classification"), a.get("why"), a.get("recommended_action") or "NO_ACTION"
+    if cat is None and not a:
+        if old_cat == "NORMAL_VARIANCE":
+            return "UNKNOWN", "no review of this bet exists, so a variance verdict is not earned", "WATCH"
+        return old_cat, None, old_action
+    if cat == "NORMAL_VARIANCE" and specific:
+        return old_cat, f"the thesis was defensible, but the box score shows {old_cat.replace('_', ' ').lower()}: not earned variance. {why}", old_action
+    if cat in ("UNKNOWN", None) and specific and a.get("outcome") == "LOSS":
+        return old_cat, "the decision review found no cause; the signal classifier did (" + old_cat.replace("_", " ").lower() + ")", old_action
+    return cat, why, action
+
+
 # ----------------------------------------------------------------------------------------------- documents
 def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> dict:
     """The postmortem document: the previous Eastern day's bets (or `for_date`), the cumulative record, the scorecard and the bankroll, with loss classification."""
@@ -241,18 +320,32 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     target_date = for_date or (dt.date.fromisoformat(today) - dt.timedelta(days=1)).isoformat()
     day_bets = [b for b in all_rows if b["et_date"] == target_date]
     cls = classify_losses(all_rows, nhl_conn, now) if nhl_conn is not None else {"per_bet": {}, "summary": {}, "policy_note": None}
+    reviews = build_reviews(all_rows, nhl_conn, now, load())
     bal = lc.balance(conn)
     cumulative = metrics(all_rows)
+    final_class: dict = {}
+    for b in all_rows:
+        a = (reviews.get(b["bet_id"]) or {}).get("assessment") or {}
+        final_class[b["bet_id"]] = combined_classification(cls["per_bet"].get(b["bet_id"]), a) if b["result_status"] in SETTLED else (None, None, "NO_ACTION")
     day_lines = []
     for b in day_bets:
         c = cls["per_bet"].get(b["bet_id"])
-        day_lines.append({"rank": b["selection_rank"], "market": b["market_family"], "bet": f"{b['participant_name']} {'' if b['threshold'] is None else str(b['threshold']) + '+'} ({b['team']} vs {b['opponent']})",
+        a = (reviews.get(b["bet_id"]) or {}).get("assessment") or {}
+        cat, why, action = final_class[b["bet_id"]]
+        day_lines.append({"rank": b["selection_rank"], "market": b["market_family"], "bet": lc.label_of(b), "bet_id": b["bet_id"],
                           "price": b["american_price"], "model_probability": _model_p(b), "edge": b["edge"], "result": b["result_status"], "profit_loss": b["profit_loss"],
-                          "edge_class": b.get("edge_class"), "price_status": b.get("price_status"), "price_age_min": b.get("price_age_at_recording_min"), "classification": (c or {}).get("category"), "action": (c or {}).get("recommended_action")})
+                          "edge_class": b.get("edge_class"), "price_status": b.get("price_status"), "price_age_min": b.get("price_age_at_recording_min"),
+                          "decision": (a.get("decision_quality") or {}).get("label"), "decision_reasons": (a.get("decision_quality") or {}).get("reasons"), "lesson": (a.get("lesson") or {}).get("signal"),
+                          "classification": cat or (c or {}).get("category"), "why": why, "action": action if cat else (c or {}).get("recommended_action")})
+    assessments = [{**(reviews[b["bet_id"]]["assessment"]), "outcome": b["result_status"]} for b in all_rows if b["bet_id"] in reviews and (reviews[b["bet_id"]].get("assessment") or {}).get("decision_quality")]
+    decision_review = {**ed.summarize(assessments), "bets_reviewed": len(assessments),
+                       "reconstructed": sum(1 for r in reviews.values() if r.get("source") == "RECONSTRUCTED"),
+                       "note": "OUTCOME (win/loss) and DECISION (good/questionable/bad) are separate results. The decision is judged from the pre-bet review alone; a good decision that lost is not a mistake, "
+                               "and a bad decision that won is not skill. NORMAL_VARIANCE is used only when earned."}
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
             "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows),
             "day_price_age": price_age_table(day_bets), "cumulative_price_age": price_age_table(all_rows), "cumulative_price_age_provider": price_age_table(all_rows, "provider_quote_age_at_recording_min"),
-            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
+            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),
             "scorecard": daily_rows(all_rows, ph["day"] if ph["phase"] == "ACTIVE" else (14 if ph["phase"] == "ENDED" else 0)),
             "bankroll": {**bal, "label": "separate experiment bankroll (not Eggy's paper bankroll)", "note": "betting P/L is from settled tickets only; resets and the initial funding are funding events, never profit"},
@@ -295,6 +388,11 @@ def load_final() -> dict | None:
         return None
 
 
+def _slim(card):
+    """A card for the published snapshot: without `answers` (the app rebuilds them from the card), so the snapshot carries each review once and small."""
+    return {k: v for k, v in card.items() if k != "answers"} if isinstance(card, dict) else card
+
+
 def snapshot_section() -> dict:
     """What the hosted app shows: the status document plus a trimmed postmortem (scorecard, cumulative record, calibration, the main breakdowns, yesterday's bets) and the final report once it exists.
     Counts and prices of paper bets only; nothing here can place or change anything."""
@@ -304,9 +402,14 @@ def snapshot_section() -> dict:
     pm = load() or {}
     cb = pm.get("cumulative_breakdowns") or {}
     keep = {k: pm.get(k) for k in ("generated_at_utc", "postmortem_for", "day_metrics", "day_edge_classes", "cumulative_edge_classes", "day_price_age", "cumulative_price_age", "cumulative_price_age_provider", "cumulative_price_status", "dependence", "day_bets", "cumulative", "calibration", "scorecard", "bankroll", "funding_events", "loss_classification", "closing_price_movement")}
+    keep["decision_review"] = pm.get("decision_review")
+    since = (dt.date.fromisoformat(lc.phase()["today"]) - dt.timedelta(days=REVIEW_DAYS)).isoformat()
+    keep["bet_reviews"] = {k: {**v, "card": _slim(v.get("card"))} for k, v in (pm.get("bet_reviews") or {}).items() if (v.get("et_date") or "") >= since}
+    status = dict(status)
+    status["cards"] = {k: _slim(c) for k, c in (status.get("cards") or {}).items() if k not in keep["bet_reviews"]}          # one copy of each card in the published document
     keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
     keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
-    return {**status, "postmortem": keep, "final_report": load_final()}
+    return {**status, "postmortem": keep, "final_report": load_final() if lc.phase()["phase"] == "ENDED" else None}          # a final report on disk is shown only once the window has really ended
 
 
 # ----------------------------------------------------------------------------------------------- end-of-experiment review
@@ -389,7 +492,11 @@ def final_report(conn, nhl_conn, now: dt.datetime, doc: dict) -> dict:
         "6_best_price_bands": best("price_band")[:3],
         "7_best_edge_bands": best("edge_band")[:3],
         "8_best_selection_ranks": best("selection_rank")[:3],
-        "9_normal_variance": {"losses": losses, "classified": total_class, "normal_variance": cats.get("NORMAL_VARIANCE", 0), "share": round(cats.get("NORMAL_VARIANCE", 0) / total_class, 3) if total_class else None},
+        "9_normal_variance": {"losses": losses, "classified": total_class, "normal_variance": cats.get("NORMAL_VARIANCE", 0), "share": round(cats.get("NORMAL_VARIANCE", 0) / total_class, 3) if total_class else None,
+                              "earned_by_the_decision_review": (doc.get("decision_review") or {}).get("earned_normal_variance"),
+                              "note": "NORMAL_VARIANCE in the decision review is earned (defensible thesis, calibration at least MEDIUM, correct data, no factual claim failed, the loss not rarer than 1 in 10 by Eggy's own estimate); "
+                                      "the signal classifier's count above is its own evidence rule and is shown beside it"},
+        "decision_quality_vs_outcome": doc.get("decision_review"),
         "10_role_context_data_issues": {"role_toi_team_shot_goalie_starter": share("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR", "TEAM_SHOT_ENVIRONMENT_ERROR", "GOALIE_WORKLOAD_ERROR", "STARTER_ERROR"),
                                         "data_identity_pipeline": share("STALE_DATA", "IDENTITY_LINEUP_ERROR", "DATA_PIPELINE_ERROR"), "unknown": cats.get("UNKNOWN", 0),
                                         "note": "role/ice-time/team-shot categories are proxies against the player's or team's own recent average and are capped at WATCH"},

@@ -247,6 +247,10 @@ def leg_label(leg: ParlayLeg) -> str:
     return f"{leg.participant_name} {leg.market_family} {leg.threshold}"
 
 
+# Complete market names for every surface that shows a bet (owner rule 2026-10-21): operational/bet_labels.py, standard library only because the hosted dashboard imports it too.
+from operational.bet_labels import MARKET_KEYS, MARKET_NAMES, bet_label, leg_dict_label, market_name  # noqa: E402,F401
+
+
 @dataclass(frozen=True)
 class ParlayResult:
     legs: list[ParlayLeg]

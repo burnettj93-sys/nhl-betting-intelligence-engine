@@ -47,7 +47,25 @@ def ml(team="TOR", game="1", price=-120.0, p=0.58, market_probability=None):
     return leg(pid=team, game=game, fam="MONEYLINE", k=None, price=price, p=p, side="HOME", empirical_games=None, market_probability=market_probability)
 
 
+def fake_card(leg, est, action="RECORD", thesis="MODEL_SEES_VALUE", contradiction="LOW", cal="HIGH", model_p=None, completeness=0.9, claims=None):
+    """A review card of the shape operational/eggy_intelligence.py produces, built from the leg alone, so the cohort's selection, recording and ledger mechanics are tested without the real data files.
+    (The review itself is tested in tests/test_eggy_intelligence.py.)"""
+    a = float(leg.american_price)
+    implied = 100.0 / (a + 100.0) if a > 0 else -a / (-a + 100.0)
+    mp = est if model_p is None else model_p
+    return {"version": "fake", "kind": "MONEYLINE" if leg.market_family == "MONEYLINE" else "PLAYER",
+            "bet": {"label": f"{leg.participant_name} — {leg.market_family} — {a:+.0f}", "market_family": leg.market_family, "price": a},
+            "most_likely_outcome": "fake outcome", "why_tonight": ["fake"], "case_for": ["fake for"], "case_against": ["fake against"], "historical": [], "why_they_disagree": [], "pass_conditions": ["fake pass"],
+            "thesis": {"type": thesis, "statement": f"fake thesis {thesis}", "strength": "MODERATE"}, "contradiction": {"level": contradiction, "flags": []},
+            "calibration_confidence": {"level": cal}, "data_completeness": {"present": ["a"], "missing": [], "k": 1, "n": 1, "fraction": completeness}, "decision_confidence": "MEDIUM",
+            "action": {"decision": action, "reasons": ["fake"]}, "probabilities": {"model": mp, "market_no_vig": implied, "estimate_used_for_edge": est},
+            "market": {"price": a, "implied_with_margin": implied, "estimate_used": est, "model": mp, "edge_vs_price": est - implied, "model_edge_vs_price": mp - implied, "edge_label": "MODEL EDGE AT LAST OBSERVED PRICE"},
+            "estimate_used": est, "model_probability": mp, "claims": claims or []}
+
+
 class Base(unittest.TestCase):
+    cards: dict
+
     def setUp(self):
         self.conn = self._mem()
         self.nhl = nhl()
@@ -56,6 +74,19 @@ class Base(unittest.TestCase):
         patcher = mock.patch.object(lc, "is_authorised", return_value=True)
         patcher.start()
         self.addCleanup(patcher.stop)
+        p = mock.patch("operational.learning_postmortem._load_rows", return_value=([], []))          # the postmortem's MoneyPuck files: never read in a unit test
+        p.start()
+        self.addCleanup(p.stop)
+        self.cards = {}                    # participant_id -> overrides for the fake review (action, thesis, contradiction, cal, model_p)
+        self.context_ok = True
+        for target, kw in (("build_context", {"side_effect": lambda *a, **k: SimpleNamespace(fake=True)}), ("usable", {"side_effect": lambda ctx: (self.context_ok, "" if self.context_ok else "fake: evidence missing")}),
+                           ("review_leg", {"side_effect": self._review})):
+            p = mock.patch.object(lc.ei, target, **kw)
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _review(self, ctx, leg, basis, est):
+        return fake_card(leg, float(est), **{"model_p": leg.model_probability, **(self.cards.get(str(leg.participant_id)) or {})})
 
     @staticmethod
     def _mem():
@@ -162,14 +193,22 @@ class TestSelectionAndRecording(Base):
 
     def test_ineligible_legs_are_counted_in_the_shortfall_reasons(self):
         out = self.cycle([leg(), leg(pid="8470003", price=-170.0), leg(pid="8470004", price=-180.0)])
-        self.assertEqual(out["recording"]["shortfall"]["not_eligible_reasons"], {"price worse than the -150 floor": 2})
+        self.assertEqual(out["recording"]["shortfall"]["reasons_candidates_were_not_recorded"], {"price worse than the -150 floor": 2})
         self.assertEqual(len(self.rows()), 1)
 
-    def test_diversification_prefers_a_second_game_over_a_same_game_near_tie(self):
-        legs = [leg(pid="8470001", game="1", p=0.80), leg(pid="8470002", game="1", p=0.795), leg(pid="8470003", game="2", p=0.79)]
-        # one slot only (cap) -> pick order shows the penalty working
-        picked = lc.select([{"leg": l, "key": lc.economic_key(l), "scored": lc.score_leg(l, D1), "score": lc.score_leg(l, D1)["score"], "band": lc.band_of(l.american_price)} for l in legs], [], 3)
-        self.assertEqual([c["leg"].participant_id for c in picked][:2], ["8470001", "8470003"])
+    def _cand(self, l, **kw):
+        card = fake_card(l, l.conservative_probability, **kw)
+        ecls, _ = lc.ei.edge_class_of(card)
+        edge, _what = lc.ei.edge_for_class(card)
+        return {"leg": l, "card": card, "rank_key": lc.ei.rank_key(card, ecls, card["estimate_used"], edge, lc.economic_key(l))}
+
+    def test_a_fourth_bet_in_one_game_waits_behind_other_games_but_still_fills_a_slot_if_nothing_else_is_left(self):
+        legs = [leg(pid="8470001", game="1", p=0.80), leg(pid="8470002", game="1", p=0.79), leg(pid="8470003", game="1", p=0.78), leg(pid="8470004", game="1", p=0.77),
+                leg(pid="8470005", game="2", p=0.60, price=-120.0)]
+        cands = [self._cand(l) for l in legs]
+        self.assertEqual([c["leg"].participant_id for c in lc.select_ranked(cands, [], 4)], ["8470001", "8470002", "8470003", "8470005"])          # the fourth game-1 bet waits
+        self.assertEqual([c["leg"].participant_id for c in lc.select_ranked(cands, [], 5)][-1], "8470004")          # ... and fills the last slot when nothing else remains
+        self.assertEqual(lc.ei.SAME_GAME_SOFT_CAP, 3)
 
     def test_a_strong_bet_is_not_rejected_only_for_sharing_a_game(self):
         legs = [leg(pid=str(8470000 + i), game="1", p=0.78) for i in range(4)]
@@ -213,6 +252,90 @@ class TestSelectionAndRecording(Base):
         self.assertEqual(out["recording"]["status"], "NO_NEW_BETS")
         self.assertEqual(self.rows(), [])
         self.assertIn("settlement", out)
+
+
+class TestIntelligenceDecidesTheBets(Base):
+    """The review decides, then the ranking orders: a PASS is never recorded, no review means no bet, every bet carries the card it was recorded with, and the order is lexicographic (no score)."""
+
+    def test_a_pass_is_never_recorded_and_the_reason_says_it_was_a_judgment(self):
+        self.cards["8470001"] = {"action": "PASS", "thesis": "UNDERDOG_AT_FAIR_PRICE"}
+        out = self.cycle([leg(pid="8470001"), leg(pid="8470002")])
+        self.assertEqual([r["participant_id"] for r in self.rows()], ["8470002"])
+        self.assertEqual(out["recording"]["shortfall"]["reasons_candidates_were_not_recorded"], {"passed on judgment: underdog at fair price": 1})
+
+    def test_no_review_no_bet(self):
+        self.context_ok = False
+        out = self.cycle([leg()])
+        self.assertEqual(self.rows(), [])
+        self.assertIn("evidence missing", out["recording"]["shortfall"]["intelligence_unavailable"])
+
+    def test_a_review_that_raises_never_becomes_a_bet(self):
+        with mock.patch.object(lc.ei, "review_leg", side_effect=lambda ctx, l, b, e: {**fake_card(l, e), "action": {"decision": "PASS", "reasons": ["the review could not be completed"]}, "thesis": {"type": "NONE", "statement": "x", "strength": "NONE"}}):
+            self.cycle([leg()])
+        self.assertEqual(self.rows(), [])
+
+    def test_every_bet_carries_the_card_it_was_recorded_with(self):
+        self.cards["8470001"] = {"thesis": "MODEL_SEES_VALUE", "contradiction": "MODERATE", "cal": "MEDIUM"}
+        self.cycle([leg(pid="8470001")])
+        r = self.rows()[0]
+        self.assertEqual((r["thesis_type"], r["action"], r["contradiction_level"], r["calibration_level"], r["decision_confidence"]), ("MODEL_SEES_VALUE", "RECORD", "MODERATE", "MEDIUM", "MEDIUM"))
+        card = json.loads(r["intelligence_json"])
+        self.assertEqual(card["thesis"]["type"], "MODEL_SEES_VALUE")
+        self.assertTrue(card["case_against"])
+        self.assertIn("Action:", r["selection_reason"])
+        self.assertEqual(json.loads(r["score_components_json"])["ranking"], "lexicographic, no weighted score")
+        self.assertEqual(r["selection_score"], 0.0)
+
+    def test_the_review_card_is_locked_with_the_rest_of_the_entry(self):
+        self.cycle([leg()])
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.conn.execute("UPDATE bets SET intelligence_json = '{}'")
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.conn.execute("UPDATE bets SET action = 'PASS'")
+
+    def test_the_lower_contradiction_ranks_first_all_else_equal(self):
+        self.cards["8470001"] = {"contradiction": "MODERATE"}
+        self.cycle([leg(pid="8470001", p=0.7), leg(pid="8470002", p=0.7)])
+        self.assertEqual([r["participant_id"] for r in self.rows()], ["8470002", "8470001"])
+
+    def test_the_better_calibrated_estimate_ranks_first_all_else_equal(self):
+        self.cards["8470001"] = {"cal": "MEDIUM"}
+        self.cycle([leg(pid="8470001", p=0.7), leg(pid="8470002", p=0.7)])
+        self.assertEqual([r["participant_id"] for r in self.rows()], ["8470002", "8470001"])
+
+    def test_a_record_ranks_before_a_lower_priority_even_with_a_bigger_edge(self):
+        self.cards["8470001"] = {"action": "LOWER_PRIORITY", "thesis": "FAIR_PRICED"}
+        late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)
+        self.cycle([leg(pid="8470001", p=0.9), leg(pid="8470002", p=0.6)], now=late)
+        self.assertEqual([(r["participant_id"], r["action"]) for r in self.rows()], [("8470002", "RECORD"), ("8470001", "LOWER_PRIORITY")])
+
+    def test_the_hit_chance_orders_bets_of_equal_standing_and_there_is_no_weighted_score(self):
+        self.cycle([leg(pid="8470001", p=0.62, price=-120.0), leg(pid="8470002", p=0.80, price=-120.0)])
+        self.assertEqual([r["participant_id"] for r in self.rows()], ["8470002", "8470001"])
+        import inspect
+        self.assertFalse(hasattr(lc, "score_leg") or hasattr(lc, "SELECTION_WEIGHTS"))
+        self.assertNotIn("weights", inspect.getsource(lc.select_ranked))
+
+    def test_the_status_document_carries_each_bets_card_and_its_complete_label(self):
+        self.cycle([leg(pid="8470001"), dataclasses.replace(ml(team="TOR", game="2", p=0.58, price=-120.0, market_probability=0.55), participant_name="TOR")])
+        doc = lc.status_doc(D1, conn=self.conn)
+        labels = {b["label"] for b in doc["bets_today"]}
+        self.assertIn("P8470001 — SHOTS ON GOAL 2+ — -130", labels)
+        self.assertIn("TOR — MONEYLINE — -120", labels)
+        self.assertEqual(set(doc["cards"]), {b["bet_id"] for b in doc["bets_today"]})
+        self.assertTrue(all(b["action"] and b["thesis_type"] for b in doc["bets_today"]))
+
+    def test_the_ledger_label_is_player_market_threshold_price(self):
+        self.assertEqual(lc.label_of({"participant_name": "Filip Chytil", "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2, "american_price": -130.0}), "Filip Chytil — SHOTS ON GOAL 2+ — -130")
+        self.assertEqual(lc.label_of({"participant_name": "Jamie Oleksiak", "market_family": "PLAYER_GOALS", "threshold": 1, "american_price": 2500.0}), "Jamie Oleksiak — GOALS 1+ — +2500")
+        self.assertEqual(lc.label_of({"participant_name": "VAN", "market_family": "MONEYLINE", "threshold": None, "american_price": 240.0}), "VAN — MONEYLINE — +240")
+        self.assertEqual(lc.label_of({"participant_name": "Quinn Hughes", "market_family": "PLAYER_POINTS", "threshold": 2, "american_price": 350.0}), "Quinn Hughes — POINTS 2+ — +350")
+        self.assertEqual(lc.label_of({"participant_name": "Some Goalie", "market_family": "GOALIE_SAVES", "threshold": 25, "american_price": -125.0}), "Some Goalie — SAVES 25+ — -125")
+
+    def test_the_cap_logic_and_every_gate_are_untouched_by_the_review(self):
+        # a leg that fails an integrity gate is never reviewed or recorded, whatever its card would say
+        self.cycle([leg(identity_resolved=False), leg(price=-155.0)])
+        self.assertEqual(self.rows(), [])
 
 
 class TestBankroll(Base):
@@ -474,6 +597,164 @@ class TestPostmortemAndScorecard(Base):
             self.assertNotIn(forbidden, src)
 
 
+class TestDecisionReviewInThePostmortem(Base):
+    """Every bet gets two results: the outcome, and a judgment of the decision made from the card it was recorded with. A bet recorded before the review existed is reconstructed and labelled."""
+    NOW = dt.datetime(2026, 10, 21, 12, 0, tzinfo=dt.timezone.utc)
+    CLAIMS = [{"id": "expected_toi", "text": "", "value": 18.0}, {"id": "expected_pp", "text": "", "value": 2.0}, {"id": "expected_stat", "text": "", "value": 3.0}, {"id": "team_win_probability", "text": "", "value": 0.55}]
+
+    def _final(self, shots=1, toi=19.0, pid="8478402", home=3, away=2):
+        self.nhl.execute(f"UPDATE games SET game_state='FINAL', home_score={home}, away_score={away}, final_period_type='REG' WHERE game_id='1'")
+        self.nhl.execute("INSERT INTO player_game_stats (game_id, player_id, team_id, toi_minutes, goals, assists, shots, played, revision_number, effective_at_utc, observed_at_utc, source) "
+                         "VALUES ('1',?,'TOR',?,0,0,?,1,1,'2026-10-21T03:00:00Z','2026-10-21T03:00:00Z','test')", (pid, toi, shots))
+        self.nhl.commit()
+        lc.settle_due(self.conn, self.nhl, D1 + dt.timedelta(hours=8))
+
+    def _build(self, **kw):
+        from operational import learning_postmortem as lpm
+        return lpm.build(self.conn, self.nhl, self.NOW, **kw)
+
+    def test_a_recorded_bet_is_reviewed_from_its_own_card_with_the_facts_of_the_game(self):
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final(shots=1)
+        doc = self._build()
+        bet = self.rows()[0]
+        r = doc["bet_reviews"][bet["bet_id"]]
+        self.assertEqual((r["source"], r["result_status"], r["facts_complete"]), ("RECORDED", "LOSS", True))
+        self.assertEqual(r["card"]["thesis"]["type"], "MODEL_SEES_VALUE")
+        self.assertEqual(r["facts"]["player"]["shots"], 1)
+        self.assertEqual(r["facts"]["game"]["winner"], "TOR")
+        a = r["assessment"]
+        self.assertEqual((a["decision_quality"]["label"], a["outcome"]), ("GOOD_DECISION", "LOSS"))
+        self.assertEqual(a["lesson"]["signal"], "GOOD_DECISION_LOST_NORMAL_VARIANCE")
+        self.assertEqual(a["classification"], "NORMAL_VARIANCE")
+        line = doc["day_bets"][0]
+        self.assertEqual((line["bet"], line["decision"], line["classification"], line["result"]), ("P8478402 — SHOTS ON GOAL 2+ — -130", "GOOD_DECISION", "NORMAL_VARIANCE", "LOSS"))
+        self.assertEqual(doc["decision_review"]["earned_normal_variance"], 1)
+        self.assertIn({"decision": "GOOD_DECISION", "outcome": "LOSS", "n": 1}, doc["decision_review"]["grid"])
+
+    def test_a_loss_whose_ice_time_assumption_failed_is_not_called_variance(self):
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final(shots=1, toi=12.0)
+        line = self._build()["day_bets"][0]
+        self.assertEqual(line["decision"], "GOOD_DECISION")
+        self.assertEqual(line["classification"], "TOI_PROJECTION_ERROR")
+        self.assertEqual(line["action"], "INVESTIGATE")
+
+    def test_a_bad_decision_that_won_is_a_lucky_win(self):
+        # an old bet (the live cohort would never record this one): its reconstructed card says the review would have passed
+        self._bet(1, "1", "8478402", -130.0, 0.6, "WIN")
+        row = self.conn.execute("SELECT * FROM bets").fetchone()
+        self.assertIsNone(row["intelligence_json"])                       # a legacy row: no card of its own
+        with mock.patch("operational.eggy_decisions.reconstruct_card", return_value=fake_card(leg(pid="8478402"), 0.6, action="PASS", thesis="FAIR_PRICED", contradiction="HIGH")):
+            line = self._build()["day_bets"][0]
+        self.assertEqual((line["decision"], line["classification"], line["lesson"]), ("BAD_DECISION", "LUCKY_WIN", "BAD_DECISION_WON_LUCK"))
+
+    def test_a_bet_recorded_before_the_review_existed_is_reconstructed_and_labelled(self):
+        self._bet(1, "1", "8478402", -130.0, 0.6, "LOSS")
+        rec = fake_card(leg(pid="8478402"), 0.6, action="PASS", thesis="UNDERDOG_AT_FAIR_PRICE", contradiction="HIGH")
+        rec["reconstructed"] = True
+        with mock.patch("operational.eggy_decisions.reconstruct_card", return_value=rec) as rc:
+            doc = self._build()
+        r = next(iter(doc["bet_reviews"].values()))
+        self.assertEqual(r["source"], "RECONSTRUCTED")
+        self.assertTrue(r["card"]["reconstructed"])
+        self.assertEqual(doc["decision_review"]["reconstructed"], 1)
+        self.assertEqual(rc.call_count, 1)
+
+    def test_a_bet_whose_card_cannot_be_rebuilt_is_insufficient_evidence_never_good_or_bad(self):
+        self._bet(1, "1", "8478402", -130.0, 0.6, "LOSS")
+        with mock.patch("operational.eggy_decisions.reconstruct_card", side_effect=ValueError("no leg")):
+            line = self._build()["day_bets"][0]
+        self.assertEqual(line["decision"], "INSUFFICIENT_EVIDENCE")
+
+    def test_a_finished_review_is_reused_not_recomputed(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final()
+        doc = self._build()
+        with mock.patch("operational.eggy_decisions.assess", side_effect=AssertionError("recomputed")), mock.patch.object(lpm, "load", return_value=doc):
+            again = lpm.build(self.conn, self.nhl, self.NOW)
+        self.assertEqual(again["bet_reviews"], doc["bet_reviews"])
+
+    def test_a_review_that_waited_for_the_games_data_is_completed_when_it_lands(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        first = self._build()
+        r1 = next(iter(first["bet_reviews"].values()))
+        self.assertEqual((r1["result_status"], r1["facts_complete"], r1["assessment"]["lesson"]["signal"]), ("PENDING", False, "NOT_SETTLED"))
+        self._final()
+        with mock.patch.object(lpm, "load", return_value=first):
+            second = lpm.build(self.conn, self.nhl, self.NOW)
+        r2 = next(iter(second["bet_reviews"].values()))
+        self.assertEqual((r2["result_status"], r2["facts_complete"]), ("LOSS", True))
+
+    def test_the_big_data_files_are_not_read_for_a_bet_that_is_still_open(self):
+        self.cycle([leg(pid="8478402")])
+        with mock.patch("operational.learning_postmortem._load_rows", side_effect=AssertionError("read the files")):
+            self._build()
+
+    def test_the_classification_never_declares_variance_without_a_review(self):
+        from operational import learning_postmortem as lpm
+        self.assertEqual(lpm.combined_classification({"category": "NORMAL_VARIANCE", "recommended_action": "NO_ACTION"}, {})[0], "UNKNOWN")
+        self.assertEqual(lpm.combined_classification({"category": "ROLE_CHANGE_MISSED", "recommended_action": "WATCH"}, {})[0], "ROLE_CHANGE_MISSED")
+
+    def test_earned_variance_gives_way_to_a_specific_cause_the_signals_found(self):
+        from operational import learning_postmortem as lpm
+        earned = {"classification": "NORMAL_VARIANCE", "why": "earned", "recommended_action": "NO_ACTION", "outcome": "LOSS"}
+        cat, why, action = lpm.combined_classification({"category": "TOI_PROJECTION_ERROR", "recommended_action": "WATCH"}, earned)
+        self.assertEqual((cat, action), ("TOI_PROJECTION_ERROR", "WATCH"))
+        self.assertIn("not earned variance", why)
+        self.assertEqual(lpm.combined_classification({"category": "UNKNOWN", "recommended_action": "NO_ACTION"}, earned)[0], "NORMAL_VARIANCE")
+
+    def test_the_hosted_snapshot_carries_the_reviews_of_the_last_three_days_only(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final()
+        doc = self._build()
+        old = dict(next(iter(doc["bet_reviews"].values())), et_date="2026-10-10", bet_id="OLD")
+        doc["bet_reviews"]["OLD"] = old
+        with mock.patch.object(lpm, "load", return_value=doc), mock.patch.object(lpm.lc, "phase", return_value={"phase": "ACTIVE", "day": 2, "today": "2026-10-21"}):
+            sec = lpm.snapshot_section()
+        self.assertEqual(len(sec["postmortem"]["bet_reviews"]), 1)
+        self.assertNotIn("OLD", sec["postmortem"]["bet_reviews"])
+        self.assertIn("decision_review", sec["postmortem"])
+
+    def test_the_published_snapshot_carries_each_card_once_and_without_the_rebuildable_answers(self):
+        from operational import learning_postmortem as lpm
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final()
+        doc = self._build()
+        bid = next(iter(doc["bet_reviews"]))
+        doc["bet_reviews"][bid]["card"]["answers"] = {"why_tonight": "x"}
+        status = {"cohort": lc.COHORT, "authorised": True, "phase": "ACTIVE", "day": 2, "cards": {bid: {"answers": {"a": 1}, "thesis": {}}, "OTHER": {"answers": {"a": 1}, "thesis": {}}}}
+        with mock.patch.object(lpm, "load", return_value=doc), mock.patch.object(lpm.lc, "load_status", return_value=status), \
+                mock.patch.object(lpm.lc, "phase", return_value={"phase": "ACTIVE", "day": 2, "today": "2026-10-21"}):
+            sec = lpm.snapshot_section()
+        self.assertNotIn(bid, sec["cards"])                                           # the review carries it
+        self.assertIn("OTHER", sec["cards"])                                          # a bet with no review yet keeps its stored card
+        self.assertNotIn("answers", sec["cards"]["OTHER"])
+        self.assertNotIn("answers", sec["postmortem"]["bet_reviews"][bid]["card"])
+        self.assertIn("thesis", sec["postmortem"]["bet_reviews"][bid]["card"])
+
+    def test_the_final_report_carries_the_decision_against_outcome_grid(self):
+        from operational import learning_postmortem as lpm
+        lc.ensure_funded(self.conn, D1)
+        self.cards["8478402"] = {"claims": self.CLAIMS}
+        self.cycle([leg(pid="8478402", p=0.62)])
+        self._final()
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(lpm.state_paths, "path", side_effect=lambda n, **k: Path(t) / n):
+            lpm.final_report_if_ready(self.conn, self.nhl, dt.datetime(2026, 11, 4, 12, 0, tzinfo=dt.timezone.utc))
+            rep = json.loads(Path(t, lpm.REPORT_NAME).read_text())
+        self.assertIn("decision_quality_vs_outcome", rep["answers"])
+        self.assertIn("earned_by_the_decision_review", rep["answers"]["9_normal_variance"])
+
+
 class TestPaperPerformancePanel(unittest.TestCase):
     def _snap(self, section):
         from tests.product_fixture import snapshot
@@ -512,6 +793,62 @@ class TestPaperPerformancePanel(unittest.TestCase):
         for needle in ("14-DAY POSTMORTEM LEARNING EXPERIMENT", "Day 2 of 14", "Today's target", "7/10", "-150 or better", "Current cash", "Betting P/L", "Reset count", "Total reset funding", "Eggy", "By price age at recording", "Price age is recorded, never a reason to skip a bet"):
             self.assertIn(needle, t, needle)
         self.assertIn("Available cash", t)           # the model book is still there
+
+    def _section_with_reviews(self):
+        """A section whose bets carry real review cards (built by the review itself on a synthetic game) and a postmortem with the decision review, so the page's card renderer runs on the real shape."""
+        from operational import eggy_decisions as ed
+        from tests import test_eggy_intelligence as t
+        ctx = t.make_ctx()
+        ctx.skater_state = {"players": {"9": t.skater()}, "newest_game_date": "2026-10-19"}
+        ctx.by_player = {"9": t.history_rows()}
+        with mock.patch("research.product_models.live.project_matchup", return_value=t.projection(0.72)):
+            prop = lc.ei.compact(lc.ei.review_leg(ctx, t.prop_leg(price=-130.0, p=0.72), "ANCHORED_RECORD_ESTIMATE", 0.72))
+        mlcard = lc.ei.compact(lc.ei.review_leg(ctx, t.ml_leg(ctx, "BBB", 0.0), "MARKET_NO_VIG", 0.3))
+        facts = {"game": {"home": "AAA", "away": "BBB", "home_score": 4, "away_score": 1, "period_type": "REG", "winner": "AAA", "team_stats": {"AAA": {"xg_for": 3.1}, "BBB": {"xg_for": 1.2}}},
+                 "player": {"source": "MoneyPuck game log", "toi": 12.0, "toi_pp": 0.0, "shots": 1.0, "goals": 0.0, "assists": 0.0, "points": 0.0}}
+        bet = {"market_family": "PLAYER_SOG_ALTERNATE", "participant_id": "9", "game_id": 1, "team": "AAA", "result_status": "LOSS"}
+        rv_prop = {"bet_id": "B1", "et_date": "2026-10-20", "label": prop["bet"]["label"], "result_status": "LOSS", "source": "RECORDED", "card": prop, "facts": facts, "facts_complete": True, "assessment": ed.assess(bet, prop, facts)}
+        rv_ml = {"bet_id": "B2", "et_date": "2026-10-20", "label": mlcard["bet"]["label"], "result_status": "LOSS", "source": "RECONSTRUCTED", "card": dict(mlcard, reconstructed=True, reconstruction_note="reconstructed note"),
+                 "facts": facts, "facts_complete": True, "assessment": ed.assess(dict(bet, market_family="MONEYLINE", participant_id="BBB", team="BBB"), mlcard, facts)}
+        sec = self._section()
+        sec["bets_today"] = [{"bet_id": "B1", "selection_rank": 1, "market_family": "PLAYER_SOG_ALTERNATE", "participant_name": "Test Player", "team": "AAA", "threshold": 2, "american_price": -130.0, "conservative_probability": 0.72,
+                              "edge": 0.15, "result_status": "LOSS", "profit_loss": -10.0, "eggy_relation": "EGGY_NOT_INVOLVED", "price_status": "RECENT", "price_age_at_recording_min": 9.0, "edge_class": "POSITIVE_EDGE",
+                              "thesis_type": "MODEL_SEES_VALUE", "action": "RECORD", "contradiction_level": "LOW", "calibration_level": "HIGH", "decision_confidence": "HIGH", "label": prop["bet"]["label"]}]
+        sec["cards"] = {"B1": prop}
+        pm = sec["postmortem"]
+        pm["bet_reviews"] = {"B1": rv_prop, "B2": rv_ml}
+        pm["decision_review"] = {"grid": [{"decision": "GOOD_DECISION", "outcome": "LOSS", "n": 1}, {"decision": "BAD_DECISION", "outcome": "LOSS", "n": 1}], "lucky_wins": 0, "earned_normal_variance": 0, "process_failures": 1,
+                                 "not_variance": 1, "reconstructed": 1, "bets_reviewed": 2, "note": "OUTCOME and DECISION are separate results."}
+        pm["day_bets"] = [{"rank": 1, "bet": prop["bet"]["label"], "bet_id": "B1", "result": "LOSS", "decision": "GOOD_DECISION", "classification": "ROLE_CHANGE_MISSED", "action": "INVESTIGATE"},
+                          {"rank": 2, "bet": mlcard["bet"]["label"], "bet_id": "B2", "result": "LOSS", "decision": "BAD_DECISION", "classification": "MODEL_CALIBRATION", "action": "INVESTIGATE"}]
+        return sec
+
+    def test_every_bet_opens_into_the_whole_review_and_the_postmortem_shows_two_results(self):
+        from tests.test_product_pages import run_page
+        at = run_page("33_Paper_Performance.py", self._snap(self._section_with_reviews()))
+        self.assertFalse(at.exception)
+        t = self._text(at) + " " + " ".join(str(e.label) for e in at.expander)
+        for needle in ("Test Player — SHOTS ON GOAL 2+ — -130", "BBB — MONEYLINE — ", "WHY THIS TEAM / PLAYER", "WHY TONIGHT", "WHY THIS MARKET", "WHY THIS PRICE", "WHO IS MOST LIKELY TO WIN", "WHAT THE MODEL BELIEVES",
+                       "WHAT THE MARKET BELIEVES", "WHY THEY DISAGREE", "WHAT SUPPORTS THE BET", "WHAT ARGUES AGAINST IT", "WHAT HISTORICAL EVIDENCE SAYS", "WHAT DATA IS MISSING", "WHAT WOULD MAKE EGGY PASS",
+                       "OUTCOME", "DECISION RESULT", "WHAT HAPPENED", "WAS THE THESIS RIGHT?", "WHAT TO LEARN", "CLASSIFICATION", "RECONSTRUCTED", "Decision quality against outcome"):
+            self.assertIn(needle, t, needle)
+
+    def test_a_final_report_left_on_disk_is_not_shown_while_the_experiment_is_running(self):
+        from operational import learning_postmortem as lpm
+        with mock.patch.object(lpm, "load_final", return_value={"statement": "x", "answers": {}}), mock.patch.object(lpm, "load", return_value={}), mock.patch.object(lpm.lc, "load_status", return_value=None):
+            with mock.patch.object(lpm.lc, "phase", return_value={"phase": "ACTIVE", "day": 2, "today": "2026-10-21"}):
+                self.assertIsNone(lpm.snapshot_section()["final_report"])
+            with mock.patch.object(lpm.lc, "phase", return_value={"phase": "ENDED", "day": 14, "today": "2026-11-03"}):
+                self.assertEqual(lpm.snapshot_section()["final_report"]["statement"], "x")
+
+    def test_a_bet_without_a_review_says_so_instead_of_inventing_one(self):
+        from tests.test_product_pages import run_page
+        sec = self._section_with_reviews()
+        sec["cards"] = {}
+        sec["postmortem"]["bet_reviews"] = {}
+        at = run_page("33_Paper_Performance.py", self._snap(sec))
+        self.assertFalse(at.exception)
+        self.assertIn("There is no review on file for this bet", self._text(at))
 
     def test_an_older_snapshot_without_the_section_changes_nothing(self):
         from tests.test_product_pages import run_page
@@ -650,36 +987,52 @@ class TestReviewFindings(Base):
 
 
 class TestEdgeClasses(Base):
-    def test_classification_thresholds_and_anchoring(self):
-        self.assertEqual(lc.edge_class(0.05, "ANCHORED_RECORD_ESTIMATE")[0], "POSITIVE_EDGE")
-        self.assertEqual(lc.edge_class(0.02, "MARKET_NO_VIG")[0], "POSITIVE_EDGE")
-        self.assertEqual(lc.edge_class(0.05, "MODEL_PROBABILITY_UNANCHORED")[0], "NEUTRAL_UNCERTAIN_EDGE")
-        self.assertEqual(lc.edge_class(0.0, "ANCHORED_RECORD_ESTIMATE")[0], "NEUTRAL_UNCERTAIN_EDGE")
-        self.assertEqual(lc.edge_class(-0.02, "ANCHORED_RECORD_ESTIMATE")[0], "NEUTRAL_UNCERTAIN_EDGE")
-        self.assertEqual(lc.edge_class(-0.0201, "ANCHORED_RECORD_ESTIMATE")[0], "LEARNING_SAMPLE_NEGATIVE_EDGE")
+    def _cls(self, est, price=-130.0, **kw):
+        card = fake_card(leg(price=price, p=est), est, **kw)
+        return lc.ei.edge_class_of(card)[0]
+
+    def test_classification_thresholds_and_calibration(self):
+        implied = 130 / 230
+        self.assertEqual(self._cls(implied + 0.05), "POSITIVE_EDGE")
+        self.assertEqual(self._cls(implied + 0.0301), "POSITIVE_EDGE")
+        self.assertEqual(self._cls(implied + 0.05, cal="LOW"), "NEUTRAL_UNCERTAIN_EDGE")                # an edge on an estimate nobody can vouch for is uncertain, not positive
+        self.assertEqual(self._cls(implied + 0.02), "NEUTRAL_UNCERTAIN_EDGE")
+        self.assertEqual(self._cls(implied - 0.0299), "NEUTRAL_UNCERTAIN_EDGE")
+        self.assertEqual(self._cls(implied - 0.03), "LEARNING_SAMPLE_NEGATIVE_EDGE")                     # the band is three points, the main engine's own edge threshold (it was two)
+        self.assertEqual(self._cls(implied - 0.08), "LEARNING_SAMPLE_NEGATIVE_EDGE")
+
+    def test_a_moneyline_is_classed_on_the_hockey_model_not_on_the_market_anchored_estimate(self):
+        l = ml(team="MTL", price=240.0, p=0.282, market_probability=0.282)
+        implied = 100 / 340
+        anchored = fake_card(l, 0.282, model_p=0.174)                          # the estimate used is the market's; the hockey model says 17.4%
+        self.assertEqual(lc.ei.edge_class_of(anchored)[0], "LEARNING_SAMPLE_NEGATIVE_EDGE")
+        self.assertAlmostEqual(lc.ei.edge_for_class(anchored)[0], 0.174 - implied, places=4)
+        agrees = fake_card(l, 0.282, model_p=0.30)
+        self.assertEqual(lc.ei.edge_class_of(agrees)[0], "NEUTRAL_UNCERTAIN_EDGE")
 
     def test_every_bet_is_tagged_at_recording_time_with_a_reason(self):
-        pos = leg(pid="8470001", p=0.80, model_probability=0.78, empirical_probability=0.80, empirical_hits=24, empirical_games=30, price=-130.0)
+        pos = leg(pid="8470001", p=0.80, price=-130.0)
         neu = leg(pid="8470002", p=0.58, price=-130.0)
         self.cycle([pos, neu], now=dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc))
         by = {r["participant_id"]: r for r in self.rows()}
         self.assertEqual(by["8470001"]["edge_class"], "POSITIVE_EDGE")
-        self.assertIn("anchored", by["8470001"]["edge_class_reason"])
+        self.assertIn("estimate less price", by["8470001"]["edge_class_reason"])
         self.assertIn(by["8470002"]["edge_class"], ("NEUTRAL_UNCERTAIN_EDGE", "LEARNING_SAMPLE_NEGATIVE_EDGE"))
         self.assertTrue(by["8470001"]["selection_reason"].startswith("POSITIVE_EDGE"))
 
     def _neg(self, pid="8470009", game="1"):
         return leg(pid=pid, game=game, p=0.50, model_probability=0.5, price=-148.0, empirical_games=30)
 
-    def test_a_negative_edge_candidate_waits_until_no_better_price_can_arrive_then_fills_the_sample(self):
+    def test_a_lower_priority_candidate_waits_until_no_better_price_can_arrive_then_fills_the_sample(self):
         early = dt.datetime(2026, 10, 20, 21, 0, tzinfo=dt.timezone.utc)           # 17:00 ET, two hours before the 19:00 drop
         late = dt.datetime(2026, 10, 20, 22, 45, tzinfo=dt.timezone.utc)           # 18:45 ET, inside the final 25 minutes
+        self.cards["8470009"] = {"action": "LOWER_PRIORITY", "thesis": "PRICE_ABOVE_ESTIMATE"}
         out = self.cycle([self._neg()], now=early)
         self.assertEqual(self.rows(), [])
-        self.assertEqual(out["recording"]["shortfall"]["negative_edge_candidates_held_until_the_final_window"], 1)
+        self.assertEqual(out["recording"]["shortfall"]["lower_priority_waiting_for_their_final_window"], 1)
         self.cycle([self._neg()], now=late)
         r = self.rows()
-        self.assertEqual((len(r), r[0]["edge_class"]), (1, "LEARNING_SAMPLE_NEGATIVE_EDGE"))
+        self.assertEqual((len(r), r[0]["edge_class"], r[0]["action"]), (1, "LEARNING_SAMPLE_NEGATIVE_EDGE", "LOWER_PRIORITY"))
         self.assertIn("learning sample", r[0]["edge_class_reason"])
 
     def test_negative_edge_never_displaces_a_better_candidate(self):
@@ -701,7 +1054,7 @@ class TestEdgeClasses(Base):
     def test_the_edge_class_is_locked_on_the_ledger(self):
         self.cycle([leg()])
         with self.assertRaises(sqlite3.DatabaseError):
-            self.conn.execute("UPDATE bets SET edge_class = 'POSITIVE_EDGE'")
+            self.conn.execute("UPDATE bets SET edge_class = 'NEUTRAL_UNCERTAIN_EDGE'")
 
     def test_postmortem_reports_each_class_separately_with_every_measure(self):
         from operational import learning_postmortem as lpm
@@ -757,6 +1110,7 @@ class TestEdgeClassReviewFixes(Base):
 
     def test_negative_fill_never_uses_the_relaxed_headroom_held_for_better_candidates(self):
         legs = [self._neg(str(8473000 + i), game="1" if i % 2 else "2") for i in range(9)]
+        self.cards.update({l.participant_id: {"action": "LOWER_PRIORITY", "thesis": "PRICE_ABOVE_ESTIMATE"} for l in legs})
         self.cycle(legs, now=self.LATE)
         self.assertLessEqual(len(self.rows()), 7)           # wave 0's proportional cap (7 of 10), not the relaxed 9
 
@@ -765,6 +1119,7 @@ class TestEdgeClassReviewFixes(Base):
         self.nhl.close()
         self.nhl = nhl(games)
         late_game = self._neg("8474001", game="4", game_start_utc="2026-10-21T00:15:00", provider_start_utc="2026-10-21T00:15:00Z")
+        self.cards["8474001"] = {"action": "LOWER_PRIORITY", "thesis": "PRICE_ABOVE_ESTIMATE"}
         self.cycle([late_game], now=self.LATE)
         self.assertEqual(self.rows(), [])                  # 18:45 ET is 90 minutes before ITS puck drop: better prices can still arrive
         self.cycle([late_game], now=dt.datetime(2026, 10, 20, 23, 52, tzinfo=dt.timezone.utc))          # 8 minutes before its own drop
@@ -848,10 +1203,15 @@ class TestPriceAgeIsMetadata(Base):
         self.assertTrue(lc.eligibility_reasons(self._old(34), late))
 
     def test_ranking_ignores_price_age(self):
-        a, b = self._old(2), self._old(300)
-        self.assertEqual(lc.score_leg(a, D1)["score"], lc.score_leg(b, D1)["score"])
-        self.assertEqual(lc.SELECTION_WEIGHTS["freshness"], 0.0)
-        self.assertAlmostEqual(sum(lc.SELECTION_WEIGHTS.values()), 1.0)
+        import inspect
+        keys = []
+        for l in (self._old(2), self._old(300)):
+            card = fake_card(l, l.conservative_probability)
+            ecls, _ = lc.ei.edge_class_of(card)
+            edge, _what = lc.ei.edge_for_class(card)
+            keys.append(lc.ei.rank_key(card, ecls, card["estimate_used"], edge, "k"))
+        self.assertEqual(keys[0], keys[1])
+        self.assertFalse([n for n in inspect.signature(lc.ei.rank_key).parameters if "age" in n or "fresh" in n])
 
     def test_the_strict_engine_paths_are_unchanged_outside_the_cohort(self):
         from operational import daily_tickets as dtk

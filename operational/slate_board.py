@@ -735,6 +735,11 @@ def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | No
     except Exception:  # noqa: BLE001 - the plan only explains why a price is missing
         plan = None
     doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=previous, recovered=recovered, plan=plan)
+    try:                                                    # the review card of each leg of Eggy's pick and best candidate (display only: Eggy's selection and policy are untouched; operational/eggy_reviews.py)
+        from operational import eggy_reviews
+        doc["eggy_reviews"] = eggy_reviews.attach(now, product, doc.get("primary"), doc.get("eggy"))
+    except Exception:  # noqa: BLE001 - the board never waits on a review
+        pass
     try:
         from operational import pregame_archive
         pregame_archive.remember(doc)                          # the last scheduled block of each analysed game is kept for after puck drop

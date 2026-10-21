@@ -663,7 +663,7 @@ class TestThePage(unittest.TestCase):
         at = run_page("41_Slate_Board.py", s)
         self.assertFalse(at.exception, at.exception)
         blob = (" ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)).replace("&#36;", "$").replace("&#x27;", "'")
-        for want in ("Eggy's Parlay Pick of the Day", "+238", "$10.00", "$33.77", "37%", "Test Skater One 2+ shots", "COL to win", "same ticket as the primary parlay", "Proposed, not recorded"):
+        for want in ("Eggy's Parlay Pick of the Day", "+238", "$10.00", "$33.77", "37%", "Test Skater One — SHOTS ON GOAL 2+ — -110", "COL — MONEYLINE — -130", "same ticket as the primary parlay", "Proposed, not recorded"):
             self.assertIn(want, blob)
         self.assertNotIn("No Eggy pick today", blob)
         for banned in ("guarantee", "slam dunk", " lock", "sure thing"):

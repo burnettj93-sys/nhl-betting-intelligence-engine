@@ -69,7 +69,7 @@ else:
         st.markdown("**Strongest individual selections** (informational: a single is not a recommendation)")
         for s in singles:
             stale, age = stale_now(s.get("quote_updated_utc"), None)
-            st.markdown(f"- **{ui.esc(s['label'])}** {ui.american(s['american_price'])} · estimate {ui.pct(s['probability'])} · value {s['ev_estimated']:+.0%} "
+            st.markdown(f"- **{ui.esc(ui.leg_dict_label(s))}** · estimate {ui.pct(s['probability'])} · value {s['ev_estimated']:+.0%} "
                         f"({s['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(s.get('quote_updated_utc'), True)} ({age}){' · STALE' if stale else ''}"
                         f"{' · provisional' if s.get('provisional') else ''}")
     st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")

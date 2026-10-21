@@ -31,6 +31,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from operational import bet_labels
 from operational import challenger_registry as cr
 from operational import ingestion_health
 from operational import paper_bankroll as pb
@@ -380,10 +381,9 @@ def real_market_parlay_loss_postmortems(bankroll_conn, nhl_conn) -> list[dict]:
                 other.append(summary)
 
         def _describe(m: dict) -> str:
-            line = f"{m.get('threshold')}+" if m.get("threshold") is not None else "to win"
             p = m.get("predicted_probability")
             predicted = f", predicted {p:.0%}" if p is not None else ""
-            return (f"{m['participant_name']} ({m['market_family']} {line} {m['side']}): "
+            return (f"{bet_labels.leg_dict_label(m, m.get('recorded_price'))}: "
                     f"actual={m['actual_value']}{predicted}")
 
         postmortems.append({

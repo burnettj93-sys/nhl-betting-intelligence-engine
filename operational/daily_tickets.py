@@ -430,7 +430,7 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
             model_threshold_eligible=True, identity_resolved=True, price_fresh=True, event_not_started=True)
         card_legs.append({
             "label": rmp.leg_label(stub), "market_family": l["market_family"], "game_id": l["game_id"],
-            "participant_id": l["participant_id"], "participant_name": l["participant_name"],
+            "participant_id": l["participant_id"], "participant_name": l["participant_name"], "threshold": l.get("threshold"), "side": l.get("side"),
             "provider_start_utc": l.get("provider_start_utc"),
             "retrieved_at_utc": l.get("retrieved_at_utc"), "quote_updated_utc": l.get("quote_updated_utc"),
             "quote_age_min_at_entry": l.get("quote_age_min_at_entry"), "freshness_status": l.get("freshness_status"),
@@ -486,7 +486,7 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str, *, proposed: bool =
     for l in combo.legs:
         legs.append({"evidence": anchor.leg_evidence(l, anchor.cap_for(policy)) if anchor_mode else None,
             "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
-            "participant_id": l.participant_id, "participant_name": l.participant_name,
+            "participant_id": l.participant_id, "participant_name": l.participant_name, "threshold": l.threshold, "side": l.side,
             "provider_start_utc": l.provider_start_utc,
             "retrieved_at_utc": l.retrieved_at_utc, "quote_updated_utc": l.quote_updated_utc,
             "quote_age_min_at_entry": l.quote_age_min, "freshness_status": l.freshness_status or None, "team": l.team,
@@ -545,7 +545,7 @@ def exposure(cards: list[dict]) -> dict:
 
 def single_card(leg: rmp.ParlayLeg) -> dict:
     d = rmp.leg_decimal(leg)
-    return {"label": rmp.leg_label(leg), "game_id": leg.game_id, "team": leg.team, "opponent": leg.opponent,
+    return {"label": rmp.leg_label(leg), "market_family": leg.market_family, "participant_name": leg.participant_name, "threshold": leg.threshold, "game_id": leg.game_id, "team": leg.team, "opponent": leg.opponent,
             "game_start_utc": leg.game_start_utc, "american_price": leg.american_price, "decimal_price": round(d, 4),
             "price_captured_at_utc": leg.captured_at_utc, "probability": leg.conservative_probability,
             "ev_estimated": leg.conservative_probability * d - 1.0, "model_version": leg.model_version,
@@ -856,7 +856,7 @@ def _strongest_singles(legs: list, limit: int = 5) -> list[dict]:
     for l in sorted(pool, key=lambda x: -x.conservative_probability)[:limit]:
         dec = rmp.leg_decimal(l)
         ev = l.conservative_probability * dec - 1.0
-        out.append({"label": rmp.leg_label(l), "game_id": l.game_id, "team": l.team, "market_family": l.market_family, "american_price": l.american_price,
+        out.append({"label": rmp.leg_label(l), "participant_name": l.participant_name, "threshold": l.threshold, "game_id": l.game_id, "team": l.team, "market_family": l.market_family, "american_price": l.american_price,
                     "probability": round(l.conservative_probability, 4), "ev_estimated": round(ev, 4),
                     "ev_after_haircut": round((l.conservative_probability - pol.value_shade) * dec - 1.0, 4),
                     "quote_updated_utc": l.quote_updated_utc, "freshness_status": l.freshness_status or None, "provisional": bool(getattr(l, "provisional", False)),

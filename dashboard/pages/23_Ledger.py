@@ -13,6 +13,7 @@ import streamlit as st
 
 from dashboard import product_source as ps
 from dashboard import ui
+from operational.bet_labels import leg_dict_label
 
 ui.header("Ticket History", "Every recorded ticket with the prices and probabilities frozen when it was recorded.")
 perf = ui.load(ps.performance, "Ticket history")
@@ -41,11 +42,11 @@ if not rows:
     st.info("No tickets match.")
 for b in rows:
     legs = legs_of(b)
-    names = " + ".join(f"{l.get('participant_name')} {l.get('threshold')}+ ({l.get('market_family', '').replace('PLAYER_', '').replace('_ALTERNATE', '').lower()})" for l in legs)
+    names = " + ".join(leg_dict_label(l) for l in legs)
     res = {"WIN": "WON", "LOSS": "LOST"}.get(b["result_status"], b["result_status"])
     with st.expander(f"{b['paper_bet_id']} · {names} · {res.title()}" + (f" {ui.signed_money(b['profit_loss'])}" if b.get("profit_loss") is not None else "")):
         st.markdown(ui.status_chip(res) + ui.status_chip(b.get("origin") or "AUTOMATIC"), unsafe_allow_html=True)
-        st.dataframe([{"Leg": f"{l.get('participant_name')} {l.get('threshold')}+", "Game": l.get("game_id"), "Price": ui.american(l.get("american_price")),
+        st.dataframe([{"Leg": leg_dict_label(l), "Game": l.get("game_id"), "Price": ui.american(l.get("american_price")),
                        "Quote updated": ui.et_time(l.get("quote_updated_utc") or l.get("captured_at_utc"), True), "Model chance": ui.pct(l.get("conservative_probability")),
                        "Model": l.get("model_version", "")} for l in legs], hide_index=True, width="stretch")
         st.caption(f"Recorded {ui.et_time(b['created_at_utc'], True)} · stake {ui.money(b['stake'])} · {'estimated combined' if len(legs) > 1 else 'quoted'} price {ui.american(b['entry_odds'])} · "

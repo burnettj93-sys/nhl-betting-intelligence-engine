@@ -24,6 +24,7 @@ import math
 from collections import defaultdict
 from pathlib import Path
 
+from operational import bet_labels
 from operational import eastern_time as et
 from operational import paper_bankroll as pb
 
@@ -89,7 +90,7 @@ def ticket_review(bet: dict, nhl_conn, account_after: dict | None) -> dict:
         hit = r.get("outcome_hit")
         outcome = "WIN" if hit else ("LOSS" if hit is False and r.get("status") == "RESOLVED" else (r.get("outcome") or r.get("status") or "UNRESOLVED"))
         cl = closing_price(l)
-        row = {"label": f"{l.get('participant_name')} {l.get('threshold')}+ ({l['market_family']})", "game_id": l["game_id"],
+        row = {"label": bet_labels.leg_dict_label(l), "game_id": l["game_id"],
                "recorded_price": l.get("american_price"), "quote_updated_utc": l.get("quote_updated_utc"),
                "quote_age_min_at_entry": l.get("quote_age_min_at_entry"), "model_probability": l.get("conservative_probability"),
                "model_version": l.get("model_version"), "actual_value": r.get("actual_value"), "outcome": outcome,
