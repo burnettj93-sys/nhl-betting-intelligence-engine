@@ -41,13 +41,13 @@ Repeatable audit: `python3 -m operational.live_audit` (read-only; checks integri
 | Wave 1 (game 2026020150, target 19:30, deadline 20:00) | captured **19:33:48 ET** unattended (+4 min); 3 credits planned = charged | **VERIFIED LIVE (unattended)** |
 | Wave 2 (game 2026020151, target 21:00, deadline 21:30) | captured **21:06:53 ET** unattended (+7 min); 3 credits planned = charged | **VERIFIED LIVE (unattended)** |
 | Credits for the day | 13 charged (one 2-credit league pull at 08:00, three 3-credit prop captures, one 2-credit moneyline pull with wave 0); every ledger row planned = charged; provider header 169 to 156, 154 after Wednesday's 08:00 pull | **VERIFIED LIVE** |
-| Trader cadence | 111 cycles between 06:00 and 24:00 ET; **largest gap 11.7 minutes (22:51 to 23:02 UTC), none over 12** | **VERIFIED LIVE** |
+| Trader cadence | 111 cycles between 06:00 and 01:00 ET; **largest gap 11.7 minutes (22:51 to 23:02 UTC), none over 12** | **VERIFIED LIVE** |
 | Publication time after each capture | the data branch keeps only recent history, so the first publication after each wave could not be read back afterwards; the trader and publication watchdog checks were OK throughout (last success within 9 minutes at the Wednesday check) | **NOT RE-VERIFIABLE** for the exact minute |
 | Watchdog and daily chain (Wednesday 09:16 ET) | `jobs_loaded` OK (11 jobs); `daily_chain` OK (sync, settlement, postmortem, backup COMPLETED); `power` OK on AC | **VERIFIED LIVE** |
 | `python3 -m operational.live_audit` (Wednesday 09:16 ET) | 0 failures, 2 warnings (no price on both surfaces yet; no captured wave yet on the new day) | **VERIFIED LIVE** |
 | Automatic paper recording | **ACTIVE since 15:30:06 ET Oct 20** by the owner's instruction (policy digest 1fad3ba03503cf94, one qualifying Eggy parlay a day, $10, +100 to +500). Experiment 2 is still the single active $500 experiment with 0 tickets (no Eggy parlay qualified); `activate_recording` dry run all_pass | **VERIFIED LIVE** |
 | 14-day paper learning experiment (POSTMORTEM_LEARNING_14D, owner-authorised Oct 20) | separate ledger and $500 experiment bankroll (reset to $500 when it cannot fund the next $10), up to 10 bets a day at -150 or better, edge classes, price age recorded not gated (owner policy Oct 21), ends automatically after Nov 2; activated 18:53 ET Oct 20, re-approved for the new digest `ed9232bf53bb1dd8` on Oct 21 08:28 ET. Day 1 finished 10 of 10 (2W-8L, +$7.69). Eggy still at most one pick a day. See docs/LEARNING_EXPERIMENT.md | **VERIFIED LIVE** (Day 1) |
-| Daily-job recovery, Eggy stage A, loss postmortem classification | **FIXED+TESTED, deployed**; the Tuesday 07:15 settlement and 07:30 postmortem ran unattended (`daily_chain` COMPLETED) | **VERIFIED LIVE** |
+| Daily-job recovery, Eggy stage A, loss postmortem classification | **FIXED+TESTED, deployed**; Wednesday's daily chain (sync, settlement, postmortem, backup) COMPLETED. Tuesday's own chain was not re-read in this pass | **VERIFIED LIVE** for Wednesday |
 
 ## Player and matchup integrity
 | Item | State |
