@@ -218,8 +218,11 @@ def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
             except (OSError, json.JSONDecodeError):
                 continue
             meta = doc.get("meta") or {}
-            if market_key not in (meta.get("market_filter") or ""):
+            filt = meta.get("market_filter") or ""
+            if market_key not in filt:
                 continue
+            if newest_per_event and market_key not in {t.strip() for t in filt.replace("+", ",").split(",")}:
+                continue                    # exact market only: "player_shots_on_goal" is a substring of the alternate market's key, and an alternate-only capture says nothing about the standard market
             resp = doc.get("response")
             if not isinstance(resp, dict):
                 continue
@@ -236,6 +239,8 @@ def _recent_archive_payloads(market_key: str, sportsbook: str = "draftkings",
                 resp = dict(resp, __retrieved_at_utc=retrieved_at)          # when this system observed the response (the learning cohort records it as the price's capture time)
             if newest_per_event:
                 eid = resp.get("id")
+                if eid is None:
+                    continue
                 if eid in newest and newest[eid][0] >= captured:
                     continue
                 newest[eid] = (captured, resp)

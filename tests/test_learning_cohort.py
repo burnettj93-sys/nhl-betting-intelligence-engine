@@ -933,8 +933,8 @@ class TestPriceAgeIsMetadata(Base):
         self.assertNotEqual(lc.policy_digest(), "df96584493d9d3e8")
 
 
-class TestPriceAgeReviewFixes(TestPriceAgeIsMetadata):
-    """Inherits the helpers (and re-runs the first group, which is cheap); adds the second review's regressions."""
+class TestPriceAgeReviewFixes(Base):
+    _old = TestPriceAgeIsMetadata._old
 
     def test_the_newest_observation_of_a_bet_is_the_price_even_if_it_fails_a_gate(self):
         older = self._old(300, price=-140.0)
@@ -1040,6 +1040,96 @@ class TestPriceAgeReviewFixes(TestPriceAgeIsMetadata):
         (legs, excluded), _, _ = run({"TOR": "2026-10-11T12:00:00", "MTL": "2026-10-11T12:30:00"}, advisory=True)
         self.assertEqual(legs, [])
         self.assertEqual([e["reason"] for e in excluded], ["SIDES_FROM_DIFFERENT_PULLS"])
+
+
+class TestPriceAgeSecondReviewFixes(Base):
+    def test_the_latest_pull_rule_uses_the_pull_time_not_the_providers_per_game_quote_time(self):
+        from research.real_market_parlay import real_slate_adapter as adapter
+        pull = "2026-10-20T12:00:05Z"
+
+        def ml_leg(game, team, quote, retrieved):
+            return dataclasses.replace(ml(team=team, game=game), captured_at_utc=quote, quote_updated_utc=quote, retrieved_at_utc=retrieved)
+        legs = [ml_leg("1", "TOR", "2026-10-20T11:58:00Z", pull), ml_leg("1", "MTL", "2026-10-20T11:58:00Z", pull),
+                ml_leg("2", "EDM", "2026-10-20T11:30:00Z", pull), ml_leg("2", "CHI", "2026-10-20T11:30:00Z", pull)]        # provider quote times differ by 28 minutes inside ONE pull
+        excluded = []
+        self.assertEqual(len(adapter.latest_pull_filter(legs, excluded)), 4)
+        self.assertEqual(excluded, [])
+        later = "2026-10-20T17:38:00Z"                                              # a newer pull that did not include game 2: it may have been withdrawn
+        legs = [ml_leg("1", "TOR", "2026-10-20T17:30:00Z", later), ml_leg("1", "MTL", "2026-10-20T17:30:00Z", later), ml_leg("2", "EDM", "2026-10-20T11:30:00Z", pull), ml_leg("2", "CHI", "2026-10-20T11:30:00Z", pull)]
+        excluded = []
+        kept = adapter.latest_pull_filter(legs, excluded)
+        self.assertEqual({l.game_id for l in kept}, {"1"})
+        self.assertIn("NOT_IN_LATEST_PULL", excluded[0]["reason"])
+        mixed = [ml_leg("1", "TOR", "x", pull), ml_leg("1", "MTL", "x", later)]
+        excluded = []
+        self.assertEqual(adapter.latest_pull_filter(mixed, excluded), [])
+        self.assertEqual(excluded[0]["reason"], "SIDES_FROM_DIFFERENT_PULLS")
+
+    def test_the_exact_market_is_matched_so_an_alternate_only_capture_is_not_a_withdrawn_standard_market(self):
+        from operational import real_prop_orchestrator as rpo
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            docs = (("std.json", "2026-10-20T20:00:00Z", "player_shots_on_goal,player_total_saves", [{"key": "draftkings", "markets": [{"key": "player_shots_on_goal"}]}]),
+                    ("alt.json", "2026-10-20T21:00:00Z", "player_shots_on_goal_alternate,player_points", []))
+            for name, when, flt, bms in docs:
+                (d / name).write_text(json.dumps({"meta": {"market_filter": flt, "retrieved_at_utc": when}, "response": {"id": "E1", "bookmakers": bms}}))
+            (d / "noid.json").write_text(json.dumps({"meta": {"market_filter": "player_shots_on_goal", "retrieved_at_utc": "2026-10-20T21:30:00Z"}, "response": {"bookmakers": []}}))
+            with mock.patch.object(rpo, "RUNTIME_ARCHIVE_DIR", d), mock.patch.object(rpo, "LEGACY_ARCHIVE_DIR", d / "none"):
+                got = rpo._recent_archive_payloads("player_shots_on_goal", now=D1, newest_per_event=True)
+                default = rpo._recent_archive_payloads("player_shots_on_goal", now=D1)
+        self.assertEqual([r["bookmakers"] for r in got], [[{"key": "draftkings", "markets": [{"key": "player_shots_on_goal"}]}]])          # the standard capture, not the newer alternate-only one
+        self.assertEqual(len(default), 3)                                              # the default reader is unchanged (substring match, id-less responses included)
+
+    def test_a_corrupt_retrieval_time_never_wins_the_newest_observation_collapse(self):
+        good = self._old(30)
+        corrupt = dataclasses.replace(self._old(5), retrieved_at_utc="garbage")
+        self.assertLess(lc._observed_at(corrupt), lc._observed_at(good))
+
+    def _old(self, minutes, **kw):
+        return TestPriceAgeIsMetadata._old(self, minutes, **kw)
+
+    def test_migration_adds_the_columns_and_the_full_trigger_even_when_the_old_ledger_has_no_bets(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "empty_old.db"
+            c = lc.open_ledger(path)
+            c.execute("DROP TRIGGER bets_entry_is_immutable")
+            for col, _ in lc.PRICE_COLUMNS:
+                c.execute(f"ALTER TABLE bets DROP COLUMN {col}")
+            c.commit()
+            c.close()
+            m = lc.open_ledger(path)
+            self.assertTrue({n for n, _ in lc.PRICE_COLUMNS} <= {r[1] for r in m.execute("PRAGMA table_info(bets)")})
+            self.assertIn("bets_entry_is_immutable", {r[0] for r in m.execute("SELECT name FROM sqlite_master WHERE type='trigger'")})
+            m.close()
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            m = lc.open_ledger(path)
+            m.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            with self.assertRaises(sqlite3.DatabaseError):
+                m.execute("UPDATE bets SET price_status = 'VERY_OLD_PREGAME'")          # the new columns are protected from the first bet on
+            m.close()
+
+    def test_an_underivable_entry_does_not_keep_taking_the_write_lock(self):
+        with tempfile.TemporaryDirectory() as t:
+            path = Path(t) / "x.db"
+            c = lc.open_ledger(path)
+            self.cycle([leg()])
+            row = dict(self.rows()[0])
+            row.update(created_at_utc="not-a-time", bet_id="Bx", idempotency_key="Kx", price_status=None, price_capture_timestamp=None, price_age_bucket=None, price_age_at_recording_min=None)
+            c.execute(f"INSERT INTO bets ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
+            c.commit()
+            c.close()
+            statements = []
+            conn = sqlite3.connect(path)
+            conn.row_factory = sqlite3.Row
+            conn.set_trace_callback(statements.append)
+            lc._migrate(conn)
+            conn.close()
+            self.assertFalse([s for s in statements if "BEGIN IMMEDIATE" in s or "DROP TRIGGER" in s], statements)
+
+    def test_reasons_are_specific_not_just_non_empty(self):
+        self.assertIn("price flagged for a reason other than its age", lc.eligibility_reasons(dataclasses.replace(self._old(34), price_fresh=False, freshness_status="FRESH"), D1))
+        self.assertIn("price cannot be tied to a real observation (missing, malformed or future time)", lc.eligibility_reasons(dataclasses.replace(self._old(34), retrieved_at_utc="not-a-time"), D1))
 
 
 if __name__ == "__main__":

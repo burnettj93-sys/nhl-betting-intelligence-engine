@@ -249,23 +249,33 @@ def moneyline_candidate_legs(conn, now: dt.datetime | None = None, *, freshness_
                 identity_resolved=True, price_fresh=fresh, event_not_started=True,
             ))
     if _ADVISORY_PRICE_AGE.get() and legs:
-        # An old moneyline price is only usable if it is from the LATEST league pull that covered the slate (a game missing from the newest pull may have been withdrawn) and both sides come from the same pull
-        # (the no-vig chance needs both). Anything else is an accuracy problem, not an age problem.
-        newest = max((quote_freshness.parse_utc(l.captured_at_utc) for l in legs if quote_freshness.parse_utc(l.captured_at_utc)), default=None)
-        by_game: dict = {}
-        for l in legs:
-            by_game.setdefault(l.game_id, []).append(l)
-        kept = []
-        for gid, gl in by_game.items():
-            times = {quote_freshness.parse_utc(l.captured_at_utc) for l in gl}
-            if len(times) > 1 or None in times:
-                excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "SIDES_FROM_DIFFERENT_PULLS"})
-            elif newest is not None and (newest - next(iter(times))).total_seconds() > 300.0:
-                excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "NOT_IN_LATEST_PULL (the market may have been withdrawn)"})
-            else:
-                kept.extend(gl)
-        legs = kept
+        legs = latest_pull_filter(legs, excluded)
     return legs, excluded
+
+
+PULL_TOLERANCE_S = 600.0       # rows written by one league pull are stamped within seconds of each other; a game whose row is older than the newest pull by more than this was not in that pull
+
+
+def latest_pull_filter(legs: list, excluded: list) -> list:
+    """Advisory-mode accuracy rule for moneylines: an old quote is only usable if it comes from the LATEST league pull that covered the slate (a game missing from the newest pull may have been withdrawn) and
+    both sides of a game come from the same pull (the no-vig chance needs both). The pull is identified by the time this system wrote the rows (retrieved_at_utc), not the provider's per-event quote time,
+    which differs from game to game within one pull. Anything else is an accuracy problem, not an age problem."""
+    from operational import quote_freshness
+    pull = lambda l: quote_freshness.parse_utc(l.retrieved_at_utc or l.captured_at_utc)
+    newest = max((pull(l) for l in legs if pull(l)), default=None)
+    by_game: dict = {}
+    for l in legs:
+        by_game.setdefault(l.game_id, []).append(l)
+    kept = []
+    for gid, gl in by_game.items():
+        times = [pull(l) for l in gl]
+        if None in times or (max(times) - min(times)).total_seconds() > 60.0:
+            excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "SIDES_FROM_DIFFERENT_PULLS"})
+        elif newest is not None and (newest - max(times)).total_seconds() > PULL_TOLERANCE_S:
+            excluded.append({"identifier": f"game:{gid}", "market_family": "MONEYLINE", "reason": "NOT_IN_LATEST_PULL (the market may have been withdrawn)"})
+        else:
+            kept.extend(gl)
+    return kept
 
 
 def _sog_model_inputs():

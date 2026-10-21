@@ -174,6 +174,10 @@ SCHEMA = (SCHEMA.replace("@ENTRY_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}
           .replace("@RESULT_CHANGED@", " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in RESULT_COLUMNS)))
 
 
+import re as _re
+ENTRY_TRIGGER_SQL = _re.search(r"CREATE TRIGGER IF NOT EXISTS bets_entry_is_immutable.*?END;", SCHEMA, _re.S).group(0)
+
+
 def open_ledger(path) -> sqlite3.Connection:
     """The ledger connection: rows by name, the triggers installed, and recursive triggers ON so that even INSERT OR REPLACE cannot silently replace a bet."""
     conn = sqlite3.connect(str(path), timeout=30)
@@ -191,7 +195,10 @@ def _parse(value):
 
 def _observed_at(leg) -> dt.datetime:
     """When this system last observed the leg's price (retrieval time, else the provider's quote time, else the capture time); the earliest instant when unknown."""
-    return _parse(leg.retrieved_at_utc) or _parse(leg.quote_updated_utc) or _parse(leg.captured_at_utc) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    floor = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+    if leg.retrieved_at_utc and _parse(leg.retrieved_at_utc) is None:
+        return floor                                    # present but unreadable: corrupt, so it never wins over a valid observation (it is then judged, and reported, on its own)
+    return _parse(leg.retrieved_at_utc) or _parse(leg.quote_updated_utc) or _parse(leg.captured_at_utc) or floor
 
 
 def price_age_status(age_min: float | None) -> str | None:
@@ -228,32 +235,41 @@ def price_observation(retrieved_utc, provider_utc, now: dt.datetime) -> dict | N
             "provider_age_min": prov_age, "status": price_age_status(age), "bucket": price_age_bucket(age)}
 
 
+def _price_backfill(conn) -> list[tuple]:
+    """(values..., bet_id) for every entry whose price metadata is missing and can be derived from its own frozen times; an entry that cannot be derived is left alone (and never keeps a write lock busy)."""
+    out = []
+    for r in conn.execute("SELECT bet_id, created_at_utc, retrieved_at_utc, quote_updated_utc FROM bets WHERE price_status IS NULL").fetchall():
+        created = _parse(r["created_at_utc"])
+        info = price_observation(r["retrieved_at_utc"], r["quote_updated_utc"], created) if created else None
+        if info:
+            out.append((info["captured_utc"], info["provider_update_utc"], info["age_min"], info["provider_age_min"], info["status"], info["bucket"], r["bet_id"]))
+    return out
+
+
 def _migrate(conn) -> None:
-    """An existing ledger (the Day-1 bets recorded before the price-age metadata existed) gains the new columns. Their values are derived deterministically from the entry's own frozen leg and its own recording
-    time, so nothing about what was recorded changes; the entry-immutability trigger is dropped for this one derivation and recreated straight after. One transaction: a crash leaves either the old ledger or the
-    complete migration, and the backfill is keyed on the missing values, not on the missing columns, so a half-finished earlier attempt is completed on the next open."""
+    """An existing ledger (the Day-1 bets recorded before the price-age metadata existed) gains the new columns. Their values are derived deterministically from the entry's own frozen times, so nothing about what
+    was recorded changes. One transaction does everything, including recreating the entry-immutability trigger with the new columns, so a crash leaves either the old ledger or the complete migration and there is
+    never a committed moment without the trigger. Everything is re-read after the write lock is taken (another process may have migrated first); an ordinary open of a migrated ledger takes no write lock."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
     if not cols:
         return
-    missing = [(n, t) for n, t in PRICE_COLUMNS if n not in cols]
-    if not missing and conn.execute("SELECT 1 FROM bets WHERE price_status IS NULL LIMIT 1").fetchone() is None:
-        return                                                      # nothing to do: no write lock is taken on an ordinary open
+    if not [n for n, _t in PRICE_COLUMNS if n not in cols] and not _price_backfill(conn):
+        return
     prior = conn.isolation_level
     conn.isolation_level = None
     try:
         conn.execute("BEGIN IMMEDIATE")
         try:
-            for n, t in missing:
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(bets)")}
+            added = [(n, t) for n, t in PRICE_COLUMNS if n not in cols]
+            for n, t in added:
                 conn.execute(f"ALTER TABLE bets ADD COLUMN {n} {t}")
-            todo = conn.execute("SELECT bet_id, created_at_utc, retrieved_at_utc, quote_updated_utc FROM bets WHERE price_status IS NULL").fetchall()
-            if todo:
+            todo = _price_backfill(conn)
+            if added or todo:
                 conn.execute("DROP TRIGGER IF EXISTS bets_entry_is_immutable")
-                for r in todo:
-                    created = _parse(r["created_at_utc"])
-                    info = price_observation(r["retrieved_at_utc"], r["quote_updated_utc"], created) if created else None
-                    if info:
-                        conn.execute("UPDATE bets SET price_capture_timestamp=?, price_provider_update_utc=?, price_age_at_recording_min=?, provider_quote_age_at_recording_min=?, price_status=?, price_age_bucket=? WHERE bet_id=?",
-                                     (info["captured_utc"], info["provider_update_utc"], info["age_min"], info["provider_age_min"], info["status"], info["bucket"], r["bet_id"]))
+                for v in todo:
+                    conn.execute("UPDATE bets SET price_capture_timestamp=?, price_provider_update_utc=?, price_age_at_recording_min=?, provider_quote_age_at_recording_min=?, price_status=?, price_age_bucket=? WHERE bet_id=?", v)
+                conn.execute(ENTRY_TRIGGER_SQL)
             conn.execute("COMMIT")
         except Exception:
             conn.execute("ROLLBACK")
