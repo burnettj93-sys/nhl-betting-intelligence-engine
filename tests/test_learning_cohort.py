@@ -981,6 +981,7 @@ class TestReviewFindings(Base):
             self.assertIsInstance(tr._learning_changed(summary), bool)
         self.assertTrue(tr._learning_changed({"recording": {"recorded_this_cycle": 2}}))
         self.assertTrue(tr._learning_changed({"settlement": {"settled": 1}}))
+        self.assertTrue(tr._learning_changed({"parlay_settlement": {"settled": 1}}))
         self.assertFalse(tr._learning_changed({"recording": {"recorded_this_cycle": 0}, "settlement": {"settled": 0}}))
 
     def test_the_recorded_probability_is_the_books_anchored_estimate_not_a_raw_model_number(self):

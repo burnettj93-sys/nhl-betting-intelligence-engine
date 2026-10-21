@@ -6,7 +6,7 @@ The question it asks: can several individually strong, repeatable outcomes be co
 * A LEG is eligible only if its own review survived (RECORD or LOWER_PRIORITY, contradiction LOW or MODERATE, calibration at least MEDIUM) and the event is a likely one (estimate at least MIN_LEG_P): no
   lottery legs, and no leg is added merely to lengthen the payout.
 * 3 legs are preferred. A 4th is added only if it independently passes the same review, is at least as strong as the ticket's current weakest leg, and adds no strong dependence.
-* DEPENDENCE comes from operational/eggy_candidates.classify_pair (directional knowledge only). Legs in different games are independent. Two legs of one game are never multiplied: the combined probability is
+* DEPENDENCE comes from operational/eggy_candidates.classify_pair (directional knowledge only). Legs in different games are ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE (an assumption, not a finding). Two legs of one game are never multiplied: the combined probability is
   then NOT given (None); only assumption-free Frechet bounds are, and the ticket is labelled UNCERTAIN. Strongly dependent or redundant pairs (one player twice, a goal and a point) are refused.
 * PRICE. The system has no combined sportsbook price for any parlay, so every parlay here is an UNPRICED LEARNING PARLAY. The product of the legs' quoted prices is kept as a labelled REFERENCE (never a
   quote, never an odds, no return or ROI is ever computed from it). The ticket is settled by its legs and records whether the whole ticket would have hit.
@@ -64,19 +64,19 @@ def _pair_view(l) -> dict:
 
 
 def pairs_of(legs: list) -> list[dict]:
-    """Every pair of legs with what is known about how they move together: different games are independent; one game's legs go through classify_pair (directional only)."""
+    """Every pair of legs with what is known about how they move together: different games are ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE; one game's legs go through classify_pair (directional only)."""
     out = []
     for a, b in itertools.combinations(legs, 2):
         if str(a.game_id) != str(b.game_id):
             out.append({"a": bet_label(a.participant_name, a.market_family, a.threshold, a.american_price), "b": bet_label(b.participant_name, b.market_family, b.threshold, b.american_price),
-                        "kind": "DIFFERENT_GAMES", "direction": "NONE", "strength": "independent", "note": "legs in different games"})
+                        "kind": "DIFFERENT_GAMES", "direction": "NONE", "strength": "assumed_independent", "note": "legs in different games: ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE"})
         else:
             out.append(ec.classify_pair(_pair_view(a), _pair_view(b)))
     return out
 
 
 def _bounds(legs: list, ests: list[float]) -> dict:
-    """Assumption-free bounds on the joint probability: Frechet within each game's legs, multiplied across games (different games are independent)."""
+    """Assumption-free bounds on the joint probability: Frechet within each game's legs, multiplied across games (different games: ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE)."""
     low = high = 1.0
     by_game: dict = {}
     for l, e in zip(legs, ests):
@@ -106,17 +106,17 @@ def construct(cands: list[dict]) -> dict | None:
     same_game = [p for p in pairs if p["kind"] != "DIFFERENT_GAMES"]
     independent = not same_game
     if independent:
-        combined, basis = round(_product(ests), 4), "PRODUCT_OF_LEG_ESTIMATES (every leg in a different game)"
+        combined, basis = round(_product(ests), 4), "PRODUCT_OF_LEG_ESTIMATES (every leg in a different game: ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE)"
     else:
         combined, basis = None, "NOT_GIVEN: legs share a game and their dependence is not quantified"
-    dep_level = "INDEPENDENT" if independent else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")
+    dep_level = "ASSUMED_INDEPENDENT" if independent else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")
     wi = min(range(len(legs)), key=lambda i: (ests[i], -LEVEL[cands[i]["card"]["contradiction"]["level"]]))
     weakest = {"index": wi, "label": bet_label(legs[wi].participant_name, legs[wi].market_family, legs[wi].threshold, legs[wi].american_price), "estimate": round(ests[wi], 4),
                "contradiction": ei.combine_contradiction([f for f in cands[wi]["card"]["contradiction"]["flags"] if f["name"] not in PRICE_FLAGS])}
     levels = [LEVEL[ei.combine_contradiction([f for f in c["card"]["contradiction"]["flags"] if f["name"] not in PRICE_FLAGS])] for c in cands]
     if ests[wi] < MIN_LEG_P or max(levels) > 1:
         quality = "BAD"
-    elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("INDEPENDENT", "POSITIVE_NOT_QUANTIFIED"):
+    elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("ASSUMED_INDEPENDENT", "POSITIVE_NOT_QUANTIFIED"):
         quality = "GOOD"
     else:
         quality = "QUESTIONABLE"
@@ -148,7 +148,7 @@ def _product(xs) -> float:
 
 def rank_key(p: dict) -> tuple:
     """Quality first, then FEWER legs (3 preferred over 4), then the strongest weakest leg, then the likelier ticket (an ORDERING only: for dependent legs it is not a probability), independence, key."""
-    return (QUALITY.index(p["construction_quality"]), p["n_legs"], -p["weakest_leg"]["estimate"], -p["ranking_probability"], {"INDEPENDENT": 0, "POSITIVE_NOT_QUANTIFIED": 1, "UNCERTAIN": 2}[p["dependence_level"]], p["key"])
+    return (QUALITY.index(p["construction_quality"]), p["n_legs"], -p["weakest_leg"]["estimate"], -p["ranking_probability"], {"ASSUMED_INDEPENDENT": 0, "POSITIVE_NOT_QUANTIFIED": 1, "UNCERTAIN": 2}[p["dependence_level"]], p["key"])
 
 
 def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX_PARLAYS_PER_DAY) -> dict:

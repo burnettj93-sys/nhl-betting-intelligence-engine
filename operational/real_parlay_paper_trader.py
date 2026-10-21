@@ -212,8 +212,8 @@ def run(now: dt.datetime | None = None) -> dict:
 def _learning_changed(summary) -> bool:
     """True when the learning cohort recorded or settled something this cycle (defensive: the summary's shape never matters to the model book's publish decision)."""
     try:
-        rec, st = summary.get("recording"), summary.get("settlement")
-        return bool((isinstance(rec, dict) and rec.get("recorded_this_cycle")) or (isinstance(st, dict) and st.get("settled")))
+        rec, st, ps = summary.get("recording"), summary.get("settlement"), summary.get("parlay_settlement")
+        return bool((isinstance(rec, dict) and rec.get("recorded_this_cycle")) or (isinstance(st, dict) and st.get("settled")) or (isinstance(ps, dict) and ps.get("settled")))
     except AttributeError:
         return False
 

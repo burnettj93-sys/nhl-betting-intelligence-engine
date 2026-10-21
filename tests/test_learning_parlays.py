@@ -23,6 +23,16 @@ def cand(pid="8470001", game="1", p=0.70, price=-130.0, action="RECORD", contrad
 
 
 class TestLegEligibility(unittest.TestCase):
+    def test_no_price_floor_on_a_leg_only_an_impossible_price_is_refused(self):
+        class P(Base):
+            def runTest(self): pass
+        with mock.patch.object(lc, "UNIT", "PARLAY"):
+            for price in (-150.0, -310.0, -800.0, -2500.0, 120.0):
+                self.assertEqual(lc.eligibility_reasons(leg(price=price), D1), [], price)
+            self.assertTrue(any("valid American" in w for w in lc.eligibility_reasons(leg(price=-50.0), D1)))
+        with mock.patch.object(lc, "UNIT", "STRAIGHT"):
+            self.assertTrue(lc.eligibility_reasons(leg(price=-310.0), D1))                  # the straight-bet floor is unchanged
+
     def test_a_likely_reviewed_leg_qualifies(self):
         self.assertEqual(lp.leg_ok(cand(p=0.62)), (True, ""))
 
@@ -45,11 +55,11 @@ class TestConstruction(unittest.TestCase):
     def three(self, games=("1", "2", "3"), ps=(0.70, 0.66, 0.62)):
         return [cand(pid=str(8470001 + i), game=g, p=p) for i, (g, p) in enumerate(zip(games, ps))]
 
-    def test_legs_in_different_games_are_independent_and_their_probability_is_the_product(self):
+    def test_legs_in_different_games_are_assumed_independent_and_their_probability_is_the_product(self):
         p = lp.construct(self.three())
-        self.assertEqual((p["dependence_level"], p["construction_quality"], p["action"]), ("INDEPENDENT", "GOOD", "RECORD"))
+        self.assertEqual((p["dependence_level"], p["construction_quality"], p["action"]), ("ASSUMED_INDEPENDENT", "GOOD", "RECORD"))
         self.assertAlmostEqual(p["combined_probability"], 0.70 * 0.66 * 0.62, places=4)
-        self.assertIn("different game", p["probability_basis"])
+        self.assertIn("ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE", p["probability_basis"])
 
     def test_two_legs_of_one_game_are_never_multiplied_the_dependence_is_labelled_and_bounds_are_given(self):
         p = lp.construct(self.three(games=("1", "1", "2")))
@@ -300,9 +310,10 @@ class TestEggyIsUntouched(unittest.TestCase):
             for forbidden in ("daily_tickets", "ticket_policy", "paper_bankroll", "record_paper_bet", "requests."):
                 self.assertNotIn(forbidden, src)
 
-    def test_the_policy_names_the_unit_and_the_unchanged_leg_floor(self):
+    def test_the_policy_names_the_unit_and_has_no_leg_price_floor(self):
         self.assertEqual(lc.POLICY["unit"], "PARLAY")
-        self.assertEqual(lc.POLICY["parlay_leg_floor_american"], -150.0)
+        self.assertNotIn("parlay_leg_floor_american", lc.POLICY)
+        self.assertFalse(hasattr(lc, "PARLAY_LEG_FLOOR"))
         self.assertEqual(lc.POLICY["eggy"], {"official_picks_per_day": 1, "changed": False})
 
 

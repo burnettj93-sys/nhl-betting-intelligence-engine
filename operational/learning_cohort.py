@@ -63,14 +63,12 @@ EDGE_BAND = ei.EDGE_MIN                # +-3 points: the main engine's own thres
                                        # a +114 underdog -1.9, so the favourite was classed NEGATIVE and the underdog NEUTRAL, which is how the old ranking came to prefer underdogs.)
 PRICE_BANDS = ((-150, -131, "-150 to -131"), (-130, -111, "-130 to -111"), (-110, 100, "-110 to +100"), (101, 150, "+101 to +150"), (151, 10 ** 6, "+151 and longer"))
 UNIT = "PARLAY"                     # the learning unit (owner 2026-10-21): up to 10 learning PARLAYS a day, built from the reviewed candidate legs (operational/learning_parlays.py). "STRAIGHT" is the earlier unit
-PARLAY_LEG_FLOOR = -150.0           # the price floor applied to each LEG of a parlay. UNCHANGED from the straight-bet floor pending the owner's decision: legs like the owner's example (1+ shots at -300 and shorter)
-                                    # cannot enter below it, and tonight's pool then yields no parlay (docs/EGGY_INTELLIGENCE.md)
 ELIGIBLE_FAMILIES = ("MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "PLAYER_POINTS", "PLAYER_GOALS", "GOALIE_SAVES")
 
 POLICY = {
     "policy_id": "postmortem-learning-14d-2026-10-20", "cohort": COHORT, "experiment_id": EXPERIMENT_ID, "timezone": "America/Toronto",
     "start_date": START_DATE, "end_date": END_DATE, "days": 14, "daily_target": DAILY_TARGET, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
-    "odds_floor_american": ODDS_FLOOR, "unit": UNIT, "parlay_leg_floor_american": PARLAY_LEG_FLOOR, "paper_only": True, "real_money": "NOT authorised",
+    "odds_floor_american": ODDS_FLOOR, "unit": UNIT, "paper_only": True, "real_money": "NOT authorised",
     "eggy": {"official_picks_per_day": 1, "changed": False}, "initial_bankroll_usd": INITIAL_BANKROLL, "reset_to_usd": RESET_TO, "reset_when_below_usd": STAKE, "reset_reason": RESET_REASON,
     "eligible_market_families": list(ELIGIBLE_FAMILIES),
     "slot_release": "cumulative cap ceil(10 x games through the wave / games today), by puck-drop wave; within the last 25 minutes before a wave the cap relaxes to 10 less one reserved slot per later wave (at most two)",
@@ -440,9 +438,13 @@ def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
     why = []
     if leg.market_family not in ELIGIBLE_FAMILIES:
         why.append("market not supported for the cohort")
-    floor = PARLAY_LEG_FLOOR if UNIT == "PARLAY" else ODDS_FLOOR
-    if leg.american_price < floor:
-        why.append(f"price worse than the {floor:+.0f} floor")
+    if UNIT == "PARLAY":
+        # no price floor on a parlay LEG (owner 2026-10-21): the review, calibrated probability, role, contradiction, weakest-leg quality, dependence and data quality decide. The price is stored and
+        # carried to the ticket; only an impossible quote (an American price inside (-100, +100) has no decimal price above 1) is refused, as a data-quality check and not a threshold.
+        if not (leg.american_price <= -100 or leg.american_price >= 100):
+            why.append("price is not a valid American price")
+    elif leg.american_price < ODDS_FLOOR:
+        why.append(f"price worse than the {ODDS_FLOOR:+.0f} floor")
     for flag, label in (("provider_contract_verified", "market contract not verified"), ("model_threshold_eligible", "no eligible model estimate for this threshold"), ("identity_resolved", "identity not resolved"),
                         ("event_not_started", "event started")):
         if not getattr(leg, flag, False):
@@ -668,7 +670,7 @@ def _refresh_postmortem(conn, nhl_conn, now: dt.datetime, summary: dict) -> str:
             age = 10 ** 6
         prior = (dt.date.fromisoformat(phase(now)["today"]) - dt.timedelta(days=1)).isoformat()
         due = age >= POSTMORTEM_REFRESH_MIN or cur.get("postmortem_for") != prior or bool((summary.get("settlement") or {}).get("settled")) \
-            or bool((summary.get("recording") or {}).get("recorded_this_cycle"))
+            or bool((summary.get("parlay_settlement") or {}).get("settled")) or bool((summary.get("recording") or {}).get("recorded_this_cycle"))
     if not due:
         return "CURRENT"
     return lpm.refresh(conn, nhl_conn, now)["status"]
