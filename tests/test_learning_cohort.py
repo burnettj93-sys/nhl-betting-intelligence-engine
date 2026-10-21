@@ -79,7 +79,7 @@ class Base(unittest.TestCase):
         self.addCleanup(p.stop)
         self.cards = {}                    # participant_id -> overrides for the fake review (action, thesis, contradiction, cal, model_p)
         self.context_ok = True
-        for target, kw in (("build_context", {"side_effect": lambda *a, **k: SimpleNamespace(fake=True)}), ("usable", {"side_effect": lambda ctx: (self.context_ok, "" if self.context_ok else "fake: evidence missing")}),
+        for target, kw in (("build_context", {"side_effect": lambda *a, **k: SimpleNamespace(fake=True)}), ("usable", {"side_effect": lambda ctx, **k: (self.context_ok, "" if self.context_ok else "fake: evidence missing")}),
                            ("review_leg", {"side_effect": self._review})):
             p = mock.patch.object(lc.ei, target, **kw)
             p.start()
@@ -200,7 +200,7 @@ class TestSelectionAndRecording(Base):
         card = fake_card(l, l.conservative_probability, **kw)
         ecls, _ = lc.ei.edge_class_of(card)
         edge, _what = lc.ei.edge_for_class(card)
-        return {"leg": l, "card": card, "rank_key": lc.ei.rank_key(card, ecls, card["estimate_used"], edge, lc.economic_key(l))}
+        return {"leg": l, "card": card, "action": card["action"]["decision"], "edge_class": ecls, "rank_key": lc.ei.rank_key(card, ecls, card["estimate_used"], edge, lc.economic_key(l))}
 
     def test_a_fourth_bet_in_one_game_waits_behind_other_games_but_still_fills_a_slot_if_nothing_else_is_left(self):
         legs = [leg(pid="8470001", game="1", p=0.80), leg(pid="8470002", game="1", p=0.79), leg(pid="8470003", game="1", p=0.78), leg(pid="8470004", game="1", p=0.77),
@@ -209,6 +209,16 @@ class TestSelectionAndRecording(Base):
         self.assertEqual([c["leg"].participant_id for c in lc.select_ranked(cands, [], 4)], ["8470001", "8470002", "8470003", "8470005"])          # the fourth game-1 bet waits
         self.assertEqual([c["leg"].participant_id for c in lc.select_ranked(cands, [], 5)][-1], "8470004")          # ... and fills the last slot when nothing else remains
         self.assertEqual(lc.ei.SAME_GAME_SOFT_CAP, 3)
+
+    def test_lower_priority_bets_never_overflow_the_game_cap_and_a_game_holds_one_negative_edge_experiment(self):
+        legs = [leg(pid=str(8470100 + i), game="1", p=0.60, price=-110.0) for i in range(6)] + [leg(pid="8470200", game="2", p=0.60, price=-110.0)]
+        lower = [self._cand(l, action="LOWER_PRIORITY", thesis="FAIR_PRICED") for l in legs]
+        picked = lc.select_ranked(lower, [], 10)
+        self.assertEqual(sorted(str(c["leg"].game_id) for c in picked), ["1", "1", "1", "2"])             # the cap is hard for lower priority: no overflow, fewer than the slots is fine
+        neg = [self._cand(leg(pid=str(8470300 + i), game="1", p=0.50, price=-148.0), action="LOWER_PRIORITY", thesis="PRICE_ABOVE_ESTIMATE") for i in range(4)]
+        self.assertTrue(all(c["edge_class"] == "LEARNING_SAMPLE_NEGATIVE_EDGE" for c in neg))
+        self.assertEqual(len(lc.select_ranked(neg, [], 10)), 1)                                           # one negative-edge experiment per game
+        self.assertEqual(len(lc.select_ranked(neg, [], 10, {"1": 1})), 0)                                 # ... counting those already recorded today
 
     def test_a_strong_bet_is_not_rejected_only_for_sharing_a_game(self):
         legs = [leg(pid=str(8470000 + i), game="1", p=0.78) for i in range(4)]

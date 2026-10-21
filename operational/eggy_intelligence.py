@@ -176,13 +176,17 @@ def _days_before(as_of: str, newest: str | None) -> int | None:
         return None
 
 
-def usable(ctx: Context) -> tuple[bool, str]:
+def usable(ctx: Context, pinned_sha: str | None = None) -> tuple[bool, str]:
     """The intelligence layer is usable when the evidence and both states exist and are current. A cohort that cannot review does not fall back to unreviewed ranking: it records nothing and says why.
     Stale state is an integrity matter (a review of last week's form is not a review): a team or skater file whose newest game is more than STALE_DATA_DAYS old makes the layer unusable."""
     problems = []
     if ctx.evidence is None:
         problems.append("evidence file missing")
-    elif ctx.now is not None and ctx.evidence.get("built_at_utc"):
+    elif pinned_sha is not None and ctx.evidence.get("_sha256") != pinned_sha:
+        problems.append("the evidence file is not the one the policy digest pins (it was rebuilt without a new approval)")
+    elif not ctx.evidence.get("built_at_utc"):
+        problems.append("the evidence file has no build time")
+    elif ctx.now is not None:
         try:
             built = dt.datetime.fromisoformat(ctx.evidence["built_at_utc"].replace("Z", "+00:00"))
             age = (ctx.now - built).days
@@ -258,7 +262,8 @@ def best_adjustment(cells: list[dict]) -> dict | None:
     cand = [c for c in cells if c["n"] >= MIN_CELL_N and c["z"] is not None and abs(c["z"]) >= Z_SIGNIFICANT and c["pred"] > 0]
     if not cand:
         return None
-    c = max(cand, key=lambda x: abs(x["z"]))
+    lowering = [x for x in cand if x["obs"] < x["pred"]]          # a significant "ran HIGH" cell is never masked by a stronger "ran LOW" one: only the lowering decision matters
+    c = max(lowering or cand, key=lambda x: abs(x["z"]))
     return {**c, "factor": round(max(c["obs"] / c["pred"], FACTOR_FLOOR), 4), "raw_factor": round(c["obs"] / c["pred"], 4)}
 
 
@@ -400,7 +405,8 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
     if D >= EDGE_MIN:
         ttype, strength = "MODEL_SEES_VALUE", ("STRONG" if D >= large else "MODERATE")
         statement = (f"The hockey model gives {side_team} {pct(H)} against the market's {pct(M)} ({pts(D)}): it sees {side_team} as underpriced"
-                     f"{'' if side_is_hockey_fav else ', although it still rates ' + hockey_fav + ' the better team'}. This is an EXPERIMENT in whether the model's disagreement means anything: the model has not been shown to beat the market.")
+                     f"{'' if side_is_hockey_fav or abs(H - 0.5) < TOSSUP_BAND else ', although it still rates ' + hockey_fav + ' the better team'}. "
+                     + ("This is an EXPERIMENT in whether the model's disagreement means anything: the model has not been shown to beat the market." if not model_leads else "On the games priced so far the model has led the market by two standard errors or more."))
     elif D <= -EDGE_MIN:
         ttype, strength = "MODEL_SAYS_OVERPRICED", "NONE"
         statement = f"The hockey model gives {side_team} {pct(H)} against the market's {pct(M)} ({pts(D)}): the model thinks {side_team} is OVERPRICED."
@@ -634,7 +640,7 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     elif stat in ("goals", "points") and team_p is not None and team_p < 0.42:
         flags.append({"name": "GAME_ENVIRONMENT", "level": "LOW", "text": f"{team} is an underdog tonight ({pct(team_p)} to win)"})
     if recal:
-        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_HIGH", "level": "HIGH" if adj["z"] <= -3 else "MODERATE",
+        flags.append({"name": "HISTORY_SAYS_MODEL_RUNS_HIGH", "level": ("LOW" if estimate_used <= p_recal else ("HIGH" if adj["z"] <= -3 else "MODERATE")),          # no weight when the leg's own estimate is already at or below the recalibrated figure
                       "text": (f"for {adj['label']} the model averaged {pct(adj['pred'])} and {pct(adj['obs'])} happened ({adj['n']:,} cases, z {adj['z']:+.1f}): the model's {pct(p_model)} is recalibrated to {pct(p_recal)}"
                                + (f"; the leg's own estimate ({pct(estimate_used)}) is already lower and is the one used" if estimate_used < p_recal else ""))})
     elif adj:
@@ -662,7 +668,7 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         best_cell = {c["dimension"]: c for c in spec}.get("toi") or {c["dimension"]: c for c in spec}.get("pp") or spec[-1]
     if recal:
         # lowered to what happened to 300+ players like this; HIGH needs a cell with 1000+ cases that is specific to the player (his ice time, his power play, his team's environment) beside the population-level band, which says little about him
-        cal = "HIGH" if any(c["dimension"] in ("toi", "pp", "env") and c["n"] >= 1000 for c in cells) else "MEDIUM"
+        cal = "HIGH" if any(c["dimension"] in ("toi", "pp", "env") and c["n"] >= 1000 and c["obs"] < c["pred"] for c in cells) else "MEDIUM"
     elif best_cell:
         # The question is whether the estimate can be OVERSTATED. A model that ran LOW in this cell (more happened than it said) cannot make a capped estimate too high, so that direction is not held against it
         # (the flag HISTORY_SAYS_MODEL_RUNS_LOW already says the estimate is conservative); a model that ran HIGH is tested two-sided as before.
@@ -696,7 +702,7 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         statement = f"The price ({pct(implied)}) and our estimate ({pct(p_used)}) are within {pct(EDGE_MIN, 0)} of each other: fair, no edge."
     else:
         ttype, strength = "PRICE_ABOVE_ESTIMATE", "NONE"
-        statement = f"The price implies {pct(implied)} but we estimate {pct(p_used)}: the market is paying less than our estimate says it should (EV negative by {pts(-edge)})."
+        statement = f"The price implies {pct(implied)} but we estimate {pct(p_used)}: the market is paying less than our estimate says it should (EV negative by {-edge * 100:.1f} pts)."
     # --- case for / against
     case_for, case_against = [], []
     case_for.append(f"calibrated model {pct(p_model)} (raw {pct(probs.get('raw'))}); estimate used {pct(p_used)} ({estimate_basis.replace('_', ' ').lower()}) vs price-implied {pct(implied)}")
@@ -730,7 +736,7 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         "player_view": {"position": p["position"], "games_total": p["games_total"], "usage_tier": p.get("usage_tier"), "pp_usage": p.get("pp_usage"), "season": season, "expected": ex, "recent_toi": round(r_toi, 2),
                         "recent_pp": round(r_pp, 2), "last_games": recent, "hit_rates": hr},
         "hockey_view": ({"available": True, "favourite": mv["favourite"], "p_favourite": mv["p_favourite"], "gap": mv["gap"], "team_win_probability": team_p, "data_through": mv["data_through"], "model": mv["model"]} if mv and mv.get("available") else {"available": False}),
-        "probabilities": {"model": p_model, "model_raw": probs.get("raw"), "estimate_used": p_used, "leg_estimate_before_recalibration": round(estimate_used, 4), "estimate_basis": estimate_basis, "recalibration": (None if adj is None else {**adj, "applied": recal, "applied_as": ("lowered the estimate" if lowered else ("the leg's own estimate was already lower" if recal else "not applied: history never raises an estimate"))})},
+        "probabilities": {"model": p_model, "model_raw": probs.get("raw"), "estimate_used": p_used, "leg_estimate_before_recalibration": round(estimate_used, 4), "estimate_basis": estimate_basis, "recalibration": (None if adj is None else {**adj, "applied": lowered, "applied_as": ("lowered the estimate" if lowered else ("the leg's own estimate was already lower" if recal else "not applied: history never raises an estimate"))})},
         "market": market_block(leg, p_used, p_model),
         "why_they_disagree": _why_disagree_prop(leg, p_used, implied, edge, adj if recal else None, stat),
         "case_for": case_for, "case_against": case_against, "historical": historical,
@@ -779,7 +785,7 @@ def _prop_action(ttype: str, flags: list[dict], cal: str, completeness: float, p
         return {"decision": "LOWER_PRIORITY", "reasons": [f"an edge exists but the contradiction is {contradiction} and the calibration {cal}{' (a longshot needs HIGH calibration and a 100-game record)' if longshot else ''}"]}
     if ttype == "FAIR_PRICED":
         if contradiction in ("LOW", "MODERATE") and cal in ("HIGH", "MEDIUM"):
-            return {"decision": "LOWER_PRIORITY", "reasons": ["estimate and price agree and the estimate is well calibrated: a calibration control, no edge"]}
+            return {"decision": "LOWER_PRIORITY", "reasons": ["estimate and price agree: a calibration control, no edge (the estimate is capped at the model's number, so where history says the model runs low it is conservative)"]}
         return {"decision": "PASS", "reasons": [f"no edge, and the contradiction is {contradiction} / calibration {cal}: nothing to learn from"]}
     # PRICE_ABOVE_ESTIMATE: the market sees more than the estimate does
     ex_price = combine_contradiction([f for f in flags if f["name"] not in ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET")])

@@ -5,7 +5,7 @@ The ten bets the old engine recorded on 2026-10-20, each reviewed as the intelli
 Provenance: `deploy/replay_eggy_review.py` rebuilt the candidate pool at each recording instant (sandboxed copy; nothing written to production); `operational/eggy_decisions.reconstruct_card` rebuilt each bet's pre-bet review from data strictly before the day; the facts of what happened are the official result and the MoneyPuck game logs. Machine-readable detail: `eggy_intelligence_oct20.json`.
 
 - Caveat: The roster identity gate cannot be replayed (the roster file on disk is today's): NHL_ENGINE_ROSTER_GATE=off in the replay.
-- Caveat: The evidence file's skater cells include 2026-27 games through Oct 20 (under 1% of its 51,516 rows); the team model's coefficients were fitted on 2009-2025 only.
+- Caveat: The evidence file's skater cells include 2026-27 games through Oct 20 (under 1% of its 51,908 rows); the team model's coefficients were fitted on 2009-2025 only.
 - Caveat: The old ranking was a weighted score that no longer exists in the code: the old rank and score are those frozen on each ledger row.
 
 ## The ten bets at a glance
@@ -20,8 +20,8 @@ Provenance: `deploy/replay_eggy_review.py` rebuilt the candidate pool at each re
 | 6 | Max Sasson — GOALS 1+ — +800 | WIN (+80.00) | 27 of 81 | PASS | FAIR PRICED | SEVERE | BAD DECISION | LUCKY WIN |
 | 7 | Paul Cotter — GOALS 1+ — +600 | LOSS (-10.00) | 29 of 81 | PASS | FAIR PRICED | SEVERE | BAD DECISION | MODEL CALIBRATION |
 | 8 | Drew O'Connor — GOALS 1+ — +700 | LOSS (-10.00) | 28 of 81 | PASS | FAIR PRICED | SEVERE | BAD DECISION | ROLE CHANGE MISSED |
-| 9 | Liam Ohgren — GOALS 1+ — +700 | LOSS (-10.00) | 18 of 81 | PASS | FAIR PRICED | HIGH | BAD DECISION | TOI PROJECTION ERROR |
-| 10 | Jamie Oleksiak — GOALS 1+ — +2500 | LOSS (-10.00) | 25 of 81 | PASS | FAIR PRICED | HIGH | BAD DECISION | MODEL CALIBRATION |
+| 9 | Liam Ohgren — GOALS 1+ — +700 | LOSS (-10.00) | 26 of 81 | PASS | FAIR PRICED | HIGH | BAD DECISION | TOI PROJECTION ERROR |
+| 10 | Jamie Oleksiak — GOALS 1+ — +2500 | LOSS (-10.00) | 24 of 81 | PASS | FAIR PRICED | HIGH | BAD DECISION | MODEL CALIBRATION |
 
 The old engine ranked by a weighted score; the new layer orders by action, edge class, contradiction, calibration confidence, hit chance and edge (no score). 9 of the ten would have been a PASS under the new layer; the other: Filip Chytil — SHOTS ON GOAL 2+ — -130 (lower priority).
 
@@ -117,7 +117,7 @@ Outcomes of the moneylines the new layer kept as lower priority at 19:02 (offici
 - **Contradiction LOW**: HISTORY_SAYS_MODEL_RUNS_LOW (LOW). Calibration HIGH; data 8 of 10 (missing: confirmed lineup, injury news); decision confidence HIGH.
 - **New action LOWER PRIORITY** (new rank 2 of 81, old rank 5).
 - **What happened.** CAR 6 at VAN 3. expected 15.5 minutes on ice: held (played 18.7 (+3.2)); expected 1.38 power-play minutes: failed (had 0.00); expected shots 1.97: information (had 2); VAN win probability 17%: information (VAN 3, CAR 6)
-- **Decision: QUESTIONABLE DECISION** (lower priority: estimate and price agree and the estimate is well calibrated: a calibration control, no edge). Outcome WIN. a questionable decision that won: no reward; the win does not make the reasoning better.
+- **Decision: QUESTIONABLE DECISION** (lower priority: estimate and price agree: a calibration control, no edge (the estimate is capped at the model's number, so where history says the model runs low it is conservative)). Outcome WIN. a questionable decision that won: no reward; the win does not make the reasoning better.
 
 ### 6. Max Sasson — GOALS 1+ — +800: WIN
 
@@ -166,10 +166,10 @@ Outcomes of the moneylines the new layer kept as lower priority at 19:02 (offici
 - **Case for.** calibrated model 14.9% (raw 15.5%); estimate used 13.7% (model probability unanchored) vs price-implied 12.5% | expected goals per game 0.17; season 2 in 10 games; last 5 0, 1, 0, 0, 0 (goals) | reached 1+ goals (anytime goal scorer) in 13 of his last 107 games (12.1%), 5 of last 30, 2 of last 10, 2 of 10 this season
 - **Case against.** VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average | for forwards, model 12%-15% the model averaged 13.5% and 12.4% happened (5,598 cases, z -2.4): the model's 14.9% is recalibrated to 13.7% | a +700 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long | opponent CAR: expected-goal differential rank 1 of 32, goal differential rank 1; tonight's win probability for VAN: 17.4%
 - **History.** any player, model 12%-15%: the model averaged 13.5%; 12.6% happened (6,534 cases; 2025-26 and 2026-27 to date) | forwards, model 12%-15%: the model averaged 13.5%; 12.4% happened (5,598 cases; 2025-26 and 2026-27 to date)
-- **Contradiction HIGH**: GAME_ENVIRONMENT (MODERATE); HISTORY_SAYS_MODEL_RUNS_HIGH (MODERATE); LONG_PRICE (HIGH). Calibration HIGH; data 8 of 10 (missing: confirmed lineup, injury news); decision confidence LOW.
-- **New action PASS** (new rank 18 of 81, old rank 9).
+- **Contradiction HIGH**: GAME_ENVIRONMENT (MODERATE); HISTORY_SAYS_MODEL_RUNS_HIGH (MODERATE); LONG_PRICE (HIGH). Calibration MEDIUM; data 8 of 10 (missing: confirmed lineup, injury news); decision confidence LOW.
+- **New action PASS** (new rank 26 of 81, old rank 9).
 - **What happened.** CAR 6 at VAN 3. expected 15.4 minutes on ice: failed (played 11.1 (-4.3)); expected 1.14 power-play minutes: failed (had 0.00); expected goals 0.17: information (had 0); VAN win probability 17%: information (VAN 3, CAR 6)
-- **Decision: BAD DECISION** (no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from). Outcome LOSS. a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 14% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game. Classification TOI PROJECTION ERROR: the ice time the thesis assumed did not happen Action: INVESTIGATE.
+- **Decision: BAD DECISION** (no edge, and the contradiction is HIGH / calibration MEDIUM: nothing to learn from). Outcome LOSS. a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 14% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game. Classification TOI PROJECTION ERROR: the ice time the thesis assumed did not happen Action: INVESTIGATE.
 
 ### 10. Jamie Oleksiak — GOALS 1+ — +2500: LOSS
 
@@ -180,7 +180,7 @@ Outcomes of the moneylines the new layer kept as lower priority at 19:02 (offici
 - **Case against.** VAN is a clear underdog tonight (17.4% to win): fewer goals for its skaters on average | for defensemen with 0-0.25 expected power-play min, model 4%-6% the model averaged 5.2% and 4.0% happened (1,803 cases, z -2.3): the model's 5.7% is recalibrated to 4.4% | a +2500 prop is +600 or longer: a small error in the probability is a large relative edge, the margin is widest here, and long prices are more often too short than too long | a price of +2500 implies 3.8%: small errors in a tail probability become large relative edges
 - **History.** any player, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,595 cases; 2025-26 and 2026-27 to date) | defensemen, model 4%-6%: the model averaged 5.2%; 5.3% happened (3,585 cases; 2025-26 and 2026-27 to date)
 - **Contradiction HIGH**: GAME_ENVIRONMENT (MODERATE); HISTORY_SAYS_MODEL_RUNS_HIGH (MODERATE); LONG_PRICE (HIGH); LONGSHOT_TAIL (MODERATE). Calibration HIGH; data 8 of 10 (missing: confirmed lineup, injury news); decision confidence LOW.
-- **New action PASS** (new rank 25 of 81, old rank 10).
+- **New action PASS** (new rank 24 of 81, old rank 10).
 - **What happened.** CAR 6 at VAN 3. expected 17.5 minutes on ice: held (played 22.9 (+5.4)); expected goals 0.06: information (had 0); VAN win probability 17%: information (VAN 3, CAR 6)
 - **Decision: BAD DECISION** (no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from). Outcome LOSS. a bad decision that lost: a process failure, not variance. The loss itself was the likelier outcome (Eggy gave the bet 4% to win), so the loss is not what is being judged: the decision is, and the flaws in it were visible before the game. Classification MODEL CALIBRATION: the pre-bet review flagged the model as running high for this kind of bet (history said so before the game) Action: INVESTIGATE.
 

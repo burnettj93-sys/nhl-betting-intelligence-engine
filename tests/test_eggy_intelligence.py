@@ -138,6 +138,20 @@ class TestRules(unittest.TestCase):
         ev["built_at_utc"] = "garbage"
         self.assertIn("unreadable", ei.usable(ctx)[1])
 
+    def test_a_rebuilt_unpinned_evidence_file_or_one_without_a_build_time_is_refused(self):
+        ctx = make_ctx()
+        self.assertTrue(ei.usable(ctx, pinned_sha=ctx.evidence["_sha256"])[0])
+        ok, why = ei.usable(ctx, pinned_sha="0" * 64)
+        self.assertFalse(ok)
+        self.assertIn("not the one the policy digest pins", why)
+        del ctx.evidence["built_at_utc"]
+        self.assertIn("no build time", ei.usable(ctx)[1])
+
+    def test_a_significant_ran_high_cell_is_not_masked_by_a_stronger_ran_low_cell(self):
+        cells = [{"dimension": "p", "label": "", "n": 7000, "pred": 0.5, "obs": 0.56, "se": 0.006, "z": 10.0}, {"dimension": "toi", "label": "", "n": 900, "pred": 0.5, "obs": 0.45, "se": 0.016, "z": -3.1}]
+        self.assertLess(ei.best_adjustment(cells)["factor"], 1.0)
+        self.assertGreater(ei.best_adjustment(cells[:1])["factor"], 1.0)
+
     def test_there_is_no_weighted_intelligence_score(self):
         src = inspect.getsource(ei)
         for word in ("intelligence_score", "INTELLIGENCE_SCORE", "WEIGHTS ="):

@@ -86,7 +86,7 @@ def _skater_facts(bet: dict, nhl_conn, index: dict | None) -> dict | None:
         p = nhl_conn.execute("SELECT toi_minutes, goals, assists, shots, played FROM player_game_stats WHERE game_id = ? AND player_id = ? ORDER BY revision_number DESC LIMIT 1", (gid, pid)).fetchone()
         if p:
             return {"source": "NHL box score", "toi": None if p["toi_minutes"] is None else round(p["toi_minutes"], 1), "toi_pp": None, "shots": p["shots"], "goals": p["goals"], "assists": p["assists"],
-                    "points": (p["goals"] or 0) + (p["assists"] or 0), "played": None if p["played"] is None else bool(p["played"])}
+                    "points": None if p["goals"] is None and p["assists"] is None else (p["goals"] or 0) + (p["assists"] or 0), "played": None if p["played"] is None else bool(p["played"])}
     return None
 
 

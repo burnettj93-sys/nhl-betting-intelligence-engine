@@ -1,5 +1,5 @@
 {
- "generated": "2026-10-21T17:31:15Z",
+ "generated": "2026-10-21T21:28:46Z",
  "what": "All ten bets the learning cohort recorded on 2026-10-20 (the old engine), each reviewed as the intelligence layer would have on that day's data, with the old and new rank.",
  "how": [
   "pre-bet review: operational/eggy_decisions.reconstruct_card on data strictly before 2026-10-20 (team and skater state), using the estimate the old engine itself recorded",
@@ -8,7 +8,7 @@
  ],
  "caveats": [
   "The roster identity gate cannot be replayed (the roster file on disk is today's): NHL_ENGINE_ROSTER_GATE=off in the replay.",
-  "The evidence file's skater cells include 2026-27 games through Oct 20 (under 1% of its 51,516 rows); the team model's coefficients were fitted on 2009-2025 only.",
+  "The evidence file's skater cells include 2026-27 games through Oct 20 (under 1% of its 51,908 rows); the team model's coefficients were fitted on 2009-2025 only.",
   "The old ranking was a weighted score that no longer exists in the code: the old rank and score are those frozen on each ledger row."
  ],
  "pool_at_1902": {
@@ -700,7 +700,7 @@
    "decision_quality": {
     "label": "QUESTIONABLE_DECISION",
     "reasons": [
-     "lower priority: estimate and price agree and the estimate is well calibrated: a calibration control, no edge"
+     "lower priority: estimate and price agree: a calibration control, no edge (the estimate is capped at the model's number, so where history says the model runs low it is conservative)"
     ]
    },
    "claims": [
@@ -1372,7 +1372,7 @@
    "new_estimate_used": 0.1374,
    "new_edge_on_the_estimate_used": 0.0124,
    "new_model_edge_at_last_observed_price": 0.0244,
-   "new_rank": 18,
+   "new_rank": 26,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {
@@ -1401,7 +1401,7 @@
      }
     ]
    },
-   "calibration": "HIGH",
+   "calibration": "MEDIUM",
    "data_completeness": {
     "present": [
      "skater model state",
@@ -1452,7 +1452,7 @@
    "decision_quality": {
     "label": "BAD_DECISION",
     "reasons": [
-     "no edge, and the contradiction is HIGH / calibration HIGH: nothing to learn from"
+     "no edge, and the contradiction is HIGH / calibration MEDIUM: nothing to learn from"
     ]
    },
    "claims": [
@@ -1561,7 +1561,7 @@
    "new_estimate_used": 0.0439,
    "new_edge_on_the_estimate_used": 0.0054,
    "new_model_edge_at_last_observed_price": 0.0185,
-   "new_rank": 25,
+   "new_rank": 24,
    "new_rank_of": 81,
    "new_action": "PASS",
    "thesis": {

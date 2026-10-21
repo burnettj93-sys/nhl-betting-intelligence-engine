@@ -493,20 +493,30 @@ def cumulative_caps(game_wave: dict, total: int, wave_start: dict | None = None,
     return caps
 
 
-def select_ranked(cands: list[dict], game_counts, slots: int) -> list[dict]:
-    """Candidates in rank order (`rank_key`, lexicographic: no score). A game that already holds SAME_GAME_SOFT_CAP of the day's bets sends its further candidates to an overflow that is used only if slots
-    remain after every other candidate: one game is one cluster of dependent outcomes, so seven bets in it are about three bets' worth of information."""
+NEGATIVE_PER_GAME = 1          # negative-edge learning samples per game per day (a design choice: they are experiments, and one game is one cluster)
+
+
+def select_ranked(cands: list[dict], game_counts, slots: int, neg_counts=None) -> list[dict]:
+    """Candidates in rank order (`rank_key`, lexicographic: no score). A game that already holds SAME_GAME_SOFT_CAP of the day's bets sends its further RECORD candidates to an overflow that is used only if slots
+    remain after every other candidate: one game is one cluster of dependent outcomes, so seven bets in it are about three bets' worth of information. A LOWER_PRIORITY candidate never overflows (the cap is hard for
+    it), and a game holds at most NEGATIVE_PER_GAME negative-edge experiments: weaker bets must not rebuild the single-game cluster the review exists to prevent. Fewer than the slots is a correct answer."""
     counts = Counter(game_counts)
+    neg = Counter(neg_counts or {})
     picked, overflow = [], []
     for c in sorted(cands, key=lambda c: c["rank_key"]):
         if len(picked) >= slots:
             break
         g = str(c["leg"].game_id)
+        is_neg = c.get("edge_class") == ei.NEGATIVE
+        if is_neg and neg[g] >= NEGATIVE_PER_GAME:
+            continue
         if counts[g] >= ei.SAME_GAME_SOFT_CAP:
-            overflow.append(c)
+            if c["action"] == "RECORD":
+                overflow.append(c)
             continue
         picked.append(c)
         counts[g] += 1
+        neg[g] += 1 if is_neg else 0
     for c in overflow:
         if len(picked) >= slots:
             break
@@ -715,7 +725,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     ctx = None
     if prelim:
         ctx = ei.build_context(nhl_conn, now)
-        ok, why_unusable = ei.usable(ctx)
+        ok, why_unusable = ei.usable(ctx, pinned_sha=POLICY["decision_architecture"]["evidence"]["sha256"])
         if not ok:                                  # no review, no bet: the cohort never falls back to unreviewed ranking
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
             return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, [], [], reasons, 0, {"intelligence_unavailable": why_unusable})
@@ -771,7 +781,8 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         strict_room = max(0, min(strict_caps.get(w, DAILY_TARGET), DAILY_TARGET) - (used + len(picks)))          # a lower-priority fill never uses the relaxed headroom held for better candidates
         lower_room = min(room - len(picks), strict_room)
         if ready and lower_room > 0:
-            picks += select_ranked(ready, counts + Counter(str(c["leg"].game_id) for c in picks), lower_room)
+            neg = Counter(str(r["game_id"]) for r in rows if r["edge_class"] == ei.NEGATIVE) + Counter(str(c["leg"].game_id) for c in recorded_now + picks if c["edge_class"] == ei.NEGATIVE)
+            picks += select_ranked(ready, counts + Counter(str(c["leg"].game_id) for c in picks), lower_room, neg)
         for c in picks:
             dep = _dependence(c, [{"leg": SimpleNamespace(game_id=r["game_id"], participant_id=r["participant_id"], team=r["team"])} for r in rows] + [{"leg": x["leg"]} for x in recorded_now])
             try:
