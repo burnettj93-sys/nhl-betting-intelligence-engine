@@ -15,6 +15,7 @@ import streamlit as st
 from dashboard import order_client, product_source
 from operational import eastern_time as et
 from operational import runtime_mode
+from operational.bet_labels import leg_dict_label
 
 TONES = {"good": ("#16352a", "#2f7a57", "#9be8bf"), "warn": ("#3a3115", "#8a6d1f", "#f3d479"),
          "bad": ("#3f2226", "#92404a", "#f5a9b0"), "info": ("#1b2d4d", "#3a64a8", "#a9c9ff"),
@@ -295,7 +296,7 @@ def _slip(legs: list[dict], stats: list[tuple], *, outcomes: bool) -> bool:
         chance = f"{'Final estimate' if ev else 'Model'} {pct(l.get('probability'))}" + (f" <span class='edge {'pos' if edge >= 0.5 else 'neg' if edge <= -0.5 else 'flat'}'>{edge:+.0f} pts vs price</span>" if edge is not None else "")
         if edge is not None and edge < 1.0:
             chance += " <span class='edge flat'>· no edge of its own</span>"
-        rows.append(f"<div class='leg {res[0] if res else ''}{' stale' if stale['stale'] else ''}'><div class='leg-main'><div class='leg-sel'>{_h(l['label'])}</div><div class='leg-meta'>{_h(meta)}</div></div>"
+        rows.append(f"<div class='leg {res[0] if res else ''}{' stale' if stale['stale'] else ''}'><div class='leg-main'><div class='leg-sel'>{_h(leg_dict_label(l))}</div><div class='leg-meta'>{_h(meta)}</div></div>"
                     f"<div class='leg-right'><span class='odds'>{american(l['american_price'])}</span><span class='chance'>{chance}</span>"
                     + (f"<span class='res {res[0]}'>{res[1]}</span>" if res else "") + "</div></div>")
     cells = "".join(f"<div class='stat {tone}'><span class='k'>{_h(k)}</span><span class='v'>{_h(v)}</span>" + (f"<span class='sub'>{_h(sub)}</span>" if sub else "") + "</div>"
@@ -450,7 +451,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
     status = t["status"]
     with st.container(border=True):
         legs = t["legs"]
-        title = " + ".join(l["label"] for l in legs) if len(legs) <= 2 else f"{len(legs)}-leg ticket"
+        title = " + ".join(leg_dict_label(l) for l in legs) if len(legs) <= 2 else f"{len(legs)}-leg ticket"
         _card_head(title, status_chip(status) + status_chip(t.get("origin") or "AUTOMATIC"))
         res = t.get("result")
         pnl = res.get("profit_loss") if res else None
@@ -472,6 +473,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
         if t.get("estimate_note"):
             banner(f"<b>Earlier estimate rule.</b> {esc(t['estimate_note'])}", "warn")
         leg_why(legs)
+        leg_reviews(legs)
         if t.get("recorded_at_utc"):
             st.caption(f"Recorded {et_time(t['recorded_at_utc'], True)} · ticket {t['ticket_id']} · prices and probabilities are frozen at that moment.")
         prov = t.get("provenance")
@@ -530,6 +532,7 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
         why = primary.get("explanation") or primary.get("reason") or ticket.get("rationale") or ""
         if why:
             st.markdown(f"**Why this one.** {esc(why)}")
+        leg_reviews(legs)
         st.caption("This is the same ticket as the primary parlay on the board, not an extra bet. Hit chances are estimates with a range, not promises; any parlay can lose.")
 
 
@@ -582,6 +585,159 @@ def _lx_pct(v, digits=0) -> str:
     return "—" if v is None else pct(v, digits)
 
 
+# ------------------------------------------------------------------ the intelligence card ----
+_ACTION_TONE = {"RECORD": "good", "LOWER_PRIORITY": "warn", "PASS": "bad"}
+_LEVEL_TONE = {"LOW": "good", "MODERATE": "warn", "HIGH": "bad", "SEVERE": "bad"}
+_CAL_TONE = {"HIGH": "good", "MEDIUM": "warn", "LOW": "bad", "INSUFFICIENT": "bad"}
+_DECISION_TONE = {"GOOD_DECISION": "good", "QUESTIONABLE_DECISION": "warn", "BAD_DECISION": "bad", "INSUFFICIENT_EVIDENCE": "muted"}
+_OUTCOME_TONE = {"WIN": "good", "LOSS": "bad", "VOID": "muted", "PENDING": "info", "UNRESOLVED": "warn"}
+_VERDICT_TONE = {"HELD": "good", "PARTLY_HELD": "warn", "FAILED": "bad", "NOT_TESTABLE": "muted", "INFORMATION": "info"}
+_ANSWER_LABELS = (("why_this_team_or_player", "WHY THIS TEAM / PLAYER"), ("why_tonight", "WHY TONIGHT"), ("why_this_market", "WHY THIS MARKET"), ("why_this_price", "WHY THIS PRICE"),
+                  ("who_is_most_likely_to_win", "WHO IS MOST LIKELY TO WIN"), ("what_the_model_believes", "WHAT THE MODEL BELIEVES"), ("what_the_market_believes", "WHAT THE MARKET BELIEVES"),
+                  ("why_they_disagree", "WHY THEY DISAGREE"), ("what_supports_it", "WHAT SUPPORTS THE BET"), ("what_argues_against_it", "WHAT ARGUES AGAINST IT"),
+                  ("what_history_says", "WHAT HISTORICAL EVIDENCE SAYS"), ("what_data_is_missing", "WHAT DATA IS MISSING"), ("what_would_make_eggy_pass", "WHAT WOULD MAKE EGGY PASS"))
+
+
+def _words(code) -> str:
+    return str(code or "—").replace("_", " ")
+
+
+def intelligence_card(card: dict | None, review: dict | None = None) -> None:
+    """The review of one bet, readable in one glance: what Eggy believed before the game and why, what argued against it, and, once the game is over, what happened and whether the DECISION (not the
+    result) was good. `card` is the review stored with the bet; `review` is the postmortem entry for it (facts of the game, the assessment). Every answer is read from the stored card, never recomputed."""
+    if not card or card.get("kind") == "ERROR":
+        st.caption("There is no review on file for this bet" + (f" ({esc((card or {}).get('reconstruction_error') or '')})" if (card or {}).get("reconstruction_error") else "") + ".")
+        return
+    from operational import eggy_intelligence as ei
+    act = (card.get("action") or {}).get("decision")
+    contra = (card.get("contradiction") or {}).get("level")
+    cal = (card.get("calibration_confidence") or {}).get("level")
+    chips = [chip(f"ACTION: {_words(act)}", _ACTION_TONE.get(act, "muted")), chip(f"CONTRADICTION: {_words(contra)}", _LEVEL_TONE.get(contra, "muted")), chip(f"CALIBRATION: {_words(cal)}", _CAL_TONE.get(cal, "muted")),
+             chip(f"DECISION CONFIDENCE: {_words(card.get('decision_confidence'))}", {"HIGH": "good", "MEDIUM": "warn", "LOW": "bad"}.get(card.get("decision_confidence"), "muted")),
+             chip(f"THESIS: {_words((card.get('thesis') or {}).get('type'))}", "info")]
+    if card.get("reconstructed"):
+        chips.append(chip("RECONSTRUCTED", "warn"))
+    st.markdown(" ".join(chips), unsafe_allow_html=True)
+    if card.get("reconstructed"):
+        st.caption(esc(card.get("reconstruction_note") or ""))
+    reasons = (card.get("action") or {}).get("reasons") or []
+    if reasons:
+        st.caption(("Why Eggy recorded it: " if act in ("RECORD", "LOWER_PRIORITY") else "Why the review passes: ") + esc("; ".join(reasons)))
+    a = (review or {}).get("assessment") or {}
+    if a and (a.get("outcome") in ("WIN", "LOSS", "VOID", "UNRESOLVED")):
+        dq = (a.get("decision_quality") or {}).get("label")
+        st.markdown(f"**OUTCOME** {chip(_words(a['outcome']), _OUTCOME_TONE.get(a['outcome'], 'muted'))} &nbsp; **DECISION RESULT** {chip(_words(dq), _DECISION_TONE.get(dq, 'muted'))}", unsafe_allow_html=True)
+        st.caption("Two separate results: what the game did, and whether the choice was a good one given what was known before it. " + esc("; ".join((a.get("decision_quality") or {}).get("reasons") or [])))
+        if not (review or {}).get("facts_complete"):
+            st.caption("Provisional: the official box score is in, but power-play time and expected goals land with the MoneyPuck file (usually the next day) and may change this review.")
+    ans = card.get("answers") or ei.standard_answers(card)
+    for key, label in _ANSWER_LABELS:
+        v = ans.get(key)
+        if isinstance(v, list):
+            if v:
+                st.markdown(f"**{label}**")
+                st.markdown("\n".join(f"- {esc(x)}" for x in v))
+        elif v:
+            st.markdown(f"**{label}** · {esc(v)}")
+    with st.expander("The numbers, the doubts and the data behind this review"):
+        pr, mk = card.get("probabilities") or {}, card.get("market") or {}
+        st.dataframe([{"Measure": "Model probability", "Value": _lx_pct(pr.get("model"), 1)}, {"Measure": "Market probability (no margin)" if mk.get("no_vig") is not None else "Price-implied probability (margin included)",
+                      "Value": _lx_pct(mk.get("no_vig") if mk.get("no_vig") is not None else mk.get("implied_with_margin"), 1)}, {"Measure": "Estimate used for expected value", "Value": _lx_pct(card.get("estimate_used"), 1)},
+                      {"Measure": "MODEL EDGE AT LAST OBSERVED PRICE", "Value": f"{(mk.get('edge_vs_price') or 0) * 100:+.1f} pts (model alone {(mk.get('model_edge_vs_price') or 0) * 100:+.1f} pts)"},
+                      {"Measure": "Price for a 3-point edge", "Value": (f"{mk['breakeven_price_for_3pt_edge']:+.0f}" if mk.get("breakeven_price_for_3pt_edge") is not None else "—")}], hide_index=True, width="stretch")
+        flags = (card.get("contradiction") or {}).get("flags") or []
+        if flags:
+            st.markdown("**Contradiction flags** (one HIGH or two MODERATE make it HIGH; two HIGH or any SEVERE make it SEVERE)")
+            st.dataframe([{"Flag": _words(f["name"]), "Level": f["level"], "What it says": f["text"]} for f in flags], hide_index=True, width="stretch")
+        dc = card.get("data_completeness") or {}
+        st.markdown(f"**Data completeness** {dc.get('k', 0)} of {dc.get('n', 0)} inputs present · missing: " + (", ".join(esc(x) for x in dc.get("missing") or []) or "none"))
+        ev = (card.get("calibration_confidence") or {}).get("evidence")
+        if ev:
+            what = ev.get("label") or (f"the team model's probabilities in the {ev.get('band')} band ({ev.get('seasons')})" if ev.get("band") else "")
+            pred, obs = ev.get("pred", ev.get("predicted")), ev.get("obs", ev.get("observed"))
+            st.caption("Calibration evidence: " + esc(what) + f" ({int(ev.get('n') or 0):,} cases; the model averaged {_lx_pct(pred, 1)}, {_lx_pct(obs, 1)} happened)")
+        ms = card.get("model_state") or {}
+        if ms:
+            st.caption("Model state: " + " · ".join(f"{_words(k)}: {esc(v)}" for k, v in ms.items() if v))
+        st.caption(f"Review version {esc(card.get('version'))}. Eggy's reviews are rules on printed quantities, not a score; the team model has not been shown to beat the market.")
+    if a and a.get("outcome") in ("WIN", "LOSS"):
+        st.markdown("**WHAT HAPPENED**")
+        facts = (review or {}).get("facts") or {}
+        g = facts.get("game") or {}
+        if g:
+            line = f"{g.get('away')} {g.get('away_score')} at {g.get('home')} {g.get('home_score')}" + (f" ({g['period_type']})" if g.get("period_type") not in (None, "REG") else "")
+            ts = g.get("team_stats")
+            if ts:
+                line += " · expected goals " + ", ".join(f"{t} {v['xg_for']:.2f}" for t, v in ts.items())
+            st.markdown(esc(line))
+        pf = facts.get("player")
+        if pf:
+            num = lambda v: "—" if v is None else f"{v:g}"
+            st.markdown(esc(f"{num(pf.get('toi'))} min on ice" + (f", {pf['toi_pp']} on the power play" if pf.get("toi_pp") is not None else "") + f", {num(pf.get('shots'))} shots, {num(pf.get('goals'))} goals, {num(pf.get('points'))} points ({pf.get('source')})"))
+        claims = a.get("claims") or []
+        if claims:
+            st.markdown("**WAS THE THESIS RIGHT?** (each factual claim checked against what happened)")
+            st.dataframe([{"Claim": c["claim"], "Verdict": _words(c["verdict"]), "What happened": c.get("note") or ""} for c in claims], hide_index=True, width="stretch")
+        ls = a.get("lesson") or {}
+        st.markdown(f"**WHAT TO LEARN** · {esc(ls.get('text') or '')}")
+        if a.get("classification"):
+            st.markdown(f"**CLASSIFICATION** {chip(_words(a['classification']), 'muted')} · {esc(a.get('why') or '')} · action: **{_words(a.get('recommended_action'))}**", unsafe_allow_html=True)
+
+
+def leg_reviews(legs: list[dict]) -> None:
+    """One expander per leg that carries a review card (Eggy's own legs): clicking it shows why this leg, in the same words as every learning-book bet."""
+    shown = [l for l in legs or [] if l.get("review")]
+    if not shown:
+        return
+    st.markdown("**Open a leg to see why**")
+    for l in shown:
+        card = l["review"]
+        with st.expander(f"{leg_dict_label(l)} · {_words((card.get('action') or {}).get('decision'))}"):
+            st.caption("Eggy's pick is chosen by its own policy, which this does not change. This is the review the learning book gives the same leg, so any disagreement is visible here rather than hidden.")
+            intelligence_card(card)
+
+
+def parlay_panel(parlays: list[dict], cards: dict, reviews: dict | None = None, *, title: str = "Today's learning parlays") -> None:
+    """The learning unit: unpriced learning PARLAYS built from the reviewed legs. Each shows its legs, the weakest leg, the dependence between them, the estimated combined probability only where it is supportable
+    (else bounds, and why not), the reference product of the legs' prices (never a quote), the construction quality and, once settled, hit or miss and the leg(s) that killed it. Every leg opens into its review."""
+    if not parlays:
+        return
+    st.markdown(f"**{title}**")
+    st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Construction": p.get("verdict") or _words(p["construction_quality"]), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
+                   "Dependence": _words(p["dependence_level"]), "Combined probability": (_lx_pct(p["combined_probability"], 1) if p.get("combined_probability") is not None else f"not given (bounds {_lx_pct(p['dependence']['joint_bounds']['low'], 0)}–{_lx_pct(p['dependence']['joint_bounds']['high'], 0)})"),
+                   "Price": "UNPRICED", "Result": _words(p["result_status"])} for p in parlays], hide_index=True, width="stretch")
+    st.caption("Unpriced learning parlays: the system has no combined sportsbook price, so none is made up. The product of the legs' own prices is shown only as a reference, and no stake, return or ROI is claimed. "
+               "Each ticket is settled by its legs and records whether the whole ticket would have hit.")
+    for p in parlays:
+        with st.expander(f"Parlay {p['rank']} · {len(p['legs'])} legs · {p.get('verdict') or _words(p['construction_quality'])} · {_words(p['result_status'])}"):
+            st.markdown(f"**Weakest leg** · {esc(p['weakest_leg']['label'])} at {p['weakest_leg']['estimate']:.0%} (contradiction {_words(p['weakest_leg']['contradiction'])})")
+            st.markdown(f"**Dependence** · {_words(p['dependence_level'])}: " + esc("; ".join(f"{x['a']} / {x['b']}: {_words(x['kind'])} ({x['strength']})" for x in (p['dependence'].get('pairs') or [])) or "none"))
+            st.markdown("**Combined probability** · " + ("estimated " + _lx_pct(p["combined_probability"], 1) + f" ({esc(p['probability_basis'])})" if p.get("combined_probability") is not None else
+                        f"NOT GIVEN: {esc(p['probability_basis'])}. Assumption-free bounds {_lx_pct(p['dependence']['joint_bounds']['low'], 1)} to {_lx_pct(p['dependence']['joint_bounds']['high'], 1)}; dependence is UNCERTAIN, not assumed away"))
+            st.markdown("**Price** · " + esc(p.get("price_text") or "UNPRICED learning parlay: reference product " + f"{p.get('reference_decimal') or 0:.2f}x, a reference not a quote"))
+            if p.get("quality_reasons"):
+                st.caption("Why not GOOD: " + esc("; ".join(p["quality_reasons"])))
+            if p.get("hit_text"):
+                st.markdown(f"**Result** · {esc(p['hit_text'])}")
+            rv = {x["key"]: x for x in p.get("leg_reviews") or []}
+            for l in p["legs"]:
+                x = rv.get(l["key"]) or {}
+                with st.expander(f"{l['label']} · {_words((cards.get(l['key']) or {}).get('action', {}).get('decision'))}" + (f" · {_words(x.get('outcome'))}" if x.get("outcome") else "")):
+                    intelligence_card(cards.get(l["key"]) or (x.get("card")), {"assessment": x.get("assessment"), "facts": x.get("facts"), "facts_complete": p.get("facts_complete")} if x else None)
+
+
+def _bet_expanders(bets: list[dict], cards: dict, reviews: dict, *, label_key: str = "label") -> None:
+    """One expander per bet, titled with its complete name ('Filip Chytil — SHOTS ON GOAL 2+ — -130'); clicking it opens the whole review."""
+    for x in bets:
+        bid = x.get("bet_id")
+        rv = (reviews or {}).get(bid) or {}
+        card = (cards or {}).get(bid) or rv.get("card")
+        res = x.get("result_status") or x.get("result")
+        head = f"{x.get(label_key) or x.get('bet')} · {_words((card or {}).get('action', {}).get('decision')) if card else 'no review'}" + (f" · {_words(res)}" if res else "")
+        with st.expander(head):
+            intelligence_card(card, rv)
+
+
 def learning_experiment_panel(doc: dict | None) -> None:
     """The temporary 14-day paper learning experiment (operational/learning_cohort.py): its own bankroll, its own record, visibly separate from Eggy's pick and the normal paper book. Paper only."""
     if not doc:
@@ -618,17 +774,33 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if sf and doc.get("recorded_today", 0) < doc.get("target_per_day", 10):
         with st.expander(f"Today: {sf.get('recorded')}/{sf.get('target')} recorded, why not 10"):
             st.write(sf.get("why") or "")
-            reasons = sf.get("not_eligible_reasons") or {}
+            reasons = sf.get("reasons_candidates_were_not_recorded") or sf.get("not_eligible_reasons") or {}
             if reasons:
-                st.dataframe([{"Reason a candidate was not eligible": k, "Candidates": v} for k, v in reasons.items()], hide_index=True, width="stretch")
-            st.caption(f"{sf.get('eligible_not_yet_recorded', 0)} eligible now but held back by the puck-drop slot release · {sf.get('legs_in_pool', 0)} candidate legs examined.")
+                st.dataframe([{"Reason a candidate was not recorded": k, "Candidates": v} for k, v in reasons.items()], hide_index=True, width="stretch")
+            st.caption(f"{sf.get('recommended_not_yet_recorded', sf.get('eligible_not_yet_recorded', 0))} reviewed and kept, waiting for their slot or their own final window "
+                       f"({sf.get('lower_priority_waiting_for_their_final_window', 0)} lower-priority) · {sf.get('legs_in_pool', 0)} candidate legs examined. Eggy passes on a candidate whose review says there is no thesis, "
+                       "so a day can record fewer than 10 bets.")
+            if sf.get("intelligence_unavailable"):
+                st.warning("Eggy's review could not run this cycle, so nothing was recorded: " + esc(sf["intelligence_unavailable"]))
+            if sf.get("review_errors"):
+                st.warning(f"{sf['review_errors']} candidate review(s) FAILED (an engine error, not a judgment): " + esc("; ".join(f"{k} (x{v})" for k, v in (sf.get("review_error_examples") or {}).items())))
+    parlay_panel(doc.get("parlays_today") or [], doc.get("cards") or {})
+    fl = doc.get("eggy_flagship")
+    if fl:
+        st.markdown("**Eggy's flagship parlay, from the learning pool** (this is Eggy's official output; UNPRICED)")
+        st.markdown(" + ".join(esc(l["label"]) for l in fl["legs"]) + f" · weakest leg {esc(fl['weakest_leg']['label'])} ({fl['weakest_leg']['estimate']:.0%}) · unpriced")
     bets = doc.get("bets_today") or []
     if bets:
         st.markdown("**Today's experiment bets**")
-        st.dataframe([{"Rank": x["selection_rank"], "Market": x["market_family"].replace("_", " ").title(), "Bet": f"{x['participant_name']}" + ("" if x.get("threshold") is None else f" {x['threshold']}+"),
-                       "Team": x.get("team"), "Price": f"{x['american_price']:+.0f}", "Hit chance": _lx_pct(x.get("conservative_probability")), "Model edge at last observed price": f"{(x.get('edge') or 0) * 100:+.1f} pts", "Price age": (f"{str(x.get('price_status') or '—').replace('_', ' ').title()} ({x['price_age_at_recording_min']:.0f} min)" if x.get("price_age_at_recording_min") is not None else "—"), "Edge class": _EDGE_LABEL.get(x.get("edge_class"), x.get("edge_class") or "—"),
-                       "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
+        st.dataframe([{"Rank": x["selection_rank"], "Bet": x.get("label") or f"{x['participant_name']} — {x['market_family']}", "Action": _words(x.get("action")), "Thesis": _words(x.get("thesis_type")),
+                       "Team": x.get("team"), "Hit chance": _lx_pct(x.get("conservative_probability")), "Model edge at last observed price": f"{(x.get('edge') or 0) * 100:+.1f} pts",
+                       "Contradiction": _words(x.get("contradiction_level")), "Calibration": _words(x.get("calibration_level")), "Decision confidence": _words(x.get("decision_confidence")),
+                       "Price age": (f"{str(x.get('price_status') or '—').replace('_', ' ').title()} ({x['price_age_at_recording_min']:.0f} min)" if x.get("price_age_at_recording_min") is not None else "—"),
+                       "Edge class": _EDGE_LABEL.get(x.get("edge_class"), x.get("edge_class") or "—"), "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
                        "Eggy": "Eggy leg" if str(x.get("eggy_relation", "")).startswith("SAME_PLAYER") else ""} for x in bets], hide_index=True, width="stretch")
+        st.caption("Open any bet below to see why Eggy took it: the team or player, tonight, the market, the price, who is likely to win, what the model and the market each believe, why they disagree, what supports it, "
+                   "what argues against it, what history says, what data is missing and what would make Eggy pass.")
+        _bet_expanders(bets, doc.get("cards") or {}, ((doc.get("postmortem") or {}).get("bet_reviews")) or {})
     pm = doc.get("postmortem") or {}
     sc = pm.get("scorecard") or []
     if sc:
@@ -641,6 +813,13 @@ def learning_experiment_panel(doc: dict | None) -> None:
         st.caption(f"Cumulative: {cu.get('placed', 0)} placed, {cu.get('settled', 0)} settled · {cu.get('wins', 0)}-{cu.get('losses', 0)}-{cu.get('voids', 0)} · hit rate {_lx_pct(cu.get('hit_rate'))} · P/L {signed_money(cu.get('profit_loss', 0))} · "
                    f"ROI {_lx_pct(cu.get('roi'), 1)} · expected wins {cu.get('expected_wins', 0)} vs actual {cu.get('actual_wins', 0)} · Brier {cu.get('brier') if cu.get('brier') is not None else '—'}. "
                    "A handful of bets says almost nothing about skill; same-game bets are not independent.")
+    dr = pm.get("decision_review") or {}
+    if dr.get("grid"):
+        st.markdown("**Decision quality against outcome (so far)**")
+        st.dataframe([{"Decision": _words(r["decision"]), "Outcome": _words(r["outcome"]), "Bets": r["n"]} for r in dr["grid"]], hide_index=True, width="stretch")
+        st.caption(f"{dr.get('lucky_wins', 0)} lucky win(s) (a bad decision that won: no confidence gained) · {dr.get('earned_normal_variance', 0)} loss(es) that were EARNED normal variance (a good decision that lost) · "
+                   f"{dr.get('process_failures', 0)} process failure(s) · {dr.get('not_variance', 0)} good decision(s) that lost for a reason other than variance. "
+                   + (f"{dr['reconstructed']} bet(s) recorded before the review existed were reviewed as it would have run on their own day's data. " if dr.get("reconstructed") else "") + esc(dr.get("note") or ""))
     if (pm.get("cumulative_edge_classes") or []) and any(r["n"] for r in pm["cumulative_edge_classes"]):
         st.markdown("**By edge class (so far)**")
         _edge_class_table(pm["cumulative_edge_classes"])
@@ -659,13 +838,20 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
         dm = pm["day_metrics"]
         with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
+            pdays = [p for p in (pm.get("parlays") or []) if p.get("et_date") == pm.get("postmortem_for")]
+            if pdays:
+                st.markdown("**PARLAY SUMMARY** (the leg-level reviews follow inside each parlay)")
+                st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Priced": "no (unpriced)", "Hit / miss": p.get("hit_text"), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
+                               "Killed by": ", ".join(p.get("killed_by") or []) or "—", "Construction": p.get("verdict")} for p in pdays], hide_index=True, width="stretch")
+                parlay_panel(pdays, doc.get("cards") or {}, title="Parlays, with their leg reviews")
             st.write(f"{dm['placed']} placed, {dm['settled']} settled: {dm['wins']} won, {dm['losses']} lost, {dm['voids']} void/push, {dm['unresolved']} unresolved, {dm['open']} open · hit rate {_lx_pct(dm.get('hit_rate'))} · "
                      f"staked {money(dm['staked'])}, returned {money(dm['returned'])}, P/L {signed_money(dm['profit_loss'])} (ROI {_lx_pct(dm.get('roi'), 1)}) · expected wins {dm['expected_wins']} vs actual {dm['actual_wins']}")
             st.caption(pm.get("closing_price_movement") or "")
             db_ = pm.get("day_bets") or []
             if db_:
-                st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Price": f"{x['price']:+.0f}", "Result": str(x["result"]).title(), "Why (classification)": x.get("classification") or "—", "Action": x.get("action") or "—"} for x in db_],
-                             hide_index=True, width="stretch")
+                st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Outcome": str(x["result"]).title(), "Decision": _words(x.get("decision")), "Why (classification)": _words(x.get("classification")) if x.get("classification") else "—",
+                               "Action": _words(x.get("action")) if x.get("action") else "—"} for x in db_], hide_index=True, width="stretch")
+                _bet_expanders(db_, doc.get("cards") or {}, pm.get("bet_reviews") or {}, label_key="bet")
             if pm.get("day_edge_classes"):
                 st.markdown("**By edge class**")
                 _edge_class_table(pm["day_edge_classes"])
@@ -732,10 +918,10 @@ def _eggy_leg_line(l: dict) -> str:
         if stale is None:
             stale = price.get("fresh") is False
         when = et_time(price.get("quote_updated_utc"), True) if price.get("quote_updated_utc") else "no quote time"
-        price_txt = f"{american(price['american'])} (quoted {when}{'; STALE' if stale else ''})"
+        price_txt = f"(quoted {when}{'; STALE' if stale else ''})"
     else:
         price_txt = f"no price yet: {str(l.get('price_outlook') or 'UNKNOWN').replace('_', ' ').lower()}"
-    bits = [f"**{esc(l['label'])}**", price_txt]
+    bits = [f"**{esc(leg_dict_label(l))}**", price_txt]
     if l.get("model_probability") is not None:
         bits.append(f"model {pct(l['model_probability'])}")
     if l.get("recent_record"):
@@ -761,12 +947,43 @@ def _stage_b_note(primary: dict | None) -> None:
         st.caption("Production recording policy (cross-game tickets only, at real prices): " + esc(primary["reason"]))
 
 
+def _eggy_official_card(eggy: dict) -> None:
+    """Eggy's official daily output: ONE flagship parlay (the learning pool's strongest GOOD ticket) or PASS. An unpriced flagship is labelled UNPRICED; no combined price, stake, return or ROI is shown or claimed."""
+    from dashboard import theme
+    img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
+    today = et.eastern_today(_utcnow())
+    out, fl = eggy.get("daily_output"), eggy.get("flagship")
+    if eggy.get("date_et") and eggy["date_et"] != today:
+        st.caption(f"The Eggy output on file is for {esc(eggy['date_et'])}, not today ({today}); it is not shown.")
+        return
+    with st.container(border=True):
+        if out != "OFFICIAL_EGGY_FLAGSHIP_PARLAY" or not fl:
+            title, sub = (("Eggy's flagship is unavailable right now", eggy.get("error") or "")) if out == "UNAVAILABLE" else (
+                "PASS", "No GOOD qualifying parlay exists today. Eggy does not lower the bar to produce one.")
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
+            return
+        st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>Eggy's flagship parlay (one a day) · UNPRICED LEARNING PARLAY</div><div class='ttl'>{_h(EGGY_PICK_TITLE)}</div>"
+                    f"<div class='sub'>Unpriced: no combined price exists, so no stake, return or ROI is claimed. It is judged by its legs.</div></div></div>", unsafe_allow_html=True)
+        for l in fl["legs"]:
+            st.markdown("- " + esc(l["label"]) + f" · estimate {l['estimate']:.0%}")
+        wl = fl["weakest_leg"]
+        bits = [f"Weakest leg: **{esc(wl['label'])}** ({wl['estimate']:.0%})", f"Construction: **{esc(fl['construction_quality'])}**", f"Dependence: **{esc(str(fl['dependence_level']).replace('_', ' '))}**"]
+        bits.append(f"Combined probability: **{fl['combined_probability']:.0%}**" if fl.get("combined_probability") is not None else "Combined probability: **not given**")
+        st.markdown(" · ".join(bits))
+        if fl.get("reference_decimal"):
+            st.caption(f"Reference only (the product of the legs' own quoted prices, {fl['reference_decimal']:.2f}x): not a sportsbook price.")
+        st.caption("Hit chances are estimates, not promises; any parlay can lose.")
+
+
 def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_paused: bool = False) -> None:
     """Eggy's Parlay Pick of the Day with its two stages. An official pick (stage B, the production recording policy) is shown exactly as before. Without one, the card shows the BEST EGGY CANDIDATE
     the whole-slate search found and says which certification gates stand in its way, or a TRUE PASS with what was examined. It never invents a joint probability or a combined price."""
     from dashboard import theme
     eggy = eggy or {}
     out = eggy.get("daily_output")
+    if eggy.get("official_policy"):                        # Eggy's official output is the flagship parlay or PASS (the primary slip is no longer the official pick)
+        _eggy_official_card(eggy)
+        return
     if (primary or {}).get("ticket"):                      # an official ticket (proposed or recorded) is always shown by the original card, whatever the candidate document says
         eggy_pick_card(primary, recording_paused=recording_paused)
         return
@@ -803,6 +1020,7 @@ def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_pa
         st.markdown(f"**{esc(best['label'])}**")
         for l in best["legs"]:
             st.markdown(_eggy_leg_line(l))
+        leg_reviews(best["legs"])
         dep = best.get("dependence") or {}
         bounds = dep.get("joint_bounds")
         bits = ["Joint probability: **not certified**"]
@@ -829,7 +1047,7 @@ def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_pa
             with st.expander(f"Other candidates examined ({len(others)})"):
                 for c in others:
                     st.markdown(f"**{esc(c['matchup'])} — {esc(c['thesis']['title'].title())}** · support {c['support_score']:.2f} · {c['priced_legs']} of {c['total_legs']} legs priced" + ("" if c.get("game_funded") else " · game outside today's credit plan"))
-                    st.caption(" + ".join(esc(l['label']) for l in c["legs"]))
+                    st.caption(" + ".join(esc(leg_dict_label(l)) for l in c["legs"]))
 
 
 def eggy_availability(eggy: dict | None) -> None:
@@ -890,7 +1108,7 @@ def leg_why(legs: list[dict]) -> None:
         return
     with st.expander("Why this selection"):
         for l, c in shown:
-            st.markdown(f"**{esc(l['label'])}**")
+            st.markdown(f"**{esc(leg_dict_label(l))}**")
             st.caption(esc(" · ".join(c["lines"])))
             (st.warning if c["low_sample"] else st.caption)(esc(c["uncertainty"]))
 
@@ -901,7 +1119,7 @@ def option_card(opt: dict, *, key: str, show_people: bool = True) -> None:
     """One option, read-only: legs, prices, quote ages, the estimate and its evidence. There is no add/submit control anywhere in the product: nothing a visitor does is recorded."""
     with st.container(border=True):
         kind = "Single" if opt["kind"] == "SINGLE" else f"{len(opt['legs'])}-leg cross-game parlay"
-        _card_head(" + ".join(l["label"] for l in opt["legs"]), chip(kind, "info"))
+        _card_head(" + ".join(leg_dict_label(l) for l in opt["legs"]), chip(kind, "info"))
         quoted = opt["price_basis"] == "SPORTSBOOK_QUOTE"
         decimal = opt.get("combined_decimal") or 1.0
         ev = opt["ev_after_haircut"] * 100
@@ -942,7 +1160,7 @@ def ontario_check(opt: dict, *, key: str) -> None:
     for l in opt["legs"]:
         c = by_leg.get((str(l["game_id"]), str(l["participant_id"]), l["market_family"], l["threshold"], l["side"]))
         if c:
-            lines.append(f"{l['label']}: Ontario {american(c['ontario_price'])} seen {et_time(c['observed_at_utc'], True)} ({c['where_seen']}) vs US feed {american(l['american_price'])}")
+            lines.append(f"{leg_dict_label(l)}: Ontario {american(c['ontario_price'])} seen {et_time(c['observed_at_utc'], True)} ({c['where_seen']}) vs US feed {american(l['american_price'])}")
     if lines:
         st.caption("Ontario spot check — " + " · ".join(esc(x) for x in lines))
     with st.expander("Check this on DraftKings Ontario"):
@@ -951,7 +1169,7 @@ def ontario_check(opt: dict, *, key: str) -> None:
         sess = st.session_state.setdefault("_verifications", {})
         for i, l in enumerate(opt["legs"]):
             with st.form(f"{key}_ont_{i}", clear_on_submit=False):
-                st.write(l["label"])
+                st.write(leg_dict_label(l))
                 price = st.number_input("Ontario price (American, e.g. -135 or 120)", value=int(l["american_price"]), step=5, key=f"{key}_ont_p_{i}")
                 where = st.text_input("Where you saw it", value="DraftKings Ontario app", key=f"{key}_ont_w_{i}")
                 if st.form_submit_button("Record Ontario price"):

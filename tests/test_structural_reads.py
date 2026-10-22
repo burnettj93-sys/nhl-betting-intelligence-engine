@@ -68,6 +68,10 @@ JUSTIFIED_EXCEPTIONS = {
     # strictly EARLIER games (`game_date <` the ticket's game date) to compare with his own recent average. It is a post-mortem diagnosis of an outcome, never "what was known at prediction time" for a new
     # prediction, feeds no pricing or decision, and writes nothing.
     ("operational/ticket_loss_classifier.py", "player_game_stats"),
+    # operational/eggy_decisions.py judges a SETTLED learning-book bet's decision AFTER its game is final: it reads that finished game's official box score row (ice time, goals, assists, shots) for the one player
+    # of the bet, to check the claims the bet's frozen pre-bet review made ("he plays about this long") against what happened. A post-mortem of an outcome: it answers "what actually happened", never "what was
+    # known at prediction time", feeds no pricing, probability or decision, and writes nothing (the same category as ticket_loss_classifier.py above).
+    ("operational/eggy_decisions.py", "player_game_stats"),
     # ingest/nhl_api.py's SELECTs are idempotency checks in the WRITE
     # path (spec item 5: "reingesting identical state stays idempotent")
     # -- they compare a candidate new row to the latest existing one to

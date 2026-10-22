@@ -19,10 +19,13 @@ price_provider_update_utc, price_age_at_recording_min, provider_quote_age_at_rec
 (`collect_candidate_legs(advisory_price_age=True)`); Eggy and the normal book use the strict limits, unchanged. The postmortem reports results by age bucket and keeps SELECTION quality (hit rate against the model's
 probability) apart from PRICE/VALUE quality (ROI against the edge at the last observed price), and measures same-game dependence rather than assuming independence.
 
-## Ranking and slots
-Score = 0.25 conservative probability + 0.10 model probability + 0.25 edge + 0.15 calibration confidence + 0.10 freshness + 0.15 model quality, with soft diversification penalties (same game / player /
-team / market / price band). A strong bet is never rejected only for sharing a game. The ten slots are released with the puck-drop waves (cumulative cap = ceil(10 x games through the wave / games today),
-relaxing in the last 25 minutes before a wave).
+## Decisions, ranking and slots (updated 2026-10-21: docs/EGGY_INTELLIGENCE.md)
+Every eligible candidate is reviewed before it is ranked (the game, the player, the market, why the model disagrees with the market, the case against, does the thesis survive) and the review decides RECORD,
+LOWER_PRIORITY or PASS; a PASS is never recorded. The survivors are ordered lexicographically (action, edge class, contradiction level, calibration confidence, hit chance, edge: there is no weighted score), and a
+game that already holds three of the day's bets sends its further candidates behind every other game's. Each bet is stored with the review card it was recorded with, and the postmortem judges the DECISION
+apart from the OUTCOME. The ten slots are released with the puck-drop waves (cumulative cap = ceil(10 x games through the wave / games today), relaxing in the last 25 minutes before a wave); a LOWER_PRIORITY bet
+is recorded only in the last 25 minutes before its own game and inside the strict caps. If the review cannot run (the evidence file or the team or skater data missing or stale) nothing is recorded and the status
+says why; an engine error in one candidate's review costs only that candidate and is reported as an error, not a judgment.
 
 ## Bankroll
 Starts at $500.00. When cash falls below the next $10 stake it is reset to $500.00 (prior losses are never erased; the reset is funding, not winnings); each reset is an append-only funding event (time, balance before, amount, balance after, experiment day, reason
@@ -32,9 +35,12 @@ Starts at $500.00. When cash falls below the next $10 stake it is reset to $500.
 On 2026-11-03 (Eastern) it ends by date arithmetic alone: nothing new is recorded and the reset rule stops. Open bets still settle. The normal paper-book policy was never changed.
 
 ## Edge classes
-Every bet is classed at recording time: POSITIVE_EDGE (edge of +2 points or more on an anchored estimate), NEUTRAL_UNCERTAIN_EDGE (within 2 points of zero, or positive on an unanchored estimate) or
-LEARNING_SAMPLE_NEGATIVE_EDGE (below -2 points). A negative-edge candidate passes every integrity and support gate, is recorded only to fill the day's sample after the others, and only once no better price for its
-wave can still arrive. Daily and final reports show the three classes separately.
+Every bet is classed at recording time on the main engine's own 3-point threshold (the first version used 2 points, which on a moneyline measured only the bookmaker's margin on that side and favoured underdogs by
+arithmetic): POSITIVE_EDGE (a model edge of +3 points or more with calibration at least MEDIUM), NEUTRAL_UNCERTAIN_EDGE (within 3 points of zero, or positive on an estimate nobody can vouch for) or
+LEARNING_SAMPLE_NEGATIVE_EDGE (-3 points or worse). A moneyline is judged on the hockey model's edge, a prop on the estimate used less the price's implied probability. A negative-edge candidate is only ever a
+bounded, LOWER_PRIORITY experiment (the event at least 25% likely, the price within 10 points of the estimate, calibration at least MEDIUM) recorded in its own game's last 25 minutes. Daily and final reports show
+the three classes separately. (Rows recorded before 2026-10-21 carry the 2-point classes and, for the four moneylines of Oct 20 and the first of Oct 21, Elo as their `model_probability`; later rows carry the
+hockey-model probability: the stored card says which.)
 
 ## Reports
 - Trader (every 10 minutes): records, settles, writes `learning_experiment_status.json` and the postmortem document.

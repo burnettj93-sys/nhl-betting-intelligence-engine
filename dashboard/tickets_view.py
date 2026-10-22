@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime as dt
 
 from operational import eastern_time as et
+from operational.bet_labels import leg_dict_label
 
 STALE_AFTER_MINUTES = 45
 
@@ -96,7 +97,7 @@ def leg_row(leg: dict) -> dict:
         where = f"{leg['team']} vs {leg['opponent']} · "
     mark = {"WIN": "✓ ", "LOSS": "✗ ", "VOID": "– void ", "UNRESOLVED": "? "}.get(leg.get("outcome") or "", "")
     return {
-        "selection": f"{mark}{leg['label']}",
+        "selection": f"{mark}{leg_dict_label(leg)}",
         "game": f"{where}{et_time(leg.get('game_start_utc'))}",
         "price": american(leg["american_price"]),
         "priced_at": quote_text(leg),
@@ -147,7 +148,7 @@ def card(ticket: dict) -> dict:
 
 def single_row(single: dict) -> dict:
     where = f"{single['team']} vs {single['opponent']} · " if single.get("team") and single.get("opponent") else ""
-    return {"Selection": single["label"], "Game": f"{where}{et_time(single.get('game_start_utc'))}",
+    return {"Selection": leg_dict_label(single), "Game": f"{where}{et_time(single.get('game_start_utc'))}",
             "Price": american(single["american_price"]), "Priced at": et_time(single.get("price_captured_at_utc")),
             "Modeled hit chance": percent(single.get("probability"))}
 

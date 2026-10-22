@@ -553,7 +553,12 @@ def build_doc(now: dt.datetime, product: dict, pool: dict | None, tickets: dict 
     eggy = None
     try:                                                    # stage A: the whole real slate, same-game theses included (operational/eggy_candidates.py); never records anything, never blocks the board
         from operational import eggy_candidates
-        eggy = eggy_candidates.build(now, games=out_games, players_by_game=players_by_game, product=product, pool=pool, availability=availability, plan=plan, primary=primary)
+        try:                                                # Eggy's official output: the learning pool's flagship parlay or PASS (operational/eggy_candidates.OFFICIAL_POLICY); read, never re-selected
+            from operational import learning_cohort
+            flagship = eggy_candidates.flagship_state(learning_cohort.load_status(), today)
+        except Exception as exc:  # noqa: BLE001
+            flagship = {"state": "UNAVAILABLE", "reason": f"{exc.__class__.__name__}: {exc}"}
+        eggy = eggy_candidates.build(now, games=out_games, players_by_game=players_by_game, product=product, pool=pool, availability=availability, plan=plan, primary=primary, flagship=flagship)
     except Exception as exc:  # noqa: BLE001
         eggy = {"version": 1, "daily_output": "UNAVAILABLE", "headline": "Eggy's candidate search could not be built", "error": f"{exc.__class__.__name__}: {exc}"}
     doc = {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": today, "counts": counts, "games": out_games, "primary": primary, "eggy": eggy, "recording": (tickets or {}).get("recording"),
@@ -735,6 +740,11 @@ def refresh(now: dt.datetime, *, product: dict | None = None, tickets: dict | No
     except Exception:  # noqa: BLE001 - the plan only explains why a price is missing
         plan = None
     doc = build_doc(now, product, pool, tickets, avail, saves, _previous_day_check(product, today) if today else None, saves_errors, previous_doc=previous, recovered=recovered, plan=plan)
+    try:                                                    # the review card of each leg of Eggy's pick and best candidate (display only: Eggy's selection and policy are untouched; operational/eggy_reviews.py)
+        from operational import eggy_reviews
+        doc["eggy_reviews"] = eggy_reviews.attach(now, product, doc.get("primary"), doc.get("eggy"))
+    except Exception:  # noqa: BLE001 - the board never waits on a review
+        pass
     try:
         from operational import pregame_archive
         pregame_archive.remember(doc)                          # the last scheduled block of each analysed game is kept for after puck drop

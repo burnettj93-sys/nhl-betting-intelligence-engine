@@ -20,10 +20,42 @@ The support score that ranks candidates is the geometric mean of the legs' estim
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 from itertools import combinations
+from zoneinfo import ZoneInfo
 
 OFFICIAL, BEST, PASS = "OFFICIAL_EGGY_PICK", "BEST_EGGY_CANDIDATE", "TRUE_PASS"
+FLAGSHIP = "OFFICIAL_EGGY_FLAGSHIP_PARLAY"
+
+# Eggy's OFFICIAL daily output (owner 2026-10-21): at most ONE flagship parlay, the learning pool's own flagship (operational/learning_cohort._flagship_public: the strongest GOOD, RECORD parlay of the
+# day), or PASS. It replaces the primary slip (policy digest 1fad3ba03503cf94) as the official output; that code is kept, not used for the official pick. No selection happens here.
+OFFICIAL_POLICY = {"policy_id": "EGGY_FLAGSHIP_PARLAY_V1", "unit": "FLAGSHIP_PARLAY", "max_outputs_per_day": 1, "source": "operational.learning_cohort._flagship_public",
+                   "qualifying": {"construction_quality": "GOOD", "action": "RECORD"}, "no_qualifying_flagship": "PASS",
+                   "price": "UNPRICED LEARNING PARLAY unless a real combined price exists; a combined price is never made up", "stake_return_roi": "none claimed",
+                   "replaces_as_official_output": {"primary_slip_policy_digest": "1fad3ba03503cf94"}}
+
+
+def official_policy_digest() -> str:
+    import hashlib
+    return hashlib.sha256(json.dumps(OFFICIAL_POLICY, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def flagship_state(status: dict | None, today_et: str | None) -> dict:
+    """Eggy's flagship as the learning status already carries it, for the Eastern date `today_et`. {'state': 'OK', 'flagship': dict|None} or {'state': 'UNAVAILABLE', 'reason': ...} when the status is
+    missing or is not from today (a stale file is never read as 'no flagship')."""
+    if not status:
+        return {"state": "UNAVAILABLE", "reason": "the learning status is not available"}
+    try:
+        built = dt.datetime.fromisoformat(str(status["generated_at_utc"]).replace("Z", "+00:00")).astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    except (KeyError, ValueError):
+        return {"state": "UNAVAILABLE", "reason": "the learning status has no valid build time"}
+    if today_et and built != today_et:
+        return {"state": "UNAVAILABLE", "reason": f"the learning status is from {built}, not {today_et}"}
+    fl = status.get("eggy_flagship")
+    if fl and fl.get("construction_quality") == "GOOD" and fl.get("action") == "RECORD":
+        return {"state": "OK", "flagship": fl}
+    return {"state": "OK", "flagship": None}
 
 FAVORITE_FLOOR = 0.55               # the moneyline floor of the production selector (anchor.MONEYLINE_LEG_FLOOR)
 STAR_POINTS_FLOOR = 0.60            # a star's 1+ point model probability for the "strong favourite + star" thesis
@@ -436,7 +468,7 @@ def _verdicts(product: dict) -> tuple[dict, list]:
     return mh.get("skater_verdicts") or {}, mh.get("market_matrix") or []
 
 
-def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product: dict, pool: dict | None, availability: dict | None, plan: dict | None, primary: dict | None) -> dict:
+def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product: dict, pool: dict | None, availability: dict | None, plan: dict | None, primary: dict | None, flagship: dict | None = None) -> dict:
     """The stage-A document for the board: candidates, theses examined, per-market availability, and the daily output."""
     verdicts, matrix = _verdicts(product)
     goalies = (product or {}).get("goalies") or {}
@@ -465,7 +497,14 @@ def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product
     qualifying = [c for c in ranked if c["support_score"] >= MIN_SUPPORT and c["all_legs_validated"]]        # a leg whose model did not beat its baselines cannot headline a candidate
     primary = primary or {}
     ticket = primary.get("ticket")
-    if ticket:
+    if flagship is not None:                                # the official output is the flagship parlay or PASS; the candidate search below is information only
+        if flagship["state"] == "UNAVAILABLE":
+            output, headline = "UNAVAILABLE", "Eggy's flagship could not be read"
+        elif flagship.get("flagship"):
+            output, headline = FLAGSHIP, "OFFICIAL EGGY FLAGSHIP PARLAY (UNPRICED)"
+        else:
+            output, headline = PASS, "TRUE PASS"
+    elif ticket:
         output, headline = OFFICIAL, "OFFICIAL EGGY PICK"
     elif qualifying:
         output, headline = BEST, "NO CERTIFIED EGGY PICK TODAY"
@@ -474,8 +513,9 @@ def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product
     else:
         output, headline = PASS, "TRUE PASS"
     best = qualifying[0] if output == BEST else None
+    official = flagship is not None
     out = {"version": 1, "generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date_et": (product or {}).get("et_today"), "daily_output": output, "headline": headline,
-           "best_candidate": best, "other_candidates": [c for c in ranked[:6] if best is None or c["id"] != best["id"]][:5],
+           "best_candidate": best, "flagship": (flagship or {}).get("flagship"), "official_policy": ({"policy_id": OFFICIAL_POLICY["policy_id"], "digest": official_policy_digest()} if official else None), "other_candidates": [c for c in ranked[:6] if best is None or c["id"] != best["id"]][:5],
            "stage_b": {"official_ticket": bool(ticket), "closest_cross_game": primary.get("closest"), "reason": primary.get("reason"), "strongest_singles": primary.get("strongest_singles")},
            "examined": {"games": n_examined, "theses_per_team": 3, "candidates": len(candidates), "support_floor": MIN_SUPPORT, "by_game": examined, "games_failed": len(errors)},
            "availability": availability_rows,
@@ -483,6 +523,8 @@ def build(now: dt.datetime, *, games: list[dict], players_by_game: dict, product
                      "Joint probabilities and combined prices of same-game candidates are NOT claimed; see each candidate's dependence section.",
                      "The support score ranks candidates; it is not a probability and not value.",
                      "Moneyline legs are included without stage B's model-agreement requirement: a candidate is a thesis to look at, not a qualified pick."]}
-    if output == "UNAVAILABLE":
+    if official and output == "UNAVAILABLE":
+        out["error"] = flagship["reason"]
+    elif output == "UNAVAILABLE":
         out["error"] = f"{len(errors)} game(s) could not be searched: " + "; ".join(f"{e['game_id']}: {e['error']}" for e in errors[:3])
     return out

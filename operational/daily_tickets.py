@@ -29,6 +29,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import os
 from collections import defaultdict
 from pathlib import Path
 
@@ -330,9 +331,15 @@ def revalidate_before_recording(combo: rmp.ParlayResult, now: dt.datetime, *, pr
     return reasons
 
 
+LEGACY_PRIMARY_SLIP_RECORDING = os.environ.get("NHL_ENGINE_LEGACY_PRIMARY_RECORDING") == "1"      # OFF unless that variable is "1" (only the test package sets it, to exercise the old machinery). RETIRED (owner 2026-10-21): the legacy primary slip (policy digest 1fad3ba03503cf94) is historical only and creates no new automatic paper bet. Eggy's official output is
+                                           # the flagship parlay (operational/eggy_candidates.OFFICIAL_POLICY). Already-recorded rows still settle and read as before; nothing else here changes.
+
+
 def record_tickets(bankroll_conn, combos: list[rmp.ParlayResult], now: dt.datetime) -> list[dict]:
     """Stake each selected ticket. Stops at the first INSUFFICIENT_FUNDS. This is the only path that stakes the model book, so it enforces the day's limit (the policy's slots; one under the
     primary-slip policy), a fresh re-check of every leg's price and the game start at this moment, the fixed $10 stake and, in the ledger, funds and duplicates."""
+    if combos and not LEGACY_PRIMARY_SLIP_RECORDING:     # the only path that stakes the model book is closed to NEW tickets
+        return [{"status": "RETIRED_LEGACY", "ticket_id": None, "reason": "The legacy primary slip no longer creates paper bets (retired 2026-10-21); it is historical only."}]
     if combos and recording_pause.is_paused():          # second guard: whoever calls this, a paused model records nothing new
         return [{"status": "PAUSED", "ticket_id": None, "reason": recording_pause.notice()}]
     results = []
@@ -430,7 +437,7 @@ def ticket_from_row(row: dict, now: dt.datetime, alerts: list[dict] | None = Non
             model_threshold_eligible=True, identity_resolved=True, price_fresh=True, event_not_started=True)
         card_legs.append({
             "label": rmp.leg_label(stub), "market_family": l["market_family"], "game_id": l["game_id"],
-            "participant_id": l["participant_id"], "participant_name": l["participant_name"],
+            "participant_id": l["participant_id"], "participant_name": l["participant_name"], "threshold": l.get("threshold"), "side": l.get("side"),
             "provider_start_utc": l.get("provider_start_utc"),
             "retrieved_at_utc": l.get("retrieved_at_utc"), "quote_updated_utc": l.get("quote_updated_utc"),
             "quote_age_min_at_entry": l.get("quote_age_min_at_entry"), "freshness_status": l.get("freshness_status"),
@@ -486,7 +493,7 @@ def ticket_from_combo(combo: rmp.ParlayResult, et_date: str, *, proposed: bool =
     for l in combo.legs:
         legs.append({"evidence": anchor.leg_evidence(l, anchor.cap_for(policy)) if anchor_mode else None,
             "label": rmp.leg_label(l), "market_family": l.market_family, "game_id": l.game_id,
-            "participant_id": l.participant_id, "participant_name": l.participant_name,
+            "participant_id": l.participant_id, "participant_name": l.participant_name, "threshold": l.threshold, "side": l.side,
             "provider_start_utc": l.provider_start_utc,
             "retrieved_at_utc": l.retrieved_at_utc, "quote_updated_utc": l.quote_updated_utc,
             "quote_age_min_at_entry": l.quote_age_min, "freshness_status": l.freshness_status or None, "team": l.team,
@@ -545,7 +552,7 @@ def exposure(cards: list[dict]) -> dict:
 
 def single_card(leg: rmp.ParlayLeg) -> dict:
     d = rmp.leg_decimal(leg)
-    return {"label": rmp.leg_label(leg), "game_id": leg.game_id, "team": leg.team, "opponent": leg.opponent,
+    return {"label": rmp.leg_label(leg), "market_family": leg.market_family, "participant_name": leg.participant_name, "threshold": leg.threshold, "game_id": leg.game_id, "team": leg.team, "opponent": leg.opponent,
             "game_start_utc": leg.game_start_utc, "american_price": leg.american_price, "decimal_price": round(d, 4),
             "price_captured_at_utc": leg.captured_at_utc, "probability": leg.conservative_probability,
             "ev_estimated": leg.conservative_probability * d - 1.0, "model_version": leg.model_version,
@@ -856,7 +863,7 @@ def _strongest_singles(legs: list, limit: int = 5) -> list[dict]:
     for l in sorted(pool, key=lambda x: -x.conservative_probability)[:limit]:
         dec = rmp.leg_decimal(l)
         ev = l.conservative_probability * dec - 1.0
-        out.append({"label": rmp.leg_label(l), "game_id": l.game_id, "team": l.team, "market_family": l.market_family, "american_price": l.american_price,
+        out.append({"label": rmp.leg_label(l), "participant_name": l.participant_name, "threshold": l.threshold, "game_id": l.game_id, "team": l.team, "market_family": l.market_family, "american_price": l.american_price,
                     "probability": round(l.conservative_probability, 4), "ev_estimated": round(ev, 4),
                     "ev_after_haircut": round((l.conservative_probability - pol.value_shade) * dec - 1.0, 4),
                     "quote_updated_utc": l.quote_updated_utc, "freshness_status": l.freshness_status or None, "provisional": bool(getattr(l, "provisional", False)),
@@ -1010,8 +1017,8 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
     try:                                     # frozen predictions: every priced leg with its evidence and the selector's decision, written before any game starts (the log is append-only; nothing is staked here)
         pol = ticket_policy.active()
         rejected = [c for c in (picked.get("considered") or []) if c.get("status") != "SELECTED"][:8]
-        selection_audit["shadow_log"] = shadow_selection.record(legs, now, code_version(), proposed=picked["tickets"], recorded=not pause["paused"], rejected=rejected,
-                                                                selector={"policy_id": pol.policy_id, "digest": pol.digest(), "mode": getattr(pol, "mode", "legacy"), "recording": not pause["paused"]})
+        selection_audit["shadow_log"] = shadow_selection.record(legs, now, code_version(), proposed=picked["tickets"], recorded=(not pause["paused"] and LEGACY_PRIMARY_SLIP_RECORDING), rejected=rejected,
+                                                                selector={"policy_id": pol.policy_id, "digest": pol.digest(), "mode": getattr(pol, "mode", "legacy"), "recording": (not pause["paused"] and LEGACY_PRIMARY_SLIP_RECORDING)})
     except Exception as exc:  # noqa: BLE001 - the shadow log must never stop a cycle
         selection_audit["shadow_log"] = {"status": "ERROR", "reason": f"{exc.__class__.__name__}: {exc}"}
     singles = rmp.select_singles(legs)
@@ -1026,6 +1033,8 @@ def run_cycle(nhl_conn, bankroll_conn, now: dt.datetime, *, collected: dict | No
         n = len(picked["tickets"])
         reason = (recording_pause.notice(pause) + (f" The {n} ticket(s) below are what the selector would record: proposed, not recorded, nothing staked." if n else
                                                      f" Nothing would be recorded right now: {picked['reason']}"))
+    elif not LEGACY_PRIMARY_SLIP_RECORDING:
+        reason = "The legacy primary slip is retired: it creates no new paper bets. Eggy's official output is the flagship parlay; the learning cohort records the learning parlays."
     elif slots_left == 0:
         reason = f"All {slots_total} of today's ticket slot{'s' if slots_total != 1 else ''} {'are' if slots_total != 1 else 'is'} recorded."
     else:

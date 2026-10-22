@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import datetime as dt
 import unittest
+from unittest import mock
 
 from operational import slate_board as sb
 from tests.product_fixture import GEN, builder_pool_doc, product_state, snapshot
@@ -43,8 +44,15 @@ def avail(shots="POSTED", goals="NOT_POSTED") -> dict:
         "player_goal_scorer_anytime": {"status": goals, "checked_utc": Q, "last_update": None, "outcomes": 0}}}}}
 
 
-def doc(tickets=None, saves=None, availability=None) -> dict:
-    return sb.build_doc(NOW, product(), pool(), tickets or {}, availability if availability is not None else avail(), saves or {}, None)
+def doc(tickets=None, saves=None, availability=None, status=None) -> dict:
+    """The board document. By default the earlier (primary-slip) Eggy output is built, which the page tests below were written for; `status` (a learning status document) builds the OFFICIAL flagship output
+    instead (tests/test_eggy_official.py)."""
+    from operational import eggy_candidates as ec, learning_cohort as lc
+    if status is None:
+        with mock.patch.object(ec, "flagship_state", return_value=None):
+            return sb.build_doc(NOW, product(), pool(), tickets or {}, availability if availability is not None else avail(), saves or {}, None)
+    with mock.patch.object(lc, "load_status", return_value=status):
+        return sb.build_doc(NOW, product(), pool(), tickets or {}, availability if availability is not None else avail(), saves or {}, None)
 
 
 class TestTheBoard(unittest.TestCase):
@@ -663,7 +671,7 @@ class TestThePage(unittest.TestCase):
         at = run_page("41_Slate_Board.py", s)
         self.assertFalse(at.exception, at.exception)
         blob = (" ".join(x.value for x in at.markdown) + " " + " ".join(x.value for x in at.caption)).replace("&#36;", "$").replace("&#x27;", "'")
-        for want in ("Eggy's Parlay Pick of the Day", "+238", "$10.00", "$33.77", "37%", "Test Skater One 2+ shots", "COL to win", "same ticket as the primary parlay", "Proposed, not recorded"):
+        for want in ("Eggy's Parlay Pick of the Day", "+238", "$10.00", "$33.77", "37%", "Test Skater One — SHOTS ON GOAL 2+ — -110", "COL — MONEYLINE — -130", "same ticket as the primary parlay", "Proposed, not recorded"):
             self.assertIn(want, blob)
         self.assertNotIn("No Eggy pick today", blob)
         for banned in ("guarantee", "slam dunk", " lock", "sure thing"):
