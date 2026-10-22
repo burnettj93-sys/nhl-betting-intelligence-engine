@@ -262,7 +262,7 @@ class TestTheCohortRecordsParlaysNotStraightBets(Base):
         self.assertTrue(all(l["key"] in doc["cards"] for l in p["legs"]))
         self.assertIsNotNone(p["weakest_leg"])
         fl = doc["eggy_flagship"]
-        self.assertIn("not changed", fl["note"])
+        self.assertIn("official flagship", fl["note"])
         self.assertEqual(doc["exposure_today_usd"], 0.0)
 
     def test_the_postmortem_wraps_the_parlay_around_the_leg_reviews(self):

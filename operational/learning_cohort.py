@@ -906,14 +906,14 @@ def _parlay_public(r: dict) -> dict:
 
 
 def _flagship_public(conn, today: str) -> dict | None:
-    """Eggy's flagship from the learning pool: the strongest GOOD ticket recorded today by the construction order (quality, fewer legs, strongest weakest leg, likelier). DISPLAY ONLY: Eggy's official pick and
-    its policy digest are unchanged until the owner approves wiring it in. At most one; None is a correct answer."""
+    """Eggy's flagship from the learning pool: the strongest GOOD ticket recorded today by the construction order (quality, fewer legs, strongest weakest leg, likelier). Eggy's OFFICIAL daily output reads this result
+    (operational/eggy_candidates.flagship_state); there is no second selection path. At most one; None is a correct answer."""
     from operational import learning_parlays as lp
     best = [r for r in _today_parlays(conn, today) if r["construction_quality"] == "GOOD" and r["action"] == "RECORD"]
     if not best:
         return None
     best.sort(key=lambda r: (r["n_legs"], -json.loads(r["weakest_leg_json"])["estimate"], -(r["ranking_probability"] or 0), r["idempotency_key"]))
-    return {**_parlay_public(best[0]), "note": "proposed flagship from the learning pool; Eggy's official pick is chosen by its own policy and is not changed by this"}
+    return {**_parlay_public(best[0]), "note": "Eggy's official flagship parlay (operational/eggy_candidates.OFFICIAL_POLICY): the strongest GOOD ticket of the learning pool, UNPRICED"}
 
 
 def settle_parlays(conn, nhl_conn, now: dt.datetime) -> dict:

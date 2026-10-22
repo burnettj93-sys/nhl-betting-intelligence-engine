@@ -787,7 +787,7 @@ def learning_experiment_panel(doc: dict | None) -> None:
     parlay_panel(doc.get("parlays_today") or [], doc.get("cards") or {})
     fl = doc.get("eggy_flagship")
     if fl:
-        st.markdown("**Eggy's flagship parlay, from the learning pool** (proposed; Eggy's official pick is unchanged)")
+        st.markdown("**Eggy's flagship parlay, from the learning pool** (this is Eggy's official output; UNPRICED)")
         st.markdown(" + ".join(esc(l["label"]) for l in fl["legs"]) + f" · weakest leg {esc(fl['weakest_leg']['label'])} ({fl['weakest_leg']['estimate']:.0%}) · unpriced")
     bets = doc.get("bets_today") or []
     if bets:
@@ -947,12 +947,43 @@ def _stage_b_note(primary: dict | None) -> None:
         st.caption("Production recording policy (cross-game tickets only, at real prices): " + esc(primary["reason"]))
 
 
+def _eggy_official_card(eggy: dict) -> None:
+    """Eggy's official daily output: ONE flagship parlay (the learning pool's strongest GOOD ticket) or PASS. An unpriced flagship is labelled UNPRICED; no combined price, stake, return or ROI is shown or claimed."""
+    from dashboard import theme
+    img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
+    today = et.eastern_today(_utcnow())
+    out, fl = eggy.get("daily_output"), eggy.get("flagship")
+    if eggy.get("date_et") and eggy["date_et"] != today:
+        st.caption(f"The Eggy output on file is for {esc(eggy['date_et'])}, not today ({today}); it is not shown.")
+        return
+    with st.container(border=True):
+        if out != "OFFICIAL_EGGY_FLAGSHIP_PARLAY" or not fl:
+            title, sub = (("Eggy's flagship is unavailable right now", eggy.get("error") or "")) if out == "UNAVAILABLE" else (
+                "PASS", "No GOOD qualifying parlay exists today. Eggy does not lower the bar to produce one.")
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
+            return
+        st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>Eggy's flagship parlay (one a day) · UNPRICED LEARNING PARLAY</div><div class='ttl'>{_h(EGGY_PICK_TITLE)}</div>"
+                    f"<div class='sub'>Unpriced: no combined price exists, so no stake, return or ROI is claimed. It is judged by its legs.</div></div></div>", unsafe_allow_html=True)
+        for l in fl["legs"]:
+            st.markdown("- " + esc(l["label"]) + f" · estimate {l['estimate']:.0%}")
+        wl = fl["weakest_leg"]
+        bits = [f"Weakest leg: **{esc(wl['label'])}** ({wl['estimate']:.0%})", f"Construction: **{esc(fl['construction_quality'])}**", f"Dependence: **{esc(str(fl['dependence_level']).replace('_', ' '))}**"]
+        bits.append(f"Combined probability: **{fl['combined_probability']:.0%}**" if fl.get("combined_probability") is not None else "Combined probability: **not given**")
+        st.markdown(" · ".join(bits))
+        if fl.get("reference_decimal"):
+            st.caption(f"Reference only (the product of the legs' own quoted prices, {fl['reference_decimal']:.2f}x): not a sportsbook price.")
+        st.caption("Hit chances are estimates, not promises; any parlay can lose.")
+
+
 def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_paused: bool = False) -> None:
     """Eggy's Parlay Pick of the Day with its two stages. An official pick (stage B, the production recording policy) is shown exactly as before. Without one, the card shows the BEST EGGY CANDIDATE
     the whole-slate search found and says which certification gates stand in its way, or a TRUE PASS with what was examined. It never invents a joint probability or a combined price."""
     from dashboard import theme
     eggy = eggy or {}
     out = eggy.get("daily_output")
+    if eggy.get("official_policy"):                        # Eggy's official output is the flagship parlay or PASS (the primary slip is no longer the official pick)
+        _eggy_official_card(eggy)
+        return
     if (primary or {}).get("ticket"):                      # an official ticket (proposed or recorded) is always shown by the original card, whatever the candidate document says
         eggy_pick_card(primary, recording_paused=recording_paused)
         return
