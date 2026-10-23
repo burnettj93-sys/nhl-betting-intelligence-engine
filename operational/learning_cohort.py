@@ -747,7 +747,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
         prelim.append((key, leg, pleg, basis))
     ctx = None
     if prelim:
-        ctx = ei.build_context(nhl_conn, now)
+        ctx = ei.build_context(nhl_conn, now, live_overlay=True)
         ok, why_unusable = ei.usable(ctx, pinned_sha=POLICY["decision_architecture"]["evidence"]["sha256"])
         if not ok:                                  # no review, no bet: the cohort never falls back to unreviewed ranking
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
