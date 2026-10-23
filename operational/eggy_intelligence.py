@@ -19,6 +19,7 @@ against anything else.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -215,9 +216,10 @@ def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, 
     seen = {g["date"] for g in box}
     games = list(box) + [g for g in (p.get("recent_games") or []) if g.get("date") not in seen]            # newest first
     games.sort(key=lambda g: g["date"], reverse=True)
-    flags, facts = [], {"latest_games": [{"date": g["date"], "toi": g["toi"], "toi_pp": g.get("toi_pp"), "shots": g.get("shots"), "source": g.get("source") or "MoneyPuck"} for g in games[:OVERLAY_FORM_GAMES]],
+    newest = lambda n: list(itertools.islice(games, n))                                                  # the n newest games by date (a recency window, not a training split)
+    flags, facts = [], {"latest_games": [{"date": g["date"], "toi": g["toi"], "toi_pp": g.get("toi_pp"), "shots": g.get("shots"), "source": g.get("source") or "MoneyPuck"} for g in newest(OVERLAY_FORM_GAMES)],
                         "box_score_games": len(box)}
-    last3 = games[:3]
+    last3 = newest(3)
     if toi_e is not None and len(last3) >= 2:
         avg3 = sum(g["toi"] for g in last3) / len(last3)
         facts["latest_toi_avg"], facts["model_toi"] = round(avg3, 1), round(toi_e, 1)
@@ -235,7 +237,7 @@ def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, 
         if pp_e - pp3 >= OVERLAY_PP_GAP:
             flags.append({"name": "PP_ROLE_LOST", "level": "MODERATE", "text": f"the model expects {pp_e:.2f} power-play min but his last {len(mp3)} games with power-play data averaged {pp3:.2f} (the newest box-score games carry no power-play time)"})
     if stat == "shots" and p_used >= OVERLAY_FORM_MIN_P and len(games) >= OVERLAY_FORM_GAMES:
-        hits = sum(1 for g in games[:OVERLAY_FORM_GAMES] if (g.get("shots") or 0) >= k)
+        hits = sum(1 for g in newest(OVERLAY_FORM_GAMES) if (g.get("shots") or 0) >= k)
         facts["last5_hits"] = hits
         if hits <= 1:
             flags.append({"name": "RECENT_FORM_BELOW_MODEL", "level": "MODERATE", "text": f"the estimate is {p_used * 100:.0f}% but he reached {k}+ shots in only {hits} of his last {OVERLAY_FORM_GAMES} games (players like this reached it next game about half the time after a spell like that)"})
