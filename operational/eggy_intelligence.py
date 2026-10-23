@@ -19,6 +19,7 @@ against anything else.
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -47,6 +48,16 @@ MODEL_LEADS_Z = 2.0              # the model counts as leading the market only w
 FACTOR_FLOOR = 0.25              # a recalibration never scales a probability by less than this (a cell with no events at all would otherwise scale it to zero)
 EVIDENCE_MAX_AGE_DAYS = 21       # the evidence file is a snapshot: past this age the layer is unusable until it is rebuilt (deploy/build_eggy_evidence.py)
 RECENT_GAMES = 6
+# Recency / role-risk overlay (owner 2026-10-23). Thresholds come from the stored 2022-2026 history (33,647 player-games), not from judgment: a player's latest-3-game average ice time sits
+# 3.2 minutes or more below his prior-10-game average about 5% of the time (the 5th percentile) and 4.0 or more about 2%, so those are the MODERATE and HIGH marks; the power-play mark reuses the existing 0.75.
+# Among players who reached 2+ shots in at least 55% of their prior games, those who reached it in 0 or 1 of their latest 5 reached it next game 49-52% of the time against 62-74% for 3 or more of 5.
+OVERLAY_TOI_MODERATE = 3.2
+OVERLAY_TOI_HIGH = 4.0
+OVERLAY_PP_GAP = 0.75
+OVERLAY_FORM_MIN_P = 0.55
+OVERLAY_FORM_GAMES = 5
+OVERLAY_ROLE_CLASSES = ("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR")
+OVERLAY_CAUTION_DAYS = 3         # a postmortem role/TOI finding is a caution on that player for this many days (the postmortem's own review window)
 
 _STAT = {"PLAYER_SOG_ALTERNATE": "shots", "PLAYER_SOG": "shots", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals"}
 
@@ -122,14 +133,17 @@ class Context:
     goalie_live: dict | None = None
     notes: list = field(default_factory=list)             # why a part of the context is missing
     shadow: dict = field(default_factory=dict)
+    live_overlay: bool = False                            # the recency / role-risk overlay is on (the live cohort only; replays and reconstructions stay as they were)
+    recent_box: dict = field(default_factory=dict)        # player id -> NHL API box-score lines (newest first) of FINAL games newer than the newest MoneyPuck game
+    role_cautions: dict = field(default_factory=dict)     # (lower-case name, team) -> {"classification", "date"} from yesterday's postmortem
 
 
 def build_context(nhl_conn, now: dt.datetime, *, as_of: str | None = None, skater_rows: list | None = None, team_rows: list | None = None, evidence: dict | None = None,
-                  with_goalie: bool = True) -> Context:
+                  with_goalie: bool = True, live_overlay: bool = False) -> Context:
     from research.product_models import history, live, matchup
     as_of = as_of or et.eastern_today(now)
     ev = evidence if evidence is not None else matchup.load_evidence()
-    ctx = Context(now=now, as_of=as_of, evidence=ev)
+    ctx = Context(now=now, as_of=as_of, evidence=ev, live_overlay=live_overlay)
     if ev is None:
         ctx.notes.append("the evidence file docs/validation/eggy_evidence.json is missing (run deploy/build_eggy_evidence.py)")
     try:
@@ -163,7 +177,78 @@ def build_context(nhl_conn, now: dt.datetime, *, as_of: str | None = None, skate
                 ctx.games[str(r["game_id"])] = {"home": r["home_team"], "away": r["away_team"], "start_utc": r["scheduled_start_utc"]}
         except Exception as exc:  # noqa: BLE001
             ctx.notes.append(f"schedule failed: {exc.__class__.__name__}")
+    if live_overlay:
+        _load_overlay_inputs(ctx, nhl_conn)
     return ctx
+
+
+def _load_overlay_inputs(ctx: Context, nhl_conn) -> None:
+    """The data the overlay reads, all of it already stored: box-score lines of games MoneyPuck has not published yet, and the last postmortem's role / ice-time findings. A failure leaves the overlay
+    with less data (it flags nothing it cannot see) and is noted; it never stops a review."""
+    newest = (ctx.skater_state or {}).get("newest_game_date")
+    if nhl_conn is not None and newest:
+        try:
+            from features import point_in_time as pit
+            stamp = ctx.now.astimezone(dt.timezone.utc).replace(tzinfo=None).isoformat()
+            for r in pit.box_scores_since(nhl_conn, newest, stamp):
+                if r["date"] < ctx.as_of:
+                    ctx.recent_box.setdefault(str(r["player_id"]), []).append({"date": r["date"], "toi": float(r["toi_minutes"] or 0.0), "toi_pp": None, "shots": r["shots"], "goals": r["goals"],
+                                                                                "assists": r["assists"], "source": "NHL API box score"})
+        except Exception as exc:  # noqa: BLE001
+            ctx.notes.append(f"recent box scores unavailable: {exc.__class__.__name__}")
+    try:
+        from operational import learning_postmortem as lpm
+        doc = lpm.load() or {}
+        floor = (dt.date.fromisoformat(ctx.as_of) - dt.timedelta(days=OVERLAY_CAUTION_DAYS)).isoformat()
+        for rv in (doc.get("bet_reviews") or {}).values():
+            cls = ((rv.get("assessment") or {}).get("classification"))
+            bet = (rv.get("card") or {}).get("bet") or {}
+            if cls in OVERLAY_ROLE_CLASSES and rv.get("et_date", "") >= floor and rv.get("et_date", "") < ctx.as_of and bet.get("player_or_team") and bet.get("team"):
+                ctx.role_cautions[(str(bet["player_or_team"]).lower(), bet["team"])] = {"classification": cls, "date": rv["et_date"]}
+    except Exception as exc:  # noqa: BLE001
+        ctx.notes.append(f"postmortem role findings unavailable: {exc.__class__.__name__}")
+
+
+def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, p_used: float, have: set) -> tuple[list, dict]:
+    """The latest stored games against the model's older assumption. It only ever ADDS contradiction flags (which lower confidence and can move a leg to LOWER_PRIORITY or PASS); it never changes
+    a probability. A rise in ice time is context (LOW), never an inflation. `have` is the names of the flags already raised, so one fact is not counted twice."""
+    box = ctx.recent_box.get(str(leg.participant_id)) or []
+    seen = {g["date"] for g in box}
+    games = list(box) + [g for g in (p.get("recent_games") or []) if g.get("date") not in seen]            # newest first
+    games.sort(key=lambda g: g["date"], reverse=True)
+    newest = lambda n: list(itertools.islice(games, n))                                                  # the n newest games by date (a recency window, not a training split)
+    flags, facts = [], {"latest_games": [{"date": g["date"], "toi": g["toi"], "toi_pp": g.get("toi_pp"), "shots": g.get("shots"), "source": g.get("source") or "MoneyPuck"} for g in newest(OVERLAY_FORM_GAMES)],
+                        "box_score_games": len(box)}
+    last3 = newest(3)
+    if toi_e is not None and len(last3) >= 2:
+        avg3 = sum(g["toi"] for g in last3) / len(last3)
+        facts["latest_toi_avg"], facts["model_toi"] = round(avg3, 1), round(toi_e, 1)
+        gap = toi_e - avg3
+        if gap >= OVERLAY_TOI_HIGH:
+            flags.append({"name": "TOI_DROP", "level": "HIGH", "text": f"his last {len(last3)} games averaged {avg3:.1f} min on ice, {gap:.1f} below the {toi_e:.1f} the model assumes (a drop this large happens about 2% of the time): the role may have changed"})
+        elif gap >= OVERLAY_TOI_MODERATE and "ROLE_ASSUMPTION" not in have:
+            flags.append({"name": "TOI_DROP", "level": "MODERATE", "text": f"his last {len(last3)} games averaged {avg3:.1f} min on ice, {gap:.1f} below the {toi_e:.1f} the model assumes (a drop this large happens about 5% of the time)"})
+        elif -gap >= OVERLAY_TOI_MODERATE:
+            flags.append({"name": "TOI_RISE", "level": "LOW", "text": f"his last {len(last3)} games averaged {avg3:.1f} min, {-gap:.1f} above the {toi_e:.1f} the model assumes: context only, the probability is not raised without calibration"})
+    mp3 = [g for g in (p.get("recent_games") or []) if g.get("toi_pp") is not None][:3]
+    if pp_e is not None and pp_e >= 1.0 and mp3 and "POWER_PLAY_ASSUMPTION" not in have:
+        pp3 = sum(g["toi_pp"] for g in mp3) / len(mp3)
+        facts["latest_pp_avg"], facts["model_pp"] = round(pp3, 2), round(pp_e, 2)
+        if pp_e - pp3 >= OVERLAY_PP_GAP:
+            flags.append({"name": "PP_ROLE_LOST", "level": "MODERATE", "text": f"the model expects {pp_e:.2f} power-play min but his last {len(mp3)} games with power-play data averaged {pp3:.2f} (the newest box-score games carry no power-play time)"})
+    if stat == "shots" and p_used >= OVERLAY_FORM_MIN_P and len(games) >= OVERLAY_FORM_GAMES:
+        hits = sum(1 for g in newest(OVERLAY_FORM_GAMES) if (g.get("shots") or 0) >= k)
+        facts["last5_hits"] = hits
+        if hits <= 1:
+            flags.append({"name": "RECENT_FORM_BELOW_MODEL", "level": "MODERATE", "text": f"the estimate is {p_used * 100:.0f}% but he reached {k}+ shots in only {hits} of his last {OVERLAY_FORM_GAMES} games (players like this reached it next game about half the time after a spell like that)"})
+    caution = ctx.role_cautions.get((str(leg.participant_name).lower(), leg.team))
+    if caution:
+        since = [g for g in games if g["date"] > caution["date"]]
+        recovered = bool(since) and toi_e is not None and abs(toi_e - since[0]["toi"]) < 2.0
+        facts["postmortem_caution"] = {**caution, "cleared_by_latest_game": recovered}
+        flags.append({"name": "POSTMORTEM_ROLE_CAUTION", "level": "LOW" if recovered else "MODERATE",
+                      "text": f"the postmortem classified a bet on him {caution['classification']} on {caution['date']}" + ("; his latest game is back within 2 minutes of the model's ice time, so this is context only" if recovered else ": a temporary caution while his role is unconfirmed")})
+    return flags, facts
 
 
 STALE_DATA_DAYS = 3              # the newest game in a data file may be at most this many days before the date being reviewed (the files refresh daily and the league never goes quiet that long inside the learning window)
@@ -634,6 +719,10 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
         flags.append({"name": "POWER_PLAY_ASSUMPTION", "level": "MODERATE", "text": f"the model expects {pp_e:.2f} power-play min but he has had {r_pp:.2f} lately"})
     if stat in ("goals", "points") and grp == "F" and p.get("usage_tier") == 4:
         flags.append({"name": "LOW_USAGE", "level": "MODERATE", "text": "inferred fourth-line usage (ice time ranks in the bottom third of his team's forwards)"})
+    overlay_facts = None
+    if ctx.live_overlay:
+        ov_flags, overlay_facts = recency_overlay(ctx, leg, p, stat, k, toi_e, pp_e, p_used, {f["name"] for f in flags})
+        flags.extend(ov_flags)
     env_in_estimate = bool(recal and adj["dimension"] == "env")
     if stat in ("goals", "points") and team_p is not None and team_p < 0.35:
         flags.append({"name": "GAME_ENVIRONMENT", "level": "LOW" if env_in_estimate else "MODERATE", "text": f"{team} is a clear underdog tonight ({pct(team_p)} to win): fewer goals for its skaters on average" + (" (history for such teams is already in the estimate)" if env_in_estimate else "")})
@@ -751,6 +840,8 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     card["calibration_confidence"] = {"level": cal, "evidence": best_cell, "note": "longshot: needs HIGH calibration and a 100-game record" if longshot else None}
     card["decision_confidence"] = decision_confidence(card["contradiction"]["level"], cal, comp["fraction"])
     card["action"] = _prop_action(ttype, flags, cal, comp["fraction"], p_used, edge, longshot, games_obs)
+    if overlay_facts is not None:
+        card["recency_overlay"] = overlay_facts
     return card
 
 
