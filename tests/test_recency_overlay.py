@@ -19,8 +19,18 @@ def box(date, toi, shots=3):
     return {"date": date, "toi": toi, "toi_pp": None, "shots": shots, "goals": 0, "assists": 0, "source": "NHL API box score"}
 
 
+def validated(adj=0.0, verdict="BEYOND_MODEL_LOWER"):
+    """Evidence in which every flag carries information beyond the model, for the markets the tests use (a zero adjustment unless one is given)."""
+    return {f: {m: {"verdict": verdict, "z": -4.0, "mean_residual_vs_model": -0.03, "live_adjustment": adj, "n": 1000} for m in ("shots>=2", "shots>=3", "points>=1", "points>=2")} for f in ei.EVIDENCE_FLAGS}
+
+
 class Overlay(unittest.TestCase):
     pid = "9"
+
+    def setUp(self):
+        p = mock.patch.object(ei, "signal_evidence", return_value=validated())
+        p.start()
+        self.addCleanup(p.stop)
     ctx = tei.TestPlayerReview.ctx                       # the review fixtures are borrowed, not inherited, so the earlier review tests are not run again
     review = tei.TestPlayerReview.review
 
@@ -39,13 +49,12 @@ class Overlay(unittest.TestCase):
 
 
 class TestWhatItFlags(Overlay):
-    def test_a_big_ice_time_drop_in_the_newest_games_is_a_high_flag_before_the_leg_can_be_recorded(self):
+    def test_a_big_ice_time_drop_in_the_newest_games_is_flagged_and_counted_when_the_history_says_it_carries_information(self):
         ctx = self.ov_ctx([box("2026-10-21", 12.0), box("2026-10-20", 12.5)])                       # the model expects 18.5; the stored latest games say ~12
         c = self.run_review(ctx, toi=18.5)
-        self.assertEqual(self.names(c)["TOI_DROP"], "HIGH")
-        self.assertEqual(c["contradiction"]["level"], "HIGH")
-        self.assertNotEqual(c["action"]["decision"], "RECORD")
-        self.assertIn("role may have changed", " ".join(c["case_against"]))
+        self.assertEqual(self.names(c)["TOI_DROP"], "MODERATE")                                      # one level: the validation shows no stronger tier
+        self.assertIn("validated", " ".join(f["text"] for f in c["contradiction"]["flags"] if f["name"] == "TOI_DROP"))
+        self.assertEqual(c["contradiction"]["level"], "MODERATE")
         self.assertEqual(c["recency_overlay"]["box_score_games"], 2)
 
     def test_the_probability_is_never_changed_by_the_overlay(self):
@@ -146,8 +155,10 @@ class TestPostmortemCaution(Overlay):
 
 
 class TestTheParlayBuilderRespectsIt(Overlay):
-    def test_a_high_overlay_flag_keeps_the_leg_out_of_a_parlay(self):
-        c = self.run_review(self.ov_ctx([box("2026-10-21", 12.0), box("2026-10-20", 12.5)]), toi=18.5)
+    def test_two_counted_role_flags_keep_the_leg_out_of_a_parlay(self):
+        ctx = self.ov_ctx([box("2026-10-21", 12.0), box("2026-10-20", 12.5)], cautions={("test player", "AAA"): {"classification": "TOI_PROJECTION_ERROR", "date": "2026-10-19"}})
+        c = self.run_review(ctx, toi=18.5)
+        self.assertEqual(c["contradiction"]["level"], "HIGH")                                        # a drop and yesterday's postmortem finding: two counted flags
         ok, why = lp.leg_ok({"leg": None, "card": c, "action": c["action"]["decision"]})
         self.assertFalse(ok)
         self.assertTrue("contradiction" in why or "passes" in why, why)

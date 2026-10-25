@@ -462,7 +462,7 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     reviews = build_reviews(all_rows, nhl_conn, now, load(), {k: v.get("integrity_defect") for k, v in cls["per_bet"].items()})
     bal = lc.balance(conn)
     cumulative = metrics(all_rows)
-    intel = im.compute(conn, {"parlays": parlays}, now)               # the measured record; its calibration cautions travel with the lessons
+    intel = im.compute(conn, {"parlays": parlays}, now, nhl_conn)               # the measured record; its calibration cautions travel with the lessons
     final_class: dict = {}
     for b in all_rows:
         a = (reviews.get(b["bet_id"]) or {}).get("assessment") or {}

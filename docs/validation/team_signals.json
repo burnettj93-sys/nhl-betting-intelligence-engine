@@ -1,0 +1,137 @@
+{
+ "test_seasons": "2017-2025 (expanding window)",
+ "current_model": {
+  "features": [
+   "gd",
+   "xgd",
+   "hd",
+   "b2b"
+  ],
+  "half_life_games": 30.0,
+  "log_loss": 0.66237,
+  "n_games": 11053
+ },
+ "variants": {
+  "+xgd5": {
+   "log_loss": 0.66241,
+   "delta_vs_current": {
+    "point": 5e-05,
+    "ci_low": -1e-05,
+    "ci_high": 0.0001
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "recent 5-game expected-goal form on top of the decayed strength"
+  },
+  "+cf5": {
+   "log_loss": 0.66243,
+   "delta_vs_current": {
+    "point": 7e-05,
+    "ci_low": -0.00017,
+    "ci_high": 0.00031
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "recent 5-game shot-attempt share"
+  },
+  "+rest": {
+   "log_loss": 0.66241,
+   "delta_vs_current": {
+    "point": 4e-05,
+    "ci_low": -0.00015,
+    "ci_high": 0.00024
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "days of rest difference (capped at 5), beyond the back-to-back flag"
+  },
+  "+fin": {
+   "log_loss": 0.66238,
+   "delta_vs_current": {
+    "point": 2e-05,
+    "ci_low": -1e-05,
+    "ci_high": 4e-05
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "finishing (goals above expected)"
+  },
+  "+pp": {
+   "log_loss": 0.66212,
+   "delta_vs_current": {
+    "point": -0.00025,
+    "ci_low": -0.00062,
+    "ci_high": 0.00014
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "power-play rate"
+  },
+  "+pk": {
+   "log_loss": 0.66238,
+   "delta_vs_current": {
+    "point": 1e-05,
+    "ci_low": -0.00013,
+    "ci_high": 0.00015
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "penalty-kill rate"
+  },
+  "-hd": {
+   "log_loss": 0.66357,
+   "delta_vs_current": {
+    "point": 0.00121,
+    "ci_low": 0.00045,
+    "ci_high": 0.00197
+   },
+   "verdict": "HURTS",
+   "note": "the model WITHOUT hd: does the feature earn its place?"
+  },
+  "-b2b": {
+   "log_loss": 0.66444,
+   "delta_vs_current": {
+    "point": 0.00207,
+    "ci_low": 0.0013,
+    "ci_high": 0.00285
+   },
+   "verdict": "HURTS",
+   "note": "the model WITHOUT b2b: does the feature earn its place?"
+  },
+  "half_life_10_games": {
+   "log_loss": 0.66465,
+   "delta_vs_current": {
+    "point": 0.00228,
+    "ci_low": 0.00065,
+    "ci_high": 0.00386
+   },
+   "verdict": "HURTS",
+   "note": "how quickly team strength should decay (the model uses 30)"
+  },
+  "half_life_15_games": {
+   "log_loss": 0.66316,
+   "delta_vs_current": {
+    "point": 0.00079,
+    "ci_low": -0.00026,
+    "ci_high": 0.0018
+   },
+   "verdict": "NO_DEMONSTRATED_DIFFERENCE",
+   "note": "how quickly team strength should decay (the model uses 30)"
+  },
+  "half_life_60_games": {
+   "log_loss": 0.6638,
+   "delta_vs_current": {
+    "point": 0.00143,
+    "ci_low": 0.00045,
+    "ci_high": 0.00246
+   },
+   "verdict": "HURTS",
+   "note": "how quickly team strength should decay (the model uses 30)"
+  },
+  "half_life_120_games": {
+   "log_loss": 0.6674,
+   "delta_vs_current": {
+    "point": 0.00503,
+    "ci_low": 0.00315,
+    "ci_high": 0.00701
+   },
+   "verdict": "HURTS",
+   "note": "how quickly team strength should decay (the model uses 30)"
+  }
+ },
+ "rule": "adopt only if the 95% bootstrap interval of (variant - current) log loss is entirely below zero; entirely above zero means it hurts"
+}

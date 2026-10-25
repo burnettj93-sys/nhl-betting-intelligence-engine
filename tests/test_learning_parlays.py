@@ -61,8 +61,9 @@ class TestConstruction(unittest.TestCase):
         self.assertAlmostEqual(p["combined_probability"], 0.70 * 0.66 * 0.62, places=4)
         self.assertIn("ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE", p["probability_basis"])
 
-    def test_two_legs_of_one_game_are_never_multiplied_the_dependence_is_labelled_and_bounds_are_given(self):
-        p = lp.construct(self.three(games=("1", "1", "2")))
+    def test_two_legs_of_one_game_are_never_blindly_multiplied_the_dependence_is_labelled_and_bounds_are_given(self):
+        with mock.patch.object(lp, "dependence_lifts", return_value={}):                          # a pair type nobody measured: nothing is multiplied, nothing is invented
+            p = lp.construct(self.three(games=("1", "1", "2")))
         self.assertIsNone(p["combined_probability"])
         self.assertIn("NOT_GIVEN", p["probability_basis"])
         self.assertIn(p["dependence_level"], ("POSITIVE_NOT_QUANTIFIED", "UNCERTAIN"))
@@ -74,7 +75,8 @@ class TestConstruction(unittest.TestCase):
     def test_unknown_dependence_between_opposing_players_is_uncertain_not_independent(self):
         a, b = cand(pid="1", game="1", team="TOR", p=0.7), cand(pid="2", game="1", team="MTL", p=0.66)
         c = cand(pid="3", game="2", p=0.64)
-        p = lp.construct([a, b, c])
+        with mock.patch.object(lp, "dependence_lifts", return_value={}):                          # unmeasured: uncertain, never assumed independent
+            p = lp.construct([a, b, c])
         self.assertEqual(p["dependence_level"], "UNCERTAIN")
         self.assertIsNone(p["combined_probability"])
 

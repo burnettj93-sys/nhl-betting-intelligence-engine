@@ -43,11 +43,12 @@ class TestEvidenceClock(unittest.TestCase):
 
     def test_ok_expiring_expired_and_missing_are_told_apart_before_the_layer_stops(self):
         self.assertEqual(self.health("2026-10-21T12:00:00Z")["state"], "OK")
-        self.assertEqual(self.health("2026-10-14T12:00:00Z")["state"], "EXPIRING")        # 18 days old: 3 left
-        self.assertEqual(self.health("2026-10-10T12:00:00Z")["state"], "EXPIRED")
+        self.assertEqual(self.health("2026-10-14T12:00:00Z")["state"], "OK")              # 18 days old of 45
+        self.assertEqual(self.health("2026-09-24T12:00:00Z")["state"], "EXPIRING")        # 38 days old: 7 left
+        self.assertEqual(self.health("2026-09-10T12:00:00Z")["state"], "EXPIRED")
         self.assertEqual(ei.evidence_health(None, self.NOW)["state"], "MISSING")
-        self.assertEqual(self.health("2026-10-14T12:00:00Z")["days_remaining"], 3.0)
-        self.assertIn("owner approval", self.health("2026-10-21T12:00:00Z")["controlled_refresh"])
+        self.assertEqual(self.health("2026-09-24T12:00:00Z")["days_remaining"], 7.0)
+        self.assertIn("prepared automatically", self.health("2026-10-21T12:00:00Z")["controlled_refresh"])
 
 
 def claim(cid, verdict, text="c"):
@@ -221,3 +222,65 @@ class TestAPartlyHeldFactIsNotChance(unittest.TestCase):
         cat, why = ed.outcome_cause(card, [claim("expected_toi", "PARTLY_HELD", "expected 17 minutes")], 0.60)
         self.assertEqual(cat, "UNKNOWN")
         self.assertIn("only in part", why)
+
+
+class TestThePortfolio(unittest.TestCase):
+    from operational import learning_parlays as _lp
+
+    def leg(self, key, p=0.7, team="AAA", game="1"):
+        return {"key": key, "label": key, "estimate": p, "team": team, "game_id": game, "role_risk": False}
+
+    def test_shared_legs_widen_the_days_spread_and_distinct_legs_do_not(self):
+        from operational import learning_parlays as lp
+        shared = [{"probability": 0.343, "legs": [self.leg("a"), self.leg("b"), self.leg("c")]}, {"probability": 0.343, "legs": [self.leg("a"), self.leg("d"), self.leg("e")]},
+                  {"probability": 0.343, "legs": [self.leg("a"), self.leg("f"), self.leg("g")]}]
+        distinct = [{"probability": 0.343, "legs": [self.leg(f"{i}{j}") for j in "abc"]} for i in range(3)]
+        s, d = lp.portfolio_summary(shared), lp.portfolio_summary(distinct)
+        self.assertEqual((s["tickets"], s["distinct_legs"], s["leg_slots"]), (3, 7, 9))
+        self.assertEqual(s["most_reused_leg"]["tickets"], 3)
+        self.assertGreater(s["spread_inflation_from_shared_legs"], 1.2)
+        self.assertAlmostEqual(d["spread_inflation_from_shared_legs"], 1.0, delta=0.12)
+        self.assertEqual(s["expected_tickets_hit"], round(3 * 0.343, 2))
+        self.assertGreaterEqual(s["chance_no_ticket_hits"], d["chance_no_ticket_hits"] - 0.05)
+
+    def test_an_empty_day_and_the_ledger_form_work(self):
+        from operational import learning_parlays as lp
+        self.assertEqual(lp.portfolio_summary([]), {"tickets": 0})
+        self.assertEqual(lp.portfolio_from_rows([]), {"tickets": 0})
+
+
+class TestMeasuredDependenceInTheTicket(unittest.TestCase):
+    def cand(self, pid, game, fam="PLAYER_SOG_ALTERNATE", k=2, team="AAA", p=0.68):
+        from tests import test_learning_parlays as tlp
+        return tlp.cand(pid=pid, game=game, p=p, fam=fam, k=k, team=team)
+
+    def test_two_shots_legs_in_one_game_are_measured_independent_and_get_a_combined_probability(self):
+        from operational import learning_parlays as lp
+        t = lp.construct([self.cand("1", "1", team="AAA"), self.cand("2", "1", team="BBB"), self.cand("3", "2", team="CCC")])
+        self.assertEqual(t["dependence_level"], "MEASURED_DEPENDENCE")
+        self.assertIsNotNone(t["combined_probability"])
+        self.assertIn("EVIDENCE_ADJUSTED_PRODUCT", t["probability_basis"])
+        self.assertAlmostEqual(t["combined_probability"], 0.68 ** 3 * lp.dependence_lifts()["SOG_SOG_OPPOSING"]["dependence_lift"], places=3)
+        self.assertLessEqual(t["combined_probability"], t["joint_bounds"]["high"])
+        self.assertGreaterEqual(t["combined_probability"], t["joint_bounds"]["low"])
+
+    def test_teammates_points_legs_are_measured_positive_so_the_ticket_is_more_likely_than_the_product(self):
+        from operational import learning_parlays as lp
+        t = lp.construct([self.cand("1", "1", fam="PLAYER_POINTS", k=1, team="AAA"), self.cand("2", "1", fam="PLAYER_POINTS", k=1, team="AAA"), self.cand("3", "2", team="CCC")])
+        self.assertGreater(t["combined_probability"], 0.68 ** 3)
+        self.assertEqual(lp.pair_type(t["legs"][0], t["legs"][1]), "PTS_PTS_TEAMMATES")
+
+    def test_a_moneyline_with_the_opposing_sides_points_is_measured_negative(self):
+        from operational import learning_parlays as lp
+        ml = self.cand("AAA", "1", fam="MONEYLINE", k=None, team="AAA", p=0.66)
+        pts = self.cand("9", "1", fam="PLAYER_POINTS", k=1, team="BBB")
+        self.assertEqual(lp.pair_type(ml["leg"], pts["leg"]), "ML_PTS_OPPOSING")
+        t = lp.construct([ml, pts, self.cand("3", "2", team="CCC")])
+        self.assertLess(t["combined_probability"], 0.66 * 0.68 * 0.68)
+
+    def test_a_pair_that_was_never_measured_leaves_the_combined_probability_unquantified(self):
+        from operational import learning_parlays as lp
+        with mock.patch.object(lp, "dependence_lifts", return_value={}):
+            t = lp.construct([self.cand("1", "1", team="AAA"), self.cand("2", "1", team="AAA"), self.cand("3", "2", team="CCC")])
+        self.assertIsNone(t["combined_probability"])
+        self.assertIn(t["dependence_level"], ("UNCERTAIN", "POSITIVE_NOT_QUANTIFIED"))

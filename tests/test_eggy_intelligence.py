@@ -129,12 +129,12 @@ class TestRules(unittest.TestCase):
         ev = copy.deepcopy(matchup.load_evidence())
         ctx = make_ctx(evidence=ev)
         ev["built_at_utc"] = "2026-10-01T00:00:00Z"
-        ctx.now = dt.datetime(2026, 10, 20, 21, 0, tzinfo=dt.timezone.utc)                   # 19 days later: inside the 21-day life
+        ctx.now = dt.datetime(2026, 11, 10, 21, 0, tzinfo=dt.timezone.utc)                   # 40 days later: inside the 45-day life (a candidate was prepared at 14)
         self.assertTrue(ei.usable(ctx)[0])
-        ctx.now = dt.datetime(2026, 10, 25, 21, 0, tzinfo=dt.timezone.utc)                   # 24 days
+        ctx.now = dt.datetime(2026, 11, 20, 21, 0, tzinfo=dt.timezone.utc)                   # 50 days
         ok, why = ei.usable(ctx)
         self.assertFalse(ok)
-        self.assertIn("evidence file is 24 days old", why)
+        self.assertIn("evidence file is 50 days old", why)
         ev["built_at_utc"] = "garbage"
         self.assertIn("unreadable", ei.usable(ctx)[1])
 

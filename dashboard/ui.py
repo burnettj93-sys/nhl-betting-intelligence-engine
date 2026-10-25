@@ -805,9 +805,12 @@ def learning_experiment_panel(doc: dict | None) -> None:
         return
     if phase == "ENDED":
         banner("<b>14-DAY POSTMORTEM LEARNING EXPERIMENT: ended.</b> The window closed after November 2 (Eastern). Nothing new is recorded; open bets still settle and the final report is below once it is written. The normal paper-book policy continues.", "info")
+    elif doc.get("window") == "PRODUCTION":
+        banner(f"<b>LEARNING PARLAYS · production day {day}</b> · the 14-day experiment ({esc(doc.get('start_date'))} to {esc(doc.get('end_date'))}) is complete and kept in the record; "
+               "the engine continues automatically: recording, settlement, the daily postmortem and the measured record · paper only", "good")
     else:
         banner(f"<b>14-DAY POSTMORTEM LEARNING EXPERIMENT · Day {day} of {doc.get('days', 14)}</b> · paper only, separate from Eggy and the normal paper book · "
-               f"{esc(doc.get('start_date'))} to {esc(doc.get('end_date'))}, then it ends automatically", "good")
+               f"{esc(doc.get('start_date'))} to {esc(doc.get('end_date'))}, then the engine continues as production", "good")
     parlay_mode = doc.get("unit") == "PARLAY"
     if parlay_mode:
         sfp, fl0 = doc.get("shortfall_today") or {}, doc.get("eggy_flagship")
@@ -856,6 +859,13 @@ def learning_experiment_panel(doc: dict | None) -> None:
             if sf.get("review_errors"):
                 st.warning(f"{sf['review_errors']} candidate review(s) FAILED (an engine error, not a judgment): " + esc("; ".join(f"{k} (x{v})" for k, v in (sf.get("review_error_examples") or {}).items())))
     parlay_panel(doc.get("parlays_today") or [], doc.get("cards") or {})
+    pf = doc.get("portfolio_today") or {}
+    if pf.get("tickets"):
+        ml = pf.get("most_reused_leg") or {}
+        st.caption(f"**Today's portfolio:** {pf['tickets']} tickets built from {pf['distinct_legs']} distinct legs ({pf['leg_slots']} leg slots) · expected tickets hit {pf['expected_tickets_hit']} "
+                   f"(10th to 90th percentile {pf['tickets_hit_10th_to_90th_percentile'][0]} to {pf['tickets_hit_10th_to_90th_percentile'][1]}) · chance no ticket hits {_lx_pct(pf.get('chance_no_ticket_hits'), 0)} · "
+                   f"shared legs widen the day's spread {pf.get('spread_inflation_from_shared_legs')}x (1.0 = fully diversified) · most reused: {esc(ml.get('label', ''))} on {ml.get('tickets')} tickets · "
+                   f"{pf.get('tickets_with_a_role_flagged_leg', 0)} ticket(s) carry a role-flagged leg.")
     fl = doc.get("eggy_flagship")
     if fl:
         st.markdown("**Eggy's flagship parlay, from the learning pool** (this is Eggy's official output; UNPRICED)")

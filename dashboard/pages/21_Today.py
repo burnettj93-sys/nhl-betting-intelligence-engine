@@ -77,14 +77,14 @@ else:
         n_stale += int(ml_stale)
         score = f"{g['away_score']}–{g['home_score']}" if g["state"] == "FINAL" else "—"
         rows.append({"Time": g["start_et"], "Game": f"{g['away']} @ {g['home']}", "Status": ui.STATUS_TEXT.get(g["state"], g["state"].title()),
-                     "Score": score, "Strength-model home win (display only)": ui.pct((g.get("win_probability") or {}).get("home")),
+                     "Score": score, "Hockey-model home win": ui.pct((g.get("win_probability") or {}).get("home")),
                      "DK moneyline (away / home)": ml_text,
                      "Tickets": len(g.get("tickets") or [])})
     if n_stale:
         ui.banner(f"<b>{n_stale} of {len(todays)} moneyline prices below are stale</b> (older than their freshness limit when you opened this page). They are shown as the last quote only, "
                   "marked STALE, and are never used for a ticket; the moneyline refresh is limited by the odds-credit allowance (see Data Status).", "warn")
     st.dataframe(rows, hide_index=True, width="stretch")
-    st.caption("The strength-model home win is a display estimate (validated strength model; the parlay review uses its own team model); moneyline quotes are DraftKings US-feed prices and are not used for tickets unless fresh.")
+    st.caption("The hockey-model home win is the same team model every parlay review uses (eggy-matchup-v1); moneyline quotes are DraftKings US-feed prices and are not used for tickets unless fresh.")
 
 slots = tk["slots"]
 _single = slots.get("total") == 1

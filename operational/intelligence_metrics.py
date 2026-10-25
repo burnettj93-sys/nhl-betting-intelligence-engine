@@ -59,7 +59,7 @@ def _ticket_p(t: dict) -> float:
     return p                                                 # an independence assumption: a yardstick, not a claim, and it is labelled so in the document
 
 
-def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None) -> dict:
+def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None, nhl_conn=None) -> dict:
     """The metrics document. `postmortem` supplies the leg-level decision quality and cause (its `parlays[*].leg_reviews`)."""
     try:
         rows = [dict(r) for r in conn.execute("SELECT * FROM parlays ORDER BY et_date, parlay_rank").fetchall()]
@@ -170,11 +170,19 @@ def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None
     try:
         from operational import eggy_intelligence as ei
         from research.product_models import matchup
-        out["evidence_health"] = ei.evidence_health(matchup.load_evidence(), now or dt.datetime.now(dt.timezone.utc))
+        from operational import evidence_refresh as er
+        out["evidence_health"] = er.status(now or dt.datetime.now(dt.timezone.utc))
         pp = ei.points_policy()
         out["points"] = {"enabled_thresholds": sorted(pp["enabled"]), "recalibrated_thresholds": sorted(pp["recalibration"]), "validated_through": pp["validated_through"],
                          "live_points_legs_settled": sum(c["n"] for k, c in out["legs"]["by_market_and_threshold"].items() if k.startswith("PLAYER_POINTS"))}
     except Exception as exc:  # noqa: BLE001 - the instrument never stops the postmortem
         out["evidence_health"] = {"state": "UNAVAILABLE", "why": f"{exc.__class__.__name__}"}
+    try:
+        from operational import prospective_moneyline as pm_
+        if nhl_conn is not None:
+            out["prospective_moneyline_refresh"] = pm_.refresh(nhl_conn)
+        out["moneyline_trust"] = pm_.summarise(pm_.read_ledger())
+    except Exception as exc:  # noqa: BLE001 - the instrument never stops the postmortem
+        out["moneyline_trust"] = {"state": "UNAVAILABLE", "why": f"{exc.__class__.__name__}"}
     out["priced_metrics"] = {"status": "NOT AVAILABLE", "why": "no combined sportsbook price exists for the learning parlays, so no ROI, expected value or closing-line value is computed (none is shown as zero)"}
     return out

@@ -308,3 +308,39 @@ class TestLightSlateFloor(Isolated):
         b = cp.cycle_budget(at(8, day=18), 60, 0.0, {"2026-10-18": 2, **self.AHEAD}, "2026-10-18", league_cost=2, league_cost_observed=False)
         w = min(2, cp.DAY_WEIGHT_CAP)
         self.assertAlmostEqual(b["player_today"], b["player_pool"] * w / b["weight_total"], places=6)
+
+
+class TestPointsFirstClassSwitch(Isolated):
+    """The one credit-consuming switch left for the owner: player points in place of anytime goals in each game's capture. OFF by default; ON costs the same three credits a game."""
+    def plan(self, day=17):
+        return cp.day_plan(at(8, day=day), f"2026-10-{day}", starts(a=(19,), b=(19, 30), c=(22,)), remaining=400, counts_ahead={"2026-10-18": 4})            # a plan is built once a day and kept: a new day, a fresh plan
+
+    def test_off_by_default_the_bundle_is_unchanged_with_goals(self):
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os
+            os.environ.pop(cp.POINTS_FIRST_CLASS_ENV, None)
+            self.assertFalse(cp.points_first_class())
+            p = self.plan()
+            self.assertEqual(cp.bundle_markets(), cp.BUNDLE_MARKETS)
+            for g in p["games_priced"]:
+                self.assertIn(cp.GOALS_KEY, p["game_markets"][g])
+                self.assertNotIn(cp.POINTS_KEY, p["game_markets"][g])
+
+    def test_on_points_replace_goals_at_the_same_credits_a_game_and_are_classed_as_points(self):
+        base = None
+        with mock.patch.dict("os.environ", {}, clear=False):
+            import os
+            os.environ.pop(cp.POINTS_FIRST_CLASS_ENV, None)
+            base = self.plan(day=16)
+        with mock.patch.dict("os.environ", {cp.POINTS_FIRST_CLASS_ENV: "on"}):
+            self.assertTrue(cp.points_first_class())
+            p = self.plan(day=17)
+        self.assertEqual(len(cp.POINTS_BUNDLE), len(cp.BUNDLE_MARKETS))                               # the same three credits a game
+        self.assertEqual(p["games_priced"], base["games_priced"])                                       # and so the same games
+        for g in p["games_priced"]:
+            self.assertIn(cp.POINTS_KEY, p["game_markets"][g])
+            self.assertNotIn(cp.GOALS_KEY, p["game_markets"][g])
+        self.assertEqual(p["points_games"], p["games_priced"])
+        self.assertEqual(p["goals_games"], [])
+        self.assertEqual(p["allowance"][cp.GOALS], 0.0)
+        self.assertEqual(p["allowance"][cp.POINTS_ADDON], float(len(p["points_games"]) * cp.POINTS_COST))

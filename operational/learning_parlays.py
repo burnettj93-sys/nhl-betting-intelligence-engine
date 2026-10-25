@@ -15,6 +15,7 @@ The question it asks: can several individually strong, repeatable outcomes be co
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import itertools
 import json
 from collections import Counter
@@ -74,6 +75,46 @@ def _pair_view(l) -> dict:
             "player_id": None if l.market_family == "MONEYLINE" else str(l.participant_id), "participant": l.participant_name}
 
 
+
+# ------------------------------------------------------------------------------------------------ measured dependence between legs of one game
+DEPENDENCE_PATH = Path(__file__).resolve().parent.parent / "docs" / "validation" / "dependence_lift.json"
+_dep_cache: dict = {"mtime": None, "data": {}}
+_CODE_OF = {"PLAYER_SOG_ALTERNATE": "SOG", "PLAYER_SOG": "SOG", "PLAYER_POINTS": "PTS", "MONEYLINE": "ML"}
+
+
+def dependence_lifts() -> dict:
+    """pair type -> {dependence_lift, ci95, reading, usable} from deploy/validate_dependence.py: how often two legs of one game hit together against what independence predicts, RELATIVE to a cross-game control
+    (the model's own calibration bias would otherwise read as dependence). An unreadable file measures nothing."""
+    try:
+        mt = DEPENDENCE_PATH.stat().st_mtime
+        if _dep_cache["mtime"] != mt:
+            _dep_cache.update(mtime=mt, data=json.loads(DEPENDENCE_PATH.read_text()).get("pairs") or {})
+        return _dep_cache["data"]
+    except (OSError, ValueError):
+        return {}
+
+
+def pair_type(a, b) -> str | None:
+    """The measured pair type for two legs of ONE game, or None when that combination was not measured (goals, saves)."""
+    ca, cb = _CODE_OF.get(a.market_family), _CODE_OF.get(b.market_family)
+    if ca is None or cb is None:
+        return None
+    if ca == "ML" and cb == "ML":
+        return None
+    if "ML" in (ca, cb):
+        ml, pl = (a, b) if ca == "ML" else (b, a)
+        return f"ML_{_CODE_OF[pl.market_family]}_{'SAMETEAM' if str(ml.team) == str(pl.team) else 'OPPOSING'}"
+    return f"{'_'.join(sorted((ca, cb)))}_{'TEAMMATES' if str(a.team) == str(b.team) else 'OPPOSING'}"
+
+
+def measured_lift(a, b) -> dict | None:
+    t = pair_type(a, b)
+    row = dependence_lifts().get(t) if t else None
+    if not row or not row.get("usable") or row.get("dependence_lift") is None:
+        return None
+    return {"type": t, "lift": float(row["dependence_lift"]), "ci95": row.get("ci95"), "reading": row.get("reading")}
+
+
 def pairs_of(legs: list) -> list[dict]:
     """Every pair of legs with what is known about how they move together: different games are ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE; one game's legs go through classify_pair (directional only)."""
     out = []
@@ -116,18 +157,32 @@ def construct(cands: list[dict]) -> dict | None:
         return None
     same_game = [p for p in pairs if p["kind"] != "DIFFERENT_GAMES"]
     independent = not same_game
+    bounds = _bounds(legs, ests)
+    lifts = []
+    if not independent:
+        for a_, b_ in itertools.combinations(legs, 2):
+            if str(a_.game_id) == str(b_.game_id):
+                lifts.append(measured_lift(a_, b_))
+    measured = bool(lifts) and all(l is not None for l in lifts)
     if independent:
         combined, basis = round(_product(ests), 4), "PRODUCT_OF_LEG_ESTIMATES (every leg in a different game: ASSUMED INDEPENDENT ABSENT KNOWN SHARED DEPENDENCE)"
+    elif measured:
+        adj = _product(ests)
+        for l in lifts:
+            adj *= l["lift"]
+        combined = round(min(max(adj, bounds["low"]), bounds["high"]), 4)
+        basis = ("EVIDENCE_ADJUSTED_PRODUCT: the legs' estimates times the MEASURED pairwise dependence of each same-game pair (" + ", ".join(f"{l['type']} x{l['lift']:.2f}" for l in lifts)
+                 + "; docs/validation/dependence_lift.json), held inside the assumption-free bounds; an approximation when three legs share a game")
     else:
-        combined, basis = None, "NOT_GIVEN: legs share a game and their dependence is not quantified"
-    dep_level = "ASSUMED_INDEPENDENT" if independent else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")
+        combined, basis = None, "NOT_GIVEN: legs share a game and their dependence is not (fully) measured"
+    dep_level = ("ASSUMED_INDEPENDENT" if independent else ("MEASURED_DEPENDENCE" if measured else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")))
     wi = min(range(len(legs)), key=lambda i: (ests[i], -LEVEL[cands[i]["card"]["contradiction"]["level"]]))
     weakest = {"index": wi, "label": bet_label(legs[wi].participant_name, legs[wi].market_family, legs[wi].threshold, legs[wi].american_price), "estimate": round(ests[wi], 4),
                "contradiction": ei.combine_contradiction(ei.counted_flags(cands[wi]["card"]["contradiction"]["flags"]))}
     levels = [LEVEL[ei.combine_contradiction(ei.counted_flags(c["card"]["contradiction"]["flags"]))] for c in cands]
     if ests[wi] < MIN_LEG_P or max(levels) > 1:
         quality = "BAD"
-    elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("ASSUMED_INDEPENDENT", "POSITIVE_NOT_QUANTIFIED"):
+    elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("ASSUMED_INDEPENDENT", "MEASURED_DEPENDENCE", "POSITIVE_NOT_QUANTIFIED"):
         quality = "GOOD"
     else:
         quality = "QUESTIONABLE"
@@ -145,10 +200,65 @@ def construct(cands: list[dict]) -> dict | None:
             why.append("legs in one game with unclear dependence")
     return {"key": key, "n_legs": len(legs), "cands": cands, "legs": legs, "estimates": [round(e, 4) for e in ests], "weakest_leg": weakest, "construction_quality": quality, "quality_reasons": why,
             "action": "PASS" if quality == "BAD" else "RECORD", "dependence_level": dep_level, "pairs": pairs, "combined_probability": combined, "probability_basis": basis,
-            "joint_bounds": _bounds(legs, ests), "ranking_probability": round(_product(ests), 4),
+            "joint_bounds": bounds, "ranking_probability": round(combined if combined is not None else _product(ests), 4), "measured_dependence": lifts if measured else None,
             "price": {"status": "UNPRICED_LEARNING_PARLAY", "reference_decimal": round(ref, 4), "reference_note": "the product of the legs' own quoted prices: a REFERENCE only, not a sportsbook price; no return or ROI is claimed",
                       "plus_money_reference": ref >= 2.0}}
 
+
+
+# ------------------------------------------------------------------------------------------------ the day's tickets as a portfolio
+def portfolio_summary(tickets: list[dict], draws: int = 4000) -> dict:
+    """The day's tickets as ONE portfolio. `tickets` = [{'legs': [{'key','label','estimate','team','game_id','role_risk'}], 'probability': p}]. Reports the exposure a day carries (the same leg on several
+    tickets, the same team, the same game, legs carrying a counted role flag) and, by simulation over the legs' own estimates, how the number of tickets that hit is distributed: the expected number, the chance
+    that none hit, and how much shared legs widen the spread compared with the same tickets built from distinct legs. Legs are drawn independently (the corpus finds same-game shots legs independent; points legs
+    and a team result share a game, a modest dependence this simulation ignores and says so). Nothing here is a bet size or a price."""
+    import random
+    from collections import Counter as C
+    legs = {}
+    for t in tickets:
+        for l in t["legs"]:
+            legs.setdefault(l["key"], {**l, "tickets": 0})["tickets"] += 1
+    if not tickets:
+        return {"tickets": 0}
+    top = max(legs.values(), key=lambda l: l["tickets"])
+    teams, games = C(), C()
+    for t in tickets:
+        for team in {str(l.get("team")) for l in t["legs"] if l.get("team")}:
+            teams[team] += 1
+        for g in {str(l.get("game_id")) for l in t["legs"] if l.get("game_id") is not None}:
+            games[g] += 1
+    rng = random.Random(20261026)
+    hits = []
+    keys = list(legs)
+    for _ in range(draws):
+        win = {k: rng.random() < legs[k]["estimate"] for k in keys}
+        hits.append(sum(all(win[l["key"]] for l in t["legs"]) for t in tickets))
+    mean = sum(hits) / draws
+    var = sum((h - mean) ** 2 for h in hits) / draws
+    p_t = [float(t["probability"]) for t in tickets]
+    indep_var = sum(p * (1 - p) for p in p_t)
+    hits.sort()
+    return {"tickets": len(tickets), "distinct_legs": len(legs), "leg_slots": sum(len(t["legs"]) for t in tickets),
+            "most_reused_leg": {"label": top["label"], "tickets": top["tickets"], "chance_it_fails": round(1 - top["estimate"], 3), "expected_tickets_it_kills_if_it_fails": top["tickets"]},
+            "team_exposure": dict(teams.most_common(3)), "game_exposure": dict(games.most_common(3)),
+            "tickets_with_a_role_flagged_leg": sum(1 for t in tickets if any(l.get("role_risk") for l in t["legs"])),
+            "expected_tickets_hit": round(sum(p_t), 2), "simulated_expected_tickets_hit": round(mean, 2), "chance_no_ticket_hits": round(sum(1 for h in hits if h == 0) / draws, 3),
+            "tickets_hit_10th_to_90th_percentile": [hits[int(0.1 * draws)], hits[int(0.9 * draws)]],
+            "spread_inflation_from_shared_legs": None if indep_var <= 0 else round(var / indep_var, 2),
+            "note": "legs drawn independently from their own estimates; shared legs widen the spread of the day's result (inflation above 1.0); a diversified day is one with inflation near 1.0"}
+
+
+def portfolio_from_rows(rows: list[dict]) -> dict:
+    """The same summary from recorded ledger rows (`parlays` table rows with legs_json)."""
+    tickets = []
+    for r in rows:
+        legs = json.loads(r["legs_json"])
+        tickets.append({"probability": r["combined_probability"] if r["combined_probability"] is not None else _product([float(l["estimate"]) for l in legs]),
+                        "legs": [{"key": l["key"], "label": bet_label(l["leg"].get("participant_name"), l["leg"].get("market_family"), l["leg"].get("threshold"), l["leg"].get("american_price")),
+                                  "estimate": float(l["estimate"]), "team": l["leg"].get("team"), "game_id": l["leg"].get("game_id"),
+                                  "role_risk": any(f["name"] in ("TOI_DROP", "ROLE_ASSUMPTION", "PP_ROLE_LOST", "POWER_PLAY_ASSUMPTION", "POSTMORTEM_ROLE_CAUTION") and f["level"] in ("MODERATE", "HIGH", "SEVERE")
+                                                   for f in (l["card"].get("contradiction") or {}).get("flags", []))} for l in legs]})
+    return portfolio_summary(tickets)
 
 def _product(xs) -> float:
     p = 1.0
@@ -159,7 +269,7 @@ def _product(xs) -> float:
 
 def rank_key(p: dict) -> tuple:
     """Quality first, then FEWER legs (3 preferred over 4), then the strongest weakest leg, then the likelier ticket (an ORDERING only: for dependent legs it is not a probability), independence, key."""
-    return (QUALITY.index(p["construction_quality"]), p["n_legs"], -p["weakest_leg"]["estimate"], -p["ranking_probability"], {"ASSUMED_INDEPENDENT": 0, "POSITIVE_NOT_QUANTIFIED": 1, "UNCERTAIN": 2}[p["dependence_level"]], p["key"])
+    return (QUALITY.index(p["construction_quality"]), p["n_legs"], -p["weakest_leg"]["estimate"], -p["ranking_probability"], {"ASSUMED_INDEPENDENT": 0, "MEASURED_DEPENDENCE": 0, "POSITIVE_NOT_QUANTIFIED": 1, "UNCERTAIN": 2}[p["dependence_level"]], p["key"])
 
 
 def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX_PARLAYS_PER_DAY) -> dict:
@@ -200,7 +310,8 @@ def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX
         chosen.append(p)
         kept_sets.append(ks)
         used.update(ks)
-    return {"parlays": chosen, "eligible_legs": len(ok), "legs_not_eligible": dict(rejected), "constructed": len(built), "pool": len(pool)}
+    return {"parlays": chosen, "portfolio_of_new_tickets": portfolio_summary([{"probability": p["ranking_probability"], "legs": [{"key": c["key"], "label": bet_label(c["leg"].participant_name, c["leg"].market_family, c["leg"].threshold, c["leg"].american_price), "estimate": float(c["card"]["estimate_used"]),
+                                                                                                                                   "team": c["leg"].team, "game_id": c["leg"].game_id, "role_risk": False} for c in p["cands"]]} for p in chosen]), "eligible_legs": len(ok), "legs_not_eligible": dict(rejected), "constructed": len(built), "pool": len(pool)}
 
 
 def flagship(parlays: list[dict]) -> dict | None:

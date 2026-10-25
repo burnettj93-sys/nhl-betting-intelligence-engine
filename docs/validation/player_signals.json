@@ -1,0 +1,1287 @@
+{
+ "model": "player-rate-toi-v2",
+ "rows_walked": 52907,
+ "flag_evidence": {
+  "MODEL_ABOVE_RECORD": {
+   "shots>=2": {
+    "n": 10056,
+    "mean_residual_vs_model": 0.0093,
+    "z": 2.05,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 7120,
+    "mean_residual_vs_model": 0.009,
+    "z": 2.1,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "TOI_DROP": {
+   "shots>=2": {
+    "n": 1247,
+    "mean_residual_vs_model": -0.0132,
+    "z": -1.08,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 1247,
+    "mean_residual_vs_model": -0.0072,
+    "z": -0.85,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=1": {
+    "n": 1247,
+    "mean_residual_vs_model": -0.0413,
+    "z": -3.73,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0231
+   },
+   "points>=2": {
+    "n": 1247,
+    "mean_residual_vs_model": -0.0096,
+    "z": -1.96,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "PP_ROLE_LOST": {
+   "shots>=2": {
+    "n": 2503,
+    "mean_residual_vs_model": 0.0086,
+    "z": 0.91,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 2503,
+    "mean_residual_vs_model": 0.0136,
+    "z": 1.57,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=1": {
+    "n": 2503,
+    "mean_residual_vs_model": -0.0193,
+    "z": -2.02,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=2": {
+    "n": 2503,
+    "mean_residual_vs_model": -0.0129,
+    "z": -2.04,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "MODEL_ABOVE_RECORD_HIGH": {
+   "shots>=2": {
+    "n": 3361,
+    "mean_residual_vs_model": 0.0034,
+    "z": 0.43,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 917,
+    "mean_residual_vs_model": 0.0345,
+    "z": 2.53,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "TOI_DROP_HIGH": {
+   "shots>=2": {
+    "n": 509,
+    "mean_residual_vs_model": -0.0171,
+    "z": -0.92,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 509,
+    "mean_residual_vs_model": -0.0041,
+    "z": -0.32,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=1": {
+    "n": 509,
+    "mean_residual_vs_model": -0.0376,
+    "z": -2.2,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=2": {
+    "n": 509,
+    "mean_residual_vs_model": -0.015,
+    "z": -2.13,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "ROLE_ASSUMPTION": {
+   "shots>=2": {
+    "n": 2343,
+    "mean_residual_vs_model": -0.0305,
+    "z": -3.57,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0164
+   },
+   "shots>=3": {
+    "n": 2343,
+    "mean_residual_vs_model": -0.0169,
+    "z": -3.04,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0078
+   },
+   "points>=1": {
+    "n": 2343,
+    "mean_residual_vs_model": -0.0431,
+    "z": -5.48,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0302
+   },
+   "points>=2": {
+    "n": 2343,
+    "mean_residual_vs_model": -0.0101,
+    "z": -3.46,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0053
+   }
+  },
+  "POSTMORTEM_ROLE_CAUTION": {
+   "shots>=2": {
+    "n": 2333,
+    "mean_residual_vs_model": -0.0329,
+    "z": -3.7,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0183
+   },
+   "shots>=3": {
+    "n": 2333,
+    "mean_residual_vs_model": -0.0076,
+    "z": -1.14,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=1": {
+    "n": 2333,
+    "mean_residual_vs_model": -0.0285,
+    "z": -3.36,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0146
+   },
+   "points>=2": {
+    "n": 2333,
+    "mean_residual_vs_model": -0.0047,
+    "z": -1.09,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "RECENT_FORM_BELOW_MODEL": {
+   "points>=1": {
+    "n": 173,
+    "mean_residual_vs_model": 0.0725,
+    "z": 2.01,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=2": {
+    "n": 350,
+    "mean_residual_vs_model": 0.013,
+    "z": 0.51,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "shots>=3": {
+    "n": 27,
+    "mean_residual_vs_model": 0.0778,
+    "z": 0.87,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=2": {
+    "n": 3,
+    "mean_residual_vs_model": 0.1109,
+    "z": 0.41,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   }
+  },
+  "POWER_PLAY_ASSUMPTION": {
+   "points>=1": {
+    "n": 769,
+    "mean_residual_vs_model": -0.0124,
+    "z": -0.73,
+    "verdict": "ALREADY_IN_MODEL",
+    "live_adjustment": null
+   },
+   "points>=2": {
+    "n": 769,
+    "mean_residual_vs_model": -0.0279,
+    "z": -3.18,
+    "verdict": "BEYOND_MODEL_LOWER",
+    "live_adjustment": -0.0134
+   }
+  }
+ },
+ "estimate_formulas": {
+  "shots>=2": {
+   "rows": 48584,
+   "log_loss_model_probability": 0.61148,
+   "log_loss_anchored_estimate": 0.61942,
+   "paired_delta_anchored_minus_model": 0.00794,
+   "ci95": [
+    0.00644,
+    0.00925
+   ],
+   "legs_the_model_would_admit_at_55pct": {
+    "n": 12544,
+    "hit_rate": 0.6927
+   },
+   "legs_the_anchor_admits_at_55pct": {
+    "n": 12775,
+    "hit_rate": 0.6877
+   },
+   "legs_only_the_model_admits": {
+    "n": 816,
+    "hit_rate": 0.636
+   }
+  },
+  "shots>=3": {
+   "rows": 48584,
+   "log_loss_model_probability": 0.46641,
+   "log_loss_anchored_estimate": 0.48657,
+   "paired_delta_anchored_minus_model": 0.02016,
+   "ci95": [
+    0.01706,
+    0.02331
+   ],
+   "legs_the_model_would_admit_at_55pct": {
+    "n": 1002,
+    "hit_rate": 0.6697
+   },
+   "legs_the_anchor_admits_at_55pct": {
+    "n": 1309,
+    "hit_rate": 0.6646
+   },
+   "legs_only_the_model_admits": {
+    "n": 32,
+    "hit_rate": 0.7188
+   }
+  }
+ },
+ "method": "python3 deploy/validate_player_signals.py --out docs/validation/player_signals.json",
+ "signals": {
+  "points>=1 | 4+ days since the last game": {
+   "flag": null,
+   "n": 5528,
+   "mean_residual_vs_model": -0.0097,
+   "se": 0.0059,
+   "z": -1.65,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE CAUTION POSTMORTEM_PP: his previous game's PP time came in 1.0+ min under the model's expectation": {
+   "flag": null,
+   "n": 5746,
+   "mean_residual_vs_model": 0.0129,
+   "se": 0.0063,
+   "z": 2.03,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE CAUTION POSTMORTEM_ROLE: his previous game's ice time came in 4.0+ min under the model's expectation": {
+   "flag": "POSTMORTEM_ROLE_CAUTION",
+   "n": 2333,
+   "mean_residual_vs_model": -0.0285,
+   "se": 0.0085,
+   "z": -3.36,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0146
+  },
+  "points>=1 | LIVE FLAG POWER_PLAY_ASSUMPTION: model expects 0.75+ PP min more than his last 6 games": {
+   "flag": "POWER_PLAY_ASSUMPTION",
+   "n": 769,
+   "mean_residual_vs_model": -0.0124,
+   "se": 0.0168,
+   "z": -0.73,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE FLAG PP_ROLE_LOST: model expects 0.75+ min more PP than his last 3 games": {
+   "flag": "PP_ROLE_LOST",
+   "n": 2503,
+   "mean_residual_vs_model": -0.0193,
+   "se": 0.0095,
+   "z": -2.02,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE FLAG RECENT_FORM_BELOW_MODEL: estimate 55%+, reached it in 0-1 of last 5": {
+   "flag": "RECENT_FORM_BELOW_MODEL",
+   "n": 173,
+   "mean_residual_vs_model": 0.0725,
+   "se": 0.036,
+   "z": 2.01,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE FLAG ROLE_ASSUMPTION: model expects 2.0+ min more than his last 6 games": {
+   "flag": "ROLE_ASSUMPTION",
+   "n": 2343,
+   "mean_residual_vs_model": -0.0431,
+   "se": 0.0079,
+   "z": -5.48,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0302
+  },
+  "points>=1 | LIVE FLAG TOI_DROP (high): model expects 4.0+ min more than his last 3 games": {
+   "flag": "TOI_DROP_HIGH",
+   "n": 509,
+   "mean_residual_vs_model": -0.0376,
+   "se": 0.0171,
+   "z": -2.2,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | LIVE FLAG TOI_DROP: model expects 3.2+ min more than his last 3 games": {
+   "flag": "TOI_DROP",
+   "n": 1247,
+   "mean_residual_vs_model": -0.0413,
+   "se": 0.0111,
+   "z": -3.73,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0231
+  },
+  "points>=1 | all rows (calibration check)": {
+   "flag": null,
+   "n": 48584,
+   "mean_residual_vs_model": 0.0076,
+   "se": 0.0021,
+   "z": 3.67,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=1 | away": {
+   "flag": null,
+   "n": 24289,
+   "mean_residual_vs_model": 0.0011,
+   "se": 0.0029,
+   "z": 0.39,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | home": {
+   "flag": null,
+   "n": 24295,
+   "mean_residual_vs_model": 0.014,
+   "se": 0.0029,
+   "z": 4.8,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=1 | ice time down 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 2002,
+   "mean_residual_vs_model": -0.0137,
+   "se": 0.0098,
+   "z": -1.4,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | ice time down 4.0+ min over 3 games": {
+   "flag": null,
+   "n": 998,
+   "mean_residual_vs_model": -0.0304,
+   "se": 0.0135,
+   "z": -2.25,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | ice time up 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 1574,
+   "mean_residual_vs_model": 0.0595,
+   "se": 0.0119,
+   "z": 4.99,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=1 | played yesterday (back-to-back proxy)": {
+   "flag": null,
+   "n": 7332,
+   "mean_residual_vs_model": -0.0063,
+   "se": 0.0053,
+   "z": -1.19,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | power-play time down 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6167,
+   "mean_residual_vs_model": 0.0157,
+   "se": 0.0061,
+   "z": 2.56,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=1 | power-play time up 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6528,
+   "mean_residual_vs_model": 0.0341,
+   "se": 0.006,
+   "z": 5.68,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=1 | reached it in 0-1 of last 5 (estimate 45%+)": {
+   "flag": null,
+   "n": 1062,
+   "mean_residual_vs_model": 0.0581,
+   "se": 0.0151,
+   "z": 3.84,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=1 | reached it in 4-5 of last 5 (estimate 30%+)": {
+   "flag": null,
+   "n": 5473,
+   "mean_residual_vs_model": 0.0213,
+   "se": 0.0066,
+   "z": 3.23,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "points>=2 | 4+ days since the last game": {
+   "flag": null,
+   "n": 5528,
+   "mean_residual_vs_model": 0.0026,
+   "se": 0.0035,
+   "z": 0.74,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE CAUTION POSTMORTEM_PP: his previous game's PP time came in 1.0+ min under the model's expectation": {
+   "flag": null,
+   "n": 5746,
+   "mean_residual_vs_model": -0.0035,
+   "se": 0.0044,
+   "z": -0.79,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE CAUTION POSTMORTEM_ROLE: his previous game's ice time came in 4.0+ min under the model's expectation": {
+   "flag": "POSTMORTEM_ROLE_CAUTION",
+   "n": 2333,
+   "mean_residual_vs_model": -0.0047,
+   "se": 0.0043,
+   "z": -1.09,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE FLAG POWER_PLAY_ASSUMPTION: model expects 0.75+ PP min more than his last 6 games": {
+   "flag": "POWER_PLAY_ASSUMPTION",
+   "n": 769,
+   "mean_residual_vs_model": -0.0279,
+   "se": 0.0088,
+   "z": -3.18,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0134
+  },
+  "points>=2 | LIVE FLAG PP_ROLE_LOST: model expects 0.75+ min more PP than his last 3 games": {
+   "flag": "PP_ROLE_LOST",
+   "n": 2503,
+   "mean_residual_vs_model": -0.0129,
+   "se": 0.0063,
+   "z": -2.04,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE FLAG RECENT_FORM_BELOW_MODEL: estimate 55%+, reached it in 0-1 of last 5": {
+   "flag": "RECENT_FORM_BELOW_MODEL",
+   "n": 3,
+   "mean_residual_vs_model": 0.1109,
+   "se": 0.2709,
+   "z": 0.41,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE FLAG ROLE_ASSUMPTION: model expects 2.0+ min more than his last 6 games": {
+   "flag": "ROLE_ASSUMPTION",
+   "n": 2343,
+   "mean_residual_vs_model": -0.0101,
+   "se": 0.0029,
+   "z": -3.46,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0053
+  },
+  "points>=2 | LIVE FLAG TOI_DROP (high): model expects 4.0+ min more than his last 3 games": {
+   "flag": "TOI_DROP_HIGH",
+   "n": 509,
+   "mean_residual_vs_model": -0.015,
+   "se": 0.0071,
+   "z": -2.13,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | LIVE FLAG TOI_DROP: model expects 3.2+ min more than his last 3 games": {
+   "flag": "TOI_DROP",
+   "n": 1247,
+   "mean_residual_vs_model": -0.0096,
+   "se": 0.0049,
+   "z": -1.96,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | all rows (calibration check)": {
+   "flag": null,
+   "n": 48584,
+   "mean_residual_vs_model": 0.0002,
+   "se": 0.0013,
+   "z": 0.18,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | away": {
+   "flag": null,
+   "n": 24289,
+   "mean_residual_vs_model": -0.0029,
+   "se": 0.0018,
+   "z": -1.65,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | home": {
+   "flag": null,
+   "n": 24295,
+   "mean_residual_vs_model": 0.0034,
+   "se": 0.0018,
+   "z": 1.87,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | ice time down 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 2002,
+   "mean_residual_vs_model": -0.003,
+   "se": 0.0058,
+   "z": -0.52,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | ice time down 4.0+ min over 3 games": {
+   "flag": null,
+   "n": 998,
+   "mean_residual_vs_model": -0.0027,
+   "se": 0.0078,
+   "z": -0.35,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | ice time up 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 1574,
+   "mean_residual_vs_model": 0.0063,
+   "se": 0.0073,
+   "z": 0.86,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | played yesterday (back-to-back proxy)": {
+   "flag": null,
+   "n": 7332,
+   "mean_residual_vs_model": -0.0099,
+   "se": 0.0032,
+   "z": -3.1,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": null
+  },
+  "points>=2 | power-play time down 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6167,
+   "mean_residual_vs_model": 0.0039,
+   "se": 0.0044,
+   "z": 0.89,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | power-play time up 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6528,
+   "mean_residual_vs_model": 0.006,
+   "se": 0.0043,
+   "z": 1.39,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | reached it in 0-1 of last 5 (estimate 45%+)": {
+   "flag": null,
+   "n": 39,
+   "mean_residual_vs_model": -0.0342,
+   "se": 0.0797,
+   "z": -0.43,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "points>=2 | reached it in 4-5 of last 5 (estimate 30%+)": {
+   "flag": null,
+   "n": 126,
+   "mean_residual_vs_model": -0.0748,
+   "se": 0.0415,
+   "z": -1.8,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | 4+ days since the last game": {
+   "flag": null,
+   "n": 5528,
+   "mean_residual_vs_model": -0.0049,
+   "se": 0.006,
+   "z": -0.83,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE CAUTION POSTMORTEM_PP: his previous game's PP time came in 1.0+ min under the model's expectation": {
+   "flag": null,
+   "n": 5746,
+   "mean_residual_vs_model": 0.0086,
+   "se": 0.0062,
+   "z": 1.38,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE CAUTION POSTMORTEM_ROLE: his previous game's ice time came in 4.0+ min under the model's expectation": {
+   "flag": "POSTMORTEM_ROLE_CAUTION",
+   "n": 2333,
+   "mean_residual_vs_model": -0.0329,
+   "se": 0.0089,
+   "z": -3.7,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0183
+  },
+  "shots>=2 | LIVE FLAG MODEL_ABOVE_RECORD (10+ pts) vs the ANCHORED estimate": {
+   "flag": null,
+   "n": 3361,
+   "mean_residual_vs_model": 0.1329,
+   "se": 0.0078,
+   "z": 16.98,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG MODEL_ABOVE_RECORD (10+ pts) vs the MODEL": {
+   "flag": "MODEL_ABOVE_RECORD_HIGH",
+   "n": 3361,
+   "mean_residual_vs_model": 0.0034,
+   "se": 0.0078,
+   "z": 0.43,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG MODEL_ABOVE_RECORD (5+ pts) vs the ANCHORED estimate": {
+   "flag": null,
+   "n": 10056,
+   "mean_residual_vs_model": 0.1006,
+   "se": 0.0045,
+   "z": 22.16,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG MODEL_ABOVE_RECORD (5+ pts) vs the MODEL": {
+   "flag": "MODEL_ABOVE_RECORD",
+   "n": 10056,
+   "mean_residual_vs_model": 0.0093,
+   "se": 0.0045,
+   "z": 2.05,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG PP_ROLE_LOST: model expects 0.75+ min more PP than his last 3 games": {
+   "flag": "PP_ROLE_LOST",
+   "n": 2503,
+   "mean_residual_vs_model": 0.0086,
+   "se": 0.0094,
+   "z": 0.91,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG RECENT_FORM_BELOW_MODEL: estimate 55%+, reached it in 0-1 of last 5": {
+   "flag": "RECENT_FORM_BELOW_MODEL",
+   "n": 350,
+   "mean_residual_vs_model": 0.013,
+   "se": 0.0258,
+   "z": 0.51,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG ROLE_ASSUMPTION: model expects 2.0+ min more than his last 6 games": {
+   "flag": "ROLE_ASSUMPTION",
+   "n": 2343,
+   "mean_residual_vs_model": -0.0305,
+   "se": 0.0086,
+   "z": -3.57,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0164
+  },
+  "shots>=2 | LIVE FLAG TOI_DROP (high): model expects 4.0+ min more than his last 3 games": {
+   "flag": "TOI_DROP_HIGH",
+   "n": 509,
+   "mean_residual_vs_model": -0.0171,
+   "se": 0.0185,
+   "z": -0.92,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | LIVE FLAG TOI_DROP: model expects 3.2+ min more than his last 3 games": {
+   "flag": "TOI_DROP",
+   "n": 1247,
+   "mean_residual_vs_model": -0.0132,
+   "se": 0.0122,
+   "z": -1.08,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | all rows (calibration check)": {
+   "flag": null,
+   "n": 48584,
+   "mean_residual_vs_model": 0.0104,
+   "se": 0.0021,
+   "z": 5.0,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | away": {
+   "flag": null,
+   "n": 24289,
+   "mean_residual_vs_model": 0.0021,
+   "se": 0.0029,
+   "z": 0.71,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | home": {
+   "flag": null,
+   "n": 24295,
+   "mean_residual_vs_model": 0.0188,
+   "se": 0.003,
+   "z": 6.36,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | ice time down 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 2002,
+   "mean_residual_vs_model": -0.0096,
+   "se": 0.0102,
+   "z": -0.94,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | ice time down 4.0+ min over 3 games": {
+   "flag": null,
+   "n": 998,
+   "mean_residual_vs_model": -0.0004,
+   "se": 0.0144,
+   "z": -0.03,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | ice time up 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 1574,
+   "mean_residual_vs_model": 0.0614,
+   "se": 0.0118,
+   "z": 5.19,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | played yesterday (back-to-back proxy)": {
+   "flag": null,
+   "n": 7332,
+   "mean_residual_vs_model": 0.0066,
+   "se": 0.0054,
+   "z": 1.23,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | power-play time down 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6167,
+   "mean_residual_vs_model": 0.0118,
+   "se": 0.006,
+   "z": 1.95,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | power-play time up 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6528,
+   "mean_residual_vs_model": 0.0425,
+   "se": 0.0058,
+   "z": 7.3,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=2 | reached it in 0-1 of last 5 (estimate 45%+)": {
+   "flag": null,
+   "n": 1632,
+   "mean_residual_vs_model": -0.001,
+   "se": 0.0123,
+   "z": -0.08,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=2 | reached it in 4-5 of last 5 (estimate 30%+)": {
+   "flag": null,
+   "n": 9800,
+   "mean_residual_vs_model": 0.0368,
+   "se": 0.0047,
+   "z": 7.9,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | 4+ days since the last game": {
+   "flag": null,
+   "n": 5528,
+   "mean_residual_vs_model": 0.0203,
+   "se": 0.005,
+   "z": 4.07,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE CAUTION POSTMORTEM_PP: his previous game's PP time came in 1.0+ min under the model's expectation": {
+   "flag": null,
+   "n": 5746,
+   "mean_residual_vs_model": 0.0172,
+   "se": 0.0058,
+   "z": 2.97,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE CAUTION POSTMORTEM_ROLE: his previous game's ice time came in 4.0+ min under the model's expectation": {
+   "flag": "POSTMORTEM_ROLE_CAUTION",
+   "n": 2333,
+   "mean_residual_vs_model": -0.0076,
+   "se": 0.0066,
+   "z": -1.14,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG MODEL_ABOVE_RECORD (10+ pts) vs the ANCHORED estimate": {
+   "flag": null,
+   "n": 917,
+   "mean_residual_vs_model": 0.1533,
+   "se": 0.0137,
+   "z": 11.19,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG MODEL_ABOVE_RECORD (10+ pts) vs the MODEL": {
+   "flag": "MODEL_ABOVE_RECORD_HIGH",
+   "n": 917,
+   "mean_residual_vs_model": 0.0345,
+   "se": 0.0137,
+   "z": 2.53,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG MODEL_ABOVE_RECORD (5+ pts) vs the ANCHORED estimate": {
+   "flag": null,
+   "n": 7120,
+   "mean_residual_vs_model": 0.0841,
+   "se": 0.0043,
+   "z": 19.58,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG MODEL_ABOVE_RECORD (5+ pts) vs the MODEL": {
+   "flag": "MODEL_ABOVE_RECORD",
+   "n": 7120,
+   "mean_residual_vs_model": 0.009,
+   "se": 0.0043,
+   "z": 2.1,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG PP_ROLE_LOST: model expects 0.75+ min more PP than his last 3 games": {
+   "flag": "PP_ROLE_LOST",
+   "n": 2503,
+   "mean_residual_vs_model": 0.0136,
+   "se": 0.0087,
+   "z": 1.57,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG RECENT_FORM_BELOW_MODEL: estimate 55%+, reached it in 0-1 of last 5": {
+   "flag": "RECENT_FORM_BELOW_MODEL",
+   "n": 27,
+   "mean_residual_vs_model": 0.0778,
+   "se": 0.0893,
+   "z": 0.87,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG ROLE_ASSUMPTION: model expects 2.0+ min more than his last 6 games": {
+   "flag": "ROLE_ASSUMPTION",
+   "n": 2343,
+   "mean_residual_vs_model": -0.0169,
+   "se": 0.0056,
+   "z": -3.04,
+   "verdict": "BEYOND_MODEL_LOWER",
+   "live_adjustment": -0.0078
+  },
+  "shots>=3 | LIVE FLAG TOI_DROP (high): model expects 4.0+ min more than his last 3 games": {
+   "flag": "TOI_DROP_HIGH",
+   "n": 509,
+   "mean_residual_vs_model": -0.0041,
+   "se": 0.0128,
+   "z": -0.32,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | LIVE FLAG TOI_DROP: model expects 3.2+ min more than his last 3 games": {
+   "flag": "TOI_DROP",
+   "n": 1247,
+   "mean_residual_vs_model": -0.0072,
+   "se": 0.0084,
+   "z": -0.85,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | all rows (calibration check)": {
+   "flag": null,
+   "n": 48584,
+   "mean_residual_vs_model": 0.0162,
+   "se": 0.0018,
+   "z": 9.18,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | away": {
+   "flag": null,
+   "n": 24289,
+   "mean_residual_vs_model": 0.0095,
+   "se": 0.0025,
+   "z": 3.83,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | home": {
+   "flag": null,
+   "n": 24295,
+   "mean_residual_vs_model": 0.0229,
+   "se": 0.0025,
+   "z": 9.12,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | ice time down 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 2002,
+   "mean_residual_vs_model": 0.0023,
+   "se": 0.0082,
+   "z": 0.28,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | ice time down 4.0+ min over 3 games": {
+   "flag": null,
+   "n": 998,
+   "mean_residual_vs_model": 0.0076,
+   "se": 0.0115,
+   "z": 0.65,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | ice time up 3.2+ min over 3 games": {
+   "flag": null,
+   "n": 1574,
+   "mean_residual_vs_model": 0.0307,
+   "se": 0.0101,
+   "z": 3.05,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | played yesterday (back-to-back proxy)": {
+   "flag": null,
+   "n": 7332,
+   "mean_residual_vs_model": 0.0085,
+   "se": 0.0045,
+   "z": 1.86,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | power-play time down 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6167,
+   "mean_residual_vs_model": 0.0208,
+   "se": 0.0056,
+   "z": 3.71,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | power-play time up 0.75+ min over 3 games": {
+   "flag": null,
+   "n": 6528,
+   "mean_residual_vs_model": 0.037,
+   "se": 0.0055,
+   "z": 6.69,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  },
+  "shots>=3 | reached it in 0-1 of last 5 (estimate 45%+)": {
+   "flag": null,
+   "n": 221,
+   "mean_residual_vs_model": 0.0645,
+   "se": 0.0332,
+   "z": 1.94,
+   "verdict": "ALREADY_IN_MODEL",
+   "live_adjustment": null
+  },
+  "shots>=3 | reached it in 4-5 of last 5 (estimate 30%+)": {
+   "flag": null,
+   "n": 2126,
+   "mean_residual_vs_model": 0.0604,
+   "se": 0.0106,
+   "z": 5.67,
+   "verdict": "BEYOND_MODEL_RAISE_NOT_APPLIED",
+   "live_adjustment": null
+  }
+ },
+ "ablations": {
+  "opponent environment OFF (opp_beta=0)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00097,
+    "ci95": [
+     0.00061,
+     0.00131
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.0004,
+    "ci95": [
+     5e-05,
+     0.00071
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00049,
+    "ci95": [
+     0.00024,
+     0.00075
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.0002,
+    "ci95": [
+     -4e-05,
+     0.00047
+    ],
+    "verdict": "NO_DEMONSTRATED_DIFFERENCE"
+   }
+  },
+  "ice-time recency OFF (toi_half_life=1000 games)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00343,
+    "ci95": [
+     0.00272,
+     0.0042
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00294,
+    "ci95": [
+     0.0023,
+     0.00366
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00093,
+    "ci95": [
+     0.00049,
+     0.00135
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.0011,
+    "ci95": [
+     0.00073,
+     0.00152
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   }
+  },
+  "rate recency slower (rate_half_life=90 games)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00056,
+    "ci95": [
+     -0.00111,
+     -0.00013
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00122,
+    "ci95": [
+     -0.00174,
+     -0.00077
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00117,
+    "ci95": [
+     -0.00158,
+     -0.00081
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.0002,
+    "ci95": [
+     -0.00056,
+     0.00015
+    ],
+    "verdict": "NO_DEMONSTRATED_DIFFERENCE"
+   }
+  },
+  "rate recency faster (rate_half_life=10 games)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00529,
+    "ci95": [
+     0.00464,
+     0.00602
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.0055,
+    "ci95": [
+     0.00493,
+     0.00613
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00442,
+    "ci95": [
+     0.00393,
+     0.005
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 0.00254,
+    "ci95": [
+     0.00201,
+     0.00301
+    ],
+    "verdict": "THE INGREDIENT HELPS (removing it hurts)"
+   }
+  },
+  "rate recency slower (rate_half_life=60 games)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00074,
+    "ci95": [
+     -0.0011,
+     -0.00043
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00119,
+    "ci95": [
+     -0.00156,
+     -0.00086
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00102,
+    "ci95": [
+     -0.00132,
+     -0.00078
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.0003,
+    "ci95": [
+     -0.00055,
+     -6e-05
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   }
+  },
+  "rate recency much slower (rate_half_life=150 games)": {
+   "shots>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.0001,
+    "ci95": [
+     -0.00083,
+     0.00043
+    ],
+    "verdict": "NO_DEMONSTRATED_DIFFERENCE"
+   },
+   "shots>=3": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00096,
+    "ci95": [
+     -0.00161,
+     -0.00035
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=1": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": -0.00114,
+    "ci95": [
+     -0.00167,
+     -0.00069
+    ],
+    "verdict": "removing it HELPS (the ingredient hurts)"
+   },
+   "points>=2": {
+    "n": 52907,
+    "delta_log_loss_vs_live_model": 3e-05,
+    "ci95": [
+     -0.00041,
+     0.00047
+    ],
+    "verdict": "NO_DEMONSTRATED_DIFFERENCE"
+   }
+  }
+ }
+}

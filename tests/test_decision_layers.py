@@ -136,3 +136,49 @@ class TestNoRetiredLogicInTheLiveParlayPath(unittest.TestCase):
         src = _i.getsource(lc.eligibility_reasons)
         self.assertIn('if UNIT == "PARLAY"', src)
         self.assertIn("elif leg.american_price < ODDS_FLOOR", src)
+
+
+class TestOneAuthoritativeTeamProbability(unittest.TestCase):
+    STRENGTH = {"home": 0.44, "away": 0.56, "model": "goalie-team-v1 strength model"}
+
+    def test_the_page_shows_the_review_models_probability_and_keeps_the_other_labelled(self):
+        from operational import product_data as pd
+        view = {"available": True, "p_home": 0.3194, "p_away": 0.6806}
+        shown, alt = pd.authoritative_win_probability(view, self.STRENGTH)
+        self.assertEqual((shown["home"], shown["away"]), (0.3194, 0.6806))
+        self.assertIn("eggy-matchup-v1", shown["model"])
+        self.assertEqual(alt, self.STRENGTH)
+
+    def test_the_older_model_is_shown_only_when_the_team_model_cannot_speak_and_it_says_so(self):
+        from operational import product_data as pd
+        for view in (None, {"available": False}):
+            shown, alt = pd.authoritative_win_probability(view, self.STRENGTH)
+            self.assertEqual(shown, self.STRENGTH)
+            self.assertIsNone(alt)
+            self.assertIn("strength model", shown["model"])
+
+    def test_the_review_and_the_page_read_the_same_function(self):
+        import inspect
+        from operational import product_data as pd
+        self.assertIn("matchup", inspect.getsource(pd))
+        self.assertIn("eggy-matchup-v1", inspect.getsource(ei.team_view) + inspect.getsource(pd.authoritative_win_probability))
+
+
+class TestOneModelForPlayerPoints(unittest.TestCase):
+    def test_a_points_leg_is_judged_on_the_validated_product_model_not_the_older_points_models_number(self):
+        t = tei.TestPlayerReview()
+        t.setUp()
+        leg = tei.prop_leg(fam="PLAYER_POINTS", k=1, price=-200.0, p=0.52)                          # the older model's (lower) number arrives on the leg
+        c = t.review(leg, 0.66, market="points>=1")                                                # the validated product model says 66%
+        self.assertEqual(c["probabilities"]["estimate_used"], 0.66)
+        self.assertEqual(c["estimate_used"], 0.66)
+        self.assertEqual(c["legacy_points_model_estimate"], 0.52)
+        ok, why = lp.leg_ok({"leg": leg, "card": c, "action": c["action"]["decision"]})
+        self.assertNotIn("not a likely outcome", why)
+
+    def test_a_points_threshold_the_validation_did_not_enable_keeps_the_legs_own_number(self):
+        t = tei.TestPlayerReview()
+        t.setUp()
+        with mock.patch.object(ei, "points_policy", return_value={"enabled": {}, "recalibration": {}, "validated_through": None}):
+            c = t.review(tei.prop_leg(fam="PLAYER_POINTS", k=1, price=-200.0, p=0.52), 0.66, market="points>=1")
+        self.assertNotIn("legacy_points_model_estimate", c)

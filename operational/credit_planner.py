@@ -50,6 +50,8 @@ PROP_MARKETS_ENV = "NHL_ENGINE_PROP_MARKETS"
 BASE_COST = 1
 SAVES_COST, GOALS_COST, POINTS_COST = 1, 1, 1
 BUNDLE_MARKETS = (SHOTS_KEY, GOALS_KEY, SAVES_KEY)             # one coordinated capture per selected game
+POINTS_FIRST_CLASS_ENV = "NHL_ENGINE_POINTS_FIRST_CLASS"
+POINTS_BUNDLE = (SHOTS_KEY, POINTS_KEY, SAVES_KEY)             # the same three credits a game with POINTS in place of anytime goals
 FIRST_CAPTURE_HOURS = capture_timeline.CAPTURE_TARGET_MIN / 60.0
 WAVE_MINUTES = capture_timeline.WAVE_MINUTES
 TOMORROW_COST = 1                                              # a paid tomorrow look exists only as an explicit-surplus extra; the core allocation is 0
@@ -187,6 +189,25 @@ def points_addon_enabled() -> bool:
     return POINTS_KEY not in prop_markets() and raw.strip().lower() not in ("off", "0", "false", "no")
 
 
+def points_first_class() -> bool:
+    """OFF by default (this is the one credit-consuming switch left for the owner). ON: player points replace anytime goals in every selected game's capture, so a game still costs the same three credits:
+    the product's goal legs never reach the 55% leg floor (a goal is a 5-33% event), whereas validated points legs (docs/validation/points_thresholds.json) can. The Slate Board then shows no goal-scorer prices."""
+    import os
+    raw = os.environ.get(POINTS_FIRST_CLASS_ENV) or ""
+    if not raw:
+        env = state_paths.REPO_ROOT / ".env"
+        if env.exists():
+            for line in env.read_text().splitlines():
+                k, sep, v = line.strip().partition("=")
+                if sep and k.strip() == POINTS_FIRST_CLASS_ENV:
+                    raw = v.strip().strip("\"'")
+    return raw.strip().lower() in ("on", "1", "true", "yes")
+
+
+def bundle_markets() -> tuple[str, ...]:
+    return POINTS_BUNDLE if points_first_class() else BUNDLE_MARKETS
+
+
 MORNING_ENV = "NHL_ENGINE_MORNING_LOOK"
 
 
@@ -280,7 +301,7 @@ def cycle_budget(now: dt.datetime, remaining: int | None, spent_all_today: float
     w_today = weights.get(today, 0)
     # Every game day gets at least one FULL bundle (shots + goals + saves) when the pool can give one to every remaining game day: a light slate would otherwise be handed a fraction of a bundle
     # (two games = 2 of 73 weight units = under 3 credits) and no goalie-saves price at all. The floor is carved out of the same pool before the weighted split, so the total is unchanged.
-    floor = float(len(BUNDLE_MARKETS))
+    floor = float(len(bundle_markets()))
     n_game_days = len(game_days)
     if w_total and n_game_days and w_today and player_pool >= floor * n_game_days:
         player_today = floor + (player_pool - floor * n_game_days) * (w_today / w_total)
@@ -307,22 +328,23 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     quality = quality or {}
     spent_player = sum(spent.get(k, 0.0) for k in (PROPS, GOALS, SAVES, POINTS_ADDON, MORNING, REFRESH))
     avail = max(budget["player_today"] - spent_player, 0.0)
-    bundle = len(BUNDLE_MARKETS)
+    bundle_set = bundle_markets()
+    bundle = len(bundle_set)
     k = int(avail // bundle)
     chosen = select_games(wave_list, quality, eligible, min(k, len(eligible)))
-    markets = {g: list(BUNDLE_MARKETS) for g in chosen}
+    markets = {g: list(bundle_set) for g in chosen}
     left = avail - bundle * len(chosen)
     partial = None
     if left >= 1 and len(chosen) < len(eligible):                 # a remainder buys a partial bundle (shots first, then goals) for the next best game
         extra = select_games(wave_list, quality, eligible - set(chosen), 1)
         if extra:
             partial = extra[0]
-            markets[partial] = [SHOTS_KEY, GOALS_KEY][:int(left)]
+            markets[partial] = [SHOTS_KEY, POINTS_KEY if POINTS_KEY in bundle_set else GOALS_KEY][:int(left)]
             left -= len(markets[partial])
             chosen = sorted(chosen + [partial], key=lambda g: (next(w.first_start for w in wave_list if g in w.games), g))
     points_games, extra_pulls = [], 0
     if len(chosen) >= len(eligible) and left >= 1:                # surplus: every eligible game already has a full bundle
-        if points_addon_enabled():
+        if points_addon_enabled() and POINTS_KEY not in bundle_set:
             k_p = int(left // POINTS_COST)
             points_games = chosen[:k_p]
             for g in points_games:
@@ -332,6 +354,7 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
         extra_pulls = min(later_waves, int(left // max(lc, 1)))
         left -= extra_pulls * lc
     shots_c = sum(1 for g in chosen if SHOTS_KEY in markets[g])
+    points_games = [g for g in chosen if POINTS_KEY in markets[g]]                 # first-class points ride in the bundle; the surplus add-on appended its games above
     goals_games = [g for g in chosen if GOALS_KEY in markets[g]]
     saves_games = [g for g in chosen if SAVES_KEY in markets[g]]
     league_planned = (LEAGUE_PULLS_PER_DAY + extra_pulls) if budget["league_total"] >= LEAGUE_PULLS_PER_DAY * lc else int(budget["league_total"] // max(lc, 1))
@@ -536,7 +559,7 @@ def month_view(now: dt.datetime, remaining: int | None, starts_per_day: float = 
     league = days_left * LEAGUE_PULLS_PER_DAY * lc
     recovery = math.ceil(RECOVERY_PER_30_DAYS * days_left / 30.0)
     pool = max(usable - league - recovery, 0)
-    per_day_games = pool / len(BUNDLE_MARKETS) / days_left
+    per_day_games = pool / len(bundle_markets()) / days_left
     return {"remaining": remaining, "days_left": days_left, "league_pulls_credits": league, "league_cost_each": lc, "league_cost_observed": observed, "recovery_credits": recovery,
             "player_pool_credits": pool, "games_per_day_covered": round(per_day_games, 1), "reset_assumed": odds_quota.reset_status()["assumed"]}
 
