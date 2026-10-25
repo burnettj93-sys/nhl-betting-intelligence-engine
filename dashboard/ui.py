@@ -751,6 +751,49 @@ def parlay_product_banner(doc: dict | None) -> None:
            "the earlier single primary slip is retired (history only) · paper only", "good")
 
 
+def intelligence_metrics_panel(m: dict | None) -> None:
+    """Is the engine getting smarter? The measured record (operational/intelligence_metrics.py): hit rates against what the engine expected, with n and a z score; only a row with enough cases is a finding."""
+    if not m or not m.get("tickets_recorded"):
+        return
+
+    def rows(cells: dict, label: str) -> list[dict]:
+        return [{label: k, "Settled": c["n"], "Hit": c["hit"], "Hit rate": _lx_pct(c.get("rate"), 0), "Engine expected": _lx_pct(c.get("expected_rate"), 0), "z": ("—" if c.get("z") is None else f"{c['z']:+.2f}"),
+                 "Enough cases?": "yes" if c.get("sufficient") else f"no (under {m.get('min_n_for_a_finding', 30)})"} for k, c in cells.items()]
+    with st.expander("Is the engine getting smarter? The measured record (hit rates against what the engine expected)"):
+        lg = m["legs"]
+        a = lg["all"]
+        st.markdown(f"**Legs, one count per leg per day:** {a['hit']} of {a['n']} hit ({_lx_pct(a.get('rate'), 0)}) against {a['expected_hit']} expected ({_lx_pct(a.get('expected_rate'), 0)}), z {a['z']}")
+        st.markdown("**Calibration by probability band**")
+        st.dataframe(rows(lg["calibration_by_probability_band"], "Engine said"), hide_index=True, width="stretch")
+        st.markdown("**By market and threshold**")
+        st.dataframe(rows(lg["by_market_and_threshold"], "Market"), hide_index=True, width="stretch")
+        st.markdown("**Legs that carried a role / opportunity flag against legs that did not, and legs on one ticket against several**")
+        st.dataframe(rows({**lg["flagged_vs_unflagged"], **lg["reused_vs_not"]}, "Group"), hide_index=True, width="stretch")
+        tk = m["tickets"]
+        st.markdown("**Tickets: GOOD against QUESTIONABLE, and by estimated ticket probability**")
+        st.dataframe(rows({**tk["good_vs_questionable"], **tk["ticket_probability_bands"]}, "Group"), hide_index=True, width="stretch")
+        st.caption(tk.get("probability_basis", "") + ". Why missed tickets missed: " + ", ".join(f"{k}: {v}" for k, v in (tk.get("why_missed_tickets_missed") or {}).items()))
+        ml = (m.get("moneyline_model_vs_market") or {}).get("by_model_market_gap") or {}
+        if ml:
+            st.markdown("**Moneyline legs: did the side beat what the MARKET said, by model-market gap?**")
+            st.dataframe(rows(ml, "Gap"), hide_index=True, width="stretch")
+        fl = m.get("flagship") or {}
+        st.markdown(f"**Eggy's flagship:** {fl.get('hit', 0)} hit of {fl.get('settled', 0)} settled" + ("" if fl.get("sufficient") else " (too few to judge)"))
+        pm = m.get("postmortem") or {}
+        st.markdown(f"**Postmortem:** {pm.get('lost_legs', 0)} lost legs; UNKNOWN {_lx_pct(pm.get('unknown_rate'), 0)}; unexplained or untested {_lx_pct(pm.get('unexplained_or_untested_rate'), 0)}. Causes: "
+                    + ", ".join(f"{k} {v}" for k, v in (pm.get("cause_counts") or {}).items()))
+        if pm.get("decision_quality_vs_outcome"):
+            st.dataframe([{"Decision": _words(r["decision"]), "Outcome": _words(r["outcome"]), "Legs": r["n"]} for r in pm["decision_quality_vs_outcome"]], hide_index=True, width="stretch")
+        eh = m.get("evidence_health") or {}
+        if eh.get("state") in ("OK", "EXPIRING", "EXPIRED"):
+            st.markdown(f"**Calibration evidence:** built {esc(str(eh.get('built_at_utc'))[:10])}, {eh.get('age_days')} days old, {eh.get('days_remaining')} days before the review layer stops (state {eh['state']}). "
+                        f"Refresh: {esc(eh.get('controlled_refresh', ''))}")
+        pts = m.get("points") or {}
+        if pts:
+            st.caption(f"Player points thresholds validated for live parlays: {pts.get('enabled_thresholds')} (recalibrated: {pts.get('recalibrated_thresholds')}); points legs settled so far: {pts.get('live_points_legs_settled', 0)}.")
+        st.caption((m.get("priced_metrics") or {}).get("why", "") + ". Small samples say little: a row is a finding only when it says so.")
+
+
 def learning_experiment_panel(doc: dict | None) -> None:
     """The temporary 14-day paper learning experiment (operational/learning_cohort.py): its own bankroll, its own record, visibly separate from Eggy's pick and the normal paper book. Paper only."""
     if not doc:
@@ -833,6 +876,7 @@ def learning_experiment_panel(doc: dict | None) -> None:
                 st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Priced": "no (unpriced)", "Hit / miss": p.get("hit_text"), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
                                "Killed by": ", ".join(p.get("killed_by") or []) or "\u2014", "Construction": p.get("verdict")} for p in pdays_], hide_index=True, width="stretch")
                 parlay_panel(pdays_, doc.get("cards") or {}, title="Parlays, with their leg reviews")
+        intelligence_metrics_panel(pm_.get("intelligence_metrics"))
         les = pm_.get("lessons") or {}
         if les.get("by_date") or les.get("cautions"):
             with st.expander("What yesterday taught today's review (persisted postmortem lessons)"):

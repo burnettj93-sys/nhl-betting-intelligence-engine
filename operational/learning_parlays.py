@@ -42,7 +42,7 @@ PRICE_FLAGS = ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "
 # liking a side MORE than the market does not touch the estimate; counting it would reject a favourite BECAUSE the model sees more value. Independent evidence still counts: MODEL_SAYS_OVERPRICED,
 # HOCKEY_PICTURE_AGAINST, calibration below MEDIUM, missing data, back-to-back and every other flag.
 MODEL_ABOVE_MARKET_FLAGS = ("MODEL_NOT_SHOWN_TO_BEAT_MARKET", "MARKET_MAY_KNOW_MORE")
-SET_ASIDE_FLAGS = PRICE_FLAGS + MODEL_ABOVE_MARKET_FLAGS
+SET_ASIDE_FLAGS = PRICE_FLAGS + MODEL_ABOVE_MARKET_FLAGS          # kept for reference; the gate itself uses ei.counted_flags (one registry, operational/eggy_intelligence.py FLAG_LAYER)
 
 
 def leg_ok(c: dict) -> tuple[bool, str]:
@@ -51,10 +51,15 @@ def leg_ok(c: dict) -> tuple[bool, str]:
     card = c["card"]
     if card.get("kind") == "ERROR":
         return False, "the review failed"
+    leg = c.get("leg")
+    if leg is not None and getattr(leg, "market_family", None) == "PLAYER_POINTS":                         # a points threshold is a live ingredient only where the out-of-time validation allows it
+        k = int(getattr(leg, "threshold", 0) or 0)
+        if k not in ei.points_policy()["enabled"]:
+            return False, f"points {k}+ is not validated for live use (docs/validation/points_thresholds.json)"
     price_only_pass = c["action"] == "PASS" and card["kind"] == "PLAYER" and card["thesis"]["type"] == "PRICE_ABOVE_ESTIMATE"
     if c["action"] not in ("RECORD", "LOWER_PRIORITY") and not price_only_pass:
         return False, "the leg's own review passes"
-    level = ei.combine_contradiction([f for f in card["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])
+    level = ei.combine_contradiction(ei.counted_flags(card["contradiction"]["flags"]))
     if LEVEL[level] > 1:
         return False, f"contradiction {level} (price and model-above-market flags set aside)"
     if card["calibration_confidence"]["level"] not in ("HIGH", "MEDIUM") or card["data_completeness"]["fraction"] < 0.5:
@@ -118,8 +123,8 @@ def construct(cands: list[dict]) -> dict | None:
     dep_level = "ASSUMED_INDEPENDENT" if independent else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")
     wi = min(range(len(legs)), key=lambda i: (ests[i], -LEVEL[cands[i]["card"]["contradiction"]["level"]]))
     weakest = {"index": wi, "label": bet_label(legs[wi].participant_name, legs[wi].market_family, legs[wi].threshold, legs[wi].american_price), "estimate": round(ests[wi], 4),
-               "contradiction": ei.combine_contradiction([f for f in cands[wi]["card"]["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])}
-    levels = [LEVEL[ei.combine_contradiction([f for f in c["card"]["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])] for c in cands]
+               "contradiction": ei.combine_contradiction(ei.counted_flags(cands[wi]["card"]["contradiction"]["flags"]))}
+    levels = [LEVEL[ei.combine_contradiction(ei.counted_flags(c["card"]["contradiction"]["flags"]))] for c in cands]
     if ests[wi] < MIN_LEG_P or max(levels) > 1:
         quality = "BAD"
     elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("ASSUMED_INDEPENDENT", "POSITIVE_NOT_QUANTIFIED"):

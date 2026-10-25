@@ -20,9 +20,11 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
+import json
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from operational import eastern_time as et
 
@@ -136,6 +138,7 @@ class Context:
     live_overlay: bool = False                            # the recency / role-risk overlay is on (the live cohort only; replays and reconstructions stay as they were)
     recent_box: dict = field(default_factory=dict)        # player id -> NHL API box-score lines (newest first) of FINAL games newer than the newest MoneyPuck game
     role_cautions: dict = field(default_factory=dict)     # (lower-case name, team) -> {"classification", "date"} from yesterday's postmortem
+    calibration_cautions: list = field(default_factory=list)   # probability bands the engine's own settled legs show it OVER-predicts (n >= 30, z <= -2), from the postmortem's metrics
 
 
 def build_context(nhl_conn, now: dt.datetime, *, as_of: str | None = None, skater_rows: list | None = None, team_rows: list | None = None, evidence: dict | None = None,
@@ -200,6 +203,7 @@ def _load_overlay_inputs(ctx: Context, nhl_conn) -> None:
         from operational import learning_postmortem as lpm
         doc = lpm.load() or {}
         floor = (dt.date.fromisoformat(ctx.as_of) - dt.timedelta(days=OVERLAY_CAUTION_DAYS)).isoformat()
+        ctx.calibration_cautions = list((doc.get("lessons") or {}).get("calibration_cautions") or [])
         for c in (doc.get("lessons") or {}).get("cautions") or []:                       # the lessons the postmortem persisted (parlay legs and earlier straight bets)
             if c.get("classification") in OVERLAY_ROLE_CLASSES and floor <= c.get("date", "") < ctx.as_of and c.get("player"):
                 ctx.role_cautions[(str(c["player"]).lower(), c.get("team"))] = {"classification": c["classification"], "date": c["date"]}
@@ -254,6 +258,35 @@ def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, 
                       "text": f"the postmortem classified a bet on him {caution['classification']} on {caution['date']}" + ("; his latest game is back within 2 minutes of the model's ice time, so this is context only" if recovered else ": a temporary caution while his role is unconfirmed")})
     return flags, facts
 
+
+
+def evidence_health(evidence: dict | None, now: dt.datetime) -> dict:
+    """The calibration evidence file is a pinned snapshot (its checksum is part of the cohort policy digest), so it cannot refresh itself: past EVIDENCE_MAX_AGE_DAYS the review layer is unusable and the cohort
+    records nothing. This reports the clock in plain numbers so that the expiry is seen coming, not discovered: state OK, EXPIRING (7 days or fewer left) or EXPIRED. The controlled refresh is
+    `python3 deploy/build_eggy_evidence.py`, then re-pinning the new checksum in the cohort policy, which needs a new policy digest and the owner's approval."""
+    if not evidence or not evidence.get("built_at_utc"):
+        return {"state": "MISSING", "why": "no evidence file or no build time"}
+    try:
+        built = dt.datetime.fromisoformat(evidence["built_at_utc"].replace("Z", "+00:00"))
+    except ValueError:
+        return {"state": "UNREADABLE", "why": "the build time cannot be read"}
+    age = (now - built).total_seconds() / 86400.0
+    left = EVIDENCE_MAX_AGE_DAYS - age
+    return {"built_at_utc": evidence["built_at_utc"], "data_through": evidence.get("data_through"), "age_days": round(age, 1), "max_age_days": EVIDENCE_MAX_AGE_DAYS, "days_remaining": round(left, 1),
+            "state": "EXPIRED" if left <= 0 else ("EXPIRING" if left <= 7 else "OK"), "controlled_refresh": "python3 deploy/build_eggy_evidence.py, then re-pin the checksum in the cohort policy (new digest, owner approval)"}
+
+
+def calibration_caution_flag(ctx: Context, leg, estimate: float) -> dict | None:
+    """The engine's own settled record says its estimates in THIS band, for THIS market and threshold, have run too high (n >= 30 and z <= -2): a standing MODERATE caution on legs in that band. It never changes
+    a probability and fires only when the sample bar is cleared; a band that merely had a bad week does not qualify."""
+    if not ctx.live_overlay or not ctx.calibration_cautions:
+        return None
+    mkt = leg.market_family if leg.market_family == "MONEYLINE" else f"{leg.market_family} {int(leg.threshold or 0)}+"
+    for c in ctx.calibration_cautions:
+        if c.get("market") == mkt and c["lo"] <= estimate < c["hi"] + (0.011 if c["hi"] >= 1.0 else 0.0):
+            return {"name": "LIVE_CALIBRATION_OVERCONFIDENT", "level": "MODERATE",
+                    "text": f"on {c['n']} settled {mkt} legs in the {c['band']} band the engine predicted {c['predicted']:.0%} and {c['observed']:.0%} happened (z {c['z']:+.1f}): estimates in this band have run too high"}
+    return None
 
 STALE_DATA_DAYS = 3              # the newest game in a data file may be at most this many days before the date being reviewed (the files refresh daily and the league never goes quiet that long inside the learning window)
 
@@ -535,6 +568,9 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
         flags.append(price_flag)
     if mv["rest"].get(side_team, 7) <= 1 < mv["rest"].get(opp, 7):
         flags.append({"name": "BACK_TO_BACK", "level": "LOW", "text": f"{side_team} played yesterday and {opp} did not (already in the model)"})
+    cc = calibration_caution_flag(ctx, leg, estimate_used)
+    if cc:
+        flags.append(cc)
     elo_worst = bool(pll and "E" in pll and pll["E"] >= max(pll.values()))
     # --- case for / against
     ind = mv["indicators"]
@@ -677,6 +713,9 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     ex = (proj or {}).get("expected") or {}
     probs = (proj or {}).get("probabilities", {}).get(market) or {}
     p_model = probs.get("calibrated")
+    if stat == "points" and probs.get("raw") is not None and k in points_policy()["recalibration"]:          # a points threshold whose live calibration failed out of time and whose refit passed
+        from research.product_models.validate import apply_platt
+        p_model = round(apply_platt(probs["raw"], *points_policy()["recalibration"][k]), 4)
     games_obs = (proj or {}).get("games_observed") or p["games_total"]
     rows = ctx.by_player.get(str(leg.participant_id)) or []
     hr = _hit_rates(rows, stat, k, _season_start(ctx.as_of)) if rows else None
@@ -727,6 +766,9 @@ def review_player(ctx: Context, leg, estimate_basis: str, estimate_used: float) 
     if ctx.live_overlay:
         ov_flags, overlay_facts = recency_overlay(ctx, leg, p, stat, k, toi_e, pp_e, p_used, {f["name"] for f in flags})
         flags.extend(ov_flags)
+        cc = calibration_caution_flag(ctx, leg, p_used)
+        if cc:
+            flags.append(cc)
     env_in_estimate = bool(recal and adj["dimension"] == "env")
     if stat in ("goals", "points") and team_p is not None and team_p < 0.35:
         flags.append({"name": "GAME_ENVIRONMENT", "level": "LOW" if env_in_estimate else "MODERATE", "text": f"{team} is a clear underdog tonight ({pct(team_p)} to win): fewer goals for its skaters on average" + (" (history for such teams is already in the estimate)" if env_in_estimate else "")})
@@ -976,6 +1018,7 @@ def review_leg(ctx: Context, leg, estimate_basis: str, estimate_used: float) -> 
         card["estimate_used"] = pr.get("estimate_used") if pr.get("estimate_used") is not None else (pr.get("estimate_used_for_edge") if pr.get("estimate_used_for_edge") is not None else round(estimate_used, 4))
         card["model_probability"] = pr.get("model")
         card["answers"] = standard_answers(card)
+        card["decision_layers"] = decision_layers(card)
         return card
     except Exception as exc:  # noqa: BLE001
         card = _card_shell(leg, "", "ERROR")
@@ -986,6 +1029,80 @@ def review_leg(ctx: Context, leg, estimate_basis: str, estimate_used: float) -> 
                      "action": {"decision": "PASS", "reasons": ["the review could not be completed"]}})
         card["answers"] = standard_answers(card)
         return card
+
+
+# ------------------------------------------------------------------------------------------------ player points: which thresholds are validated for live use
+POINTS_VALIDATION_PATH = Path(__file__).resolve().parent.parent / "docs" / "validation" / "points_thresholds.json"
+
+
+def points_policy() -> dict:
+    """What the out-of-time validation (deploy/validate_points_thresholds.py -> docs/validation/points_thresholds.json) allows: the thresholds enabled for live parlays, and for a threshold whose live calibration
+    failed but whose recalibration (fitted on games before the split, scored after it) passed, that (a, b). A missing or unreadable file enables NOTHING: an unvalidated market is never a live ingredient."""
+    try:
+        d = json.loads(POINTS_VALIDATION_PATH.read_text())
+        enabled = {int(k): v["verdict"] for k, v in d["thresholds"].items() if str(v.get("verdict", "")).startswith("ENABLED")}
+        recal = {int(k): (v["recalibration"]["a"], v["recalibration"]["b"]) for k, v in d["thresholds"].items() if v.get("recalibration") and int(k) in enabled}
+        return {"enabled": enabled, "recalibration": recal, "validated_through": d.get("scored")}
+    except (OSError, ValueError, KeyError):
+        return {"enabled": {}, "recalibration": {}, "validated_through": None}
+
+
+# ------------------------------------------------------------------------------------------------ the decision hierarchy
+# One vocabulary for what a flag IS, so that a market disagreement is never mistaken for a hockey contradiction and a price warning is never mistaken for role risk. Every flag the review can raise is named here
+# (tests/test_decision_layers.py scans this module and fails on an unregistered name). A flag in an INFORMATIONAL category stays on the card as caution and is shown with its layer, but does not count toward the
+# contradiction that decides whether a leg may enter a parlay; a flag in a COUNTED category is evidence about the hockey, the role, the data or the model's own reliability for THIS leg.
+HOCKEY_CONTEXT, ROLE_OPPORTUNITY, DATA_QUALITY, MODEL_TRUST = "HOCKEY_CONTEXT", "ROLE_OPPORTUNITY", "DATA_QUALITY", "MODEL_TRUST"
+MODEL_BELOW_MARKET, MODEL_ABOVE_MARKET, PRICE_RISK = "MODEL_BELOW_MARKET", "MODEL_ABOVE_MARKET", "PRICE_RISK"
+FLAG_LAYER = {
+    "HOCKEY_PICTURE_AGAINST": HOCKEY_CONTEXT, "INDICATORS_FAVOUR_OPPONENT": HOCKEY_CONTEXT, "GAME_ENVIRONMENT": HOCKEY_CONTEXT, "BACK_TO_BACK": HOCKEY_CONTEXT,
+    "ROLE_ASSUMPTION": ROLE_OPPORTUNITY, "POWER_PLAY_ASSUMPTION": ROLE_OPPORTUNITY, "LOW_USAGE": ROLE_OPPORTUNITY, "TOI_DROP": ROLE_OPPORTUNITY, "TOI_RISE": ROLE_OPPORTUNITY,
+    "PP_ROLE_LOST": ROLE_OPPORTUNITY, "POSTMORTEM_ROLE_CAUTION": ROLE_OPPORTUNITY, "RECENT_FORM_BELOW_MODEL": ROLE_OPPORTUNITY,
+    "THIN_HISTORY": DATA_QUALITY, "NO_PLAYER_STATE": DATA_QUALITY, "NO_HOCKEY_VIEW": DATA_QUALITY, "REVIEW_FAILED": DATA_QUALITY, "STARTER_UNCONFIRMED": DATA_QUALITY,
+    "MODEL_ABOVE_RECORD": MODEL_TRUST, "LIVE_CALIBRATION_OVERCONFIDENT": MODEL_TRUST, "HISTORY_SAYS_MODEL_RUNS_HIGH": MODEL_TRUST, "HISTORY_SAYS_MODEL_RUNS_LOW": MODEL_TRUST,
+    "MODEL_SAYS_OVERPRICED": MODEL_BELOW_MARKET,
+    "MODEL_NOT_SHOWN_TO_BEAT_MARKET": MODEL_ABOVE_MARKET, "MARKET_MAY_KNOW_MORE": MODEL_ABOVE_MARKET, "MODEL_FAR_ABOVE_MARKET": MODEL_ABOVE_MARKET,
+    "PRICE_ABOVE_ESTIMATE": PRICE_RISK, "LONG_PRICE": PRICE_RISK, "LONGSHOT_TAIL": PRICE_RISK,
+}
+INFORMATIONAL_LAYERS = (MODEL_ABOVE_MARKET, PRICE_RISK)           # the model liking a side MORE than the market, and what the price costs: value questions, not evidence the leg will fail
+
+
+def flag_layer(name: str) -> str | None:
+    return FLAG_LAYER.get(name)
+
+
+def counted_flags(flags: list[dict]) -> list[dict]:
+    """The flags that are evidence about whether the leg will happen (hockey, role, data, the model's reliability, the model saying the side is OVERpriced). An unregistered name counts: unknown is not harmless."""
+    return [f for f in flags if FLAG_LAYER.get(f["name"]) not in INFORMATIONAL_LAYERS]
+
+
+def counted_contradiction(card: dict) -> str:
+    return combine_contradiction(counted_flags((card.get("contradiction") or {}).get("flags") or []))
+
+
+def decision_layers(card: dict) -> dict:
+    """The card read in the eight layers of the decision, kept apart: hockey probability, market probability, model edge, model trust, data quality, hockey/role contradictions, price and expected value."""
+    pr, mk = card.get("probabilities") or {}, card.get("market") or {}
+    flags = (card.get("contradiction") or {}).get("flags") or []
+    by_layer: dict[str, list[str]] = {}
+    for f in flags:
+        by_layer.setdefault(FLAG_LAYER.get(f["name"]) or "UNREGISTERED", []).append(f"{f['name']}:{f['level']}")
+    hockey_p = pr.get("model")
+    market_p = pr.get("market_no_vig") if pr.get("market_no_vig") is not None else mk.get("no_vig")
+    implied = mk.get("implied_with_margin")
+    est = card.get("estimate_used")
+    edge = (hockey_p - market_p) if hockey_p is not None and market_p is not None else None
+    cal = card.get("calibration_confidence") or {}
+    comp = card.get("data_completeness") or {}
+    return {
+        "A_hockey_probability": hockey_p, "B_market_probability": market_p, "B_price_implied_with_margin": implied,
+        "C_model_edge_vs_market": None if edge is None else round(edge, 4),
+        "D_model_trust": {"calibration": cal.get("level"), "cases": (cal.get("evidence") or {}).get("n"), "flags": by_layer.get(MODEL_TRUST, [])},
+        "E_data_quality": {"completeness": comp.get("fraction"), "missing": comp.get("missing"), "flags": by_layer.get(DATA_QUALITY, [])},
+        "F_hockey_and_role_contradictions": {"level": counted_contradiction(card), "hockey": by_layer.get(HOCKEY_CONTEXT, []), "role": by_layer.get(ROLE_OPPORTUNITY, []), "model_below_market": by_layer.get(MODEL_BELOW_MARKET, [])},
+        "G_price_and_value": {"price": (card.get("bet") or {}).get("price"), "estimate_used": est, "edge_at_price": None if est is None or implied is None else round(est - implied, 4),
+                              "model_edge_at_price": mk.get("model_edge_vs_price"), "informational_flags": by_layer.get(PRICE_RISK, []) + by_layer.get(MODEL_ABOVE_MARKET, [])},
+        "estimate_used": est,
+    }
 
 
 # ------------------------------------------------------------------------------------------------ ranking

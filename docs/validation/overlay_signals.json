@@ -1,0 +1,48 @@
+{
+ "rows": 195306,
+ "method": "python3 deploy/validate_overlay_signals.py --out docs/validation/overlay_signals.json",
+ "signals": {
+  "toi_drop_3.2_shots2": {
+   "n": 5926,
+   "mean_shortfall_vs_own_record": -0.048,
+   "se": 0.006,
+   "z": -7.96,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  },
+  "toi_drop_3.2_points1": {
+   "n": 5926,
+   "mean_shortfall_vs_own_record": -0.0364,
+   "se": 0.0058,
+   "z": -6.22,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  },
+  "toi_drop_4.0_shots2": {
+   "n": 2946,
+   "mean_shortfall_vs_own_record": -0.0491,
+   "se": 0.0086,
+   "z": -5.71,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  },
+  "recent_form_0_or_1_of_5_shots2_players_at_55pct": {
+   "n": 4158,
+   "mean_shortfall_vs_own_record": -0.1275,
+   "se": 0.0077,
+   "z": -16.49,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  },
+  "pp_loss_0.75_points1": {
+   "n": 19383,
+   "mean_shortfall_vs_own_record": -0.0163,
+   "se": 0.0035,
+   "z": -4.63,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  },
+  "pp_loss_0.75_shots2": {
+   "n": 19383,
+   "mean_shortfall_vs_own_record": -0.0275,
+   "se": 0.0034,
+   "z": -8.03,
+   "verdict": "SIGNAL (flagged games fall short of the player's own record)"
+  }
+ }
+}
