@@ -45,11 +45,18 @@ st.caption(f"Board built {ui.et_time(board.get('generated_at_utc'), True)} for E
 primary = board.get("primary") or {}
 st.subheader("Eggy's Parlay Pick of the Day")
 pol = board.get("policy") or {}
-ui.recording_status_banner(board.get("recording"))
-if board.get("recording_paused"):
-    st.caption("Automatic recording is paused: this is the slip the selector would record, shown for review. Nothing is staked.")
+_official = bool((board.get("eggy") or {}).get("official_policy"))          # the parlay product: Eggy's output is the flagship parlay or PASS, not the retired primary slip
+if _official:
+    try:
+        ui.parlay_product_banner(ps.learning_experiment())
+    except Exception:  # noqa: BLE001 - the banner is context; the card below stands on its own
+        pass
+else:
+    ui.recording_status_banner(board.get("recording"))
+    if board.get("recording_paused"):
+        st.caption("Automatic recording is paused: this is the slip the selector would record, shown for review. Nothing is staked.")
 ui.eggy_candidate_card(board.get("eggy"), primary, recording_paused=bool(board.get("recording_paused")))
-ticket = primary.get("ticket")
+ticket = None if _official else primary.get("ticket")
 if ticket:
     st.caption(f"{ui.esc(primary.get('price_note') or '')}")
     with st.expander("Calculations and why not the others"):
@@ -58,7 +65,7 @@ if ticket:
         if anchor:
             st.write({k: v for k, v in anchor.items() if k in ("hit_low", "hit_high", "ev_estimated", "ev_after_haircut", "ev_midpoint", "ev_after_shade") and v is not None})
 else:
-    closest = primary.get("closest")
+    closest = None if _official else primary.get("closest")
     if closest:
         legs_txt = " + ".join(f"{ui.esc(str(l['participant']))}{(' ' + str(l['threshold']) + '+') if l.get('threshold') else ' to win'} ({ui.american(l['american_price'])})" for l in closest["legs"])
         st.markdown(f"**Closest combination (does not qualify):** {legs_txt} → {ui.american(closest['combined_american'])} calculated · estimated hit chance {ui.pct(closest['hit_probability'])} · "
@@ -66,13 +73,15 @@ else:
         st.caption(ui.esc(closest.get("note") or ""))
     singles = primary.get("strongest_singles") or []
     if singles:
-        st.markdown("**Strongest individual selections** (informational: a single is not a recommendation)")
+        st.markdown("**Candidate legs: the strongest individual selections** (informational: a single leg is a candidate for a parlay, not a bet or a recommendation)" if _official
+                    else "**Strongest individual selections** (informational: a single is not a recommendation)")
         for s in singles:
             stale, age = stale_now(s.get("quote_updated_utc"), None)
             st.markdown(f"- **{ui.esc(ui.leg_dict_label(s))}** · estimate {ui.pct(s['probability'])} · value {s['ev_estimated']:+.0%} "
                         f"({s['ev_after_haircut']:+.0%} after the haircut) · quote {ui.et_time(s.get('quote_updated_utc'), True)} ({age}){' · STALE' if stale else ''}"
                         f"{' · provisional' if s.get('provisional') else ''}")
-    st.caption("A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
+    st.caption("Eggy passes when no GOOD parlay exists: a PASS is a correct answer, and the engine does not loosen its rules to produce a parlay." if _official
+               else "A slot left empty is a correct answer: the engine does not loosen its rules to produce a slip.")
 
 if (board.get("eggy") or {}).get("availability"):
     with st.expander("Why prices are missing: every market, game by game"):
