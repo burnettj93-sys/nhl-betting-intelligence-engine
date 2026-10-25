@@ -8,6 +8,7 @@ control, and that only inside a button handler.
 """
 from __future__ import annotations
 
+import contextlib
 import datetime as dt
 
 import streamlit as st
@@ -738,6 +739,18 @@ def _bet_expanders(bets: list[dict], cards: dict, reviews: dict, *, label_key: s
             intelligence_card(card, rv)
 
 
+def parlay_product_banner(doc: dict | None) -> None:
+    """One line that says what the product is NOW, shown instead of the retired primary slip's recording banner: up to 10 unpriced learning parlays a day, Eggy's one flagship parlay or PASS, individual legs
+    are candidates only. Read from the learning status (the same document the Paper Performance panel shows)."""
+    if not doc or not doc.get("authorised"):
+        return
+    n, tgt, fl = doc.get("recorded_today", 0), doc.get("target_per_day", 10), doc.get("eggy_flagship")
+    sf = doc.get("shortfall_today") or {}
+    banner(f"<b>CURRENT PRODUCT: UNPRICED LEARNING PARLAYS</b> · {n} recorded today of up to {tgt} · {sf.get('parlay_legs_eligible', 0)} of {sf.get('legs_in_pool', 0)} candidate legs eligible · "
+           f"Eggy's flagship today: {'1 parlay' if fl else 'PASS'} · individual legs are candidates, not bets, with no price floor · no combined price exists, so results are hit or miss only · "
+           "the earlier single primary slip is retired (history only) · paper only", "good")
+
+
 def learning_experiment_panel(doc: dict | None) -> None:
     """The temporary 14-day paper learning experiment (operational/learning_cohort.py): its own bankroll, its own record, visibly separate from Eggy's pick and the normal paper book. Paper only."""
     if not doc:
@@ -752,27 +765,42 @@ def learning_experiment_panel(doc: dict | None) -> None:
     else:
         banner(f"<b>14-DAY POSTMORTEM LEARNING EXPERIMENT · Day {day} of {doc.get('days', 14)}</b> · paper only, separate from Eggy and the normal paper book · "
                f"{esc(doc.get('start_date'))} to {esc(doc.get('end_date'))}, then it ends automatically", "good")
+    parlay_mode = doc.get("unit") == "PARLAY"
+    if parlay_mode:
+        sfp, fl0 = doc.get("shortfall_today") or {}, doc.get("eggy_flagship")
+        pc = st.columns(4)
+        pc[0].metric("Learning parlays today", f"{doc.get('recorded_today', 0)} of up to {doc.get('target_per_day', 10)}")
+        pc[1].metric("Candidate legs eligible", f"{sfp.get('parlay_legs_eligible', 0)}", f"of {sfp.get('legs_in_pool', 0)} examined", delta_color="off")
+        pc[2].metric("Eggy flagship today", "1 parlay" if fl0 else "PASS")
+        pc[3].metric("Pricing", "Unpriced", "no combined price exists: hit or miss only", delta_color="off")
+        st.caption("The product: up to 10 unpriced learning PARLAYS a day built from reviewed candidate legs (individual legs are candidates, not bets; no price floor on a leg), and Eggy's ONE official flagship parlay "
+                   "(the strongest GOOD ticket) or PASS. A real combined price, if one ever exists, is judged at +100 or better at the parlay level; none is made up. Fewer than 10 is a correct answer. "
+                   "The earlier single primary slip and the straight-bet experiment are retired and kept below as history.")
     bank, rec = doc.get("bankroll") or {}, doc.get("record") or {}
-    a = st.columns(4)
-    a[0].metric("Today's target", doc.get("target_per_day", 10))
-    a[1].metric("Recorded today", f"{doc.get('recorded_today', 0)}/{doc.get('target_per_day', 10)}")
-    a[2].metric("Stake each", money(doc.get("stake_usd", 10)))
-    a[3].metric("Odds requirement", str(doc.get("odds_requirement", "-150 or better")))
-    b = st.columns(4)
-    b[0].metric("Today's exposure", money(doc.get("exposure_today_usd", 0)))
-    b[1].metric("Experiment P/L", signed_money(bank.get("betting_pl", 0)))
-    b[2].metric("Experiment ROI", _lx_pct(bank.get("roi"), 1))
-    b[3].metric("Hit rate", _lx_pct(rec.get("hit_rate")), f"{rec.get('wins', 0)}-{rec.get('losses', 0)}-{rec.get('voids', 0)} · {rec.get('open', 0)} open", delta_color="off")
-    c = st.columns(4)
-    c[0].metric("Current cash", money(bank.get("cash", 0)), f"equity {money(bank.get('equity', 0))}", delta_color="off")
-    c[1].metric("Betting P/L", signed_money(bank.get("betting_pl", 0)))
-    c[2].metric("Reset count", bank.get("reset_count", 0))
-    c[3].metric("Total reset funding (not profit)", money(bank.get("reset_funding_added", 0)))
-    st.caption("A separate experiment bankroll that started at \\$500.00. Whenever cash falls below the next \\$10 stake it is reset to \\$500.00; the reset is logged as funding, never as winnings or profit, and earlier losses are never erased; results come from settled bets only. "
-               "Each day aims for 10 real, eligible paper bets at -150 or better, priced at the last real DraftKings price we observed (its age is shown with every bet); if fewer qualify the day records fewer and says why. Eggy's pick of the day is separate and unchanged.")
+    def straight_tiles() -> None:
+        """The earlier straight-bet experiment's bankroll tiles (retired 2026-10-22); in the parlay product they are history, shown only inside the history expander."""
+        a = st.columns(4)
+        a[0].metric("Today's target", doc.get("target_per_day", 10))
+        a[1].metric("Recorded today", f"{doc.get('recorded_today', 0)}/{doc.get('target_per_day', 10)}")
+        a[2].metric("Stake each", money(doc.get("stake_usd", 10)))
+        a[3].metric("Odds requirement", str(doc.get("odds_requirement", "-150 or better")))
+        b = st.columns(4)
+        b[0].metric("Today's exposure", money(doc.get("exposure_today_usd", 0)))
+        b[1].metric("Experiment P/L", signed_money(bank.get("betting_pl", 0)))
+        b[2].metric("Experiment ROI", _lx_pct(bank.get("roi"), 1))
+        b[3].metric("Hit rate", _lx_pct(rec.get("hit_rate")), f"{rec.get('wins', 0)}-{rec.get('losses', 0)}-{rec.get('voids', 0)} · {rec.get('open', 0)} open", delta_color="off")
+        c = st.columns(4)
+        c[0].metric("Current cash", money(bank.get("cash", 0)), f"equity {money(bank.get('equity', 0))}", delta_color="off")
+        c[1].metric("Betting P/L", signed_money(bank.get("betting_pl", 0)))
+        c[2].metric("Reset count", bank.get("reset_count", 0))
+        c[3].metric("Total reset funding (not profit)", money(bank.get("reset_funding_added", 0)))
+        st.caption("A separate experiment bankroll that started at \\$500.00. Whenever cash falls below the next \\$10 stake it is reset to \\$500.00; the reset is logged as funding, never as winnings or profit, and earlier losses are never erased; results come from settled bets only. "
+                   "Each day aims for 10 real, eligible paper bets at -150 or better, priced at the last real DraftKings price we observed (its age is shown with every bet); if fewer qualify the day records fewer and says why. Eggy's pick of the day is separate and unchanged.")
+    if not parlay_mode:
+        straight_tiles()
     sf = doc.get("shortfall_today")
     if sf and doc.get("recorded_today", 0) < doc.get("target_per_day", 10):
-        with st.expander(f"Today: {sf.get('recorded')}/{sf.get('target')} recorded, why not 10"):
+        with st.expander((f"Today: {doc.get('recorded_today', 0)} parlays recorded of up to {doc.get('target_per_day', 10)}, why not 10" if parlay_mode else f"Today: {sf.get('recorded')}/{sf.get('target')} recorded, why not 10")):
             st.write(sf.get("why") or "")
             reasons = sf.get("reasons_candidates_were_not_recorded") or sf.get("not_eligible_reasons") or {}
             if reasons:
@@ -789,97 +817,128 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if fl:
         st.markdown("**Eggy's flagship parlay, from the learning pool** (this is Eggy's official output; UNPRICED)")
         st.markdown(" + ".join(esc(l["label"]) for l in fl["legs"]) + f" · weakest leg {esc(fl['weakest_leg']['label'])} ({fl['weakest_leg']['estimate']:.0%}) · unpriced")
-    bets = doc.get("bets_today") or []
-    if bets:
-        st.markdown("**Today's experiment bets**")
-        st.dataframe([{"Rank": x["selection_rank"], "Bet": x.get("label") or f"{x['participant_name']} — {x['market_family']}", "Action": _words(x.get("action")), "Thesis": _words(x.get("thesis_type")),
-                       "Team": x.get("team"), "Hit chance": _lx_pct(x.get("conservative_probability")), "Model edge at last observed price": f"{(x.get('edge') or 0) * 100:+.1f} pts",
-                       "Contradiction": _words(x.get("contradiction_level")), "Calibration": _words(x.get("calibration_level")), "Decision confidence": _words(x.get("decision_confidence")),
-                       "Price age": (f"{str(x.get('price_status') or '—').replace('_', ' ').title()} ({x['price_age_at_recording_min']:.0f} min)" if x.get("price_age_at_recording_min") is not None else "—"),
-                       "Edge class": _EDGE_LABEL.get(x.get("edge_class"), x.get("edge_class") or "—"), "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
-                       "Eggy": "Eggy leg" if str(x.get("eggy_relation", "")).startswith("SAME_PLAYER") else ""} for x in bets], hide_index=True, width="stretch")
-        st.caption("Open any bet below to see why Eggy took it: the team or player, tonight, the market, the price, who is likely to win, what the model and the market each believe, why they disagree, what supports it, "
-                   "what argues against it, what history says, what data is missing and what would make Eggy pass.")
-        _bet_expanders(bets, doc.get("cards") or {}, ((doc.get("postmortem") or {}).get("bet_reviews")) or {})
-    pm = doc.get("postmortem") or {}
-    sc = pm.get("scorecard") or []
-    if sc:
-        st.markdown("**14-day scorecard**")
-        st.dataframe([{"Day": d["day"], "Date": d["date"], "Recorded": f"{d['recorded']}/{d['target']}", "W-L-P": f"{d['wins']}-{d['losses']}-{d['pushes_voids']}", "Hit rate": _lx_pct(d.get("hit_rate")),
-                       "P/L": signed_money(d["profit_loss"]) if d["recorded"] else "—", "ROI": _lx_pct(d.get("roi"), 1), "Avg odds (dec)": f"{d['average_decimal_odds']:.2f}" if d.get("average_decimal_odds") and d["recorded"] else "—",
-                       "Expected wins": f"{d['expected_wins']:.2f}" if d["recorded"] else "—", "Actual wins": str(d["actual_wins"]) if d["recorded"] else "—",
-                       "Calibration": f"{d['calibration_delta']:+.2f}" if d.get("calibration_delta") is not None else "—"} for d in sc if not d.get("is_future") or d["recorded"]], hide_index=True, width="stretch")
-        cu = pm.get("cumulative") or {}
-        st.caption(f"Cumulative: {cu.get('placed', 0)} placed, {cu.get('settled', 0)} settled · {cu.get('wins', 0)}-{cu.get('losses', 0)}-{cu.get('voids', 0)} · hit rate {_lx_pct(cu.get('hit_rate'))} · P/L {signed_money(cu.get('profit_loss', 0))} · "
-                   f"ROI {_lx_pct(cu.get('roi'), 1)} · expected wins {cu.get('expected_wins', 0)} vs actual {cu.get('actual_wins', 0)} · Brier {cu.get('brier') if cu.get('brier') is not None else '—'}. "
-                   "A handful of bets says almost nothing about skill; same-game bets are not independent.")
-    dr = pm.get("decision_review") or {}
-    if dr.get("grid"):
-        st.markdown("**Decision quality against outcome (so far)**")
-        st.dataframe([{"Decision": _words(r["decision"]), "Outcome": _words(r["outcome"]), "Bets": r["n"]} for r in dr["grid"]], hide_index=True, width="stretch")
-        st.caption(f"{dr.get('lucky_wins', 0)} lucky win(s) (a bad decision that won: no confidence gained) · {dr.get('earned_normal_variance', 0)} loss(es) that were EARNED normal variance (a good decision that lost) · "
-                   f"{dr.get('process_failures', 0)} process failure(s) · {dr.get('not_variance', 0)} good decision(s) that lost for a reason other than variance. "
-                   + (f"{dr['reconstructed']} bet(s) recorded before the review existed were reviewed as it would have run on their own day's data. " if dr.get("reconstructed") else "") + esc(dr.get("note") or ""))
-    if (pm.get("cumulative_edge_classes") or []) and any(r["n"] for r in pm["cumulative_edge_classes"]):
-        st.markdown("**By edge class (so far)**")
-        _edge_class_table(pm["cumulative_edge_classes"])
-        st.caption("Positive-edge, neutral and learning-sample negative-edge bets are reported separately so we can see whether the edge calculation predicts results.")
-    if pm.get("cumulative_price_age"):
-        st.markdown("**By price age at recording (so far)**")
-        _age_table(pm["cumulative_price_age"])
-        st.caption("Price age is recorded, never a reason to skip a bet: it is the time since the last real DraftKings observation of the price. Hit rate against the model's probability (selection) and ROI against the model edge at the last observed price (price value) are separate questions; we do not assume which way age matters.")
-    dep = pm.get("dependence") or {}
-    if dep.get("games_with_multiple_bets"):
-        with st.expander("Same-game dependence (never assumed away)"):
-            st.write(dep.get("reading") or "")
-            st.dataframe([{"Game": g["game_id"], "Bets": g["bets"], "Expected hits": g["expected_hits"], "Actual hits": g["actual_hits"], "Pairs both hit": f"{g['pairs_both_hit']} (independent: {g['pairs_both_hit_if_independent']})",
-                           "Players": ", ".join(g["players"])} for g in dep["games_with_multiple_bets"]], hide_index=True, width="stretch")
-            st.caption(dep.get("not_captured", ""))
-    if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
-        dm = pm["day_metrics"]
-        with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
-            pdays = [p for p in (pm.get("parlays") or []) if p.get("et_date") == pm.get("postmortem_for")]
-            if pdays:
-                st.markdown("**PARLAY SUMMARY** (the leg-level reviews follow inside each parlay)")
+    if parlay_mode:
+        pm_ = doc.get("postmortem") or {}
+        psc = pm_.get("parlay_scorecard") or []
+        if psc:
+            st.markdown("**Parlay scorecard** (hit or miss only: unpriced parlays have no stake, return or ROI)")
+            st.dataframe([{"Date": d["date"], "Recorded": f"{d['recorded']}/{d['target']}", "Hit": d["hit"], "Miss": d["miss"], "Open": d["open"],
+                           "GOOD hit/settled": f"{d['good']['hit']}/{d['good']['n']}", "QUESTIONABLE hit/settled": f"{d['questionable']['hit']}/{d['questionable']['n']}",
+                           "Eggy flagship": ((d["flagship"]["result"].title() + ": " + " + ".join(x.split(" \u2014 ")[0] for x in d["flagship"]["legs"])) if d.get("flagship") else "PASS / none")} for d in psc], hide_index=True, width="stretch")
+            tot = pm_.get("parlay_totals") or {}
+            st.caption(f"Cumulative: {tot.get('recorded', 0)} parlays recorded, {tot.get('hit', 0)} hit, {tot.get('miss', 0)} missed, {tot.get('open', 0)} open. Small samples say little; any parlay can lose.")
+        pdays_ = [p for p in (pm_.get("parlays") or []) if p.get("et_date") == pm_.get("postmortem_for")]
+        if pdays_:
+            with st.expander(f"Parlay postmortem of {pm_.get('postmortem_for')}"):
                 st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Priced": "no (unpriced)", "Hit / miss": p.get("hit_text"), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
-                               "Killed by": ", ".join(p.get("killed_by") or []) or "—", "Construction": p.get("verdict")} for p in pdays], hide_index=True, width="stretch")
-                parlay_panel(pdays, doc.get("cards") or {}, title="Parlays, with their leg reviews")
-            st.write(f"{dm['placed']} placed, {dm['settled']} settled: {dm['wins']} won, {dm['losses']} lost, {dm['voids']} void/push, {dm['unresolved']} unresolved, {dm['open']} open · hit rate {_lx_pct(dm.get('hit_rate'))} · "
-                     f"staked {money(dm['staked'])}, returned {money(dm['returned'])}, P/L {signed_money(dm['profit_loss'])} (ROI {_lx_pct(dm.get('roi'), 1)}) · expected wins {dm['expected_wins']} vs actual {dm['actual_wins']}")
-            st.caption(pm.get("closing_price_movement") or "")
-            db_ = pm.get("day_bets") or []
-            if db_:
-                st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Outcome": str(x["result"]).title(), "Decision": _words(x.get("decision")), "Why (classification)": _words(x.get("classification")) if x.get("classification") else "—",
-                               "Action": _words(x.get("action")) if x.get("action") else "—"} for x in db_], hide_index=True, width="stretch")
-                _bet_expanders(db_, doc.get("cards") or {}, pm.get("bet_reviews") or {}, label_key="bet")
-            if pm.get("day_edge_classes"):
-                st.markdown("**By edge class**")
-                _edge_class_table(pm["day_edge_classes"])
-            if pm.get("day_price_age"):
-                st.markdown("**By price age**")
-                _age_table(pm["day_price_age"])
-            for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"),
-                               ("selection_rank", "By selection rank"), ("data_freshness", "By data freshness"), ("team", "By team"), ("player", "By player")):
-                rows_ = (pm.get("day_breakdowns") or {}).get(key)
-                if rows_:
-                    st.markdown(f"**{label}**")
-                    st.dataframe([{"Group": r["group"], "Placed": r["placed"], "W": r["wins"], "L": r["losses"], "P/L": signed_money(r["profit_loss"]), "ROI": _lx_pct(r.get("roi"), 1)} for r in rows_], hide_index=True, width="stretch")
-    cb = pm.get("cumulative_breakdowns") or {}
-    if any(cb.values()):
-        with st.expander("Everything so far, by group"):
-            for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"), ("selection_rank", "By selection rank")):
-                if cb.get(key):
-                    st.markdown(f"**{label}**")
-                    st.dataframe([{"Group": r["group"], "Placed": r["placed"], "Settled": r["settled"], "W": r["wins"], "L": r["losses"], "Hit rate": _lx_pct(r.get("hit_rate")), "P/L": signed_money(r["profit_loss"]),
-                                   "ROI": _lx_pct(r.get("roi"), 1), "Expected wins": r["expected_wins"]} for r in cb[key]], hide_index=True, width="stretch")
-            if pm.get("calibration"):
-                st.markdown("**Calibration: predicted against actual**")
-                st.dataframe([{"Band": r["band"], "Settled": r["n"], "Predicted": _lx_pct(r.get("predicted"), 1), "Actual": _lx_pct(r.get("actual"), 1), "Wins vs expected": r.get("delta_wins")} for r in pm["calibration"]],
-                             hide_index=True, width="stretch")
-    if doc.get("bankroll", {}).get("reset_count"):
-        with st.expander(f"Bankroll resets ({bank.get('reset_count')}) · funding, not profit"):
-            st.dataframe([{"When (ET)": r["at_et"], "Day": r["experiment_day"], "Before": money(r["balance_before"]), "Added": money(r["amount"]), "After": money(r["balance_after"]), "Reason": r["reason"]}
-                          for r in (doc.get("resets") or [])], hide_index=True, width="stretch")
+                               "Killed by": ", ".join(p.get("killed_by") or []) or "\u2014", "Construction": p.get("verdict")} for p in pdays_], hide_index=True, width="stretch")
+                parlay_panel(pdays_, doc.get("cards") or {}, title="Parlays, with their leg reviews")
+        les = pm_.get("lessons") or {}
+        if les.get("by_date") or les.get("cautions"):
+            with st.expander("What yesterday taught today's review (persisted postmortem lessons)"):
+                if les.get("cautions"):
+                    st.markdown("**Temporary cautions on named players** (a role, ice-time or power-play miss; they flag the player in today's review for 3 days, they never change a probability)")
+                    st.dataframe([{"Player": c["player"], "Team": c.get("team") or "\u2014", "Finding": _words(c["classification"]), "Date": c["date"], "From": _words(c.get("source"))} for c in les["cautions"]], hide_index=True, width="stretch")
+                for day_, v in sorted((les.get("by_date") or {}).items(), reverse=True):
+                    st.markdown(f"**{day_}**: {v['tickets']} parlays, {v['hit']} hit / {v['miss']} missed" + (f" · repeated killer legs: {', '.join(v['repeated_killer_legs'])}" if v.get("repeated_killer_legs") else "")
+                                + (f" · weakest legs that failed: {', '.join(v['weakest_legs_that_failed'])}" if v.get("weakest_legs_that_failed") else ""))
+                st.caption(les.get("note") or "")
+    hist = st.expander("Earlier straight-bet experiment (retired 2026-10-22; history only: 10 bets a day, $10 stake, -150 or better)") if parlay_mode else contextlib.nullcontext()
+    pm = doc.get("postmortem") or {}
+    with hist:
+        if parlay_mode:
+            straight_tiles()
+        bets = doc.get("bets_today") or []
+        if bets:
+            st.markdown("**Today's experiment bets**")
+            st.dataframe([{"Rank": x["selection_rank"], "Bet": x.get("label") or f"{x['participant_name']} — {x['market_family']}", "Action": _words(x.get("action")), "Thesis": _words(x.get("thesis_type")),
+                           "Team": x.get("team"), "Hit chance": _lx_pct(x.get("conservative_probability")), "Model edge at last observed price": f"{(x.get('edge') or 0) * 100:+.1f} pts",
+                           "Contradiction": _words(x.get("contradiction_level")), "Calibration": _words(x.get("calibration_level")), "Decision confidence": _words(x.get("decision_confidence")),
+                           "Price age": (f"{str(x.get('price_status') or '—').replace('_', ' ').title()} ({x['price_age_at_recording_min']:.0f} min)" if x.get("price_age_at_recording_min") is not None else "—"),
+                           "Edge class": _EDGE_LABEL.get(x.get("edge_class"), x.get("edge_class") or "—"), "Result": x["result_status"].title(), "P/L": signed_money(x["profit_loss"]) if x.get("profit_loss") is not None else "—",
+                           "Eggy": "Eggy leg" if str(x.get("eggy_relation", "")).startswith("SAME_PLAYER") else ""} for x in bets], hide_index=True, width="stretch")
+            st.caption("Open any bet below to see why Eggy took it: the team or player, tonight, the market, the price, who is likely to win, what the model and the market each believe, why they disagree, what supports it, "
+                       "what argues against it, what history says, what data is missing and what would make Eggy pass.")
+            _bet_expanders(bets, doc.get("cards") or {}, ((doc.get("postmortem") or {}).get("bet_reviews")) or {})
+        pm = doc.get("postmortem") or {}
+        sc = pm.get("scorecard") or []
+        if sc:
+            st.markdown("**14-day scorecard**")
+            st.dataframe([{"Day": d["day"], "Date": d["date"], "Recorded": f"{d['recorded']}/{d['target']}", "W-L-P": f"{d['wins']}-{d['losses']}-{d['pushes_voids']}", "Hit rate": _lx_pct(d.get("hit_rate")),
+                           "P/L": signed_money(d["profit_loss"]) if d["recorded"] else "—", "ROI": _lx_pct(d.get("roi"), 1), "Avg odds (dec)": f"{d['average_decimal_odds']:.2f}" if d.get("average_decimal_odds") and d["recorded"] else "—",
+                           "Expected wins": f"{d['expected_wins']:.2f}" if d["recorded"] else "—", "Actual wins": str(d["actual_wins"]) if d["recorded"] else "—",
+                           "Calibration": f"{d['calibration_delta']:+.2f}" if d.get("calibration_delta") is not None else "—"} for d in sc if not d.get("is_future") or d["recorded"]], hide_index=True, width="stretch")
+            cu = pm.get("cumulative") or {}
+            st.caption(f"Cumulative: {cu.get('placed', 0)} placed, {cu.get('settled', 0)} settled · {cu.get('wins', 0)}-{cu.get('losses', 0)}-{cu.get('voids', 0)} · hit rate {_lx_pct(cu.get('hit_rate'))} · P/L {signed_money(cu.get('profit_loss', 0))} · "
+                       f"ROI {_lx_pct(cu.get('roi'), 1)} · expected wins {cu.get('expected_wins', 0)} vs actual {cu.get('actual_wins', 0)} · Brier {cu.get('brier') if cu.get('brier') is not None else '—'}. "
+                       "A handful of bets says almost nothing about skill; same-game bets are not independent.")
+        dr = pm.get("decision_review") or {}
+        if dr.get("grid"):
+            st.markdown("**Decision quality against outcome (so far)**")
+            st.dataframe([{"Decision": _words(r["decision"]), "Outcome": _words(r["outcome"]), "Bets": r["n"]} for r in dr["grid"]], hide_index=True, width="stretch")
+            st.caption(f"{dr.get('lucky_wins', 0)} lucky win(s) (a bad decision that won: no confidence gained) · {dr.get('earned_normal_variance', 0)} loss(es) that were EARNED normal variance (a good decision that lost) · "
+                       f"{dr.get('process_failures', 0)} process failure(s) · {dr.get('not_variance', 0)} good decision(s) that lost for a reason other than variance. "
+                       + (f"{dr['reconstructed']} bet(s) recorded before the review existed were reviewed as it would have run on their own day's data. " if dr.get("reconstructed") else "") + esc(dr.get("note") or ""))
+        if (pm.get("cumulative_edge_classes") or []) and any(r["n"] for r in pm["cumulative_edge_classes"]):
+            st.markdown("**By edge class (so far)**")
+            _edge_class_table(pm["cumulative_edge_classes"])
+            st.caption("Positive-edge, neutral and learning-sample negative-edge bets are reported separately so we can see whether the edge calculation predicts results.")
+        if pm.get("cumulative_price_age"):
+            st.markdown("**By price age at recording (so far)**")
+            _age_table(pm["cumulative_price_age"])
+            st.caption("Price age is recorded, never a reason to skip a bet: it is the time since the last real DraftKings observation of the price. Hit rate against the model's probability (selection) and ROI against the model edge at the last observed price (price value) are separate questions; we do not assume which way age matters.")
+        dep = pm.get("dependence") or {}
+        if dep.get("games_with_multiple_bets"):
+            with st.expander("Same-game dependence (never assumed away)"):
+                st.write(dep.get("reading") or "")
+                st.dataframe([{"Game": g["game_id"], "Bets": g["bets"], "Expected hits": g["expected_hits"], "Actual hits": g["actual_hits"], "Pairs both hit": f"{g['pairs_both_hit']} (independent: {g['pairs_both_hit_if_independent']})",
+                               "Players": ", ".join(g["players"])} for g in dep["games_with_multiple_bets"]], hide_index=True, width="stretch")
+                st.caption(dep.get("not_captured", ""))
+        if pm.get("day_metrics") and pm["day_metrics"].get("placed"):
+            dm = pm["day_metrics"]
+            with st.expander(f"Postmortem of {pm.get('postmortem_for')}"):
+                pdays = [p for p in (pm.get("parlays") or []) if p.get("et_date") == pm.get("postmortem_for")]
+                if pdays:
+                    st.markdown("**PARLAY SUMMARY** (the leg-level reviews follow inside each parlay)")
+                    st.dataframe([{"#": p["rank"], "Legs": " + ".join(l["label"] for l in p["legs"]), "Priced": "no (unpriced)", "Hit / miss": p.get("hit_text"), "Weakest leg": f"{p['weakest_leg']['label']} ({p['weakest_leg']['estimate']:.0%})",
+                                   "Killed by": ", ".join(p.get("killed_by") or []) or "—", "Construction": p.get("verdict")} for p in pdays], hide_index=True, width="stretch")
+                    parlay_panel(pdays, doc.get("cards") or {}, title="Parlays, with their leg reviews")
+                st.write(f"{dm['placed']} placed, {dm['settled']} settled: {dm['wins']} won, {dm['losses']} lost, {dm['voids']} void/push, {dm['unresolved']} unresolved, {dm['open']} open · hit rate {_lx_pct(dm.get('hit_rate'))} · "
+                         f"staked {money(dm['staked'])}, returned {money(dm['returned'])}, P/L {signed_money(dm['profit_loss'])} (ROI {_lx_pct(dm.get('roi'), 1)}) · expected wins {dm['expected_wins']} vs actual {dm['actual_wins']}")
+                st.caption(pm.get("closing_price_movement") or "")
+                db_ = pm.get("day_bets") or []
+                if db_:
+                    st.dataframe([{"Rank": x["rank"], "Bet": x["bet"], "Outcome": str(x["result"]).title(), "Decision": _words(x.get("decision")), "Why (classification)": _words(x.get("classification")) if x.get("classification") else "—",
+                                   "Action": _words(x.get("action")) if x.get("action") else "—"} for x in db_], hide_index=True, width="stretch")
+                    _bet_expanders(db_, doc.get("cards") or {}, pm.get("bet_reviews") or {}, label_key="bet")
+                if pm.get("day_edge_classes"):
+                    st.markdown("**By edge class**")
+                    _edge_class_table(pm["day_edge_classes"])
+                if pm.get("day_price_age"):
+                    st.markdown("**By price age**")
+                    _age_table(pm["day_price_age"])
+                for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"),
+                                   ("selection_rank", "By selection rank"), ("data_freshness", "By data freshness"), ("team", "By team"), ("player", "By player")):
+                    rows_ = (pm.get("day_breakdowns") or {}).get(key)
+                    if rows_:
+                        st.markdown(f"**{label}**")
+                        st.dataframe([{"Group": r["group"], "Placed": r["placed"], "W": r["wins"], "L": r["losses"], "P/L": signed_money(r["profit_loss"]), "ROI": _lx_pct(r.get("roi"), 1)} for r in rows_], hide_index=True, width="stretch")
+        cb = pm.get("cumulative_breakdowns") or {}
+        if any(cb.values()):
+            with st.expander("Everything so far, by group"):
+                for key, label in (("market_type", "By market"), ("price_band", "By price band"), ("model_probability_band", "By model-probability band"), ("edge_band", "By edge band"), ("selection_rank", "By selection rank")):
+                    if cb.get(key):
+                        st.markdown(f"**{label}**")
+                        st.dataframe([{"Group": r["group"], "Placed": r["placed"], "Settled": r["settled"], "W": r["wins"], "L": r["losses"], "Hit rate": _lx_pct(r.get("hit_rate")), "P/L": signed_money(r["profit_loss"]),
+                                       "ROI": _lx_pct(r.get("roi"), 1), "Expected wins": r["expected_wins"]} for r in cb[key]], hide_index=True, width="stretch")
+                if pm.get("calibration"):
+                    st.markdown("**Calibration: predicted against actual**")
+                    st.dataframe([{"Band": r["band"], "Settled": r["n"], "Predicted": _lx_pct(r.get("predicted"), 1), "Actual": _lx_pct(r.get("actual"), 1), "Wins vs expected": r.get("delta_wins")} for r in pm["calibration"]],
+                                 hide_index=True, width="stretch")
+        if doc.get("bankroll", {}).get("reset_count"):
+            with st.expander(f"Bankroll resets ({bank.get('reset_count')}) · funding, not profit"):
+                st.dataframe([{"When (ET)": r["at_et"], "Day": r["experiment_day"], "Before": money(r["balance_before"]), "Added": money(r["amount"]), "After": money(r["balance_after"]), "Reason": r["reason"]}
+                              for r in (doc.get("resets") or [])], hide_index=True, width="stretch")
     fr = doc.get("final_report")
     if fr:
         with st.expander("Final experiment report (recommendations only)", expanded=True):

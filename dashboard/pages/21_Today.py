@@ -42,8 +42,18 @@ _gen = ui.parse_utc(tk["generated_at_utc"])
 if _gen is not None and (__import__("datetime").datetime.now(__import__("datetime").timezone.utc) - _gen).total_seconds() > 45 * 60:
     ui.banner(f"The ticket board is {ui.age_text(tk['generated_at_utc']).replace(' ago', '')} old. The scheduled job refreshes it every 10 minutes while the Mac that runs it is awake; prices may have moved.", "warn")
 ui.book_split(origins)
-ui.recording_status_banner(tk.get("recording"))
-if tk.get("notice"):
+try:                                                        # the parlay product: Eggy's output is the flagship parlay or PASS; the primary slip's recording banner and policy text are retired
+    _official = bool(((ps.slate_board() or {}).get("eggy") or {}).get("official_policy"))
+except Exception:  # noqa: BLE001
+    _official = False
+if _official:
+    try:
+        ui.parlay_product_banner(ps.learning_experiment())
+    except Exception:  # noqa: BLE001
+        pass
+else:
+    ui.recording_status_banner(tk.get("recording"))
+if tk.get("notice") and not _official:
     ui.banner(ui.esc(tk["notice"]), "warn")
 if tk.get("label"):
     st.caption(ui.esc(tk["label"]))
@@ -78,8 +88,15 @@ else:
 
 slots = tk["slots"]
 _single = slots.get("total") == 1
-st.subheader("Eggy's Parlay Pick of the Day" if _single else "Automatic tickets")
-if _single:
+st.subheader("Eggy's Parlay Pick of the Day" if (_single or _official) else "Automatic tickets")
+if _official:
+    st.caption("Eggy's output is ONE flagship learning parlay (the strongest GOOD ticket from today's learning parlays) or PASS. It is unpriced: no combined price exists, so it is judged by its legs. "
+               "The model book below is the earlier primary-slip ledger: history only, no new bets.")
+    try:
+        st.page_link("pages/41_Slate_Board.py", label="Open the Slate Board: every game's goal scorers, shots values, goalie saves and side", icon="📋")
+    except Exception:  # noqa: BLE001
+        st.caption("The Slate Board (sidebar) analyses every game on the slate.")
+elif _single:
     st.caption(f"{slots['used']} of {slots['total']} daily slot used. One parlay a day, priced +100 to +500, the fewest legs that qualify, ranked by estimated hit chance; recorded tickets are paper bets "
                "and never change, a recommended one can still move with the next price refresh.")
     try:
@@ -89,12 +106,12 @@ if _single:
 else:
     st.caption(f"{slots['used']} of {slots['total']} daily slots used. Each ticket is a distinct cross-game bet at +100 or better; recorded tickets are paper bets and never change, "
                "recommended ones can still move with the next price refresh.")
-_proposed = [t for t in tk["tickets"] if t.get("proposed")]
+_proposed = [t for t in tk["tickets"] if t.get("proposed")] if not _official else []
 if _proposed:
     st.caption(f"{len(_proposed)} of the tickets below are **proposed, not recorded**: automatic recording is paused until the ticket policy is approved, so they are what the selector would "
                "record at the prices shown now, ranked by estimated hit chance. Each shows the evidence behind every leg's number.")
 _prim = tk.get("primary") if _single else None
-_eggy = bool(_prim)
+_eggy = bool(_prim) or _official
 if _eggy:
     try:                                                    # the whole-slate candidate search lives on the slate board document; a missing or failed one falls back to the official card alone
         _stage_a = (ps.slate_board() or {}).get("eggy")
@@ -119,7 +136,7 @@ if slots["empty"] and not _eggy:
                    f"each leg's probability by {pol.get('leg_probability_margin', 0.03) * 100:.0f} points; one leg may sit on at most {pol.get('max_tickets_per_leg')} tickets and one game on at most "
                    f"{pol.get('max_tickets_per_game')}. Slots are left empty rather than filled with tickets that fail these rules.")
 
-if _eggy and _single:
+if _eggy and _single and not _official:
     _tp = tk.get("ticket_policy")
     if _tp:
         st.caption(f"Ticket policy ({_tp['policy_id']}): {_tp['summary']}. "

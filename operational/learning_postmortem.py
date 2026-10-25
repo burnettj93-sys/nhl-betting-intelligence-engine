@@ -409,6 +409,23 @@ def build_lessons(conn, parlays: list[dict], reviews: dict, today: str) -> dict:
             "note": "facts from settled legs, read by tomorrow's review as temporary cautions; no model parameter or threshold is changed by them"}
 
 
+def parlay_scorecard(conn, parlays: list[dict]) -> list[dict]:
+    """The parlay product's own day-by-day record (the straight-bet scorecard is the earlier experiment's): per Eastern date the tickets recorded of the daily maximum, hits, misses, open, GOOD against
+    QUESTIONABLE, and the day's flagship with its result. Hit or miss only: no stake, return or ROI exists for an unpriced parlay."""
+    out = []
+    for day in sorted({p["et_date"] for p in parlays}):
+        ts = [p for p in parlays if p["et_date"] == day]
+        q = lambda name: {"n": sum(1 for p in ts if p["construction_quality"] == name and p["result_status"] in ("HIT", "MISS")), "hit": sum(1 for p in ts if p["construction_quality"] == name and p["result_status"] == "HIT")}
+        try:
+            f = lc._flagship_public(conn, day)
+            flagship = {"legs": [x["label"] for x in f["legs"]], "result": f["result_status"]} if f else None
+        except Exception:  # noqa: BLE001
+            flagship = None
+        out.append({"date": day, "recorded": len(ts), "target": lc.DAILY_TARGET, "hit": sum(p["result_status"] == "HIT" for p in ts), "miss": sum(p["result_status"] == "MISS" for p in ts),
+                    "open": sum(p["result_status"] not in ("HIT", "MISS") for p in ts), "good": q("GOOD"), "questionable": q("QUESTIONABLE"), "flagship": flagship})
+    return out
+
+
 def combined_classification(old: dict | None, a: dict) -> tuple[str | None, str | None, str]:
     """(category, why, action) for a settled bet. The decision review's verdict, held to the older signal classifier's evidence: NORMAL_VARIANCE stands only when the review EARNED it and the classifier found no
     specific cause; a specific cause the signals found is never overruled; a loss with no review and no evidence is UNKNOWN, not variance."""
@@ -462,7 +479,7 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
             "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows),
             "day_price_age": price_age_table(day_bets), "cumulative_price_age": price_age_table(all_rows), "cumulative_price_age_provider": price_age_table(all_rows, "provider_quote_age_at_recording_min"),
-            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "parlays": parlays, "lessons": build_lessons(conn, parlays, reviews, today), "parlay_day": [p for p in parlays if p["et_date"] == target_date],
+            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "parlays": parlays, "lessons": build_lessons(conn, parlays, reviews, today), "parlay_scorecard": parlay_scorecard(conn, parlays), "parlay_day": [p for p in parlays if p["et_date"] == target_date],
             "parlay_totals": {"recorded": len(parlays), "hit": sum(1 for p in parlays if p["result_status"] == "HIT"), "miss": sum(1 for p in parlays if p["result_status"] == "MISS"), "open": sum(1 for p in parlays if p["result_status"] == "PENDING"),
                               "note": "unpriced learning parlays: hit or miss only; no stake, return or ROI"}, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),
@@ -528,6 +545,8 @@ def snapshot_section() -> dict:
     status["cards"] = {k: _slim(c) for k, c in (status.get("cards") or {}).items() if k not in keep["bet_reviews"]}          # one copy of each card in the published document
     keep["parlays"] = [{**p, "leg_reviews": [{**x, "facts": x.get("facts")} for x in p.get("leg_reviews") or []]} for p in (pm.get("parlays") or []) if (p.get("et_date") or "") >= since]
     keep["parlay_totals"] = pm.get("parlay_totals")
+    keep["parlay_scorecard"] = pm.get("parlay_scorecard")
+    keep["lessons"] = pm.get("lessons")
     keep["cumulative_breakdowns"] = {k: cb.get(k) for k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team")}
     keep["day_breakdowns"] = {k: v for k, v in (pm.get("day_breakdowns") or {}).items() if k in ("edge_class", "market_type", "price_band", "model_probability_band", "edge_band", "selection_rank", "data_freshness", "team", "player")}
     return {**status, "postmortem": keep, "final_report": load_final() if lc.phase()["phase"] == "ENDED" else None}          # a final report on disk is shown only once the window has really ended
