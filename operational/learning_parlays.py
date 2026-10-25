@@ -37,6 +37,12 @@ LEVEL = {"LOW": 0, "MODERATE": 1, "HIGH": 2, "SEVERE": 3}
 
 
 PRICE_FLAGS = ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "LONGSHOT_TAIL")          # about the straight bet's VALUE: a parlay leg is judged on the hockey and the player, and the ticket on its construction
+# The moneyline's model-ABOVE-market flags (operational/eggy_intelligence.py review_moneyline): the same kind of value-versus-price flag as MODEL_FAR_ABOVE_MARKET above, and like it they stay on the
+# review card as caution but do not enter the parlay leg's non-price contradiction. A moneyline leg's estimate is the market's own no-vig probability while the model has not beaten the market, so the model
+# liking a side MORE than the market does not touch the estimate; counting it would reject a favourite BECAUSE the model sees more value. Independent evidence still counts: MODEL_SAYS_OVERPRICED,
+# HOCKEY_PICTURE_AGAINST, calibration below MEDIUM, missing data, back-to-back and every other flag.
+MODEL_ABOVE_MARKET_FLAGS = ("MODEL_NOT_SHOWN_TO_BEAT_MARKET", "MARKET_MAY_KNOW_MORE")
+SET_ASIDE_FLAGS = PRICE_FLAGS + MODEL_ABOVE_MARKET_FLAGS
 
 
 def leg_ok(c: dict) -> tuple[bool, str]:
@@ -48,9 +54,9 @@ def leg_ok(c: dict) -> tuple[bool, str]:
     price_only_pass = c["action"] == "PASS" and card["kind"] == "PLAYER" and card["thesis"]["type"] == "PRICE_ABOVE_ESTIMATE"
     if c["action"] not in ("RECORD", "LOWER_PRIORITY") and not price_only_pass:
         return False, "the leg's own review passes"
-    level = ei.combine_contradiction([f for f in card["contradiction"]["flags"] if f["name"] not in PRICE_FLAGS])
+    level = ei.combine_contradiction([f for f in card["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])
     if LEVEL[level] > 1:
-        return False, f"contradiction {level} (price flags set aside)"
+        return False, f"contradiction {level} (price and model-above-market flags set aside)"
     if card["calibration_confidence"]["level"] not in ("HIGH", "MEDIUM") or card["data_completeness"]["fraction"] < 0.5:
         return False, "calibration below MEDIUM or too little data"
     if float(card["estimate_used"]) < MIN_LEG_P:
@@ -112,8 +118,8 @@ def construct(cands: list[dict]) -> dict | None:
     dep_level = "ASSUMED_INDEPENDENT" if independent else ("UNCERTAIN" if any(p["direction"] == "UNCLEAR" for p in same_game) else "POSITIVE_NOT_QUANTIFIED")
     wi = min(range(len(legs)), key=lambda i: (ests[i], -LEVEL[cands[i]["card"]["contradiction"]["level"]]))
     weakest = {"index": wi, "label": bet_label(legs[wi].participant_name, legs[wi].market_family, legs[wi].threshold, legs[wi].american_price), "estimate": round(ests[wi], 4),
-               "contradiction": ei.combine_contradiction([f for f in cands[wi]["card"]["contradiction"]["flags"] if f["name"] not in PRICE_FLAGS])}
-    levels = [LEVEL[ei.combine_contradiction([f for f in c["card"]["contradiction"]["flags"] if f["name"] not in PRICE_FLAGS])] for c in cands]
+               "contradiction": ei.combine_contradiction([f for f in cands[wi]["card"]["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])}
+    levels = [LEVEL[ei.combine_contradiction([f for f in c["card"]["contradiction"]["flags"] if f["name"] not in SET_ASIDE_FLAGS])] for c in cands]
     if ests[wi] < MIN_LEG_P or max(levels) > 1:
         quality = "BAD"
     elif ests[wi] >= MIN_GOOD_WEAKEST and sum(levels) <= 1 and dep_level in ("ASSUMED_INDEPENDENT", "POSITIVE_NOT_QUANTIFIED"):
