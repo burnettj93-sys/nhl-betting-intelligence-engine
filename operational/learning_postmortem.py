@@ -6,6 +6,7 @@ changes a model, a threshold or a policy.
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import json
 import math
@@ -328,7 +329,8 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
             bet = {"game_id": L["game_id"], "participant_id": L["participant_id"], "market_family": L["market_family"], "threshold": L.get("threshold"), "team": L.get("team"),
                    "result_status": res.get("outcome") or "PENDING"}
             facts = ed.facts_for(bet, card, nhl_conn, data["files"][2]) if settled and res.get("outcome") in ("WIN", "LOSS") else None
-            reviews.append({"key": l["key"], "label": lc.ei_label(L), "estimate": l["estimate"], "outcome": bet["result_status"], "facts": facts, "assessment": ed.assess(bet, card, facts)})
+            reviews.append({"key": l["key"], "label": lc.ei_label(L), "player": L.get("participant_name"), "team": L.get("team"), "estimate": l["estimate"], "outcome": bet["result_status"], "facts": facts,
+                            "assessment": ed.assess(bet, card, facts)})
             complete = complete and (not settled or ed.facts_are_complete(card, facts, bet_date=r["et_date"], now_date=now.astimezone(et.EASTERN).date().isoformat()))
         pub = lc._parlay_public(r)
         out.append({**pub, "et_date": r["et_date"], "verdict": PARLAY_WORD.get(r["construction_quality"]), "priced": False,
@@ -336,6 +338,75 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
                     "hit_text": {"HIT": "HIT: every leg won", "MISS": f"MISS: killed by {', '.join(st.get('killed_by') or [])}", "PENDING": "open"}.get(r["result_status"], r["result_status"]),
                     "leg_reviews": reviews, "facts_complete": complete})
     return out
+
+
+LESSON_DAYS = 3                     # a role / ice-time lesson is a caution on that player for this many days (the overlay in operational/eggy_intelligence.py reads it)
+ROLE_LESSONS = ("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR")
+
+
+def _player_of(leg_review: dict) -> str | None:
+    return leg_review.get("player") or ((leg_review.get("label") or "").split(" \u2014 ")[0] or None)
+
+
+def build_lessons(conn, parlays: list[dict], reviews: dict, today: str) -> dict:
+    """What yesterday (and the two days before) taught, in a form tomorrow's review reads without anyone's memory: per Eastern date the flagship and its result, the legs that lost on several tickets, the
+    weakest legs that failed, role / ice-time / power-play misses, calibration and game-environment misses, same-game (dependence) tickets, and good decisions that lost against bad ones that won. `cautions` is the
+    list the review turns into a temporary caution on a named player. Facts only: nothing here changes a model parameter or a threshold."""
+    floor = (dt.date.fromisoformat(today) - dt.timedelta(days=LESSON_DAYS)).isoformat()
+    cautions, by_date = [], {}
+    for day in sorted({p["et_date"] for p in parlays if p["et_date"] >= floor}):
+        ts = [p for p in parlays if p["et_date"] == day]
+        settled = [p for p in ts if p["result_status"] in ("HIT", "MISS")]
+        lost_on = collections.defaultdict(list)                                  # leg key -> tickets it lost on
+        classes, decisions = collections.Counter(), collections.Counter()
+        weakest_failed, stronger_failed, same_game = [], 0, {"n": 0, "hit": 0, "miss": 0}
+        for p in ts:
+            weakest = (p.get("weakest_leg") or {}).get("label")
+            for lr in p.get("leg_reviews") or []:
+                a = lr.get("assessment") or {}
+                cls = a.get("classification")
+                if lr.get("outcome") == "LOSS":
+                    lost_on[lr["key"]].append((p["parlay_id"], _player_of(lr)))
+                    classes[cls or "UNKNOWN"] += 1
+                    if p["result_status"] == "MISS" and weakest and lr.get("label") == weakest:
+                        weakest_failed.append(_player_of(lr))
+                label, out = (a.get("decision_quality") or {}).get("label"), lr.get("outcome")
+                if label == ed.GOOD and out == "LOSS":
+                    decisions["good_decision_lost"] += 1
+                elif label == ed.BAD and out == "WIN":
+                    decisions["bad_decision_won"] += 1
+                claims = {c.get("id"): c.get("verdict") for c in a.get("claims") or []}
+                kind = cls if cls in ROLE_LESSONS else ("PP_ROLE_MISS" if claims.get("expected_pp") == "FAILED" else None)
+                if kind and out in ("WIN", "LOSS") and _player_of(lr):
+                    cautions.append({"player": _player_of(lr), "team": lr.get("team"), "classification": kind, "date": day, "source": "PARLAY_LEG"})
+            if p["result_status"] in ("HIT", "MISS") and p.get("dependence_level") != "ASSUMED_INDEPENDENT":
+                same_game["n"] += 1
+                same_game["hit" if p["result_status"] == "HIT" else "miss"] += 1
+            if p["result_status"] == "MISS" and not any((p.get("weakest_leg") or {}).get("label") == lr.get("label") and lr.get("outcome") == "LOSS" for lr in p.get("leg_reviews") or []):
+                stronger_failed += 1
+        flagship = None
+        try:
+            f = lc._flagship_public(conn, day)                                  # the SAME selection the board uses: no second path
+            flagship = {"legs": [x["label"] for x in f["legs"]], "result": f["result_status"]} if f else None
+        except Exception:  # noqa: BLE001
+            flagship = None
+        by_date[day] = {"tickets": len(ts), "hit": sum(p["result_status"] == "HIT" for p in ts), "miss": sum(p["result_status"] == "MISS" for p in ts), "settled": len(settled),
+                        "flagship": flagship,
+                        "repeated_killer_legs": sorted({names[0][1] for names in lost_on.values() if len({t for t, _ in names}) >= 2 and names[0][1]}),
+                        "weakest_legs_that_failed": sorted({n for n in weakest_failed if n}), "misses_killed_by_a_stronger_leg": stronger_failed,
+                        "lost_leg_classes": dict(classes), "decisions": dict(decisions), "same_game_tickets": same_game}
+    for b in (reviews or {}).values():                                          # earlier straight-bet reviews keep their cautions for their three days
+        a, bet = b.get("assessment") or {}, (b.get("card") or {}).get("bet") or {}
+        if a.get("classification") in ROLE_LESSONS and b.get("et_date", "") >= floor and bet.get("player_or_team") and bet.get("team"):
+            cautions.append({"player": bet["player_or_team"], "team": bet["team"], "classification": a["classification"], "date": b["et_date"], "source": "STRAIGHT_BET"})
+    seen, unique = set(), []
+    for c in cautions:
+        k = (c["player"].lower(), c["team"], c["classification"], c["date"])
+        if k not in seen:
+            seen.add(k)
+            unique.append(c)
+    return {"as_of": today, "window_days": LESSON_DAYS, "cautions": unique, "by_date": by_date,
+            "note": "facts from settled legs, read by tomorrow's review as temporary cautions; no model parameter or threshold is changed by them"}
 
 
 def combined_classification(old: dict | None, a: dict) -> tuple[str | None, str | None, str]:
@@ -391,7 +462,7 @@ def build(conn, nhl_conn, now: dt.datetime, *, for_date: str | None = None) -> d
     return {"generated_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "phase": ph["phase"], "day": ph["day"],
             "postmortem_for": target_date, "day_metrics": metrics(day_bets), "day_edge_classes": edge_class_table(day_bets), "cumulative_edge_classes": edge_class_table(all_rows),
             "day_price_age": price_age_table(day_bets), "cumulative_price_age": price_age_table(all_rows), "cumulative_price_age_provider": price_age_table(all_rows, "provider_quote_age_at_recording_min"),
-            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "parlays": parlays, "parlay_day": [p for p in parlays if p["et_date"] == target_date],
+            "cumulative_price_status": price_status_table(all_rows), "dependence": dependence_report(all_rows), "day_bets": day_lines, "bet_reviews": reviews, "decision_review": decision_review, "parlays": parlays, "lessons": build_lessons(conn, parlays, reviews, today), "parlay_day": [p for p in parlays if p["et_date"] == target_date],
             "parlay_totals": {"recorded": len(parlays), "hit": sum(1 for p in parlays if p["result_status"] == "HIT"), "miss": sum(1 for p in parlays if p["result_status"] == "MISS"), "open": sum(1 for p in parlays if p["result_status"] == "PENDING"),
                               "note": "unpriced learning parlays: hit or miss only; no stake, return or ROI"}, "day_breakdowns": breakdowns(day_bets) if day_bets else {},
             "cumulative": cumulative, "cumulative_breakdowns": breakdowns(all_rows) if all_rows else {}, "calibration": calibration_table(all_rows),

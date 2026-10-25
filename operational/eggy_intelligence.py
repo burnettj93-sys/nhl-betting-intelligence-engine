@@ -56,7 +56,7 @@ OVERLAY_TOI_HIGH = 4.0
 OVERLAY_PP_GAP = 0.75
 OVERLAY_FORM_MIN_P = 0.55
 OVERLAY_FORM_GAMES = 5
-OVERLAY_ROLE_CLASSES = ("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR")
+OVERLAY_ROLE_CLASSES = ("ROLE_CHANGE_MISSED", "TOI_PROJECTION_ERROR", "PP_ROLE_MISS")
 OVERLAY_CAUTION_DAYS = 3         # a postmortem role/TOI finding is a caution on that player for this many days (the postmortem's own review window)
 
 _STAT = {"PLAYER_SOG_ALTERNATE": "shots", "PLAYER_SOG": "shots", "PLAYER_POINTS": "points", "PLAYER_GOALS": "goals"}
@@ -200,7 +200,10 @@ def _load_overlay_inputs(ctx: Context, nhl_conn) -> None:
         from operational import learning_postmortem as lpm
         doc = lpm.load() or {}
         floor = (dt.date.fromisoformat(ctx.as_of) - dt.timedelta(days=OVERLAY_CAUTION_DAYS)).isoformat()
-        for rv in (doc.get("bet_reviews") or {}).values():
+        for c in (doc.get("lessons") or {}).get("cautions") or []:                       # the lessons the postmortem persisted (parlay legs and earlier straight bets)
+            if c.get("classification") in OVERLAY_ROLE_CLASSES and floor <= c.get("date", "") < ctx.as_of and c.get("player"):
+                ctx.role_cautions[(str(c["player"]).lower(), c.get("team"))] = {"classification": c["classification"], "date": c["date"]}
+        for rv in ((doc.get("bet_reviews") or {}).values() if "lessons" not in doc else []):          # a document from before the lessons block
             cls = ((rv.get("assessment") or {}).get("classification"))
             bet = (rv.get("card") or {}).get("bet") or {}
             if cls in OVERLAY_ROLE_CLASSES and rv.get("et_date", "") >= floor and rv.get("et_date", "") < ctx.as_of and bet.get("player_or_team") and bet.get("team"):
@@ -241,7 +244,8 @@ def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, 
         facts["last5_hits"] = hits
         if hits <= 1:
             flags.append({"name": "RECENT_FORM_BELOW_MODEL", "level": "MODERATE", "text": f"the estimate is {p_used * 100:.0f}% but he reached {k}+ shots in only {hits} of his last {OVERLAY_FORM_GAMES} games (players like this reached it next game about half the time after a spell like that)"})
-    caution = ctx.role_cautions.get((str(leg.participant_name).lower(), leg.team))
+    name = str(leg.participant_name).lower()
+    caution = ctx.role_cautions.get((name, leg.team)) or ctx.role_cautions.get((name, None))                       # a lesson from a leg review that carried no team matches on the name
     if caution:
         since = [g for g in games if g["date"] > caution["date"]]
         recovered = bool(since) and toi_e is not None and abs(toi_e - since[0]["toi"]) < 2.0
