@@ -41,15 +41,41 @@ class TestSummary(unittest.TestCase):
 
     def test_a_biased_model_gap_band_reads_as_overconfidence_not_edge(self):
         s = pm.summarise(rows(6000, bias=0.045, seed=5))
-        up = s["by_gap_band"]["model above the market by 3 to 6 pts"]
-        self.assertGreaterEqual(up["sides"], pm.MIN_SIDES)
+        up = s["by_gap_band"][pm.BANDS[1][0]]
+        self.assertGreaterEqual(up["games"], pm.MIN_GAMES_PER_BAND)
         self.assertEqual(up["state"], "DISAGREEMENT_IS_OVERCONFIDENCE")
 
     def test_the_within_three_points_band_is_agreement_and_band_state_reads_the_right_band(self):
         s = pm.summarise(rows(3000))
         self.assertEqual(pm.band_state(s, 0.0), "MODEL_AND_MARKET_AGREE")
         self.assertEqual(pm.band_state(None, 0.05), "INSUFFICIENT_EVIDENCE")
-        self.assertEqual(pm.band_state(s, 0.05), s["by_gap_band"]["model above the market by 3 to 6 pts"]["state"])
+        self.assertEqual(pm.band_state(s, 0.05), s["by_gap_band"][pm.BANDS[1][0]]["state"])
+        self.assertEqual(pm.band_state(s, -0.05), pm.band_state(s, 0.05))                          # the side the model likes LESS is the other end of the same game: the same band, the same evidence
+
+
+class TestIndependentObservations(unittest.TestCase):
+    def test_every_game_is_counted_once_across_the_bands(self):
+        r = rows(900, bias=0.02, seed=3)
+        s = pm.summarise(r)
+        self.assertEqual(sum(b["games"] for b in s["by_gap_band"].values()), len(r))                # no mirrored band: the bands PARTITION the games
+
+    def test_a_band_never_exceeds_the_games_that_exist(self):
+        r = rows(250, bias=0.045, seed=9)
+        s = pm.summarise(r)
+        self.assertLessEqual(max(b["games"] for b in s["by_gap_band"].values()), len(r))
+
+    def test_the_threshold_is_not_loosened_because_the_count_is_smaller(self):
+        self.assertEqual(pm.MIN_GAMES_PER_BAND, 100)
+        self.assertEqual(pm.MIN_GAMES, 100)
+        s = pm.summarise(rows(150, bias=0.06, seed=4))
+        self.assertTrue(all(b["state"] in ("INSUFFICIENT_EVIDENCE", "MODEL_AND_MARKET_AGREE") for b in s["by_gap_band"].values() if b["games"] < 100))
+
+    def test_the_old_double_counted_sample_would_have_cleared_the_bar_that_the_games_do_not(self):
+        r = rows(120, bias=0.05, seed=2)
+        s = pm.summarise(r)
+        mirrored_sides = 2 * sum(b["games"] for b in s["by_gap_band"].values())
+        self.assertGreater(mirrored_sides, 100)
+        self.assertTrue(all(b["games"] < 100 for b in s["by_gap_band"].values()))
 
 
 class TestTheLedger(unittest.TestCase):
@@ -79,7 +105,7 @@ class TestTheReviewReadsIt(unittest.TestCase):
     def test_a_moneyline_card_carries_the_trust_state_of_its_gap_band(self):
         t = tei.TestMoneylineReview()
         t.setUp()
-        t.ctx.moneyline_trust = {"state": "MARKET_PROBABLY_BETTER", "games": 250, "by_gap_band": {"model above the market by 3 to 6 pts": {"state": "DISAGREEMENT_IS_OVERCONFIDENCE"}}}
+        t.ctx.moneyline_trust = {"state": "MARKET_PROBABLY_BETTER", "games": 250, "by_gap_band": {pm.BANDS[1][0]: {"state": "DISAGREEMENT_IS_OVERCONFIDENCE"}}}
         c = t.review("AAA", shift=-0.05)
         self.assertEqual(c["market_trust"]["disagreement_state"], "DISAGREEMENT_IS_OVERCONFIDENCE")
         self.assertEqual(c["market_trust"]["overall_state"], "MARKET_PROBABLY_BETTER")

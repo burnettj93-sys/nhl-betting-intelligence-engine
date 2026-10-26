@@ -32,6 +32,7 @@ import sqlite3
 from collections import Counter
 from types import SimpleNamespace
 
+from operational import decision_artifacts
 from operational import eastern_time as et
 from operational import eggy_intelligence as ei
 from operational import state_paths
@@ -40,7 +41,7 @@ from research.product_models import matchup
 COHORT = "POSTMORTEM_LEARNING_14D"
 EXPERIMENT_ID = "LEARN-14D-2026-10-20"
 START_DATE, END_DATE = "2026-10-20", "2026-11-02"
-DAILY_TARGET = 10
+DAILY_TARGET = 10                    # the EARLIER straight-bet experiment's bets a day (retired with that unit; kept only for its history and its tests)
 STAKE = 10.0
 ODDS_FLOOR = -150.0                  # an American price of -150 or longer (a price MORE expensive than -150, e.g. -155, is excluded)
 INITIAL_BANKROLL = 500.0             # the owner's instruction (2026-10-20): start at $500 and reset to $500 whenever cash cannot fund the next bet
@@ -62,12 +63,14 @@ EDGE_CLASSES = (EDGE_POSITIVE, EDGE_NEUTRAL, EDGE_NEGATIVE)
 EDGE_BAND = ei.EDGE_MIN                # +-3 points: the main engine's own threshold. (The first band was +-2 points, which split the bookmaker's margin on a moneyline: a -135 favourite reads -2.3 points of "edge",
                                        # a +114 underdog -1.9, so the favourite was classed NEGATIVE and the underdog NEUTRAL, which is how the old ranking came to prefer underdogs.)
 PRICE_BANDS = ((-150, -131, "-150 to -131"), (-130, -111, "-130 to -111"), (-110, 100, "-110 to +100"), (101, 150, "+101 to +150"), (151, 10 ** 6, "+151 and longer"))
+from operational import learning_parlays as _lp          # noqa: E402  (the parlay product owns its own daily maximum)
+PARLAY_DAILY_MAX = _lp.MAX_PARLAYS_PER_DAY          # the learning-parlay maximum per Eastern day: the PRODUCT's constant (operational/learning_parlays.py), never the retired straight-bet target
 UNIT = "PARLAY"                     # the learning unit (owner 2026-10-21): up to 10 learning PARLAYS a day, built from the reviewed candidate legs (operational/learning_parlays.py). "STRAIGHT" is the earlier unit
 ELIGIBLE_FAMILIES = ("MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "PLAYER_POINTS", "PLAYER_GOALS", "GOALIE_SAVES")
 
 POLICY = {
     "policy_id": "postmortem-learning-14d-2026-10-20", "cohort": COHORT, "experiment_id": EXPERIMENT_ID, "timezone": "America/Toronto",
-    "start_date": START_DATE, "end_date": END_DATE, "days": 14, "continues_after_window": True, "daily_target": DAILY_TARGET, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
+    "start_date": START_DATE, "end_date": END_DATE, "days": 14, "continues_after_window": True, "daily_target": PARLAY_DAILY_MAX, "daily_parlay_max": PARLAY_DAILY_MAX, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
     "odds_floor_american": ODDS_FLOOR, "unit": UNIT, "paper_only": True, "real_money": "NOT authorised",
     "eggy": {"official_picks_per_day": 1, "changed": False}, "initial_bankroll_usd": INITIAL_BANKROLL, "reset_to_usd": RESET_TO, "reset_when_below_usd": STAKE, "reset_reason": RESET_REASON,
     "eligible_market_families": list(ELIGIBLE_FAMILIES),
@@ -85,7 +88,9 @@ POLICY = {
                      "a fair-priced favourite is lower priority; a fair-priced underdog or a side the model thinks overpriced is a PASS; Elo plays no part",
         "props": "estimate = the calibrated skater model recalibrated by what happened to similar players in 2025-26 where history is clear (300+ cases, 2 standard errors), in either direction; a record needs 3+ points over the "
                  "price, contradiction no worse than MODERATE and calibration at least MEDIUM; a fair-priced event with a well-calibrated estimate is lower priority; a price far above the estimate is a PASS",
-        "evidence": {"path": "docs/validation/eggy_evidence.json", "sha256": matchup.evidence_sha256(), "max_age_days": ei.EVIDENCE_MAX_AGE_DAYS, "stale_data_days": ei.STALE_DATA_DAYS},
+        "evidence": {"path": "docs/validation/eggy_evidence.json", "identity": matchup.evidence_identity(), "history": "docs/validation/evidence_history.jsonl", "max_unverified_days": ei.EVIDENCE_MAX_AGE_DAYS,
+                     "stale_data_days": ei.STALE_DATA_DAYS, "refresh": "routine refreshes roll forward automatically (hash-chained history); a material change needs the owner (operational/evidence_refresh.py)"},
+        "artifacts": decision_artifacts.pinned(),
     },
     "behaviour": {"relax_min": RELAX_MIN, "relaxed_reserve_max": RELAXED_RESERVE_MAX, "wave_span_min": WAVE_SPAN_MIN, "price_bands": [b[2] for b in PRICE_BANDS], "code_version": CODE_VERSION,
                   "exclusions": "one side of a game's moneyline; one threshold per player and statistic (PLAYER_SOG and PLAYER_SOG_ALTERNATE are the same statistic); the engine's leg gate (leg_is_eligible) applies unchanged",
@@ -452,6 +457,11 @@ def eligibility_reasons(leg, now: dt.datetime) -> list[str]:
             why.append("price is not a valid American price")
     elif leg.american_price < ODDS_FLOOR:
         why.append(f"price worse than the {ODDS_FLOOR:+.0f} floor")
+    if getattr(leg, "market_family", None) == "PLAYER_POINTS":                       # Player Points: 1+ is the actionable threshold; a validated threshold that can never reach the leg floor is research only
+        pol = ei.points_policy()
+        k = int(getattr(leg, "threshold", 0) or 0)
+        if k not in pol["actionable"]:
+            why.append(f"MODEL_THRESHOLD_NOT_ACTIONABLE (points {k}+ -- " + (f"research only: validated, but cannot reach the {pol['leg_floor']:.0%} leg floor" if k in pol["enabled"] else "not validated") + f"; actionable: {pol['actionable']})")
     for flag, label in (("provider_contract_verified", "market contract not verified"), ("model_threshold_eligible", "no eligible model estimate for this threshold"), ("identity_resolved", "identity not resolved"),
                         ("event_not_started", "event started")):
         if not getattr(leg, flag, False):
@@ -506,6 +516,11 @@ def day_waves(nhl_conn, et_date: str) -> tuple[dict, int, dict]:
     return game_wave, len(game_wave), wave_start
 
 
+def daily_cap() -> int:
+    """Slots a day may use: the parlay product's own maximum for the parlay unit; the straight-bet target only for the retired straight unit."""
+    return PARLAY_DAILY_MAX if UNIT == "PARLAY" else DAILY_TARGET
+
+
 def cumulative_caps(game_wave: dict, total: int, wave_start: dict | None = None, now: dt.datetime | None = None) -> dict[int, int]:
     """Slots a wave (with all earlier waves) may have used: the day's ten released in proportion to the games played through it. Just before a wave's puck drop the cap relaxes to
     ten less a reserve of one slot per later wave still to start (at most two), so a quiet late slate cannot strand slots that these prices could still fill."""
@@ -513,11 +528,11 @@ def cumulative_caps(game_wave: dict, total: int, wave_start: dict | None = None,
     caps, run = {}, 0
     for w in sorted(per):
         run += per[w]
-        cap = DAILY_TARGET if run >= total else min(DAILY_TARGET, math.ceil(DAILY_TARGET * run / total))
-        if wave_start and now and w in wave_start and cap < DAILY_TARGET:
+        cap = daily_cap() if run >= total else min(daily_cap(), math.ceil(daily_cap() * run / total))
+        if wave_start and now and w in wave_start and cap < daily_cap():
             if (wave_start[w] - now).total_seconds() / 60.0 <= RELAX_MIN:
                 later = sum(1 for x in wave_start if x > w and wave_start[x] > now)
-                cap = max(cap, DAILY_TARGET - min(RELAXED_RESERVE_MAX, later))
+                cap = max(cap, daily_cap() - min(RELAXED_RESERVE_MAX, later))
         caps[w] = cap
     return caps
 
@@ -700,20 +715,20 @@ def load_status() -> dict | None:
 
 def _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, recorded_now, cands, reasons, held_lower, extra=None) -> dict:
     recorded_total = len(rows) + len(recorded_now)
-    open_slots = DAILY_TARGET - recorded_total
+    open_slots = daily_cap() - recorded_total
     shortfall = None
     if open_slots > 0:
         waiting_caps = {w: caps.get(w) for w in sorted(set(game_wave.values()))}
-        shortfall = {"target": DAILY_TARGET, "recorded": recorded_total, "slots_open": open_slots, "recommended_not_yet_recorded": len([c for c in cands if c not in recorded_now]),
+        shortfall = {"target": daily_cap(), "recorded": recorded_total, "slots_open": open_slots, "recommended_not_yet_recorded": len([c for c in cands if c not in recorded_now]),
                      "lower_priority_waiting_for_their_final_window": held_lower, "legs_in_pool": len(legs), "reasons_candidates_were_not_recorded": dict(reasons.most_common(14)), "wave_caps": waiting_caps,
                      "sources": {k: (v.get("exclusion_reasons") if isinstance(v, dict) else None) for k, v in (collected.get("sources") or {}).items() if isinstance(v, dict) and v.get("exclusion_reasons")},
                      "why": ("fewer than 10 defensible bets exist so far today: the cohort records only what survives its review, and releases slots with the puck-drop waves (later waves' prices are not captured yet)"),
                      **(extra or {})}
     conn.execute("INSERT INTO daily_records (et_date, experiment_day, target, recorded, eligible_now, slots_open, shortfall_json, updated_at_utc) VALUES (?,?,?,?,?,?,?,?) "
                  "ON CONFLICT(et_date) DO UPDATE SET recorded=excluded.recorded, eligible_now=excluded.eligible_now, slots_open=excluded.slots_open, shortfall_json=excluded.shortfall_json, updated_at_utc=excluded.updated_at_utc",
-                 (today, day, DAILY_TARGET, recorded_total, len(cands), max(0, open_slots), json.dumps(shortfall, sort_keys=True, default=str) if shortfall else None, _utc(now)))
+                 (today, day, daily_cap(), recorded_total, len(cands), max(0, open_slots), json.dumps(shortfall, sort_keys=True, default=str) if shortfall else None, _utc(now)))
     conn.commit()
-    return {"recording": {"day": day, "recorded_this_cycle": len(recorded_now), "recorded_today": recorded_total, "target": DAILY_TARGET, "eligible_pool": len(cands),
+    return {"recording": {"day": day, "recorded_this_cycle": len(recorded_now), "recorded_today": recorded_total, "target": daily_cap(), "eligible_pool": len(cands),
                           "resets": [c["reset"] for c in recorded_now if c.get("reset")], "shortfall": shortfall}}
 
 
@@ -755,7 +770,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
     ctx = None
     if prelim:
         ctx = ei.build_context(nhl_conn, now, live_overlay=True)
-        ok, why_unusable = ei.usable(ctx, pinned_sha=POLICY["decision_architecture"]["evidence"]["sha256"])
+        ok, why_unusable = ei.usable(ctx, pinned_identity=POLICY["decision_architecture"]["evidence"]["identity"])
         if not ok:                                  # no review, no bet: the cohort never falls back to unreviewed ranking
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
             return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, [], [], reasons, 0, {"intelligence_unavailable": why_unusable})
@@ -864,8 +879,8 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
         except Exception as exc:  # noqa: BLE001
             review_errors[f"{exc.__class__.__name__}: {exc}"[:160]] += 1
             reasons[f"the review failed ({exc.__class__.__name__}), not a judgment"] += 1
-    already = [{"key": r["idempotency_key"], "leg_keys": json.loads(r["leg_keys"])} for r in rows]
-    out = lp.build(cands, already, slots=DAILY_TARGET)
+    already = [{"key": r["idempotency_key"], "leg_keys": json.loads(r["leg_keys"]), "view": lp.view_of_row(r)} for r in rows]
+    out = lp.build(cands, already, slots=daily_cap())
     recorded_now, rank = [], len(rows)
     waiting = 0
     for p in out["parlays"]:
@@ -875,7 +890,7 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
             waiting += 1                                                           # a ticket with a lesser leg waits for its first game's last 25 minutes: no better price can still arrive
             continue
         w = game_wave.get(str(first.game_id))
-        cap = min(strict_caps.get(w, DAILY_TARGET), DAILY_TARGET) if w is not None else DAILY_TARGET
+        cap = min(strict_caps.get(w, daily_cap()), daily_cap()) if w is not None else daily_cap()
         if sum(1 for r in rows if r["wave_index"] is not None and r["wave_index"] <= (w if w is not None else 99)) + sum(1 for r in recorded_now if (r["wave"] or 0) <= (w or 0)) >= cap and w is not None:
             continue
         rec = lp.record_dict(p)
@@ -1033,7 +1048,7 @@ def status_doc(now: dt.datetime | None = None, conn=None) -> dict:
             conn.close()
     wins, losses = int(settled[0] or 0), int(settled[1] or 0)
     return {"generated_at_utc": _utc(now), "cohort": COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "authorised": is_authorised(), "policy_digest": policy_digest(), "phase": ph["phase"], "day": ph["day"], "days": 14,
-            "start_date": START_DATE, "end_date": END_DATE, "target_per_day": DAILY_TARGET, "stake_usd": STAKE, "odds_requirement": f"{int(ODDS_FLOOR)} or better",
+            "start_date": START_DATE, "end_date": END_DATE, "target_per_day": daily_cap(), "stake_usd": STAKE, "odds_requirement": f"{int(ODDS_FLOOR)} or better",
             "recorded_today": (len(_today_parlays(conn, today)) if UNIT == "PARLAY" else len(rows)), "exposure_today_usd": (0.0 if UNIT == "PARLAY" else round(len(rows) * STAKE, 2)), "bankroll": bal, "resets": resets, "bets_total": total,
             "record": {"wins": wins, "losses": losses, "voids": int(settled[2] or 0), "open": int(settled[3] or 0), "hit_rate": round(wins / (wins + losses), 4) if wins + losses else None},
             "edge_classes_today": dict(Counter(r["edge_class"] for r in rows)),

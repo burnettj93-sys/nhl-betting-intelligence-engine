@@ -155,13 +155,22 @@ class TestPostmortemCaution(Overlay):
 
 
 class TestTheParlayBuilderRespectsIt(Overlay):
-    def test_two_counted_role_flags_keep_the_leg_out_of_a_parlay(self):
+    def test_two_detectors_of_one_role_change_are_one_contradiction(self):
         ctx = self.ov_ctx([box("2026-10-21", 12.0), box("2026-10-20", 12.5)], cautions={("test player", "AAA"): {"classification": "TOI_PROJECTION_ERROR", "date": "2026-10-19"}})
         c = self.run_review(ctx, toi=18.5)
-        self.assertEqual(c["contradiction"]["level"], "HIGH")                                        # a drop and yesterday's postmortem finding: two counted flags
+        self.assertEqual(c["contradiction"]["level"], "MODERATE")                                    # a drop and yesterday's postmortem finding describe ONE role change: counted once
+        self.assertEqual({"TOI_DROP", "POSTMORTEM_ROLE_CAUTION"}, {f["name"] for f in c["contradiction"]["flags"]} & {"TOI_DROP", "POSTMORTEM_ROLE_CAUTION"})      # both traces stay on the card
+        fam = {f["family"]: f for f in c["contradiction"]["families"]}
+        self.assertEqual(sorted(fam["TOI_ROLE"]["flags"]), ["POSTMORTEM_ROLE_CAUTION", "TOI_DROP"])
         ok, why = lp.leg_ok({"leg": None, "card": c, "action": c["action"]["decision"]})
-        self.assertFalse(ok)
-        self.assertTrue("contradiction" in why or "passes" in why, why)
+        self.assertTrue(ok or "contradiction" not in why, why)                                       # the contradiction no longer excludes it
+
+    def test_a_validated_adjustment_is_still_applied_once(self):
+        with mock.patch.object(ei, "signal_evidence", return_value=validated(adj=-0.02)):
+            ctx = self.ov_ctx([box("2026-10-21", 12.0), box("2026-10-20", 12.5)], cautions={("test player", "AAA"): {"classification": "TOI_PROJECTION_ERROR", "date": "2026-10-19"}})
+            base = self.run_review(self.ov_ctx(live=False), toi=18.5)
+            c = self.run_review(ctx, toi=18.5)
+        self.assertAlmostEqual(base["probabilities"]["estimate_used"] - c["probabilities"]["estimate_used"], 0.02, places=3)
 
 
 if __name__ == "__main__":

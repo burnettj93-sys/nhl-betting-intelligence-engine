@@ -48,8 +48,9 @@ LONG_PRICE_PROP, VERY_LONG_PRICE_PROP = 300.0, 600.0
 TOSSUP_BAND = 0.03               # a hockey probability within three points of 50% is a toss-up: there is no "better team" to argue for or against
 MODEL_LEADS_Z = 2.0              # the model counts as leading the market only when its paired log-loss advantage is at least two standard errors
 FACTOR_FLOOR = 0.25              # a recalibration never scales a probability by less than this (a cell with no events at all would otherwise scale it to zero)
-EVIDENCE_MAX_AGE_DAYS = 45       # the evidence file is a snapshot: past this age the layer is unusable. 45 days, not 21: the live calibration still holds months out (docs/validation/points_thresholds.json, player_signals.json), and a candidate is PREPARED at 14 days (operational/evidence_refresh.py), leaving a month to approve it
+EVIDENCE_MAX_AGE_DAYS = 45       # the longest the live evidence may go UNVERIFIED. A refresh builds, validates and compares a candidate every 14 days and rolls a routine one forward by itself (operational/evidence_refresh.py), which restarts this clock; it is reached only when the refresh is failing or a MATERIAL change is waiting for the owner. It is not a calendar cliff.
 RECENT_GAMES = 6
+LEG_FLOOR = 0.55                 # a parlay leg's minimum estimate (operational/learning_parlays.py MIN_LEG_P is this value)
 # Recency / role-risk overlay (owner 2026-10-23). Thresholds come from the stored 2022-2026 history (33,647 player-games), not from judgment: a player's latest-3-game average ice time sits
 # 3.2 minutes or more below his prior-10-game average about 5% of the time (the 5th percentile) and 4.0 or more about 2%, so those are the MODERATE and HIGH marks; the power-play mark reuses the existing 0.75.
 # Among players who reached 2+ shots in at least 55% of their prior games, those who reached it in 0 or 1 of their latest 5 reached it next game 49-52% of the time against 62-74% for 3 or more of 5.
@@ -86,10 +87,40 @@ def _level_index(level: str) -> int:
     return LEVELS.index(level)
 
 
+# One underlying hockey FACT may be seen by several detectors (the model's ice-time assumption, the last three games, a postmortem finding all describe one role change). The contradiction
+# counts a causal family ONCE, at its strongest level; the evidence traces of every detector stay on the card. Different families are different evidence and still combine.
+CAUSE_FAMILY = {
+    "ROLE_ASSUMPTION": "TOI_ROLE", "TOI_DROP": "TOI_ROLE", "TOI_RISE": "TOI_ROLE", "LOW_USAGE": "TOI_ROLE", "POSTMORTEM_ROLE_CAUTION": "TOI_ROLE",
+    "POWER_PLAY_ASSUMPTION": "PP_ROLE", "PP_ROLE_LOST": "PP_ROLE",
+    "MODEL_ABOVE_RECORD": "PRODUCTION_BELOW_MODEL", "RECENT_FORM_BELOW_MODEL": "PRODUCTION_BELOW_MODEL",
+    "HISTORY_SAYS_MODEL_RUNS_HIGH": "MODEL_OVERCONFIDENCE", "HISTORY_SAYS_MODEL_RUNS_LOW": "MODEL_OVERCONFIDENCE", "LIVE_CALIBRATION_OVERCONFIDENT": "MODEL_OVERCONFIDENCE",
+    "HOCKEY_PICTURE_AGAINST": "TEAM_STRENGTH", "INDICATORS_FAVOUR_OPPONENT": "TEAM_STRENGTH", "GAME_ENVIRONMENT": "TEAM_STRENGTH",
+    "BACK_TO_BACK": "REST",
+}
+
+
+def cause_family(flag: dict) -> str:
+    """The causal family of a flag: an explicit `family` on the flag (a postmortem caution about the power play), else the registry, else the flag is its own family."""
+    return flag.get("family") or CAUSE_FAMILY.get(flag["name"]) or flag["name"]
+
+
+def families_of(flags: list[dict]) -> list[dict]:
+    """[{family, level, flags: [names]}]: each family at its strongest level, with every flag that evidenced it."""
+    out: dict[str, dict] = {}
+    for f in flags:
+        fam = cause_family(f)
+        e = out.setdefault(fam, {"family": fam, "level": f["level"], "flags": []})
+        e["flags"].append(f["name"])
+        if _level_index(f["level"]) > _level_index(e["level"]):
+            e["level"] = f["level"]
+    return list(out.values())
+
+
 def combine_contradiction(flags: list[dict]) -> str:
-    """Contradiction level from the flags that fired. One HIGH or two MODERATE flags make it HIGH; two HIGH flags (or any SEVERE) make it SEVERE; one MODERATE makes it MODERATE; otherwise LOW. A rule on
-    counts, not a weighted sum: compounding doubts is the point, and no history says how much each one is worth."""
-    lv = [f["level"] for f in flags]
+    """Contradiction level from the CAUSAL FAMILIES that fired (a family counts once, at its strongest flag). One HIGH or two MODERATE families make it HIGH; two HIGH families (or any SEVERE) make it SEVERE;
+    one MODERATE makes it MODERATE; otherwise LOW. A rule on counts, not a weighted sum: compounding independent doubts is the point, and no history says how much each one is worth; two detectors of one
+    fact are not two doubts."""
+    lv = [f["level"] for f in families_of(flags)]
     if "SEVERE" in lv or lv.count("HIGH") >= 2:
         return "SEVERE"
     if "HIGH" in lv or lv.count("MODERATE") >= 2:
@@ -204,9 +235,11 @@ def _load_overlay_inputs(ctx: Context, nhl_conn) -> None:
         from operational import learning_postmortem as lpm
         doc = lpm.load() or {}
         floor = (dt.date.fromisoformat(ctx.as_of) - dt.timedelta(days=OVERLAY_CAUTION_DAYS)).isoformat()
-        ctx.calibration_cautions = list((doc.get("lessons") or {}).get("calibration_cautions") or [])
+        states = (doc.get("lessons") or {}).get("lesson_state")                           # machine-readable: only an ACTIONABLE lesson is consumed (a document from before it read as actionable)
+        actionable = None if states is None else {x["id"] for x in states if x.get("state") == "ACTIONABLE"}
+        ctx.calibration_cautions = list((doc.get("lessons") or {}).get("calibration_cautions") or []) if actionable is None or "CALIBRATION_BAND_OVERCONFIDENCE" in actionable else []
         ctx.moneyline_trust = ((doc.get("intelligence_metrics") or {}).get("moneyline_trust")) or {}
-        for c in (doc.get("lessons") or {}).get("cautions") or []:                       # the lessons the postmortem persisted (parlay legs and earlier straight bets)
+        for c in (doc.get("lessons") or {}).get("cautions") or [] if (actionable is None or "ROLE_CAUTION" in actionable) else []:                       # the lessons the postmortem persisted (parlay legs and earlier straight bets)
             if c.get("classification") in OVERLAY_ROLE_CLASSES and floor <= c.get("date", "") < ctx.as_of and c.get("player"):
                 ctx.role_cautions[(str(c["player"]).lower(), c.get("team"))] = {"classification": c["classification"], "date": c["date"]}
         for rv in ((doc.get("bet_reviews") or {}).values() if "lessons" not in doc else []):          # a document from before the lessons block
@@ -254,16 +287,16 @@ def recency_overlay(ctx: Context, leg, p: dict, stat: str, k: int, toi_e, pp_e, 
         since = [g for g in games if g["date"] > caution["date"]]
         recovered = bool(since) and toi_e is not None and abs(toi_e - since[0]["toi"]) < 2.0
         facts["postmortem_caution"] = {**caution, "cleared_by_latest_game": recovered}
-        flags.append({"name": "POSTMORTEM_ROLE_CAUTION", "level": "LOW" if recovered else "MODERATE",
+        flags.append({"name": "POSTMORTEM_ROLE_CAUTION", "family": "PP_ROLE" if caution["classification"] == "PP_ROLE_MISS" else "TOI_ROLE", "level": "LOW" if recovered else "MODERATE",
                       "text": f"the postmortem classified a bet on him {caution['classification']} on {caution['date']}" + ("; his latest game is back within 2 minutes of the model's ice time, so this is context only" if recovered else ": a temporary caution while his role is unconfirmed")})
     return flags, facts
 
 
 
 def evidence_health(evidence: dict | None, now: dt.datetime) -> dict:
-    """The calibration evidence file is a pinned snapshot (its checksum is part of the cohort policy digest), so it cannot refresh itself: past EVIDENCE_MAX_AGE_DAYS the review layer is unusable and the cohort
-    records nothing. This reports the clock in plain numbers so that the expiry is seen coming, not discovered: state OK, EXPIRING (7 days or fewer left) or EXPIRED. The controlled refresh is
-    the candidate that operational/evidence_refresh.py prepares at 14 days, put in force by `python3 -m deploy.promote_evidence` and approved with the new policy digest."""
+    """How long the live calibration evidence has gone without verification, in plain numbers so that a stop is seen coming, not discovered: state OK, EXPIRING (7 days or fewer left) or EXPIRED. A working
+    refresh (operational/evidence_refresh.py) rebuilds, validates and compares a candidate every 14 days and rolls a routine one forward by itself, which restarts this clock; the clock runs out only when the
+    refresh is failing or a MATERIAL change is waiting for the owner."""
     if not evidence or not evidence.get("built_at_utc"):
         return {"state": "MISSING", "why": "no evidence file or no build time"}
     try:
@@ -273,8 +306,8 @@ def evidence_health(evidence: dict | None, now: dt.datetime) -> dict:
     age = (now - built).total_seconds() / 86400.0
     left = EVIDENCE_MAX_AGE_DAYS - age
     return {"built_at_utc": evidence["built_at_utc"], "data_through": evidence.get("data_through"), "age_days": round(age, 1), "max_age_days": EVIDENCE_MAX_AGE_DAYS, "days_remaining": round(left, 1),
-            "state": "EXPIRED" if left <= 0 else ("EXPIRING" if left <= 7 else "OK"), "controlled_refresh": ("a candidate and its proposal are prepared automatically at 14 days (operational/evidence_refresh.py); approving = python3 -m deploy.promote_evidence, "
-                                   "then deploy.activate_learning_experiment --apply with the new digest")}
+            "state": "EXPIRED" if left <= 0 else ("EXPIRING" if left <= 7 else "OK"), "controlled_refresh": ("a candidate is prepared automatically every 14 days (operational/evidence_refresh.py): a routine refresh rolls forward by itself and is recorded in the evidence history; "
+                                   "only a MATERIAL change waits for the owner (python3 -m deploy.promote_evidence --approve ...)")}
 
 
 def calibration_caution_flag(ctx: Context, leg, estimate: float) -> dict | None:
@@ -299,14 +332,26 @@ def _days_before(as_of: str, newest: str | None) -> int | None:
         return None
 
 
-def usable(ctx: Context, pinned_sha: str | None = None) -> tuple[bool, str]:
+def _matchup():
+    from research.product_models import matchup
+    return matchup
+
+
+def _history() -> dict:
+    from operational import evidence_refresh
+    return evidence_refresh.verify_history()
+
+
+def usable(ctx: Context, pinned_identity: str | None = None) -> tuple[bool, str]:
     """The intelligence layer is usable when the evidence and both states exist and are current. A cohort that cannot review does not fall back to unreviewed ranking: it records nothing and says why.
     Stale state is an integrity matter (a review of last week's form is not a review): a team or skater file whose newest game is more than STALE_DATA_DAYS old makes the layer unusable."""
     problems = []
     if ctx.evidence is None:
         problems.append("evidence file missing")
-    elif pinned_sha is not None and ctx.evidence.get("_sha256") != pinned_sha:
-        problems.append("the evidence file is not the one the policy digest pins (it was rebuilt without a new approval)")
+    elif pinned_identity is not None and _matchup().evidence_identity(ctx.evidence) != pinned_identity:
+        problems.append("the evidence file is a different model or feature set from the one the policy digest pins (a policy change needs a new approval)")
+    elif pinned_identity is not None and not _history()["ok"]:
+        problems.append("the evidence file is not accounted for by its history (" + "; ".join(_history()["problems"][:2]) + ")")
     elif not ctx.evidence.get("built_at_utc"):
         problems.append("the evidence file has no build time")
     elif ctx.now is not None:
@@ -314,7 +359,7 @@ def usable(ctx: Context, pinned_sha: str | None = None) -> tuple[bool, str]:
             built = dt.datetime.fromisoformat(ctx.evidence["built_at_utc"].replace("Z", "+00:00"))
             age = (ctx.now - built).days
             if age > EVIDENCE_MAX_AGE_DAYS:
-                problems.append(f"the evidence file is {age} days old (built {ctx.evidence['built_at_utc']}): rebuild it with deploy/build_eggy_evidence.py")
+                problems.append(f"the evidence has gone {age} days without verification (built {ctx.evidence['built_at_utc']}): the refresh is failing or a material change awaits approval (operational/evidence_refresh.py)")
         except (ValueError, TypeError):
             problems.append("the evidence file's build time is unreadable")
     if ctx.team_state is None:
@@ -465,7 +510,7 @@ def _card_shell(leg, label: str, kind: str) -> dict:
 def _finish(card: dict, flags: list[dict], cal: str, comp: dict, thesis: dict, policy: dict) -> dict:
     """Contradiction, decision confidence and the action, from the rules in `policy` (already evaluated into booleans by the caller)."""
     contradiction = combine_contradiction(flags)
-    card["contradiction"] = {"level": contradiction, "flags": flags}
+    card["contradiction"] = {"level": contradiction, "flags": flags, "families": families_of(flags)}
     card["calibration_confidence"] = card.get("calibration_confidence") or {"level": cal}
     card["data_completeness"] = comp
     card["thesis"] = thesis
@@ -499,6 +544,9 @@ def review_moneyline(ctx: Context, leg, estimate_basis: str, estimate_used: floa
     pll = pros.get("log_loss") or {}
     pdiff = pros.get("paired_difference") or {}
     model_leads = bool(pdiff.get("z") is not None and pdiff["z"] >= MODEL_LEADS_Z)          # the model counts as leading only when its paired log-loss advantage clears two standard errors: a gap of a few thousandths on 87 games is noise
+    live_record = getattr(ctx, "moneyline_trust", None) or {}
+    if live_record.get("games"):                                                             # the growing prospective record (one observation per GAME) supersedes the evidence file's frozen 87-game snapshot
+        model_leads = live_record.get("state") == "MODEL_MAY_HAVE_EDGE"
     large = max(DISAGREE_LARGE_DEFAULT * 0.9, pros.get("disagreement_sd") or DISAGREE_LARGE_DEFAULT)
     card["bet"]["opponent_price_implied"] = opp_price
     card["bet"]["matchup"] = f"{away} @ {home}"
@@ -1109,16 +1157,36 @@ def apply_signal_evidence(flags: list[dict], stat: str, k: int) -> tuple[list[di
 POINTS_VALIDATION_PATH = Path(__file__).resolve().parent.parent / "docs" / "validation" / "points_thresholds.json"
 
 
+_points_cache: dict = {"mtime": None, "data": None}
+
+
 def points_policy() -> dict:
     """What the out-of-time validation (deploy/validate_points_thresholds.py -> docs/validation/points_thresholds.json) allows: the thresholds enabled for live parlays, and for a threshold whose live calibration
     failed but whose recalibration (fitted on games before the split, scored after it) passed, that (a, b). A missing or unreadable file enables NOTHING: an unvalidated market is never a live ingredient."""
     try:
+        mt = POINTS_VALIDATION_PATH.stat().st_mtime
+        if _points_cache["mtime"] == mt and _points_cache["data"] is not None:
+            return _points_cache["data"]
         d = json.loads(POINTS_VALIDATION_PATH.read_text())
         enabled = {int(k): v["verdict"] for k, v in d["thresholds"].items() if str(v.get("verdict", "")).startswith("ENABLED")}
         recal = {int(k): (v["recalibration"]["a"], v["recalibration"]["b"]) for k, v in d["thresholds"].items() if v.get("recalibration") and int(k) in enabled}
-        return {"enabled": enabled, "recalibration": recal, "validated_through": d.get("scored")}
+        # A threshold is ACTIONABLE only if its validated predictions can reach the parlay leg floor: enough validation cases (the file's own band minimum) sit in bands at or above MIN_LEG_P. Validated but
+        # not actionable = RESEARCH ONLY: the model is kept and measured, and it is never presented as a live opportunity (it can never be admitted without lowering the floor, which this does not do).
+        need = int(((d.get("rule_declared_before_the_numbers") or {}).get("band_min_n")) or 200)
+        floor = LEG_FLOOR
+        reach = {}
+        for k, v in d["thresholds"].items():
+            if int(k) not in enabled:
+                continue
+            var = (v.get("variants") or {}).get(v.get("live_variant")) or {}
+            reach[int(k)] = sum(int(b["n"]) for b in var.get("calibration_by_band") or [] if float(str(b["band"]).split("%-")[0]) / 100.0 >= floor - 1e-9)
+        actionable = sorted(k for k, n in reach.items() if n >= need)
+        out = {"enabled": enabled, "recalibration": recal, "validated_through": d.get("scored"), "actionable": actionable, "research_only": sorted(set(enabled) - set(actionable)),
+               "cases_at_or_above_the_leg_floor": reach, "leg_floor": floor}
+        _points_cache.update(mtime=mt, data=out)
+        return out
     except (OSError, ValueError, KeyError):
-        return {"enabled": {}, "recalibration": {}, "validated_through": None}
+        return {"enabled": {}, "recalibration": {}, "validated_through": None, "actionable": [], "research_only": [], "cases_at_or_above_the_leg_floor": {}, "leg_floor": LEG_FLOOR}
 
 
 # ------------------------------------------------------------------------------------------------ the decision hierarchy

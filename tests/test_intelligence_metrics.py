@@ -151,7 +151,7 @@ class TestTheMetricsOnARealLedger(Base):
         m = doc["intelligence_metrics"]
         for k in ("legs", "moneyline_model_vs_market", "tickets", "flagship", "postmortem", "priced_metrics", "evidence_health", "points", "calibration_cautions"):
             self.assertIn(k, m, k)
-        self.assertEqual(set(m["legs"]), {"all", "calibration_by_probability_band", "by_market_and_threshold", "calibration_by_market_and_band", "flagged_vs_unflagged", "reused_vs_not"})
+        self.assertEqual(set(m["legs"]), {"all", "calibration_by_probability_band", "by_market_and_threshold", "calibration_by_market_and_band", "flagged_vs_unflagged", "reused_vs_not", "rubric"})
         self.assertEqual(set(m["tickets"]), {"by_day", "all", "good_vs_questionable", "ticket_probability_bands", "probability_basis", "weakest_leg_vs_other_legs", "why_missed_tickets_missed"})
         self.assertEqual(m["legs"]["all"]["hit"], m["legs"]["all"]["n"])                    # every leg got 3 shots: all won
         self.assertEqual(sum(c["n"] for c in m["legs"]["calibration_by_probability_band"].values()), m["legs"]["all"]["n"])

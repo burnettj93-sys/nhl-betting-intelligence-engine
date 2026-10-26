@@ -8,6 +8,7 @@ import inspect
 import json
 import unittest
 from unittest import mock
+from unittest import mock
 
 from operational import eggy_intelligence as ei
 from research.product_models import matchup
@@ -134,16 +135,21 @@ class TestRules(unittest.TestCase):
         ctx.now = dt.datetime(2026, 11, 20, 21, 0, tzinfo=dt.timezone.utc)                   # 50 days
         ok, why = ei.usable(ctx)
         self.assertFalse(ok)
-        self.assertIn("evidence file is 50 days old", why)
+        self.assertIn("50 days without verification", why)
         ev["built_at_utc"] = "garbage"
         self.assertIn("unreadable", ei.usable(ctx)[1])
 
     def test_a_rebuilt_unpinned_evidence_file_or_one_without_a_build_time_is_refused(self):
         ctx = make_ctx()
-        self.assertTrue(ei.usable(ctx, pinned_sha=ctx.evidence["_sha256"])[0])
-        ok, why = ei.usable(ctx, pinned_sha="0" * 64)
+        with mock.patch.object(ei, "_history", return_value={"ok": True, "problems": []}):
+            self.assertTrue(ei.usable(ctx, pinned_identity=matchup.evidence_identity(ctx.evidence))[0])
+            ok, why = ei.usable(ctx, pinned_identity="0" * 16)
         self.assertFalse(ok)
-        self.assertIn("not the one the policy digest pins", why)
+        self.assertIn("different model or feature set", why)
+        with mock.patch.object(ei, "_history", return_value={"ok": False, "problems": ["the live evidence file is not the one the newest history entry recorded"]}):
+            ok, why = ei.usable(ctx, pinned_identity=matchup.evidence_identity(ctx.evidence))
+        self.assertFalse(ok)
+        self.assertIn("not accounted for by its history", why)
         del ctx.evidence["built_at_utc"]
         self.assertIn("no build time", ei.usable(ctx)[1])
 

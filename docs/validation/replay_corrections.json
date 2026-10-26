@@ -1,0 +1,472 @@
+{
+ "generated_at_utc": "2026-10-26T02:10:46Z",
+ "ledger_tickets": 34,
+ "days": [
+  "2026-10-22",
+  "2026-10-23",
+  "2026-10-24",
+  "2026-10-25"
+ ],
+ "1a_recorded_legs": {
+  "distinct_legs": 65,
+  "severity_before_after": {
+   "LOW -> LOW": 51,
+   "MODERATE -> MODERATE": 14
+  },
+  "legs_whose_severity_changed": [],
+  "limit": "only legs that were RECORDED are stored with their cards: a leg the old rule rejected (two detectors of one role change adding to HIGH) was never recorded, so this replay can show that no recorded leg got stricter, not how many rejected legs would now be admitted"
+ },
+ "1b_todays_reviewed_cards": {
+  "cards": 47,
+  "admitted_before_after": {
+   "True -> True": 47
+  },
+  "legs_whose_admission_changed": [],
+  "note": "the cards were reviewed before the corrections; only the contradiction rule is re-applied here (a probability or flag the corrections also change is not re-derived)"
+ },
+ "2_leg_decision_quality": {
+  "settled_distinct_legs": 59,
+  "before_straight_bet_rubric": {
+   "BAD_DECISION / LOSS": 4,
+   "BAD_DECISION / WIN": 11,
+   "GOOD_DECISION / LOSS": 1,
+   "QUESTIONABLE_DECISION / LOSS": 14,
+   "QUESTIONABLE_DECISION / WIN": 29
+  },
+  "after_parlay_leg_rubric": {
+   "GOOD_DECISION / LOSS": 8,
+   "GOOD_DECISION / WIN": 27,
+   "QUESTIONABLE_DECISION / LOSS": 11,
+   "QUESTIONABLE_DECISION / WIN": 13
+  }
+ },
+ "3_loss_causes": {
+  "lost_legs_before": 19,
+  "before": {
+   "OUTCOME_WITHIN_ESTIMATE": 8,
+   "TOI_PROJECTION_ERROR": 4,
+   "UNKNOWN": 4,
+   "MODEL_CALIBRATION": 2,
+   "NORMAL_VARIANCE": 1
+  },
+  "lost_legs_after": 19,
+  "after": {
+   "NORMAL_VARIANCE": 6,
+   "TOI_PROJECTION_ERROR": 4,
+   "UNKNOWN": 4,
+   "OUTCOME_WITHIN_ESTIMATE": 3,
+   "MODEL_CALIBRATION": 2
+  },
+  "unknown_before": 4,
+  "unknown_after": 4,
+  "note": "the cause taxonomy reads the review's flags and the game facts, which did not change: specific causes (TOI_PROJECTION_ERROR, MODEL_CALIBRATION) and UNKNOWN are identical. The two 'chance' categories move because they depend on the decision label: a GOOD leg that lost to variance is NORMAL_VARIANCE (earned), a QUESTIONABLE leg that lost within its estimate is OUTCOME_WITHIN_ESTIMATE"
+ },
+ "4_ticket_probabilities": {
+  "tickets": 34,
+  "stored_without_a_probability": 27,
+  "mean_abs_change_from_the_product": 0.0048,
+  "largest_changes": [
+   {
+    "id": "P004BE0F9",
+    "date": "2026-10-25",
+    "quality": "GOOD",
+    "stored_combined": null,
+    "dependence_level_stored": "POSITIVE_NOT_QUANTIFIED",
+    "product_of_estimates": 0.3551,
+    "with_measured_lifts": 0.3703
+   },
+   {
+    "id": "PA0C64DF6",
+    "date": "2026-10-24",
+    "quality": "GOOD",
+    "stored_combined": null,
+    "dependence_level_stored": "POSITIVE_NOT_QUANTIFIED",
+    "product_of_estimates": 0.3299,
+    "with_measured_lifts": 0.344
+   },
+   {
+    "id": "PABB191BE",
+    "date": "2026-10-24",
+    "quality": "GOOD",
+    "stored_combined": null,
+    "dependence_level_stored": "POSITIVE_NOT_QUANTIFIED",
+    "product_of_estimates": 0.3235,
+    "with_measured_lifts": 0.3373
+   },
+   {
+    "id": "P15E261AF",
+    "date": "2026-10-22",
+    "quality": "GOOD",
+    "stored_combined": null,
+    "dependence_level_stored": "POSITIVE_NOT_QUANTIFIED",
+    "product_of_estimates": 0.3075,
+    "with_measured_lifts": 0.3206
+   },
+   {
+    "id": "P7306F3B6",
+    "date": "2026-10-22",
+    "quality": "GOOD",
+    "stored_combined": null,
+    "dependence_level_stored": "POSITIVE_NOT_QUANTIFIED",
+    "product_of_estimates": 0.3022,
+    "with_measured_lifts": 0.3151
+   }
+  ]
+ },
+ "5_portfolio_selection": {
+  "method": "the day's RECORDED legs are the pool (the full reviewed pool of earlier days was not stored); built once by pure rank order with the old contradiction rule, and once by the portfolio-aware order",
+  "days": {
+   "2026-10-22": {
+    "recorded_legs_available": 18,
+    "before": {
+     "n": 5,
+     "flagship": [
+      "Artemi Panarin",
+      "Jason Robertson",
+      "Matthew Tkachuk"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 9,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+       "tickets": 2,
+       "chance_it_fails": 0.296,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "LAK": 4,
+       "FLA": 3,
+       "DAL": 3
+      },
+      "game_exposure": {
+       "2026020159": 4,
+       "2026020158": 3,
+       "2026020161": 3
+      },
+      "expected_tickets_hit": 1.67,
+      "chance_no_ticket_hits": 0.2,
+      "chance_no_ticket_hits_range": [
+       0.19,
+       0.207
+      ],
+      "spread_inflation_from_shared_legs": 1.52,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 0
+     }
+    },
+    "after": {
+     "n": 5,
+     "flagship": [
+      "Artemi Panarin",
+      "Jason Robertson",
+      "Matthew Tkachuk"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 10,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+       "tickets": 2,
+       "chance_it_fails": 0.296,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "FLA": 4,
+       "LAK": 4,
+       "DAL": 3
+      },
+      "game_exposure": {
+       "2026020158": 4,
+       "2026020159": 4,
+       "2026020161": 3
+      },
+      "expected_tickets_hit": 1.63,
+      "chance_no_ticket_hits": 0.201,
+      "chance_no_ticket_hits_range": [
+       0.186,
+       0.201
+      ],
+      "spread_inflation_from_shared_legs": 1.48,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 0
+     }
+    },
+    "same_tickets": 1,
+    "tickets_only_before": 4,
+    "tickets_only_after": 4
+   },
+   "2026-10-23": {
+    "recorded_legs_available": 13,
+    "before": {
+     "n": 5,
+     "flagship": [
+      "Brandon Hagel",
+      "Connor Bedard",
+      "Cole Caufield"
+     ],
+     "qualities": {
+      "GOOD": 4,
+      "QUESTIONABLE": 1
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 8,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+       "tickets": 2,
+       "chance_it_fails": 0.232,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "TBL": 4,
+       "MTL": 4,
+       "CHI": 3
+      },
+      "game_exposure": {
+       "2026020167": 5,
+       "2026020166": 5
+      },
+      "expected_tickets_hit": 1.7,
+      "chance_no_ticket_hits": 0.207,
+      "chance_no_ticket_hits_range": [
+       0.19,
+       0.231
+      ],
+      "spread_inflation_from_shared_legs": 1.59,
+      "tickets_with_a_role_flagged_leg": 5,
+      "tickets_with_a_model_risk_leg": 2
+     }
+    },
+    "after": {
+     "n": 5,
+     "flagship": [
+      "Brandon Hagel",
+      "Connor Bedard",
+      "Cole Caufield"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 8,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+       "tickets": 2,
+       "chance_it_fails": 0.232,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "TBL": 4,
+       "MTL": 4,
+       "CHI": 3
+      },
+      "game_exposure": {
+       "2026020167": 5,
+       "2026020166": 5
+      },
+      "expected_tickets_hit": 1.69,
+      "chance_no_ticket_hits": 0.209,
+      "chance_no_ticket_hits_range": [
+       0.191,
+       0.237
+      ],
+      "spread_inflation_from_shared_legs": 1.58,
+      "tickets_with_a_role_flagged_leg": 5,
+      "tickets_with_a_model_risk_leg": 2
+     }
+    },
+    "same_tickets": 3,
+    "tickets_only_before": 2,
+    "tickets_only_after": 2
+   },
+   "2026-10-24": {
+    "recorded_legs_available": 22,
+    "before": {
+     "n": 5,
+     "flagship": [
+      "Brandon Hagel",
+      "Jack Hughes",
+      "Timo Meier"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 9,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -500",
+       "tickets": 2,
+       "chance_it_fails": 0.242,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "TBL": 4,
+       "NJD": 3,
+       "UTA": 3
+      },
+      "game_exposure": {
+       "2026020177": 5,
+       "2026020169": 3,
+       "2026020172": 2
+      },
+      "expected_tickets_hit": 1.79,
+      "chance_no_ticket_hits": 0.17,
+      "chance_no_ticket_hits_range": [
+       0.17,
+       0.18
+      ],
+      "spread_inflation_from_shared_legs": 1.53,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 4
+     }
+    },
+    "after": {
+     "n": 5,
+     "flagship": [
+      "Brandon Hagel",
+      "Jack Hughes",
+      "Timo Meier"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 9,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -500",
+       "tickets": 2,
+       "chance_it_fails": 0.242,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "UTA": 4,
+       "TBL": 3,
+       "NJD": 2
+      },
+      "game_exposure": {
+       "2026020177": 5,
+       "2026020169": 2,
+       "2026020172": 2
+      },
+      "expected_tickets_hit": 1.74,
+      "chance_no_ticket_hits": 0.175,
+      "chance_no_ticket_hits_range": [
+       0.171,
+       0.184
+      ],
+      "spread_inflation_from_shared_legs": 1.45,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 4
+     }
+    },
+    "same_tickets": 2,
+    "tickets_only_before": 3,
+    "tickets_only_after": 3
+   },
+   "2026-10-25": {
+    "recorded_legs_available": 12,
+    "before": {
+     "n": 5,
+     "flagship": [
+      "Kyle Connor",
+      "Jason Robertson",
+      "Cole Caufield"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 9,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Kyle Connor \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+       "tickets": 2,
+       "chance_it_fails": 0.201,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "DAL": 3,
+       "FLA": 3,
+       "NYI": 3
+      },
+      "game_exposure": {
+       "2026020181": 5,
+       "2026020182": 3,
+       "2026020180": 3
+      },
+      "expected_tickets_hit": 2.06,
+      "chance_no_ticket_hits": 0.136,
+      "chance_no_ticket_hits_range": [
+       0.133,
+       0.139
+      ],
+      "spread_inflation_from_shared_legs": 1.64,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 4
+     }
+    },
+    "after": {
+     "n": 5,
+     "flagship": [
+      "Kyle Connor",
+      "Jason Robertson",
+      "Cole Caufield"
+     ],
+     "qualities": {
+      "GOOD": 5
+     },
+     "portfolio": {
+      "tickets": 5,
+      "distinct_legs": 8,
+      "leg_slots": 15,
+      "most_reused_leg": {
+       "label": "Kyle Connor \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+       "tickets": 2,
+       "chance_it_fails": 0.201,
+       "expected_tickets_it_kills_if_it_fails": 2
+      },
+      "team_exposure": {
+       "FLA": 4,
+       "NYI": 3,
+       "WPG": 2
+      },
+      "game_exposure": {
+       "2026020181": 4,
+       "2026020180": 4,
+       "2026020182": 3
+      },
+      "expected_tickets_hit": 2.07,
+      "chance_no_ticket_hits": 0.135,
+      "chance_no_ticket_hits_range": [
+       0.127,
+       0.15
+      ],
+      "spread_inflation_from_shared_legs": 1.64,
+      "tickets_with_a_role_flagged_leg": 0,
+      "tickets_with_a_model_risk_leg": 4
+     }
+    },
+    "same_tickets": 1,
+    "tickets_only_before": 4,
+    "tickets_only_after": 4
+   }
+  }
+ }
+}

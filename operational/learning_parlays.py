@@ -25,7 +25,7 @@ from operational import eggy_intelligence as ei
 from research.real_market_parlay.engine import leg_decimal
 from operational.bet_labels import bet_label
 
-MIN_LEG_P = 0.55                 # an individually likely event (design choice; the pool's -150 floor means most legs sit between 55% and 70%)
+MIN_LEG_P = ei.LEG_FLOOR                 # an individually likely event (design choice; the pool's -150 floor means most legs sit between 55% and 70%)
 MIN_GOOD_WEAKEST = 0.62          # the weakest leg of a GOOD ticket
 MIN_FOURTH_P = 0.60
 POOL_LEGS = 14                   # the strongest eligible legs considered: keeps the search small and every constructed ticket made of the best of the day
@@ -55,8 +55,11 @@ def leg_ok(c: dict) -> tuple[bool, str]:
     leg = c.get("leg")
     if leg is not None and getattr(leg, "market_family", None) == "PLAYER_POINTS":                         # a points threshold is a live ingredient only where the out-of-time validation allows it
         k = int(getattr(leg, "threshold", 0) or 0)
-        if k not in ei.points_policy()["enabled"]:
+        pol = ei.points_policy()
+        if k not in pol["enabled"]:
             return False, f"points {k}+ is not validated for live use (docs/validation/points_thresholds.json)"
+        if k not in pol["actionable"]:
+            return False, f"points {k}+ is validated but RESEARCH ONLY: only {pol['cases_at_or_above_the_leg_floor'].get(k, 0)} validated predictions reach the {pol['leg_floor']:.0%} leg floor, so it cannot be a live leg"
     price_only_pass = c["action"] == "PASS" and card["kind"] == "PLAYER" and card["thesis"]["type"] == "PRICE_ABOVE_ESTIMATE"
     if c["action"] not in ("RECORD", "LOWER_PRIORITY") and not price_only_pass:
         return False, "the leg's own review passes"
@@ -207,58 +210,187 @@ def construct(cands: list[dict]) -> dict | None:
 
 
 # ------------------------------------------------------------------------------------------------ the day's tickets as a portfolio
-def portfolio_summary(tickets: list[dict], draws: int = 4000) -> dict:
-    """The day's tickets as ONE portfolio. `tickets` = [{'legs': [{'key','label','estimate','team','game_id','role_risk'}], 'probability': p}]. Reports the exposure a day carries (the same leg on several
-    tickets, the same team, the same game, legs carrying a counted role flag) and, by simulation over the legs' own estimates, how the number of tickets that hit is distributed: the expected number, the chance
-    that none hit, and how much shared legs widen the spread compared with the same tickets built from distinct legs. Legs are drawn independently (the corpus finds same-game shots legs independent; points legs
-    and a team result share a game, a modest dependence this simulation ignores and says so). Nothing here is a bet size or a price."""
+# ONE authoritative portfolio assessment. The ticket search (build) uses it to choose between similarly strong tickets, and the status and the postmortem report the SAME function over the recorded rows, so
+# the portfolio that selected the day's tickets and the portfolio shown afterwards are one piece of logic (`leg_view` builds a leg the same way from a candidate and from a stored row).
+SIMILAR_STRENGTH = 0.02          # weakest-leg estimates this close are not distinguishable by the engine's own declared calibration rule (docs/validation/points_thresholds.json: case-weighted mean band error <= 0.02)
+COV_RESOLUTION = 0.005           # a difference in how two tickets move together smaller than half a point of probability is below the noise of the leg estimates themselves
+ROLE_FAMILIES = ("TOI_ROLE", "PP_ROLE")
+MODEL_FAMILIES = ("MODEL_OVERCONFIDENCE", "PRODUCTION_BELOW_MODEL")
+
+
+def leg_risks(card: dict) -> dict:
+    """The two shared-uncertainty facts about a leg, from its review card: ROLE (a counted role / deployment family at MODERATE or worse: lineup uncertainty touches every leg built on that team's minutes) and
+    MODEL (the model's own reliability is in doubt for this leg: a counted overconfidence or production-below-model family, or calibration below HIGH: the same calibration failure can hit every ticket using the model there)."""
+    flags = ei.counted_flags((card.get("contradiction") or {}).get("flags") or [])
+    fams = {f["family"]: f["level"] for f in ei.families_of(flags)}
+    role = any(fams.get(f) in ("MODERATE", "HIGH", "SEVERE") for f in ROLE_FAMILIES)
+    model = any(fams.get(f) in ("MODERATE", "HIGH", "SEVERE") for f in MODEL_FAMILIES) or (card.get("calibration_confidence") or {}).get("level") != "HIGH"
+    return {"role_risk": bool(role), "model_risk": bool(model)}
+
+
+def leg_view(key: str, leg, estimate: float, card: dict) -> dict:
+    """A leg as the portfolio sees it. `leg` is a ParlayLeg or the dict of one (a stored row): the same fields, the same risk logic."""
+    g = (lambda n: leg.get(n)) if isinstance(leg, dict) else (lambda n: getattr(leg, n, None))
+    return {"key": key, "label": bet_label(g("participant_name"), g("market_family"), g("threshold"), g("american_price")), "estimate": float(estimate), "team": g("team"), "game_id": g("game_id"),
+            "market_family": g("market_family"), "threshold": g("threshold"), "player": None if g("market_family") == "MONEYLINE" else str(g("participant_id")), **leg_risks(card)}
+
+
+def view_of_candidates(p: dict) -> dict:
+    legs = [leg_view(c["key"], c["leg"], float(c["card"]["estimate_used"]), c["card"]) for c in p["cands"]]
+    return {"key": p["key"], "legs": legs, "probability": ticket_probability(legs)}
+
+
+def view_of_row(r) -> dict:
+    legs = [leg_view(l["key"], l["leg"], float(l["estimate"]), l.get("card") or {}) for l in json.loads(r["legs_json"])]
+    return {"key": r["idempotency_key"] if "idempotency_key" in r.keys() else r["parlay_id"], "legs": legs, "probability": ticket_probability(legs)}
+
+
+def _lift_of(a: dict, b: dict, which: str = "dependence_lift") -> tuple[float, bool]:
+    """(the measured lift of two legs of one game, whether it was measured). Different games: independent by assumption (1.0, True is NOT claimed: it is an assumption, reported as such by the caller)."""
+    from types import SimpleNamespace
+    t = pair_type(SimpleNamespace(market_family=a.get("market_family"), team=a.get("team")), SimpleNamespace(market_family=b.get("market_family"), team=b.get("team")))
+    row = dependence_lifts().get(t) if t else None
+    if not row or not row.get("usable") or row.get("dependence_lift") is None:
+        return 1.0, False
+    if which == "dependence_lift":
+        return float(row["dependence_lift"]), True
+    ci = row.get("ci95") or [row["dependence_lift"]] * 2
+    return float(ci[0] if which == "low" else ci[1]), True
+
+
+def _same_game_pairs(legs: list[dict]):
+    for a, b in itertools.combinations(legs, 2):
+        if a.get("game_id") is not None and str(a["game_id"]) == str(b.get("game_id")):
+            yield a, b
+
+
+def ticket_probability(legs: list[dict], which: str = "dependence_lift") -> float:
+    """The legs' estimates multiplied, times the measured pairwise lift of every same-game pair (an approximation for three legs of one game: only pairwise evidence exists). Different games: independent by assumption."""
+    p = 1.0
+    for l in legs:
+        p *= float(l["estimate"])
+    for a, b in _same_game_pairs(legs):
+        p *= _lift_of(a, b, which)[0]
+    return max(0.0, min(1.0, p))
+
+
+def joint_probability(t1: dict, t2: dict) -> float:
+    """P(both tickets hit): the union of their legs (a shared leg counts once) with the same measured lifts. The covariance of two tickets is this minus the product of their probabilities."""
+    union = {l["key"]: l for l in t1["legs"]}
+    union.update({l["key"]: l for l in t2["legs"]})
+    j = ticket_probability(list(union.values()))
+    return max(min(j, t1["probability"], t2["probability"]), t1["probability"] + t2["probability"] - 1.0, 0.0)
+
+
+def _game_loadings(legs: list[dict], which: str) -> dict:
+    """For one game's legs, a loading per leg on a shared game state s = +-1 (probability 1/2 each): P(win | s) = p (1 + delta s). Marginals are exact and two legs hit together p_i p_j (1 + delta_i delta_j), so the
+    pair's measured lift is reproduced exactly; three or more legs reproduce the pairwise lifts approximately (least squares). Only pairwise lifts exist: nothing about triples is claimed."""
+    n = len(legs)
+    c = [[0.0] * n for _ in range(n)]
+    for i, j in itertools.combinations(range(n), 2):
+        c[i][j] = c[j][i] = _lift_of(legs[i], legs[j], which)[0] - 1.0
+    d = [0.1] + [0.1 * (1.0 if c[0][i] >= 0 else -1.0) for i in range(1, n)]          # signs from the first leg's pairs: a negative lift needs opposite loadings
+    for _ in range(400):
+        g = [sum(2 * (d[i] * d[j] - c[i][j]) * d[j] for j in range(n) if j != i) for i in range(n)]
+        d = [d[i] - 0.2 * g[i] for i in range(n)]
+    return {legs[i]["key"]: max(-min(1.0, 1.0 / max(float(legs[i]["estimate"]), 1e-9) - 1.0), min(min(1.0, 1.0 / max(float(legs[i]["estimate"]), 1e-9) - 1.0), d[i])) for i in range(n)}
+
+
+def simulate_tickets_hit(tickets: list[dict], which: str = "dependence_lift", draws: int = 4000, seed: int = 20261026) -> list[int]:
     import random
+    legs: dict = {}
+    for t in tickets:
+        for l in t["legs"]:
+            legs.setdefault(l["key"], l)
+    games: dict = {}
+    for l in legs.values():
+        games.setdefault(str(l.get("game_id")), []).append(l)
+    load = {}
+    for g, ls in games.items():
+        if len(ls) >= 2 and g != "None":
+            load.update(_game_loadings(ls, which))
+    rng = random.Random(seed)
+    out = []
+    for _ in range(draws):
+        state = {g: (1 if rng.random() < 0.5 else -1) for g in games}
+        win = {}
+        for k, l in legs.items():
+            p = float(l["estimate"]) * (1.0 + load.get(k, 0.0) * state[str(l.get("game_id"))])
+            win[k] = rng.random() < p
+        out.append(sum(all(win[l["key"]] for l in t["legs"]) for t in tickets))
+    return out
+
+
+def portfolio_summary(tickets: list[dict], draws: int = 4000) -> dict:
+    """The day's tickets as ONE portfolio. `tickets` = [{'key','probability','legs': [leg_view]}]. Reports what the day concentrates (the same leg on several tickets, the same player, team and game, legs carrying
+    role or model uncertainty) and, by simulation that RESPECTS the measured same-game dependence (docs/validation/dependence_lift.json; cross-game legs are independent by assumption), how many tickets hit: the
+    expected number, the chance none hit (with the range it takes when the measured lifts sit at either end of their 95% interval), and how much shared legs and dependence widen the spread. Nothing here is a bet
+    size or a price."""
     from collections import Counter as C
-    legs = {}
+    if not tickets:
+        return {"tickets": 0}
+    legs: dict = {}
     for t in tickets:
         for l in t["legs"]:
             legs.setdefault(l["key"], {**l, "tickets": 0})["tickets"] += 1
-    if not tickets:
-        return {"tickets": 0}
     top = max(legs.values(), key=lambda l: l["tickets"])
-    teams, games = C(), C()
+    teams, games, players = C(), C(), C()
     for t in tickets:
         for team in {str(l.get("team")) for l in t["legs"] if l.get("team")}:
             teams[team] += 1
         for g in {str(l.get("game_id")) for l in t["legs"] if l.get("game_id") is not None}:
             games[g] += 1
-    rng = random.Random(20261026)
-    hits = []
-    keys = list(legs)
-    for _ in range(draws):
-        win = {k: rng.random() < legs[k]["estimate"] for k in keys}
-        hits.append(sum(all(win[l["key"]] for l in t["legs"]) for t in tickets))
+        for pl in {str(l.get("player")) for l in t["legs"] if l.get("player")}:
+            players[pl] += 1
+    hits = sorted(simulate_tickets_hit(tickets, draws=draws))
+    lo = simulate_tickets_hit(tickets, "low", draws=draws)
+    hi = simulate_tickets_hit(tickets, "high", draws=draws)
+    none = lambda h: sum(1 for x in h if x == 0) / len(h)
     mean = sum(hits) / draws
     var = sum((h - mean) ** 2 for h in hits) / draws
     p_t = [float(t["probability"]) for t in tickets]
     indep_var = sum(p * (1 - p) for p in p_t)
-    hits.sort()
+    pairs_total = len(list(_same_game_pairs(list(legs.values()))))
+    unmeasured = sum(1 for a, b in _same_game_pairs(list(legs.values())) if not _lift_of(a, b)[1])
+    none_range = sorted((round(none(lo), 3), round(none(hits), 3), round(none(hi), 3)))
     return {"tickets": len(tickets), "distinct_legs": len(legs), "leg_slots": sum(len(t["legs"]) for t in tickets),
             "most_reused_leg": {"label": top["label"], "tickets": top["tickets"], "chance_it_fails": round(1 - top["estimate"], 3), "expected_tickets_it_kills_if_it_fails": top["tickets"]},
-            "team_exposure": dict(teams.most_common(3)), "game_exposure": dict(games.most_common(3)),
+            "team_exposure": dict(teams.most_common(3)), "game_exposure": dict(games.most_common(3)), "player_exposure": dict(players.most_common(3)),
             "tickets_with_a_role_flagged_leg": sum(1 for t in tickets if any(l.get("role_risk") for l in t["legs"])),
-            "expected_tickets_hit": round(sum(p_t), 2), "simulated_expected_tickets_hit": round(mean, 2), "chance_no_ticket_hits": round(sum(1 for h in hits if h == 0) / draws, 3),
+            "tickets_with_a_model_risk_leg": sum(1 for t in tickets if any(l.get("model_risk") for l in t["legs"])),
+            "expected_tickets_hit": round(sum(p_t), 2), "simulated_expected_tickets_hit": round(mean, 2), "chance_no_ticket_hits": round(none(hits), 3), "chance_no_ticket_hits_range": [none_range[0], none_range[-1]],
             "tickets_hit_10th_to_90th_percentile": [hits[int(0.1 * draws)], hits[int(0.9 * draws)]],
             "spread_inflation_from_shared_legs": None if indep_var <= 0 else round(var / indep_var, 2),
-            "note": "legs drawn independently from their own estimates; shared legs widen the spread of the day's result (inflation above 1.0); a diversified day is one with inflation near 1.0"}
+            "same_game_pairs": {"total": pairs_total, "without_a_measured_lift": unmeasured},
+            "note": "cross-game legs are independent by assumption; same-game legs follow the measured pairwise lifts (docs/validation/dependence_lift.json), an approximation where three legs share a game; a diversified day has inflation near 1.0"}
+
+
+assess_portfolio = portfolio_summary
 
 
 def portfolio_from_rows(rows: list[dict]) -> dict:
     """The same summary from recorded ledger rows (`parlays` table rows with legs_json)."""
-    tickets = []
-    for r in rows:
-        legs = json.loads(r["legs_json"])
-        tickets.append({"probability": r["combined_probability"] if r["combined_probability"] is not None else _product([float(l["estimate"]) for l in legs]),
-                        "legs": [{"key": l["key"], "label": bet_label(l["leg"].get("participant_name"), l["leg"].get("market_family"), l["leg"].get("threshold"), l["leg"].get("american_price")),
-                                  "estimate": float(l["estimate"]), "team": l["leg"].get("team"), "game_id": l["leg"].get("game_id"),
-                                  "role_risk": any(f["name"] in ("TOI_DROP", "ROLE_ASSUMPTION", "PP_ROLE_LOST", "POWER_PLAY_ASSUMPTION", "POSTMORTEM_ROLE_CAUTION") and f["level"] in ("MODERATE", "HIGH", "SEVERE")
-                                                   for f in (l["card"].get("contradiction") or {}).get("flags", []))} for l in legs]})
-    return portfolio_summary(tickets)
+    return portfolio_summary([view_of_row(r) for r in rows])
+
+
+def concentration_key(view: dict, kept: list[dict]) -> tuple:
+    """How much a candidate ticket adds to what the day already concentrates, most important first; used ONLY to choose between tickets of similar strength (see build). Lower is more diversified.
+    (1) legs it shares with kept tickets (one failure kills both); (2) how much it moves WITH the kept tickets: the covariance of the tickets' results at the measured lifts, in COV_RESOLUTION steps; (3) legs in a game
+    the day already uses; (4) legs of a team the day already uses; (5) role-uncertain legs on a team that already carries role uncertainty; (6) model-uncertain legs of a market the day already trusts the model on."""
+    if not kept:
+        return (0, 0, 0, 0, 0, 0)
+    kept_keys = [{l["key"] for l in k["legs"]} for k in kept]
+    shared = sum(len({l["key"] for l in view["legs"]} & ks) for ks in kept_keys)
+    cov = sum(joint_probability(view, k) - view["probability"] * k["probability"] for k in kept)
+    kl = [l for k in kept for l in k["legs"]]
+    k_games = {str(l["game_id"]) for l in kl if l.get("game_id") is not None}
+    k_teams = {str(l["team"]) for l in kl if l.get("team")}
+    k_role_teams = {str(l["team"]) for l in kl if l.get("role_risk") and l.get("team")}
+    k_model_mkts = {(l.get("market_family"), l.get("threshold")) for l in kl if l.get("model_risk")}
+    own = [l for l in view["legs"] if l["key"] not in set().union(*kept_keys)]
+    return (shared, int(max(cov, 0.0) / COV_RESOLUTION), sum(1 for l in own if str(l.get("game_id")) in k_games), sum(1 for l in own if str(l.get("team")) in k_teams),
+            sum(1 for l in own if l.get("role_risk") and str(l.get("team")) in k_role_teams), sum(1 for l in own if l.get("model_risk") and (l.get("market_family"), l.get("threshold")) in k_model_mkts))
+
 
 def _product(xs) -> float:
     p = 1.0
@@ -273,7 +405,13 @@ def rank_key(p: dict) -> tuple:
 
 
 def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX_PARLAYS_PER_DAY) -> dict:
-    """Up to `slots` parlays from the day's reviewed candidates. `already` are today's recorded parlays ({'key','leg_keys'}) whose legs count against the reuse cap. Fewer than `slots` is a correct answer."""
+    """Up to `slots` parlays from the day's reviewed candidates. `already` are today's recorded parlays ({'key','leg_keys', and 'view' when known}) whose legs count against the reuse cap. Fewer than `slots` is a
+    correct answer.
+
+    SELECTION IS PORTFOLIO-AWARE. The tickets are not taken in rank order: at each step the best remaining ticket sets the bar, every ticket of the same quality and length whose weakest leg is not
+    distinguishably weaker (within SIMILAR_STRENGTH) is 'similarly strong', and among those the one that adds the LEAST concentration to what is already kept is taken (concentration_key: shared legs, how the tickets
+    move together at the measured lifts, repeated games, teams, role uncertainty and model uncertainty), rank order breaking ties. A clearly stronger ticket is never passed over for diversification, and no ticket
+    that the old order would not have admitted is admitted: the candidate set, the quality gate, the reuse cap of 2 and the two-leg difference are unchanged."""
     ok, rejected = [], Counter()
     for c in cands:
         good, why = leg_ok(c)
@@ -297,21 +435,30 @@ def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX
     built.sort(key=rank_key)
     used: Counter = Counter()
     kept_sets = [set(a["leg_keys"]) for a in already or []]
+    kept_views = [a["view"] for a in already or [] if a.get("view")]
     for a in already or []:
         used.update(a["leg_keys"])
     have = {a["key"] for a in already or []}
     chosen = []
-    for p in built:
-        if len(chosen) + len(kept_sets) >= slots or p["action"] != "RECORD" or p["key"] in have:
-            continue
-        ks = {c["key"] for c in p["cands"]}
-        if any(used[k] >= LEG_REUSE for k in ks) or any(len(ks & other) >= min(len(ks), len(other)) - 1 for other in kept_sets):
-            continue                                                         # a leg is used at most twice, and two tickets differ by at least two legs
-        chosen.append(p)
+    remaining = [p for p in built if p["action"] == "RECORD" and p["key"] not in have]
+    views = {p["key"]: view_of_candidates(p) for p in remaining}
+    while len(chosen) + len(kept_sets) < slots and remaining:                                  # the slot arithmetic is the one the earlier builder used, unchanged: this pass changes the ORDER, not the volume
+        allowed = [p for p in remaining if not any(used[c["key"]] >= LEG_REUSE for c in p["cands"])
+                   and not any(len({c["key"] for c in p["cands"]} & other) >= min(p["n_legs"], len(other)) - 1 for other in kept_sets)]
+        if not allowed:
+            break
+        lead = allowed[0]
+        similar = [p for p in allowed if p["construction_quality"] == lead["construction_quality"] and p["n_legs"] == lead["n_legs"]
+                   and p["weakest_leg"]["estimate"] >= lead["weakest_leg"]["estimate"] - SIMILAR_STRENGTH]
+        pick = min(similar, key=lambda p: (concentration_key(views[p["key"]], kept_views), rank_key(p)))
+        ks = {c["key"] for c in pick["cands"]}
+        chosen.append(pick)
         kept_sets.append(ks)
+        kept_views.append(views[pick["key"]])
         used.update(ks)
-    return {"parlays": chosen, "portfolio_of_new_tickets": portfolio_summary([{"probability": p["ranking_probability"], "legs": [{"key": c["key"], "label": bet_label(c["leg"].participant_name, c["leg"].market_family, c["leg"].threshold, c["leg"].american_price), "estimate": float(c["card"]["estimate_used"]),
-                                                                                                                                   "team": c["leg"].team, "game_id": c["leg"].game_id, "role_risk": False} for c in p["cands"]]} for p in chosen]), "eligible_legs": len(ok), "legs_not_eligible": dict(rejected), "constructed": len(built), "pool": len(pool)}
+        remaining = [p for p in remaining if p["key"] != pick["key"]]
+    return {"parlays": chosen, "portfolio": portfolio_summary(kept_views), "portfolio_of_new_tickets": portfolio_summary([views[p["key"]] for p in chosen]),
+            "eligible_legs": len(ok), "legs_not_eligible": dict(rejected), "constructed": len(built), "pool": len(pool)}
 
 
 def flagship(parlays: list[dict]) -> dict | None:

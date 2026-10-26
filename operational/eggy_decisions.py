@@ -26,7 +26,7 @@ from collections import Counter
 
 from operational import eggy_intelligence as ei
 
-ASSESS_VERSION = 2              # bump when the assessment logic changes: a stored review of an older version is rebuilt, never reused
+ASSESS_VERSION = 3              # bump when the assessment logic changes: a stored review of an older version is rebuilt, never reused
 SURPRISE_FLOOR = 0.10          # a loss the estimate called less than 10% likely is not explained by ordinary variance
 TOI_HELD = 2.0                 # minutes below the expectation that still count as the expected role
 TOI_FAILED = 3.0               # minutes below expectation
@@ -60,6 +60,49 @@ def decision_quality(card: dict) -> dict:
     if action == "RECORD" and contr in ("LOW", "MODERATE") and cal in ("HIGH", "MEDIUM") and thesis == "MODEL_SEES_VALUE":
         return {"label": GOOD, "reasons": [f"a {thesis.lower().replace('_', ' ')} thesis that survived scrutiny (contradiction {contr}, calibration {cal})"]}
     return {"label": QUESTIONABLE, "reasons": [f"{(card.get('action') or {}).get('decision', '?').replace('_', ' ').lower()}: " + "; ".join((card.get("action") or {}).get("reasons") or [f"contradiction {contr}, calibration {cal}"])]}
+
+
+def parlay_leg_quality(card: dict) -> dict:
+    """The quality of a PARLAY INGREDIENT's decision, judged from its review card alone (never from the result, never from the ticket it sits on). A parlay leg is not a straight bet: it does not need a
+    value thesis. It is a likely, well-calibrated, role-supported event. The rubric uses only constants the builder already uses:
+      INSUFFICIENT  calibration INSUFFICIENT or data completeness under 0.5: the decision cannot be judged;
+      BAD           the leg was one the builder's own gate refuses (a counted contradiction of HIGH or worse, calibration below MEDIUM, an estimate under the 55% leg floor, or a review PASS that is not merely a price
+                    judgement): the process admitted what it should not have;
+      GOOD          an estimate at or above the weakest leg of a GOOD ticket (62%), calibration HIGH or MEDIUM, data complete enough, and NO counted contradiction (role, hockey context, model trust and
+                    data quality, each causal fact counted once);
+      QUESTIONABLE  admitted, but with a counted doubt (MODERATE) or an estimate between the 55% floor and 62%.
+    Price is reported, not graded: no combined price exists, and a straight price edge is not what makes a parlay leg sound. A moneyline leg's market evidence enters through the counted contradiction
+    (MODEL_SAYS_OVERPRICED is counted; a model that merely likes the side more than the market is not). Outcome is kept apart: this label never reads the result."""
+    from operational import learning_parlays as lp
+    if not card or card.get("kind") == "ERROR":
+        return {"label": INSUFFICIENT, "basis": "PARLAY_LEG", "reasons": ["there is no review of this leg"]}
+    cal = (card.get("calibration_confidence") or {}).get("level")
+    comp = (card.get("data_completeness") or {}).get("fraction", 0.0)
+    est = card.get("estimate_used")
+    contr = ei.counted_contradiction(card)
+    action = (card.get("action") or {}).get("decision")
+    price_only_pass = action == "PASS" and card.get("kind") == "PLAYER" and (card.get("thesis") or {}).get("type") == "PRICE_ABOVE_ESTIMATE"
+    if cal == "INSUFFICIENT" or comp < 0.5 or est is None:
+        return {"label": INSUFFICIENT, "basis": "PARLAY_LEG", "reasons": [f"calibration {cal}, data completeness {comp:.0%}: not enough to judge the decision"]}
+    bad = []
+    if contr in ("HIGH", "SEVERE"):
+        bad.append(f"a counted contradiction of {contr}")
+    if cal not in ("HIGH", "MEDIUM"):
+        bad.append(f"calibration {cal}")
+    if float(est) < lp.MIN_LEG_P:
+        bad.append(f"an estimate of {float(est):.0%}, under the {lp.MIN_LEG_P:.0%} a parlay leg needs")
+    if action == "PASS" and not price_only_pass:
+        bad.append("the review itself passed it")
+    if bad:
+        return {"label": BAD, "basis": "PARLAY_LEG", "reasons": bad}
+    if float(est) >= lp.MIN_GOOD_WEAKEST and contr == "LOW":
+        return {"label": GOOD, "basis": "PARLAY_LEG", "reasons": [f"a {float(est):.0%} estimate, calibration {cal}, no counted contradiction, data {comp:.0%} complete"]}
+    why = []
+    if contr == "MODERATE":
+        why.append("a counted MODERATE contradiction (" + ", ".join(f["family"] for f in ei.families_of(ei.counted_flags((card.get("contradiction") or {}).get("flags") or [])) if f["level"] != "LOW") + ")")
+    if float(est) < lp.MIN_GOOD_WEAKEST:
+        why.append(f"an estimate of {float(est):.0%}, between the {lp.MIN_LEG_P:.0%} floor and {lp.MIN_GOOD_WEAKEST:.0%}")
+    return {"label": QUESTIONABLE, "basis": "PARLAY_LEG", "reasons": why or ["admitted with doubts"]}
 
 
 # ------------------------------------------------------------------------------------------------ facts about what happened
@@ -280,10 +323,10 @@ def outcome_cause(card: dict, claims: list[dict], est) -> tuple[str, str]:
     return "UNKNOWN", "the facts held but the loss was rarer than the estimate allowed, so chance alone is not an adequate explanation: investigate"
 
 
-def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False) -> dict:
+def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False, parlay_leg: bool = False) -> dict:
     """Everything the postmortem says about one bet's decision: quality, claims checked, the lesson, and the category/action when the loss is not earned variance. `integrity_defect` is the loss classifier's
     verdict that the bet's data was defective (stale data treated as fresh, an identity failure, a pipeline failure): such a loss is never earned variance."""
-    q = decision_quality(card or {})
+    q = parlay_leg_quality(card or {}) if parlay_leg else decision_quality(card or {})
     claims = review_claims(card or {}, bet, facts) if card else []
     est = (card or {}).get("estimate_used")
     outcome = bet.get("result_status")

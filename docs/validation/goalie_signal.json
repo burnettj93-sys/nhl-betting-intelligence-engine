@@ -1,0 +1,87 @@
+{
+ "method": "python3 deploy/validate_goalie_signal.py --out docs/validation/goalie_signal.json",
+ "rule_declared_before_the_numbers": {
+  "integrate_only_if": "the 95% bootstrap interval of the paired log-loss improvement is entirely above zero",
+  "bootstrap_draws": 2000
+ },
+ "rating": {
+  "half_life_starts": 25.0,
+  "shrink_starts": 10.0,
+  "min_prior_starts": 5
+ },
+ "games_with_both_starters": 5426,
+ "A_persistence": {
+  "question": "does a goalie's pre-game rating predict his next start's goals saved above expected?",
+  "starts": 10209,
+  "slope": 0.3147,
+  "ci95": [
+   0.1797,
+   0.4383
+  ],
+  "correlation": 0.0392,
+  "mean_gsax_per_start": 0.1152,
+  "sd_gsax_per_start": 1.612,
+  "verdict": "PERSISTENT (rating has information)"
+ },
+ "B_team_win_probability": {
+  "question": "does home-minus-away goalie rating add to the production team model's logit (seasons 2024 and 2025, each fitted on earlier seasons only)?",
+  "actual_starter": {
+   "improvement": -0.00041,
+   "ci_low": -0.00102,
+   "ci_high": 0.00024,
+   "n": 2427,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_goalie_diff_last_fit": 0.1129
+  },
+  "previous_starter": {
+   "improvement": 0.00011,
+   "ci_low": -0.00131,
+   "ci_high": 0.00148,
+   "n": 2427,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_goalie_diff_last_fit": 0.3185
+  }
+ },
+ "C_player_points": {
+  "question": "does the OPPOSING starter's rating add to the product model's points probability (fitted before 2026-02-01, scored after)?",
+  "points>=1_actual_opposing_starter": {
+   "improvement": 0.0001,
+   "ci_low": -4e-05,
+   "ci_high": 0.00025,
+   "n": 21951,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_opposing_goalie_rating": -0.1309,
+   "fit_rows": 30938
+  },
+  "points>=1_previous_opposing_starter": {
+   "improvement": 3e-05,
+   "ci_low": -0.00015,
+   "ci_high": 0.0002,
+   "n": 21951,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_opposing_goalie_rating": 0.1587,
+   "fit_rows": 30938
+  },
+  "points>=2_actual_opposing_starter": {
+   "improvement": -2e-05,
+   "ci_low": -4e-05,
+   "ci_high": 1e-05,
+   "n": 21951,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_opposing_goalie_rating": 0.0378,
+   "fit_rows": 30938
+  },
+  "points>=2_previous_opposing_starter": {
+   "improvement": -0.00011,
+   "ci_low": -0.00029,
+   "ci_high": 8e-05,
+   "n": 21951,
+   "verdict": "REJECT: no demonstrated improvement out of time",
+   "coefficient_on_opposing_goalie_rating": 0.2772,
+   "fit_rows": 30938
+  }
+ },
+ "integrated": [],
+ "decision": "REJECT: goalie information adds nothing demonstrable to team win probability or player points out of time; it stays out of the probabilities",
+ "elapsed_seconds": 2
+}

@@ -863,9 +863,9 @@ def learning_experiment_panel(doc: dict | None) -> None:
     if pf.get("tickets"):
         ml = pf.get("most_reused_leg") or {}
         st.caption(f"**Today's portfolio:** {pf['tickets']} tickets built from {pf['distinct_legs']} distinct legs ({pf['leg_slots']} leg slots) · expected tickets hit {pf['expected_tickets_hit']} "
-                   f"(10th to 90th percentile {pf['tickets_hit_10th_to_90th_percentile'][0]} to {pf['tickets_hit_10th_to_90th_percentile'][1]}) · chance no ticket hits {_lx_pct(pf.get('chance_no_ticket_hits'), 0)} · "
+                   f"(10th to 90th percentile {pf['tickets_hit_10th_to_90th_percentile'][0]} to {pf['tickets_hit_10th_to_90th_percentile'][1]}) · chance no ticket hits {_lx_pct(pf.get('chance_no_ticket_hits'), 0)}{(' (range ' + _lx_pct(pf['chance_no_ticket_hits_range'][0], 0) + ' to ' + _lx_pct(pf['chance_no_ticket_hits_range'][1], 0) + ' with the measured same-game dependence at its interval ends)') if pf.get('chance_no_ticket_hits_range') else ''} · "
                    f"shared legs widen the day's spread {pf.get('spread_inflation_from_shared_legs')}x (1.0 = fully diversified) · most reused: {esc(ml.get('label', ''))} on {ml.get('tickets')} tickets · "
-                   f"{pf.get('tickets_with_a_role_flagged_leg', 0)} ticket(s) carry a role-flagged leg.")
+                   f"{pf.get('tickets_with_a_role_flagged_leg', 0)} ticket(s) carry a role-uncertain leg and {pf.get('tickets_with_a_model_risk_leg', 0)} a model-uncertain leg · the same assessment chose between similarly strong tickets (shared legs, covariance, repeated games, teams and role/model risk).")
     fl = doc.get("eggy_flagship")
     if fl:
         st.markdown("**Eggy's flagship parlay, from the learning pool** (this is Eggy's official output; UNPRICED)")
@@ -896,6 +896,13 @@ def learning_experiment_panel(doc: dict | None) -> None:
                 for day_, v in sorted((les.get("by_date") or {}).items(), reverse=True):
                     st.markdown(f"**{day_}**: {v['tickets']} parlays, {v['hit']} hit / {v['miss']} missed" + (f" · repeated killer legs: {', '.join(v['repeated_killer_legs'])}" if v.get("repeated_killer_legs") else "")
                                 + (f" · weakest legs that failed: {', '.join(v['weakest_legs_that_failed'])}" if v.get("weakest_legs_that_failed") else ""))
+                if les.get("lesson_state"):
+                    sm = les.get("lesson_state_summary") or {}
+                    st.markdown(f"**Lesson states** · {sm.get('ACTIONABLE', 0)} actionable now · {sm.get('ACCUMULATING', 0)} accumulating evidence · {sm.get('REPORT_ONLY', 0)} report only. "
+                                "A lesson changes tomorrow's review only when it is actionable (enough evidence); the rest are measured with their threshold written down, and a rule or policy change is only ever a proposal to the owner.")
+                    st.dataframe([{"Lesson": x["name"], "State": _words(x["state"]), "Evidence": ", ".join(f"{k} {v}" for k, v in (x.get("evidence") or {}).items() if v is not None and not isinstance(v, (list, dict)))[:110],
+                                   "Needed": (f"n >= {x['threshold']['n_required']}" + (f", |z| >= {x['threshold']['abs_z_required']}" if x['threshold'].get('abs_z_required') else "")) if x.get("threshold") else "\u2014",
+                                   "Read by": (x.get("consumed_by") or "").split(" -> ")[-1][:60] or "\u2014"} for x in les["lesson_state"]], hide_index=True, width="stretch")
                 st.caption(les.get("note") or "")
     hist = st.expander("Earlier straight-bet experiment (retired 2026-10-22; history only: 10 bets a day, $10 stake, -150 or better)") if parlay_mode else contextlib.nullcontext()
     pm = doc.get("postmortem") or {}

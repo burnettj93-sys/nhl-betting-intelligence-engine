@@ -18,11 +18,12 @@ from operational import state_paths
 
 LEDGER_NAME = "prospective_moneyline.jsonl"
 MIN_GAMES = 100                      # an overall verdict needs this many finished games
-MIN_SIDES = 100                      # a gap band needs this many finished sides
+MIN_GAMES_PER_BAND = 100             # a gap band needs this many finished GAMES (independent observations; the threshold is unchanged, the count is now of games, not of mirrored sides)
 MAX_NEW_DATES_PER_CALL = 4           # building a team state costs seconds: a long backlog is worked off over several calls
 Z = 2.0
-BANDS = (("model BELOW the market by 6+ pts", -9.0, -0.06), ("model below the market by 3 to 6 pts", -0.06, -0.03), ("within 3 pts of the market", -0.03, 0.03),
-         ("model above the market by 3 to 6 pts", 0.03, 0.06), ("model ABOVE the market by 6+ pts", 0.06, 9.0))
+# INDEPENDENT OBSERVATIONS. One game is ONE observation: its two sides are the same event seen from both ends (when the home side wins the away side loses), so counting both sides would double the apparent sample
+# and report the same fact twice in a band and its mirror. Each game is oriented to the side the model likes MORE than the market (the side whose gap is positive) and falls in one band by how much more.
+BANDS = (("within 3 pts of the market", 0.0, 0.03), ("model likes a side 3 to 6 pts more than the market", 0.03, 0.06), ("model likes a side 6+ pts more than the market", 0.06, 9.0))
 
 
 def _ll(p: float, y: int) -> float:
@@ -107,31 +108,32 @@ def summarise(rows: list[dict]) -> dict:
                 "home_win_rate": round(sum(r["home_won"] for r in rows) / n, 3)})
     bands = {}
     for name, lo, hi in BANDS:
-        sides = []
+        sides = []                                                            # one entry per GAME: the side the model likes more than the market
         for r in rows:
-            for p_h, p_m, y in ((r["hockey_home"], r["market_home"], r["home_won"]), (1 - r["hockey_home"], 1 - r["market_home"], 1 - r["home_won"])):
-                if lo <= p_h - p_m < hi:
-                    sides.append((p_h, p_m, y))
+            gap = r["hockey_home"] - r["market_home"]
+            p_h, p_m, y = (r["hockey_home"], r["market_home"], r["home_won"]) if gap >= 0 else (1 - r["hockey_home"], 1 - r["market_home"], 1 - r["home_won"])
+            if lo <= abs(gap) < hi:
+                sides.append((p_h, p_m, y))
         k = len(sides)
         if not k:
-            bands[name] = {"sides": 0, "state": "INSUFFICIENT_EVIDENCE"}
+            bands[name] = {"games": 0, "state": "INSUFFICIENT_EVIDENCE"}
             continue
         var = sum(p_m * (1 - p_m) for _, p_m, _ in sides)
         zz = (sum(y for *_, y in sides) - sum(p_m for _, p_m, _ in sides)) / math.sqrt(var) if var else None
         zh = (sum(y for *_, y in sides) - sum(p_h for p_h, _, _ in sides)) / math.sqrt(sum(p_h * (1 - p_h) for p_h, _, _ in sides)) if sides else None
-        up = lo >= 0
-        if name == "within 3 pts of the market":
+        if lo == 0.0:
             state = "MODEL_AND_MARKET_AGREE"
-        elif k < MIN_SIDES or zz is None or zh is None:
+        elif k < MIN_GAMES_PER_BAND or zz is None or zh is None:
             state = "INSUFFICIENT_EVIDENCE"
-        elif (up and zz >= Z) or (not up and zz <= -Z):
-            state = "DISAGREEMENT_HAS_SIGNAL"                                  # the side the model liked more won MORE than the market said (or the one it liked less won LESS)
-        elif (up and zh <= -Z) or (not up and zh >= Z):
-            state = "DISAGREEMENT_IS_OVERCONFIDENCE"                           # the model's number was not borne out: the side won about as often as the market said, far less (or more) than the model said
+        elif zz >= Z:
+            state = "DISAGREEMENT_HAS_SIGNAL"                                  # the side the model liked more won MORE than the market said
+        elif zh <= -Z:
+            state = "DISAGREEMENT_IS_OVERCONFIDENCE"                           # the model's number was not borne out: the side won about as often as the market said, far less than the model said
         else:
             state = "INSUFFICIENT_EVIDENCE"
-        bands[name] = {"sides": k, "mean_hockey": round(sum(p_h for p_h, *_ in sides) / k, 4), "mean_market": round(sum(p_m for _, p_m, _ in sides) / k, 4), "observed_win_rate": round(sum(y for *_, y in sides) / k, 4),
-                       "z_wins_vs_market_expectation": None if zz is None else round(zz, 2), "z_wins_vs_hockey_expectation": None if zh is None else round(zh, 2), "state": state}
+        bands[name] = {"games": k, "games_needed": MIN_GAMES_PER_BAND, "mean_hockey": round(sum(p_h for p_h, *_ in sides) / k, 4), "mean_market": round(sum(p_m for _, p_m, _ in sides) / k, 4),
+                       "observed_win_rate": round(sum(y for *_, y in sides) / k, 4), "z_wins_vs_market_expectation": None if zz is None else round(zz, 2),
+                       "z_wins_vs_hockey_expectation": None if zh is None else round(zh, 2), "state": state}
     out["by_gap_band"] = bands
     if n < MIN_GAMES:
         out["state"] = "INSUFFICIENT_EVIDENCE"
@@ -147,8 +149,8 @@ def summarise(rows: list[dict]) -> dict:
 
 
 def band_state(summary: dict | None, gap: float) -> str:
-    """The trust state for a side whose hockey probability is `gap` above (+) or below (-) the market's."""
+    """The trust state for a side whose hockey probability is `gap` above (+) or below (-) the market's. A side the model likes LESS is the other end of the same game: its state is the band's state."""
     for name, lo, hi in BANDS:
-        if lo <= gap < hi:
+        if lo <= abs(gap) < hi:
             return ((summary or {}).get("by_gap_band") or {}).get(name, {}).get("state", "INSUFFICIENT_EVIDENCE")
     return "INSUFFICIENT_EVIDENCE"

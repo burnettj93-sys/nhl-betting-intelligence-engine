@@ -5,6 +5,7 @@ _os.environ.setdefault("NHL_ENGINE_TICKET_POLICY", "legacy")      # machinery te
 _os.environ.setdefault("NHL_ENGINE_ROSTER_GATE", "off")           # machinery tests have no official rosters; tests of the roster gate turn it on explicitly
 _os.environ.setdefault("NHL_ENGINE_LEGACY_PRIMARY_RECORDING", "1")  # the legacy primary slip is RETIRED in production (operational/daily_tickets.py); the machinery tests exercise its code, tests/test_legacy_retired.py proves it is off
 _os.environ.setdefault("NHL_ENGINE_ALLOW_SINGLES", "1")        # older accounting tests record single bets; tests of the exclusion turn this off explicitly
+_os.environ.setdefault("NHL_ENGINE_POINTS_FIRST_CLASS", "off")     # the owner's live switch lives in the shared .env (on); the machinery tests keep the default bundle they were written for, and the switch's own tests set it explicitly
 _os.environ.setdefault("NHL_ENGINE_PROP_MARKETS", "player_shots_on_goal_alternate,player_points")   # machinery tests keep the two-market capture they were written for; the shots-only default is tested in tests/test_credit_planner.py
 
 # A test run can never open the production ledgers for writing (2026-10-17: a branch test run migrated the live paper_bankroll.db through a dashboard page's default path). The ledgers' own

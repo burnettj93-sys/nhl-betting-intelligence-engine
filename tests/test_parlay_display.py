@@ -30,7 +30,11 @@ def parlay_section(recorded=1, flagship=True):
                                                "flagship": {"legs": ["Martin Necas — SHOTS ON GOAL 2+ — -210"], "result": "MISS"}}],
                          "parlay_totals": {"recorded": 8, "hit": 2, "miss": 6, "open": 0},
                          "lessons": {"note": "facts only", "cautions": [{"player": "Martin Necas", "team": None, "classification": "TOI_PROJECTION_ERROR", "date": "2026-10-23", "source": "PARLAY_LEG"}],
-                                     "by_date": {"2026-10-23": {"tickets": 8, "hit": 2, "miss": 6, "repeated_killer_legs": ["Connor Bedard"], "weakest_legs_that_failed": []}}}}
+                                     "by_date": {"2026-10-23": {"tickets": 8, "hit": 2, "miss": 6, "repeated_killer_legs": ["Connor Bedard"], "weakest_legs_that_failed": []}},
+                                     "lesson_state_summary": {"ACTIONABLE": 1, "ACCUMULATING": 1, "REPORT_ONLY": 1},
+                                     "lesson_state": [{"id": "ROLE_CAUTION", "name": "a role miss becomes a short caution", "state": "ACTIONABLE", "evidence": {"active_cautions": 1}, "consumed_by": "x -> recency_overlay"},
+                                                      {"id": "REUSED_LEG_PERFORMANCE", "name": "reused legs", "state": "ACCUMULATING", "evidence": {"n": 28, "z": 0.6}, "threshold": {"n_required": 30, "abs_z_required": 2.0}},
+                                                      {"id": "REPEATED_KILLER_LEG", "name": "a repeated killer leg", "state": "REPORT_ONLY"}]}}
     return sec
 
 
@@ -55,6 +59,11 @@ class TestPaperPerformance(unittest.TestCase):
         top = [m.label for m in at.metric if m.label in ("Stake each", "Odds requirement", "Today's target")]
         self.assertEqual(sorted(top), sorted(["Stake each", "Odds requirement", "Today's target"]))          # present once each (inside the expander), not twice
         self.assertEqual(len([m for m in at.metric if m.label == "Stake each"]), 1)
+
+    def test_the_lessons_show_which_are_actionable_which_accumulate_and_which_are_report_only(self):
+        t = text(self.page())
+        for want in ("Lesson states", "1 actionable now", "1 accumulating evidence", "1 report only", "a role miss becomes a short caution", "reused legs"):
+            self.assertIn(want, t, want)
 
     def test_a_day_with_no_flagship_says_pass_and_zero_parlays(self):
         t = text(self.page(recorded=0, flagship=False))
