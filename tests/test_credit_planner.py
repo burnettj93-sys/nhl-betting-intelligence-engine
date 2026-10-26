@@ -315,10 +315,17 @@ class TestPointsFirstClassSwitch(Isolated):
     def plan(self, day=17):
         return cp.day_plan(at(8, day=day), f"2026-10-{day}", starts(a=(19,), b=(19, 30), c=(22,)), remaining=400, counts_ahead={"2026-10-18": 4})            # a plan is built once a day and kept: a new day, a fresh plan
 
+    def unset(self):
+        """The switch unset everywhere: no environment variable and no .env (the owner's live .env has it ON, and the tests must not read it)."""
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        p1, p2 = mock.patch.dict("os.environ", {cp.POINTS_FIRST_CLASS_ENV: ""}), mock.patch.object(cp.state_paths, "REPO_ROOT", Path(d.name))
+        p1.start(); p2.start()
+        self.addCleanup(p1.stop); self.addCleanup(p2.stop)
+
     def test_off_by_default_the_bundle_is_unchanged_with_goals(self):
-        with mock.patch.dict("os.environ", {}, clear=False):
-            import os
-            os.environ.pop(cp.POINTS_FIRST_CLASS_ENV, None)
+        self.unset()
+        if True:
             self.assertFalse(cp.points_first_class())
             p = self.plan()
             self.assertEqual(cp.bundle_markets(), cp.BUNDLE_MARKETS)
@@ -328,9 +335,8 @@ class TestPointsFirstClassSwitch(Isolated):
 
     def test_on_points_replace_goals_at_the_same_credits_a_game_and_are_classed_as_points(self):
         base = None
-        with mock.patch.dict("os.environ", {}, clear=False):
-            import os
-            os.environ.pop(cp.POINTS_FIRST_CLASS_ENV, None)
+        self.unset()
+        if True:
             base = self.plan(day=16)
         with mock.patch.dict("os.environ", {cp.POINTS_FIRST_CLASS_ENV: "on"}):
             self.assertTrue(cp.points_first_class())

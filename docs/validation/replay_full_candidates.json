@@ -1,0 +1,1264 @@
+{
+ "generated_at_utc": "2026-10-26T02:53:49Z",
+ "method": "see the module docstring",
+ "days": {
+  "2026-10-22": {
+   "decision_time_utc": "2026-10-22T22:39:25Z",
+   "raw_candidate_legs": 290,
+   "by_market": {
+    "MONEYLINE": 24,
+    "GOALIE_SAVES": 1,
+    "PLAYER_SOG_ALTERNATE": 207,
+    "PLAYER_GOALS": 58
+   },
+   "reviewed_legs": 247,
+   "pool_sources": {
+    "MONEYLINE": 24,
+    "PLAYER_SOG_ALTERNATE": 0,
+    "PLAYER_SOG": 0,
+    "GOALIE_SAVES": 1,
+    "ROLLING_FORM_SHOTS": 265
+   },
+   "faithfulness": {
+    "legs_in_the_tickets_the_cohort_recorded_at_T": 9,
+    "of_which_present_in_the_reconstructed_reviewed_pool": 9,
+    "recall_of_the_first_batch": 1.0,
+    "legs_of_the_whole_day_present": "12 of 18",
+    "missing_first_batch_legs": []
+   },
+   "equal_volume": {
+    "tickets_each": 10,
+    "rank_order_only": {
+     "tickets": 10,
+     "distinct_legs": 17,
+     "leg_slots": 30,
+     "expected_tickets_hit": 2.98,
+     "chance_no_ticket_hits": 0.07,
+     "chance_no_ticket_hits_range": [
+      0.06,
+      0.089
+     ],
+     "spread_inflation_from_shared_legs": 1.65,
+     "player_exposure": {
+      "8480027": 3,
+      "8480801": 2,
+      "8478550": 2
+     },
+     "team_exposure": {
+      "FLA": 7,
+      "LAK": 7,
+      "DAL": 5
+     },
+     "game_exposure": {
+      "2026020158": 8,
+      "2026020159": 7,
+      "2026020161": 5
+     },
+     "most_reused_leg": {
+      "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+      "tickets": 2,
+      "chance_it_fails": 0.208,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 3
+    },
+    "portfolio_aware": {
+     "tickets": 10,
+     "distinct_legs": 16,
+     "leg_slots": 30,
+     "expected_tickets_hit": 2.96,
+     "chance_no_ticket_hits": 0.067,
+     "chance_no_ticket_hits_range": [
+      0.067,
+      0.071
+     ],
+     "spread_inflation_from_shared_legs": 1.61,
+     "player_exposure": {
+      "8480027": 4,
+      "8480801": 2,
+      "8478550": 2
+     },
+     "team_exposure": {
+      "DAL": 6,
+      "LAK": 6,
+      "FLA": 5
+     },
+     "game_exposure": {
+      "2026020158": 7,
+      "2026020159": 6,
+      "2026020161": 6
+     },
+     "most_reused_leg": {
+      "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+      "tickets": 2,
+      "chance_it_fails": 0.208,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 4
+    }
+   },
+   "eligible_legs": 31,
+   "eligible_legs_under_the_old_contradiction_rule": 31,
+   "candidate_tickets": 8183,
+   "candidate_tickets_old": 3030,
+   "selected_old": 5,
+   "selected_new": 10,
+   "same_tickets": 2,
+   "qualities_old": {
+    "GOOD": 4,
+    "QUESTIONABLE": 1
+   },
+   "qualities_new": {
+    "GOOD": 5,
+    "QUESTIONABLE": 5
+   },
+   "selected_rank_order_only_corrected_builder": 10,
+   "same_tickets_new_vs_rank_order_only": 1,
+   "portfolio_old": {
+    "tickets": 5,
+    "distinct_legs": 9,
+    "leg_slots": 15,
+    "expected_tickets_hit": 1.78,
+    "chance_no_ticket_hits": 0.188,
+    "chance_no_ticket_hits_range": [
+     0.16,
+     0.205
+    ],
+    "spread_inflation_from_shared_legs": 1.63,
+    "player_exposure": {
+     "8480801": 2,
+     "8478550": 2,
+     "8480027": 2
+    },
+    "team_exposure": {
+     "LAK": 5,
+     "FLA": 4,
+     "DAL": 3
+    },
+    "game_exposure": {
+     "2026020159": 5,
+     "2026020158": 4,
+     "2026020161": 3
+    },
+    "most_reused_leg": {
+     "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.208,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 2
+   },
+   "portfolio_rank_order_only": {
+    "tickets": 10,
+    "distinct_legs": 17,
+    "leg_slots": 30,
+    "expected_tickets_hit": 2.98,
+    "chance_no_ticket_hits": 0.07,
+    "chance_no_ticket_hits_range": [
+     0.06,
+     0.089
+    ],
+    "spread_inflation_from_shared_legs": 1.65,
+    "player_exposure": {
+     "8480027": 3,
+     "8480801": 2,
+     "8478550": 2
+    },
+    "team_exposure": {
+     "FLA": 7,
+     "LAK": 7,
+     "DAL": 5
+    },
+    "game_exposure": {
+     "2026020158": 8,
+     "2026020159": 7,
+     "2026020161": 5
+    },
+    "most_reused_leg": {
+     "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.208,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 3
+   },
+   "portfolio_new": {
+    "tickets": 10,
+    "distinct_legs": 16,
+    "leg_slots": 30,
+    "expected_tickets_hit": 2.96,
+    "chance_no_ticket_hits": 0.067,
+    "chance_no_ticket_hits_range": [
+     0.067,
+     0.071
+    ],
+    "spread_inflation_from_shared_legs": 1.61,
+    "player_exposure": {
+     "8480027": 4,
+     "8480801": 2,
+     "8478550": 2
+    },
+    "team_exposure": {
+     "DAL": 6,
+     "LAK": 6,
+     "FLA": 5
+    },
+    "game_exposure": {
+     "2026020158": 7,
+     "2026020159": 6,
+     "2026020161": 6
+    },
+    "most_reused_leg": {
+     "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.208,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "flagship_rank_order_only": [
+    "Jason Robertson",
+    "Artemi Panarin",
+    "Brady Tkachuk"
+   ],
+   "qualities_rank_order_only": {
+    "GOOD": 5,
+    "QUESTIONABLE": 5
+   },
+   "cycle_recording_under_the_wave_caps": {
+    "recorded_this_cycle": 7,
+    "recorded_today": 7
+   },
+   "flagship_old": [
+    "Jason Robertson",
+    "Artemi Panarin",
+    "Brady Tkachuk"
+   ],
+   "flagship_new": [
+    "Jason Robertson",
+    "Artemi Panarin",
+    "Brady Tkachuk"
+   ],
+   "tickets_old": [
+    [
+     "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -425"
+    ],
+    [
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -220",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -425",
+     "Adrian Kempe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -190",
+     "Adrian Kempe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -190",
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -220"
+    ],
+    [
+     "DAL \u2014 MONEYLINE \u2014 -205",
+     "Trevor Moore \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+     "UTA \u2014 MONEYLINE \u2014 -170"
+    ]
+   ],
+   "tickets_new": [
+    [
+     "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -425"
+    ],
+    [
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -220",
+     "Adrian Kempe \u2014 SHOTS ON GOAL 2+ \u2014 -310",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -280"
+    ],
+    [
+     "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -190",
+     "Alex Laferriere \u2014 SHOTS ON GOAL 2+ \u2014 -245"
+    ],
+    [
+     "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+     "Adrian Kempe \u2014 SHOTS ON GOAL 2+ \u2014 -310",
+     "Alex Laferriere \u2014 SHOTS ON GOAL 2+ \u2014 -245"
+    ],
+    [
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -190",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -425",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -280"
+    ],
+    [
+     "UTA \u2014 MONEYLINE \u2014 -170",
+     "Evgeni Malkin \u2014 SHOTS ON GOAL 2+ \u2014 -165",
+     "DET \u2014 MONEYLINE \u2014 -170"
+    ],
+    [
+     "DAL \u2014 MONEYLINE \u2014 -205",
+     "Trevor Moore \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+     "UTA \u2014 MONEYLINE \u2014 -170"
+    ],
+    [
+     "Anton Lundell \u2014 SHOTS ON GOAL 2+ \u2014 -150",
+     "BOS \u2014 MONEYLINE \u2014 -155",
+     "Jason Robertson \u2014 SHOTS ON GOAL 3+ \u2014 -155"
+    ],
+    [
+     "DAL \u2014 MONEYLINE \u2014 -205",
+     "DET \u2014 MONEYLINE \u2014 -170",
+     "BOS \u2014 MONEYLINE \u2014 -155"
+    ],
+    [
+     "Trevor Moore \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+     "Evgeni Malkin \u2014 SHOTS ON GOAL 2+ \u2014 -165",
+     "Jason Robertson \u2014 SHOTS ON GOAL 3+ \u2014 -155"
+    ]
+   ],
+   "recorded_that_day_by_the_live_cohort": 10
+  },
+  "2026-10-23": {
+   "decision_time_utc": "2026-10-23T23:39:53Z",
+   "raw_candidate_legs": 174,
+   "by_market": {
+    "MONEYLINE": 4,
+    "GOALIE_SAVES": 2,
+    "PLAYER_SOG_ALTERNATE": 136,
+    "PLAYER_GOALS": 32
+   },
+   "reviewed_legs": 146,
+   "pool_sources": {
+    "MONEYLINE": 4,
+    "PLAYER_SOG_ALTERNATE": 0,
+    "PLAYER_SOG": 0,
+    "GOALIE_SAVES": 2,
+    "ROLLING_FORM_SHOTS": 168
+   },
+   "faithfulness": {
+    "legs_in_the_tickets_the_cohort_recorded_at_T": 8,
+    "of_which_present_in_the_reconstructed_reviewed_pool": 8,
+    "recall_of_the_first_batch": 1.0,
+    "legs_of_the_whole_day_present": "13 of 13",
+    "missing_first_batch_legs": []
+   },
+   "equal_volume": {
+    "tickets_each": 9,
+    "rank_order_only": {
+     "tickets": 9,
+     "distinct_legs": 15,
+     "leg_slots": 27,
+     "expected_tickets_hit": 3.09,
+     "chance_no_ticket_hits": 0.054,
+     "chance_no_ticket_hits_range": [
+      0.052,
+      0.098
+     ],
+     "spread_inflation_from_shared_legs": 1.67,
+     "player_exposure": {
+      "8477492": 4,
+      "8481540": 3,
+      "8479542": 2
+     },
+     "team_exposure": {
+      "COL": 7,
+      "MTL": 5,
+      "TBL": 4
+     },
+     "game_exposure": {
+      "2026020167": 9,
+      "2026020166": 8
+     },
+     "most_reused_leg": {
+      "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+      "tickets": 2,
+      "chance_it_fails": 0.222,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 7
+    },
+    "portfolio_aware": {
+     "tickets": 9,
+     "distinct_legs": 15,
+     "leg_slots": 27,
+     "expected_tickets_hit": 3.03,
+     "chance_no_ticket_hits": 0.054,
+     "chance_no_ticket_hits_range": [
+      0.048,
+      0.084
+     ],
+     "spread_inflation_from_shared_legs": 1.6,
+     "player_exposure": {
+      "8477492": 4,
+      "8481540": 4,
+      "8479542": 2
+     },
+     "team_exposure": {
+      "COL": 7,
+      "MTL": 6,
+      "TBL": 4
+     },
+     "game_exposure": {
+      "2026020167": 8,
+      "2026020166": 7
+     },
+     "most_reused_leg": {
+      "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+      "tickets": 2,
+      "chance_it_fails": 0.222,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 7
+    }
+   },
+   "eligible_legs": 16,
+   "eligible_legs_under_the_old_contradiction_rule": 16,
+   "candidate_tickets": 4672,
+   "candidate_tickets_old": 2782,
+   "selected_old": 5,
+   "selected_new": 10,
+   "same_tickets": 2,
+   "qualities_old": {
+    "GOOD": 5
+   },
+   "qualities_new": {
+    "GOOD": 6,
+    "QUESTIONABLE": 4
+   },
+   "selected_rank_order_only_corrected_builder": 9,
+   "same_tickets_new_vs_rank_order_only": 2,
+   "portfolio_old": {
+    "tickets": 5,
+    "distinct_legs": 9,
+    "leg_slots": 15,
+    "expected_tickets_hit": 2.09,
+    "chance_no_ticket_hits": 0.124,
+    "chance_no_ticket_hits_range": [
+     0.115,
+     0.169
+    ],
+    "spread_inflation_from_shared_legs": 1.61,
+    "player_exposure": {
+     "8477492": 3,
+     "8481540": 2,
+     "8479542": 2
+    },
+    "team_exposure": {
+     "TBL": 4,
+     "COL": 3,
+     "MTL": 2
+    },
+    "game_exposure": {
+     "2026020167": 5,
+     "2026020166": 4
+    },
+    "most_reused_leg": {
+     "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "tickets": 2,
+     "chance_it_fails": 0.222,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "portfolio_rank_order_only": {
+    "tickets": 9,
+    "distinct_legs": 15,
+    "leg_slots": 27,
+    "expected_tickets_hit": 3.09,
+    "chance_no_ticket_hits": 0.054,
+    "chance_no_ticket_hits_range": [
+     0.052,
+     0.098
+    ],
+    "spread_inflation_from_shared_legs": 1.67,
+    "player_exposure": {
+     "8477492": 4,
+     "8481540": 3,
+     "8479542": 2
+    },
+    "team_exposure": {
+     "COL": 7,
+     "MTL": 5,
+     "TBL": 4
+    },
+    "game_exposure": {
+     "2026020167": 9,
+     "2026020166": 8
+    },
+    "most_reused_leg": {
+     "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "tickets": 2,
+     "chance_it_fails": 0.222,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 7
+   },
+   "portfolio_new": {
+    "tickets": 10,
+    "distinct_legs": 16,
+    "leg_slots": 30,
+    "expected_tickets_hit": 3.25,
+    "chance_no_ticket_hits": 0.056,
+    "chance_no_ticket_hits_range": [
+     0.044,
+     0.08
+    ],
+    "spread_inflation_from_shared_legs": 1.72,
+    "player_exposure": {
+     "8477492": 4,
+     "8481540": 4,
+     "8479542": 2
+    },
+    "team_exposure": {
+     "COL": 8,
+     "MTL": 6,
+     "TBL": 5
+    },
+    "game_exposure": {
+     "2026020167": 9,
+     "2026020166": 7
+    },
+    "most_reused_leg": {
+     "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "tickets": 2,
+     "chance_it_fails": 0.222,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 7
+   },
+   "flagship_rank_order_only": [
+    "Brandon Hagel",
+    "Nathan MacKinnon",
+    "Cole Caufield"
+   ],
+   "qualities_rank_order_only": {
+    "GOOD": 6,
+    "QUESTIONABLE": 3
+   },
+   "cycle_recording_under_the_wave_caps": {
+    "recorded_this_cycle": 7,
+    "recorded_today": 7
+   },
+   "flagship_old": [
+    "Brandon Hagel",
+    "Nathan MacKinnon",
+    "Cole Caufield"
+   ],
+   "flagship_new": [
+    "Brandon Hagel",
+    "Nathan MacKinnon",
+    "Cole Caufield"
+   ],
+   "tickets_old": [
+    [
+     "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 2+ \u2014 -1000",
+     "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -750"
+    ],
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 2+ \u2014 -1000",
+     "Nikita Kucherov \u2014 SHOTS ON GOAL 2+ \u2014 -500"
+    ],
+    [
+     "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -750",
+     "Nikita Kucherov \u2014 SHOTS ON GOAL 2+ \u2014 -500"
+    ],
+    [
+     "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -300"
+    ],
+    [
+     "Martin Necas \u2014 SHOTS ON GOAL 2+ \u2014 -210",
+     "Nazem Kadri \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 3+ \u2014 -310"
+    ]
+   ],
+   "tickets_new": [
+    [
+     "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 2+ \u2014 -1000",
+     "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -750"
+    ],
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 2+ \u2014 -1000",
+     "Nikita Kucherov \u2014 SHOTS ON GOAL 2+ \u2014 -500"
+    ],
+    [
+     "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Nazem Kadri \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 3+ \u2014 -310"
+    ],
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -750",
+     "Nathan MacKinnon \u2014 SHOTS ON GOAL 3+ \u2014 -310"
+    ],
+    [
+     "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Nikita Kucherov \u2014 SHOTS ON GOAL 2+ \u2014 -500"
+    ],
+    [
+     "Martin Necas \u2014 SHOTS ON GOAL 2+ \u2014 -210",
+     "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -245",
+     "Juraj Slafkovsk\u00fd \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "Brock Nelson \u2014 SHOTS ON GOAL 2+ \u2014 -145",
+     "MTL \u2014 MONEYLINE \u2014 -170",
+     "Cale Makar \u2014 SHOTS ON GOAL 2+ \u2014 -275"
+    ],
+    [
+     "MTL \u2014 MONEYLINE \u2014 -170",
+     "Juraj Slafkovsk\u00fd \u2014 SHOTS ON GOAL 2+ \u2014 -310",
+     "Cole Caufield \u2014 SHOTS ON GOAL 3+ \u2014 -250"
+    ],
+    [
+     "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -245",
+     "Cale Makar \u2014 SHOTS ON GOAL 2+ \u2014 -275",
+     "Cole Caufield \u2014 SHOTS ON GOAL 3+ \u2014 -250"
+    ],
+    [
+     "Brock Nelson \u2014 SHOTS ON GOAL 2+ \u2014 -145",
+     "Nazem Kadri \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+     "Brayden Point \u2014 SHOTS ON GOAL 2+ \u2014 -175"
+    ]
+   ],
+   "recorded_that_day_by_the_live_cohort": 8
+  },
+  "2026-10-24": {
+   "decision_time_utc": "2026-10-24T16:35:19Z",
+   "raw_candidate_legs": 108,
+   "by_market": {
+    "MONEYLINE": 24,
+    "PLAYER_SOG_ALTERNATE": 59,
+    "PLAYER_GOALS": 25
+   },
+   "reviewed_legs": 96,
+   "pool_sources": {
+    "MONEYLINE": 24,
+    "PLAYER_SOG_ALTERNATE": 0,
+    "PLAYER_SOG": 0,
+    "GOALIE_SAVES": 0,
+    "ROLLING_FORM_SHOTS": 84
+   },
+   "faithfulness": {
+    "legs_in_the_tickets_the_cohort_recorded_at_T": 3,
+    "of_which_present_in_the_reconstructed_reviewed_pool": 3,
+    "recall_of_the_first_batch": 1.0,
+    "legs_of_the_whole_day_present": "7 of 22",
+    "missing_first_batch_legs": []
+   },
+   "equal_volume": {
+    "tickets_each": 8,
+    "rank_order_only": {
+     "tickets": 8,
+     "distinct_legs": 12,
+     "leg_slots": 24,
+     "expected_tickets_hit": 1.88,
+     "chance_no_ticket_hits": 0.192,
+     "chance_no_ticket_hits_range": [
+      0.189,
+      0.192
+     ],
+     "spread_inflation_from_shared_legs": 1.59,
+     "player_exposure": {
+      "8483445": 4,
+      "8484762": 2,
+      "8484153": 2
+     },
+     "team_exposure": {
+      "ANA": 6,
+      "NJD": 2,
+      "BOS": 2
+     },
+     "game_exposure": {
+      "2026020168": 7,
+      "2026020170": 2,
+      "2026020169": 2
+     },
+     "most_reused_leg": {
+      "label": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+      "tickets": 2,
+      "chance_it_fails": 0.326,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 4
+    },
+    "portfolio_aware": {
+     "tickets": 8,
+     "distinct_legs": 13,
+     "leg_slots": 24,
+     "expected_tickets_hit": 1.82,
+     "chance_no_ticket_hits": 0.184,
+     "chance_no_ticket_hits_range": [
+      0.184,
+      0.187
+     ],
+     "spread_inflation_from_shared_legs": 1.42,
+     "player_exposure": {
+      "8483445": 4,
+      "8484762": 2,
+      "8482159": 2
+     },
+     "team_exposure": {
+      "ANA": 4,
+      "BOS": 2,
+      "CAR": 2
+     },
+     "game_exposure": {
+      "2026020168": 5,
+      "2026020170": 2,
+      "2026020175": 2
+     },
+     "most_reused_leg": {
+      "label": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+      "tickets": 2,
+      "chance_it_fails": 0.326,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 4
+    }
+   },
+   "eligible_legs": 13,
+   "eligible_legs_under_the_old_contradiction_rule": 13,
+   "candidate_tickets": 1273,
+   "candidate_tickets_old": 1273,
+   "selected_old": 5,
+   "selected_new": 8,
+   "same_tickets": 2,
+   "qualities_old": {
+    "GOOD": 2,
+    "QUESTIONABLE": 3
+   },
+   "qualities_new": {
+    "GOOD": 2,
+    "QUESTIONABLE": 6
+   },
+   "selected_rank_order_only_corrected_builder": 8,
+   "same_tickets_new_vs_rank_order_only": 2,
+   "portfolio_old": {
+    "tickets": 5,
+    "distinct_legs": 9,
+    "leg_slots": 15,
+    "expected_tickets_hit": 1.34,
+    "chance_no_ticket_hits": 0.285,
+    "chance_no_ticket_hits_range": [
+     0.282,
+     0.285
+    ],
+    "spread_inflation_from_shared_legs": 1.52,
+    "player_exposure": {
+     "8484762": 2,
+     "8483445": 2,
+     "8484153": 2
+    },
+    "team_exposure": {
+     "ANA": 4,
+     "NJD": 2,
+     "BOS": 2
+    },
+    "game_exposure": {
+     "2026020168": 5,
+     "2026020170": 2,
+     "2026020169": 2
+    },
+    "most_reused_leg": {
+     "label": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.326,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 2
+   },
+   "portfolio_rank_order_only": {
+    "tickets": 8,
+    "distinct_legs": 12,
+    "leg_slots": 24,
+    "expected_tickets_hit": 1.88,
+    "chance_no_ticket_hits": 0.192,
+    "chance_no_ticket_hits_range": [
+     0.189,
+     0.192
+    ],
+    "spread_inflation_from_shared_legs": 1.59,
+    "player_exposure": {
+     "8483445": 4,
+     "8484762": 2,
+     "8484153": 2
+    },
+    "team_exposure": {
+     "ANA": 6,
+     "NJD": 2,
+     "BOS": 2
+    },
+    "game_exposure": {
+     "2026020168": 7,
+     "2026020170": 2,
+     "2026020169": 2
+    },
+    "most_reused_leg": {
+     "label": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.326,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "portfolio_new": {
+    "tickets": 8,
+    "distinct_legs": 13,
+    "leg_slots": 24,
+    "expected_tickets_hit": 1.82,
+    "chance_no_ticket_hits": 0.184,
+    "chance_no_ticket_hits_range": [
+     0.184,
+     0.187
+    ],
+    "spread_inflation_from_shared_legs": 1.42,
+    "player_exposure": {
+     "8483445": 4,
+     "8484762": 2,
+     "8482159": 2
+    },
+    "team_exposure": {
+     "ANA": 4,
+     "BOS": 2,
+     "CAR": 2
+    },
+    "game_exposure": {
+     "2026020168": 5,
+     "2026020170": 2,
+     "2026020175": 2
+    },
+    "most_reused_leg": {
+     "label": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "tickets": 2,
+     "chance_it_fails": 0.326,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "flagship_rank_order_only": [
+    "Beckett Sennecke",
+    "Leo Carlsson",
+    "Cutter Gauthier"
+   ],
+   "qualities_rank_order_only": {
+    "GOOD": 2,
+    "QUESTIONABLE": 6
+   },
+   "cycle_recording_under_the_wave_caps": {
+    "recorded_this_cycle": 1,
+    "recorded_today": 1
+   },
+   "flagship_old": [
+    "Beckett Sennecke",
+    "Leo Carlsson",
+    "Cutter Gauthier"
+   ],
+   "flagship_new": [
+    "Beckett Sennecke",
+    "Leo Carlsson",
+    "Cutter Gauthier"
+   ],
+   "tickets_old": [
+    [
+     "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Leo Carlsson \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 2+ \u2014 -900"
+    ],
+    [
+     "BOS \u2014 MONEYLINE \u2014 -192",
+     "NJD \u2014 MONEYLINE \u2014 -192",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 2+ \u2014 -900"
+    ],
+    [
+     "NJD \u2014 MONEYLINE \u2014 -192",
+     "MIN \u2014 MONEYLINE \u2014 -155",
+     "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450"
+    ],
+    [
+     "BOS \u2014 MONEYLINE \u2014 -192",
+     "MIN \u2014 MONEYLINE \u2014 -155",
+     "Leo Carlsson \u2014 SHOTS ON GOAL 2+ \u2014 -320"
+    ],
+    [
+     "CAR \u2014 MONEYLINE \u2014 -155",
+     "DET \u2014 MONEYLINE \u2014 -148",
+     "Tyson Foerster \u2014 SHOTS ON GOAL 2+ \u2014 -225"
+    ]
+   ],
+   "tickets_new": [
+    [
+     "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Leo Carlsson \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 2+ \u2014 -900"
+    ],
+    [
+     "BOS \u2014 MONEYLINE \u2014 -192",
+     "NJD \u2014 MONEYLINE \u2014 -192",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 2+ \u2014 -900"
+    ],
+    [
+     "CAR \u2014 MONEYLINE \u2014 -155",
+     "MIN \u2014 MONEYLINE \u2014 -155",
+     "DET \u2014 MONEYLINE \u2014 -148"
+    ],
+    [
+     "UTA \u2014 MONEYLINE \u2014 -142",
+     "VGK \u2014 MONEYLINE \u2014 -142",
+     "Tyson Foerster \u2014 SHOTS ON GOAL 2+ \u2014 -225"
+    ],
+    [
+     "MIN \u2014 MONEYLINE \u2014 -155",
+     "Tyson Foerster \u2014 SHOTS ON GOAL 2+ \u2014 -225",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 3+ \u2014 -285"
+    ],
+    [
+     "CAR \u2014 MONEYLINE \u2014 -155",
+     "PIT \u2014 MONEYLINE \u2014 -135",
+     "VGK \u2014 MONEYLINE \u2014 -142"
+    ],
+    [
+     "PIT \u2014 MONEYLINE \u2014 -135",
+     "UTA \u2014 MONEYLINE \u2014 -142",
+     "DET \u2014 MONEYLINE \u2014 -148"
+    ],
+    [
+     "BOS \u2014 MONEYLINE \u2014 -192",
+     "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+     "Cutter Gauthier \u2014 SHOTS ON GOAL 3+ \u2014 -285"
+    ]
+   ],
+   "recorded_that_day_by_the_live_cohort": 10
+  },
+  "2026-10-25": {
+   "decision_time_utc": "2026-10-25T18:37:54Z",
+   "raw_candidate_legs": 101,
+   "by_market": {
+    "MONEYLINE": 10,
+    "PLAYER_SOG_ALTERNATE": 63,
+    "PLAYER_GOALS": 28
+   },
+   "reviewed_legs": 88,
+   "pool_sources": {
+    "MONEYLINE": 10,
+    "PLAYER_SOG_ALTERNATE": 0,
+    "PLAYER_SOG": 0,
+    "GOALIE_SAVES": 0,
+    "ROLLING_FORM_SHOTS": 91
+   },
+   "faithfulness": {
+    "legs_in_the_tickets_the_cohort_recorded_at_T": 5,
+    "of_which_present_in_the_reconstructed_reviewed_pool": 5,
+    "recall_of_the_first_batch": 1.0,
+    "legs_of_the_whole_day_present": "5 of 12",
+    "missing_first_batch_legs": []
+   },
+   "equal_volume": {
+    "tickets_each": 7,
+    "rank_order_only": {
+     "tickets": 7,
+     "distinct_legs": 12,
+     "leg_slots": 21,
+     "expected_tickets_hit": 2.23,
+     "chance_no_ticket_hits": 0.133,
+     "chance_no_ticket_hits_range": [
+      0.123,
+      0.175
+     ],
+     "spread_inflation_from_shared_legs": 1.64,
+     "player_exposure": {
+      "8480801": 3,
+      "8479314": 2,
+      "8484144": 2
+     },
+     "team_exposure": {
+      "FLA": 6,
+      "CHI": 3,
+      "DAL": 2
+     },
+     "game_exposure": {
+      "2026020180": 7,
+      "2026020184": 2,
+      "2026020181": 2
+     },
+     "most_reused_leg": {
+      "label": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+      "tickets": 2,
+      "chance_it_fails": 0.283,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 5
+    },
+    "portfolio_aware": {
+     "tickets": 7,
+     "distinct_legs": 12,
+     "leg_slots": 21,
+     "expected_tickets_hit": 2.18,
+     "chance_no_ticket_hits": 0.138,
+     "chance_no_ticket_hits_range": [
+      0.121,
+      0.18
+     ],
+     "spread_inflation_from_shared_legs": 1.58,
+     "player_exposure": {
+      "8480801": 3,
+      "8479314": 2,
+      "8484144": 2
+     },
+     "team_exposure": {
+      "FLA": 6,
+      "CHI": 3,
+      "DAL": 2
+     },
+     "game_exposure": {
+      "2026020180": 7,
+      "2026020184": 2,
+      "2026020181": 2
+     },
+     "most_reused_leg": {
+      "label": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+      "tickets": 2,
+      "chance_it_fails": 0.283,
+      "expected_tickets_it_kills_if_it_fails": 2
+     },
+     "tickets_with_a_role_flagged_leg": 0,
+     "tickets_with_a_model_risk_leg": 4
+    }
+   },
+   "eligible_legs": 12,
+   "eligible_legs_under_the_old_contradiction_rule": 12,
+   "candidate_tickets": 1014,
+   "candidate_tickets_old": 1014,
+   "selected_old": 5,
+   "selected_new": 7,
+   "same_tickets": 3,
+   "qualities_old": {
+    "GOOD": 5
+   },
+   "qualities_new": {
+    "GOOD": 6,
+    "QUESTIONABLE": 1
+   },
+   "selected_rank_order_only_corrected_builder": 8,
+   "same_tickets_new_vs_rank_order_only": 3,
+   "portfolio_old": {
+    "tickets": 5,
+    "distinct_legs": 9,
+    "leg_slots": 15,
+    "expected_tickets_hit": 1.76,
+    "chance_no_ticket_hits": 0.2,
+    "chance_no_ticket_hits_range": [
+     0.194,
+     0.234
+    ],
+    "spread_inflation_from_shared_legs": 1.68,
+    "player_exposure": {
+     "8480801": 2,
+     "8479314": 2,
+     "8484144": 2
+    },
+    "team_exposure": {
+     "FLA": 4,
+     "CHI": 3,
+     "DAL": 1
+    },
+    "game_exposure": {
+     "2026020180": 5,
+     "2026020184": 1,
+     "2026020181": 1
+    },
+    "most_reused_leg": {
+     "label": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "tickets": 2,
+     "chance_it_fails": 0.283,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "portfolio_rank_order_only": {
+    "tickets": 8,
+    "distinct_legs": 12,
+    "leg_slots": 24,
+    "expected_tickets_hit": 2.46,
+    "chance_no_ticket_hits": 0.116,
+    "chance_no_ticket_hits_range": [
+     0.106,
+     0.159
+    ],
+    "spread_inflation_from_shared_legs": 1.73,
+    "player_exposure": {
+     "8480801": 4,
+     "8479314": 2,
+     "8484144": 2
+    },
+    "team_exposure": {
+     "FLA": 7,
+     "CHI": 4,
+     "DAL": 2
+    },
+    "game_exposure": {
+     "2026020180": 8,
+     "2026020184": 2,
+     "2026020181": 2
+    },
+    "most_reused_leg": {
+     "label": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "tickets": 2,
+     "chance_it_fails": 0.283,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 6
+   },
+   "portfolio_new": {
+    "tickets": 7,
+    "distinct_legs": 12,
+    "leg_slots": 21,
+    "expected_tickets_hit": 2.18,
+    "chance_no_ticket_hits": 0.138,
+    "chance_no_ticket_hits_range": [
+     0.121,
+     0.18
+    ],
+    "spread_inflation_from_shared_legs": 1.58,
+    "player_exposure": {
+     "8480801": 3,
+     "8479314": 2,
+     "8484144": 2
+    },
+    "team_exposure": {
+     "FLA": 6,
+     "CHI": 3,
+     "DAL": 2
+    },
+    "game_exposure": {
+     "2026020180": 7,
+     "2026020184": 2,
+     "2026020181": 2
+    },
+    "most_reused_leg": {
+     "label": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "tickets": 2,
+     "chance_it_fails": 0.283,
+     "expected_tickets_it_kills_if_it_fails": 2
+    },
+    "tickets_with_a_role_flagged_leg": 0,
+    "tickets_with_a_model_risk_leg": 4
+   },
+   "flagship_rank_order_only": [
+    "Connor Bedard",
+    "Brady Tkachuk",
+    "Matthew Tkachuk"
+   ],
+   "qualities_rank_order_only": {
+    "GOOD": 5,
+    "QUESTIONABLE": 3
+   },
+   "cycle_recording_under_the_wave_caps": {
+    "recorded_this_cycle": 2,
+    "recorded_today": 2
+   },
+   "flagship_old": [
+    "Connor Bedard",
+    "Brady Tkachuk",
+    "Matthew Tkachuk"
+   ],
+   "flagship_new": [
+    "Connor Bedard",
+    "Brady Tkachuk",
+    "Matthew Tkachuk"
+   ],
+   "tickets_old": [
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -350"
+    ],
+    [
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -575"
+    ],
+    [
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -350",
+     "Carter Verhaeghe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Carter Verhaeghe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "MIN \u2014 MONEYLINE \u2014 -192",
+     "DAL \u2014 MONEYLINE \u2014 -198",
+     "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -230"
+    ]
+   ],
+   "tickets_new": [
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -350"
+    ],
+    [
+     "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -575"
+    ],
+    [
+     "MIN \u2014 MONEYLINE \u2014 -192",
+     "DAL \u2014 MONEYLINE \u2014 -198",
+     "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -230"
+    ],
+    [
+     "FLA \u2014 MONEYLINE \u2014 -185",
+     "DAL \u2014 MONEYLINE \u2014 -198",
+     "Carter Verhaeghe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "FLA \u2014 MONEYLINE \u2014 -185",
+     "MIN \u2014 MONEYLINE \u2014 -192",
+     "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -350"
+    ],
+    [
+     "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+     "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+     "Carter Verhaeghe \u2014 SHOTS ON GOAL 2+ \u2014 -310"
+    ],
+    [
+     "Anton Lundell \u2014 SHOTS ON GOAL 2+ \u2014 -165",
+     "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+     "Brady Tkachuk \u2014 SHOTS ON GOAL 3+ \u2014 -200"
+    ]
+   ],
+   "recorded_that_day_by_the_live_cohort": 6
+  }
+ }
+}

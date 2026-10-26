@@ -26,7 +26,7 @@ from collections import Counter
 
 from operational import eggy_intelligence as ei
 
-ASSESS_VERSION = 2              # bump when the assessment logic changes: a stored review of an older version is rebuilt, never reused
+ASSESS_VERSION = 4              # bump when the assessment logic changes: a stored review of an older version is rebuilt, never reused
 SURPRISE_FLOOR = 0.10          # a loss the estimate called less than 10% likely is not explained by ordinary variance
 TOI_HELD = 2.0                 # minutes below the expectation that still count as the expected role
 TOI_FAILED = 3.0               # minutes below expectation
@@ -60,6 +60,112 @@ def decision_quality(card: dict) -> dict:
     if action == "RECORD" and contr in ("LOW", "MODERATE") and cal in ("HIGH", "MEDIUM") and thesis == "MODEL_SEES_VALUE":
         return {"label": GOOD, "reasons": [f"a {thesis.lower().replace('_', ' ')} thesis that survived scrutiny (contradiction {contr}, calibration {cal})"]}
     return {"label": QUESTIONABLE, "reasons": [f"{(card.get('action') or {}).get('decision', '?').replace('_', ' ').lower()}: " + "; ".join((card.get("action") or {}).get("reasons") or [f"contradiction {contr}, calibration {cal}"])]}
+
+
+UNAVAILABLE_ITEMS = ("confirmed lineup", "injury news", "confirmed starting goalies", "injuries and lineup")      # data no approved source supplies: its absence is a limitation of the engine, not a flaw of the leg
+MIN_CELL_N = ei.MIN_CELL_N                                                                                          # an analogue cell of fewer cases than this adjusts nothing (the engine's own rule)
+
+
+def _adjustment_the_evidence_required(card: dict, leg: dict | None, date: str | None) -> float:
+    """The downward adjustment the VALIDATED flag evidence (docs/validation/player_signals.json, built from games before `date`) says a counted role / opportunity flag on this card was worth, where the review did
+    not already apply it (a card with a `signal_adjustment` did). 0.0 when none applies or the evidence did not yet exist on `date`."""
+    if card.get("signal_adjustment") or not leg or card.get("kind") != "PLAYER":
+        return 0.0
+    from operational import decision_artifacts as da
+    through = ((da.manifest().get("artifacts") or {}).get("player_signals") or {}).get("data_through")
+    if not through or not date or str(date) <= str(through):
+        return 0.0                                                                                                   # the evidence was built from games up to `through`: it cannot judge a decision made before then
+    stat = ei._STAT.get(leg.get("market_family"))
+    if stat is None:
+        return 0.0
+    market = f"{stat}>={int(leg.get('threshold') or 1)}"
+    ev = ei.signal_evidence()
+    deltas = []
+    for f in ei.counted_flags((card.get("contradiction") or {}).get("flags") or []):
+        e = (ev.get(f["name"]) or {}).get(market)
+        if e and f["level"] in ("MODERATE", "HIGH", "SEVERE") and str(e.get("verdict", "")).startswith("BEYOND_MODEL_LOWER") and e.get("live_adjustment") is not None:
+            deltas.append(float(e["live_adjustment"]))
+    return min(deltas, default=0.0)
+
+
+def parlay_leg_quality(card: dict, context: dict | None = None) -> dict:
+    """The quality of a PARLAY INGREDIENT's decision, reconstructed from what was knowable WHEN IT WAS MADE: the review card as recorded, the leg as recorded (its quote, its market) and the day's reuse. The
+    outcome is not an input (there is no parameter for it) and `assess` passes none. This rubric is deliberately independent of the admission gate: it asks whether the admission was DEFENSIBLE, so it can find a
+    leg the gate let in that it should not have.
+
+    BAD (the admission was not defensible on pregame information):
+      * the gate's own refusals (a counted HIGH contradiction, calibration below MEDIUM, an estimate under the 55% floor, a review PASS that is not merely a price judgement);
+      * STALE MARKET ESTIMATE: a moneyline whose estimate IS its quote, from a quote the system itself classes stale;
+      * THE ESTIMATE CONTRADICTS ITS OWN CALIBRATION EVIDENCE: the analogue cell (300+ cases) says the model ran high there (z <= -2) and the estimate sits two standard errors above what happened to those players;
+      * EVIDENCE NOT APPLIED: validated flag evidence (built before the decision) says a counted role flag on the card cost this much, and subtracting it puts the estimate under the 55% floor;
+      * UNSUPPORTED REGIME: fewer prior games for the player than the model's own validation population required (the walk skips players with fewer than 5);
+      * TWO OR MORE AVAILABLE DATA ITEMS MISSING from the review (items no source supplies, such as a confirmed lineup, are not held against the leg).
+    QUESTIONABLE (admitted, with a doubt the evidence supports): a counted MODERATE contradiction; an estimate between the floor and 62% (not strong enough to be the weakest leg of a GOOD ticket); an estimate of
+    75% or more on calibration below HIGH; one available data item missing; a thin record (under 40 games); a leg staked on two tickets that carries role or model uncertainty (the same doubt twice).
+    GOOD: none of the above, an estimate of at least 62%, calibration HIGH or MEDIUM.
+    Price is reported, not graded: no combined price exists. INSUFFICIENT: the card is missing, a reconstruction, or its calibration / completeness cannot support any judgement."""
+    from operational import learning_parlays as lp
+    ctx = context or {}
+    leg = ctx.get("leg") or {}
+    if not card or card.get("kind") == "ERROR" or card.get("reconstructed"):
+        return {"label": INSUFFICIENT, "basis": "PARLAY_LEG", "reasons": ["there is no review of this leg made at the time"], "criteria": []}
+    cal = (card.get("calibration_confidence") or {}).get("level")
+    comp = (card.get("data_completeness") or {}).get("fraction", 0.0)
+    est = card.get("estimate_used")
+    contr = ei.counted_contradiction(card)
+    action = (card.get("action") or {}).get("decision")
+    price_only_pass = action == "PASS" and card.get("kind") == "PLAYER" and (card.get("thesis") or {}).get("type") == "PRICE_ABOVE_ESTIMATE"
+    if cal == "INSUFFICIENT" or comp < 0.5 or est is None:
+        return {"label": INSUFFICIENT, "basis": "PARLAY_LEG", "reasons": [f"calibration {cal}, data completeness {comp:.0%}: not enough to judge the decision"], "criteria": []}
+    est = float(est)
+    bad, doubt = [], []
+    if contr in ("HIGH", "SEVERE"):
+        bad.append(("GATE_CONTRADICTION", f"a counted contradiction of {contr}"))
+    if cal not in ("HIGH", "MEDIUM"):
+        bad.append(("GATE_CALIBRATION", f"calibration {cal}"))
+    if est < lp.MIN_LEG_P:
+        bad.append(("GATE_ESTIMATE_FLOOR", f"an estimate of {est:.0%}, under the {lp.MIN_LEG_P:.0%} a parlay leg needs"))
+    if action == "PASS" and not price_only_pass:
+        bad.append(("GATE_REVIEW_PASS", "the review itself passed it"))
+    if card.get("kind") == "MONEYLINE" and leg.get("freshness_status") == "STALE_QUOTE":
+        bad.append(("STALE_MARKET_ESTIMATE", f"the estimate IS the market quote, and that quote was {leg.get('quote_age_min') or 0:.0f} minutes old (classed stale by the system)"))
+    ev = (card.get("calibration_confidence") or {}).get("evidence") or {}
+    se = ev.get("se", ev.get("standard_error"))
+    if ev.get("z") is not None and se is not None and ev.get("n", 0) >= MIN_CELL_N and ev["z"] <= -ei.Z_SIGNIFICANT and ev.get("obs") is not None and est >= float(ev["obs"]) + ei.Z_SIGNIFICANT * float(se):
+        bad.append(("CONTRADICTS_ITS_OWN_CALIBRATION", f"the {ev.get('n')}-case analogue cell says the model ran high there (z {ev['z']}) and observed {float(ev['obs']):.0%}, two standard errors under the {est:.0%} claimed"))
+    need = _adjustment_the_evidence_required(card, leg, ctx.get("date"))
+    if need < 0 and est + need < lp.MIN_LEG_P:
+        bad.append(("EVIDENCE_NOT_APPLIED", f"validated evidence says the role flag on this card costs {abs(need) * 100:.1f} points; applied, the estimate is {est + need:.0%}, under the floor"))
+    elif need < 0:
+        doubt.append(("EVIDENCE_NOT_APPLIED", f"validated evidence says a role flag on this card costs {abs(need) * 100:.1f} points that the estimate did not take off"))
+    games = leg.get("games_total") if leg.get("games_total") is not None else ((card.get("player_view") or {}).get("games_total"))
+    if card.get("kind") == "PLAYER" and games is not None:
+        from research.product_models.validate import MIN_PRIOR_GAMES
+        if games < MIN_PRIOR_GAMES:
+            bad.append(("UNSUPPORTED_REGIME", f"{games} prior games: fewer than the {MIN_PRIOR_GAMES} the model's validation required"))
+        elif games < ei.THIN_PLAYER_GAMES:
+            doubt.append(("THIN_RECORD", f"{games} games of record, under {ei.THIN_PLAYER_GAMES}"))
+    missing = [m for m in ((card.get("data_completeness") or {}).get("missing") or []) if m not in UNAVAILABLE_ITEMS]
+    if len(missing) >= 2:
+        bad.append(("DATA_INCOMPLETE", f"{len(missing)} available data items missing from the review ({', '.join(missing)})"))
+    elif missing:
+        doubt.append(("DATA_INCOMPLETE", f"an available data item was missing from the review ({missing[0]})"))
+    if bad:
+        return {"label": BAD, "basis": "PARLAY_LEG", "reasons": [t for _, t in bad], "criteria": [c for c, _ in bad]}
+    if contr == "MODERATE":
+        doubt.append(("COUNTED_CONTRADICTION", "a counted MODERATE contradiction (" + ", ".join(f["family"] for f in ei.families_of(ei.counted_flags((card.get("contradiction") or {}).get("flags") or [])) if f["level"] != "LOW") + ")"))
+    if est < lp.MIN_GOOD_WEAKEST:
+        doubt.append(("ESTIMATE_MARGIN", f"an estimate of {est:.0%}, between the {lp.MIN_LEG_P:.0%} floor and {lp.MIN_GOOD_WEAKEST:.0%}"))
+    if est >= 0.75 and cal != "HIGH":
+        doubt.append(("CLAIM_EXCEEDS_CALIBRATION", f"{est:.0%} asserted on calibration {cal}"))
+    if ctx.get("reuse_count", 1) >= 2:
+        from operational import learning_parlays as lp_
+        r = lp_.leg_risks(card)
+        if r["role_risk"] or r["model_risk"]:
+            doubt.append(("UNCERTAINTY_STAKED_TWICE", "the same role or model uncertainty sits on " + str(ctx["reuse_count"]) + " tickets"))
+    if doubt:
+        return {"label": QUESTIONABLE, "basis": "PARLAY_LEG", "reasons": [t for _, t in doubt], "criteria": [c for c, _ in doubt]}
+    return {"label": GOOD, "basis": "PARLAY_LEG", "reasons": [f"a {est:.0%} estimate, calibration {cal}, no counted contradiction, no available data missing, a supported regime"], "criteria": []}
 
 
 # ------------------------------------------------------------------------------------------------ facts about what happened
@@ -280,10 +386,10 @@ def outcome_cause(card: dict, claims: list[dict], est) -> tuple[str, str]:
     return "UNKNOWN", "the facts held but the loss was rarer than the estimate allowed, so chance alone is not an adequate explanation: investigate"
 
 
-def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False) -> dict:
+def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False, parlay_leg: bool = False, context: dict | None = None) -> dict:
     """Everything the postmortem says about one bet's decision: quality, claims checked, the lesson, and the category/action when the loss is not earned variance. `integrity_defect` is the loss classifier's
     verdict that the bet's data was defective (stale data treated as fresh, an identity failure, a pipeline failure): such a loss is never earned variance."""
-    q = decision_quality(card or {})
+    q = parlay_leg_quality(card or {}, context) if parlay_leg else decision_quality(card or {})
     claims = review_claims(card or {}, bet, facts) if card else []
     est = (card or {}).get("estimate_used")
     outcome = bet.get("result_status")

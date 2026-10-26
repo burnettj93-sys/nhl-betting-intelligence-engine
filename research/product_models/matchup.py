@@ -215,6 +215,20 @@ def load_evidence(path: Path = EVIDENCE_PATH) -> dict | None:
     return doc
 
 
+def evidence_identity(doc: dict | None = None, path: Path = EVIDENCE_PATH) -> str | None:
+    """What the evidence file IS, apart from the numbers it holds: the evidence format, the team model and its feature set and decay, and the markets the skater calibration covers. New games change the numbers
+    (a refresh); a different model, feature set, decay or market set is a different POLICY. The cohort's policy digest pins this identity, not the file's bytes."""
+    if doc is None:
+        try:
+            doc = json.loads(Path(path).read_text())
+        except (OSError, ValueError):
+            return None
+    m = doc.get("matchup") or {}
+    ident = {"version": doc.get("version"), "model_version": m.get("model_version"), "features": m.get("features"), "half_life_games": m.get("half_life_games"), "shrink_games": m.get("shrink_games"),
+             "skater_markets": sorted(((doc.get("skater") or {}).get("cells") or {}).keys())}
+    return hashlib.sha256(json.dumps(ident, sort_keys=True).encode()).hexdigest()[:16]
+
+
 def evidence_sha256(path: Path = EVIDENCE_PATH) -> str | None:
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()

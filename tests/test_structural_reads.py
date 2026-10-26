@@ -60,6 +60,9 @@ JUSTIFIED_EXCEPTIONS = {
     # deploy/score_selection_shadow.py scores shadow-logged legs AFTER their games are final (shots/goals/assists of a finished game) to measure how
     # the model's earlier, frozen probabilities did. It reads outcomes, never "what was known at time T" for a prediction, and writes nothing.
     ("deploy/score_selection_shadow.py", "player_game_stats"),
+    # deploy/analyze_price_freshness.py measures, over the moneyline snapshots already stored, how far a price moves between two captures that are a given number of hours apart (the evidence for how old a
+    # price may be and still be current). It is an offline analysis of price HISTORY: it never answers "what was known at time T" for a prediction, feeds no probability, and writes only its own report.
+    ("deploy/analyze_price_freshness.py", "odds_snapshots"),
     # operational/board_scorecard.py grades the Slate Board's pregame-FROZEN cards AFTER their games are FINAL (goals, shots, saves, score of a finished game) to measure how the card's earlier, frozen
     # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
     ("operational/board_scorecard.py", "player_game_stats"),

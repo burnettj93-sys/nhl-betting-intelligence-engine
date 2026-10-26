@@ -1,0 +1,51 @@
+{
+ "purpose": "decision-affecting validation artifacts pinned by the cohort policy digest; a changed file is a policy change and needs the owner's approval of the new digest",
+ "evidence_file": "docs/validation/eggy_evidence.json is controlled by operational/evidence_refresh.py (identity pinned, hash-chained history, automatic roll-forward of routine refreshes)",
+ "artifacts": {
+  "player_signals": {
+   "file": "docs/validation/player_signals.json",
+   "sha256": "05f40a40239e9778c4fd88b25df8fbc0b672c02de9ce7bab92614fb1b0313332",
+   "decides": "how much a role / opportunity flag is worth beyond the model (a measured downward probability adjustment, or demoted to LOW and not counted) and that the shots estimate is the validated model probability",
+   "read_by": [
+    "operational/eggy_intelligence.py signal_evidence, estimate_policy, apply_signal_evidence"
+   ],
+   "regenerate": "python3 deploy/validate_player_signals.py --out docs/validation/player_signals.json",
+   "data": "MoneyPuck skater rows 2022-23 to 2026-10-20 (52,907 rows walked), time-ordered",
+   "data_through": "2026-10-20"
+  },
+  "points_thresholds": {
+   "file": "docs/validation/points_thresholds.json",
+   "sha256": "42ff618999c85ec60c5f602f0eabc3ca9387c1948e521bcb0ae40568e1204903",
+   "decides": "which Player Points thresholds may be live legs and the recalibration of points>=2",
+   "read_by": [
+    "operational/eggy_intelligence.py points_policy",
+    "operational/learning_parlays.py leg_ok"
+   ],
+   "regenerate": "python3 deploy/validate_points_thresholds.py --out docs/validation/points_thresholds.json",
+   "data": "21,969 post-split rows; recalibration fitted before 2026-02-01",
+   "data_through": "2026-10-20"
+  },
+  "dependence_lift": {
+   "file": "docs/validation/dependence_lift.json",
+   "sha256": "ed6830fa0bac506adde48317f13daa4cf56010c165d96e8af46986c7f686b2c0",
+   "decides": "the measured pairwise dependence of legs of one game, used in ticket probability and in the portfolio simulation",
+   "read_by": [
+    "operational/learning_parlays.py dependence_lifts, measured_lift, portfolio_summary"
+   ],
+   "regenerate": "python3 deploy/validate_dependence.py --out docs/validation/dependence_lift.json",
+   "data": "same-game pairs 2025-26 and 2026-27 to date, relative to a cross-game control",
+   "data_through": "2026-10-20"
+  },
+  "price_freshness": {
+   "decides": "whether a leg's sportsbook price is FRESH, AGING (admitted with a visible note) or STALE (not admitted to a parlay), per market",
+   "read_by": [
+    "operational/price_freshness.py classify",
+    "operational/learning_cohort.py _record_parlays",
+    "operational/learning_parlays.py leg_ok"
+   ],
+   "regenerate": "python3 deploy/analyze_price_freshness.py --runtime <runtime> --out docs/validation/price_freshness.json",
+   "data_through": "2026-10-26",
+   "sha256": "5d1df9c12d9697862397da35877f04c81fc8ab85d573bffb97c73d51387368f6"
+  }
+ }
+}

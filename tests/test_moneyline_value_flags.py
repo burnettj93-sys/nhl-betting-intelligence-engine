@@ -76,7 +76,7 @@ class TestMoneylineModelAboveMarket(unittest.TestCase):
         self.assertFalse(self.ok(c)[0])
 
     def test_the_set_aside_list_is_the_price_flags_plus_exactly_these_two(self):
-        self.assertEqual(lp.PRICE_FLAGS, ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "LONGSHOT_TAIL"))
+        self.assertEqual(lp.PRICE_FLAGS, ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "LONGSHOT_TAIL", "PRICE_AGING"))
         self.assertEqual(lp.MODEL_ABOVE_MARKET_FLAGS, BOTH)
         self.assertEqual(lp.SET_ASIDE_FLAGS, lp.PRICE_FLAGS + BOTH)
 

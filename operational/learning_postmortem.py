@@ -310,6 +310,7 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
     except sqlite3.OperationalError:
         return []
     prior = {x["parlay_id"]: x for x in (previous or {}).get("parlays") or []}
+    uses: collections.Counter = collections.Counter((r["et_date"], l["key"]) for r in rows for l in json.loads(r["legs_json"]))          # how many of the day's tickets stake each leg
     out, data = [], {}
     for r in rows:
         old = prior.get(r["parlay_id"])
@@ -332,7 +333,7 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
                    "result_status": res.get("outcome") or "PENDING"}
             facts = ed.facts_for(bet, card, nhl_conn, data["files"][2]) if settled and res.get("outcome") in ("WIN", "LOSS") else None
             reviews.append({"key": l["key"], "label": lc.ei_label(L), "player": L.get("participant_name"), "team": L.get("team"), "estimate": l["estimate"], "outcome": bet["result_status"], "facts": facts,
-                            "assessment": ed.assess(bet, card, facts)})
+                            "assessment": ed.assess(bet, card, facts, parlay_leg=True, context={"leg": L, "date": r["et_date"], "reuse_count": uses[(r["et_date"], l["key"])]})})
             complete = complete and (not settled or ed.facts_are_complete(card, facts, bet_date=r["et_date"], now_date=now.astimezone(et.EASTERN).date().isoformat()))
         pub = lc._parlay_public(r)
         out.append({**pub, "et_date": r["et_date"], "verdict": PARLAY_WORD.get(r["construction_quality"]), "priced": False,
@@ -410,7 +411,11 @@ def build_lessons(conn, parlays: list[dict], reviews: dict, today: str, metrics:
         if k not in seen:
             seen.add(k)
             unique.append(c)
-    return {"as_of": today, "window_days": LESSON_DAYS, "cautions": unique, "by_date": by_date, "calibration_cautions": list((metrics or {}).get("calibration_cautions") or []),
+    cal_cautions = list((metrics or {}).get("calibration_cautions") or [])
+    from operational import eggy_intelligence as ei_
+    from operational import lesson_state as ls
+    states = ls.build(metrics, unique, cal_cautions, ei_.signal_evidence(), (metrics or {}).get("moneyline_trust"))
+    return {"as_of": today, "window_days": LESSON_DAYS, "cautions": unique, "by_date": by_date, "calibration_cautions": cal_cautions, "lesson_state": states, "lesson_state_summary": ls.summary(states),
             "note": "facts from settled legs, read by tomorrow's review as temporary cautions; no model parameter or threshold is changed by them"}
 
 
@@ -426,7 +431,7 @@ def parlay_scorecard(conn, parlays: list[dict]) -> list[dict]:
             flagship = {"legs": [x["label"] for x in f["legs"]], "result": f["result_status"]} if f else None
         except Exception:  # noqa: BLE001
             flagship = None
-        out.append({"date": day, "recorded": len(ts), "target": lc.DAILY_TARGET, "hit": sum(p["result_status"] == "HIT" for p in ts), "miss": sum(p["result_status"] == "MISS" for p in ts),
+        out.append({"date": day, "recorded": len(ts), "target": lc.daily_cap(), "hit": sum(p["result_status"] == "HIT" for p in ts), "miss": sum(p["result_status"] == "MISS" for p in ts),
                     "open": sum(p["result_status"] not in ("HIT", "MISS") for p in ts), "good": q("GOOD"), "questionable": q("QUESTIONABLE"), "flagship": flagship})
     return out
 
@@ -539,7 +544,7 @@ def snapshot_section() -> dict:
     """What the hosted app shows: the status document plus a trimmed postmortem (scorecard, cumulative record, calibration, the main breakdowns, yesterday's bets) and the final report once it exists.
     Counts and prices of paper bets only; nothing here can place or change anything."""
     status = lc.load_status() or {"cohort": lc.COHORT, "label": "14-DAY POSTMORTEM LEARNING EXPERIMENT", "authorised": False, "phase": lc.phase()["phase"], "day": lc.phase()["day"], "days": 14,
-                                  "target_per_day": lc.DAILY_TARGET, "stake_usd": lc.STAKE, "odds_requirement": f"{int(lc.ODDS_FLOOR)} or better", "recorded_today": 0, "exposure_today_usd": 0.0,
+                                  "target_per_day": lc.daily_cap(), "stake_usd": lc.STAKE, "odds_requirement": f"{int(lc.ODDS_FLOOR)} or better", "recorded_today": 0, "exposure_today_usd": 0.0,
                                   "start_date": lc.START_DATE, "end_date": lc.END_DATE}
     pm = load() or {}
     cb = pm.get("cumulative_breakdowns") or {}

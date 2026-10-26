@@ -441,7 +441,7 @@ def check_recording_pause(now: dt.datetime) -> dict:
     from operational import recording_pause as rp
     st = rp.status()
     if not st["paused"]:
-        return {"name": "recording_pause", "status": OK, "detail": "automatic recording is on"}
+        return {"name": "recording_pause", "status": OK, "detail": "no owner pause: automatic recording of the learning parlays is on (the retired primary slip records nothing)"}
     since = st.get("since_utc")
     try:
         days = (now - dt.datetime.strptime(since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)).total_seconds() / 86400.0
@@ -452,17 +452,31 @@ def check_recording_pause(now: dt.datetime) -> dict:
 
 
 def check_ticket_policy() -> dict:
-    """The selector's policy must load: if it cannot, the trader blocks recording (it never falls back to the superseded five tickets), and this says so."""
+    """The legacy selector's policy must still load (its history is read), but it is RETIRED: it records nothing and is never reported as an approved ACTIVE recording system. Only if the legacy recording
+    switch were deliberately turned back on would its approval matter again."""
     try:
-        from operational import recording_pause, ticket_policy
+        from operational import daily_tickets, recording_pause, ticket_policy
         pol = ticket_policy.checked_active()
         approved = ticket_policy.is_approved(pol)
+        if not daily_tickets.LEGACY_PRIMARY_SLIP_RECORDING:
+            return {"name": "ticket_policy", "status": OK, "detail": f"RETIRED (history only): the legacy primary slip {pol.policy_id} ({pol.digest()}) records nothing; the live product is the learning-parlay cohort and Eggy's flagship"}
         unapproved_and_live = (not approved) and not recording_pause.status()["paused"]
         return {"name": "ticket_policy", "status": WARN if unapproved_and_live else OK,
-                "detail": (f"{pol.policy_id} ({pol.digest()}), {pol.slots} slot(s) a day, {'approved' if approved else 'NOT approved by the owner'}"
+                "detail": (f"LEGACY recording switched back on: {pol.policy_id} ({pol.digest()}), {pol.slots} slot(s) a day, {'approved' if approved else 'NOT approved by the owner'}"
                            + ("; automatic recording is ON with an unapproved policy" if unapproved_and_live else ""))}
     except Exception as exc:  # noqa: BLE001
-        return {"name": "ticket_policy", "status": FAIL, "detail": f"the ticket policy cannot be loaded; automatic recording is blocked: {exc.__class__.__name__}: {exc}"[:300]}
+        return {"name": "ticket_policy", "status": FAIL, "detail": f"the ticket policy cannot be loaded; the legacy history cannot be read: {exc.__class__.__name__}: {exc}"[:300]}
+
+
+def check_learning_cohort() -> dict:
+    """The LIVE recording system: the learning-parlay cohort records only while its exact policy digest is approved (fail closed). A changed digest nobody approved stops recording silently, so the watchdog says so."""
+    try:
+        from operational import learning_cohort as lc
+        ok = lc.is_authorised()
+        return {"name": "learning_cohort", "status": OK if ok else FAIL, "detail": (f"policy digest {lc.policy_digest()} is approved and recording" if ok
+                else f"policy digest {lc.policy_digest()} is NOT approved: the cohort records nothing until `python3 -m deploy.activate_learning_experiment --apply` approves it")}
+    except Exception as exc:  # noqa: BLE001
+        return {"name": "learning_cohort", "status": FAIL, "detail": f"the learning cohort policy cannot be read: {exc.__class__.__name__}: {exc}"[:300]}
 
 
 PREDICTION_LOG_MAX_AGE_MIN = 60.0
@@ -732,6 +746,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_publishing_enabled())
     checks.append(check_recording_pause(now))
     checks.append(check_ticket_policy())
+    checks.append(check_learning_cohort())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
     for fn in (check_jobs_ran, check_missed_windows, check_power, check_daily_chain):

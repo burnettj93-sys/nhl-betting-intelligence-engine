@@ -1,0 +1,279 @@
+{
+ "method": "python3 deploy/analyze_price_freshness.py --runtime <runtime> --out docs/validation/price_freshness.json",
+ "rule": "FRESH age <= fresh_max_min; AGING up to aging_max_min while no newer scheduled capture is overdue; STALE beyond that or when a newer scheduled capture was due and does not exist",
+ "cadence": {
+  "capture_target_min": 90,
+  "publish_deadline_min": 60,
+  "wave_minutes": 60,
+  "overdue_tolerance_min": 10.0,
+  "fresh_max_min": 150.0,
+  "why": "a wave's coordinated capture is taken capture_target_min before its first game and a wave spans wave_minutes, so no price the schedule produces is older than their sum at any game's start; a later wave's moneyline is refreshed only when the plan funds a wave pull (operational/capture_timeline.py league_pull_due)"
+ },
+ "markets": {
+  "MONEYLINE": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 240.0,
+   "standard_error_of_the_estimate": 0.0098,
+   "se_source": "this market's calibration cells in the cohort's review cards",
+   "drift_of_the_price_between_captures": [
+    {
+     "gap_hours": "0-1",
+     "pairs": 643,
+     "median": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 0.0281
+    },
+    {
+     "gap_hours": "1-2",
+     "pairs": 973,
+     "median": 0.0,
+     "p75": 0.0,
+     "p90": 0.0,
+     "max": 0.0384
+    },
+    {
+     "gap_hours": "2-4",
+     "pairs": 1874,
+     "median": 0.0,
+     "p75": 0.0,
+     "p90": 0.0086,
+     "max": 0.0514
+    },
+    {
+     "gap_hours": "4-8",
+     "pairs": 2478,
+     "median": 0.0,
+     "p75": 0.0,
+     "p90": 0.0109,
+     "max": 0.0601
+    },
+    {
+     "gap_hours": "8-30",
+     "pairs": 11024,
+     "median": 0.0,
+     "p75": 0.0109,
+     "p90": 0.0265,
+     "max": 0.0904
+    }
+   ],
+   "aging_limit_reason": "the 90th-percentile move stays within one standard error (0.0098) up to 4 hours",
+   "recorded_legs_age_at_decision_min": {
+    "n": 8,
+    "min": 62.1,
+    "median": 146.95,
+    "max": 442.2
+   }
+  },
+  "PLAYER_SOG_ALTERNATE": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 150.0,
+   "standard_error_of_the_estimate": 0.0108,
+   "se_source": "this market's calibration cells in the cohort's review cards",
+   "drift_of_the_price_between_captures": [
+    {
+     "gap_hours": "0-1",
+     "pairs": 1323,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0144,
+     "max": 0.0556
+    },
+    {
+     "gap_hours": "1-2",
+     "pairs": 972,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0119,
+     "max": 0.0861
+    },
+    {
+     "gap_hours": "2-4",
+     "pairs": 817,
+     "median": 0.0055,
+     "p75": 0.0111,
+     "p90": 0.0214,
+     "max": 0.09
+    },
+    {
+     "gap_hours": "4-8",
+     "pairs": 165,
+     "median": 0.0092,
+     "p75": 0.0179,
+     "p90": 0.0278,
+     "max": 0.0587
+    },
+    {
+     "gap_hours": "8-30",
+     "pairs": 536,
+     "median": 0.0128,
+     "p75": 0.0231,
+     "p90": 0.0366,
+     "max": 0.1556
+    }
+   ],
+   "aging_limit_reason": "the 90th-percentile move exceeds one standard error in every bucket with enough history: only the schedule's limit",
+   "recorded_legs_age_at_decision_min": {
+    "n": 57,
+    "min": 31.2,
+    "median": 63.0,
+    "max": 136.3
+   }
+  },
+  "PLAYER_POINTS": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 150.0,
+   "standard_error_of_the_estimate": 0.0108,
+   "se_source": "the shots calibration cells (this market has none yet)",
+   "drift_of_the_price_between_captures": [
+    {
+     "gap_hours": "1-2",
+     "pairs": 171,
+     "median": 0.0,
+     "p75": 0.0093,
+     "p90": 0.0116,
+     "max": 0.0513
+    },
+    {
+     "gap_hours": "2-4",
+     "pairs": 102,
+     "median": 0.0,
+     "p75": 0.0051,
+     "p90": 0.0095,
+     "max": 0.0434
+    },
+    {
+     "gap_hours": "4-8",
+     "pairs": 12,
+     "median": 0.0199,
+     "p75": 0.0379,
+     "p90": 0.0444,
+     "max": 0.0476
+    }
+   ],
+   "aging_limit_reason": "the 90th-percentile move exceeds one standard error in every bucket with enough history: only the schedule's limit",
+   "recorded_legs_age_at_decision_min": null
+  },
+  "GOALIE_SAVES": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 150.0,
+   "standard_error_of_the_estimate": 0.0108,
+   "se_source": "the shots calibration cells (this market has none yet)",
+   "drift_of_the_price_between_captures": [],
+   "aging_limit_reason": "the 90th-percentile move exceeds one standard error in every bucket with enough history: only the schedule's limit",
+   "recorded_legs_age_at_decision_min": null
+  },
+  "PLAYER_GOALS": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 150.0,
+   "standard_error_of_the_estimate": 0.0108,
+   "se_source": "this market's calibration cells in the cohort's review cards",
+   "drift_of_the_price_between_captures": [
+    {
+     "gap_hours": "0-1",
+     "pairs": 1323,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0144,
+     "max": 0.0556
+    },
+    {
+     "gap_hours": "1-2",
+     "pairs": 972,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0119,
+     "max": 0.0861
+    },
+    {
+     "gap_hours": "2-4",
+     "pairs": 817,
+     "median": 0.0055,
+     "p75": 0.0111,
+     "p90": 0.0214,
+     "max": 0.09
+    },
+    {
+     "gap_hours": "4-8",
+     "pairs": 165,
+     "median": 0.0092,
+     "p75": 0.0179,
+     "p90": 0.0278,
+     "max": 0.0587
+    },
+    {
+     "gap_hours": "8-30",
+     "pairs": 536,
+     "median": 0.0128,
+     "p75": 0.0231,
+     "p90": 0.0366,
+     "max": 0.1556
+    }
+   ],
+   "aging_limit_reason": "the 90th-percentile move exceeds one standard error in every bucket with enough history: only the schedule's limit",
+   "recorded_legs_age_at_decision_min": {
+    "n": 57,
+    "min": 31.2,
+    "median": 63.0,
+    "max": 136.3
+   },
+   "note": "uses the shots limits (the same capture)"
+  },
+  "PLAYER_SOG": {
+   "fresh_max_min": 150.0,
+   "aging_max_min": 150.0,
+   "standard_error_of_the_estimate": 0.0108,
+   "se_source": "this market's calibration cells in the cohort's review cards",
+   "drift_of_the_price_between_captures": [
+    {
+     "gap_hours": "0-1",
+     "pairs": 1323,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0144,
+     "max": 0.0556
+    },
+    {
+     "gap_hours": "1-2",
+     "pairs": 972,
+     "median": 0.0,
+     "p75": 0.0065,
+     "p90": 0.0119,
+     "max": 0.0861
+    },
+    {
+     "gap_hours": "2-4",
+     "pairs": 817,
+     "median": 0.0055,
+     "p75": 0.0111,
+     "p90": 0.0214,
+     "max": 0.09
+    },
+    {
+     "gap_hours": "4-8",
+     "pairs": 165,
+     "median": 0.0092,
+     "p75": 0.0179,
+     "p90": 0.0278,
+     "max": 0.0587
+    },
+    {
+     "gap_hours": "8-30",
+     "pairs": 536,
+     "median": 0.0128,
+     "p75": 0.0231,
+     "p90": 0.0366,
+     "max": 0.1556
+    }
+   ],
+   "aging_limit_reason": "the 90th-percentile move exceeds one standard error in every bucket with enough history: only the schedule's limit",
+   "recorded_legs_age_at_decision_min": {
+    "n": 57,
+    "min": 31.2,
+    "median": 63.0,
+    "max": 136.3
+   },
+   "note": "uses the shots limits (the same capture)"
+  }
+ }
+}

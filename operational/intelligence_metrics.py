@@ -87,6 +87,7 @@ def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None
     # --- legs: hit rate against expected, calibration by band, by market, flagged / unflagged, reused / not
     leg_all, by_band, by_market, by_flag, by_reuse = _Acc(), collections.defaultdict(_Acc), collections.defaultdict(_Acc), collections.defaultdict(_Acc), collections.defaultdict(_Acc)
     ml_gap = collections.defaultdict(_Acc)
+    by_rubric = collections.defaultdict(_Acc)
     by_mkt_band = collections.defaultdict(lambda: collections.defaultdict(_Acc))
     ml_market, ml_model = collections.defaultdict(_Acc), collections.defaultdict(_Acc)
     for day, ls in legs_by_day.items():
@@ -104,6 +105,9 @@ def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None
             names = {f["name"] for f in (l["card"].get("contradiction") or {}).get("flags", [])}
             by_flag["flagged (role / opportunity flag raised)" if names & set(OVERLAY_FLAGS) else "unflagged"].add(p, hit)
             by_reuse["used on 1 ticket" if uses[day][key] == 1 else "used on 2+ tickets"].add(p, hit)
+            label = (((reviews.get((day, key)) or {}).get("assessment") or {}).get("decision_quality") or {}).get("label")
+            if label:
+                by_rubric[label].add(p, hit)                         # the parlay-leg rubric's verdict (read from the card, never from the result) against what then happened
             if fam == "MONEYLINE":
                 pr = l["card"].get("probabilities") or {}
                 mp, mk = pr.get("model"), pr.get("market_no_vig")
@@ -115,7 +119,7 @@ def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None
                     ml_model["hockey model"].add(mp, hit)
     out["legs"] = {"all": leg_all.cell(), "calibration_by_probability_band": {k: v.cell() for k, v in sorted(by_band.items())}, "by_market_and_threshold": {k: v.cell() for k, v in sorted(by_market.items())},
                    "calibration_by_market_and_band": {m: {b: c.cell() for b, c in sorted(bs.items())} for m, bs in sorted(by_mkt_band.items())},
-                   "flagged_vs_unflagged": {k: v.cell() for k, v in by_flag.items()}, "reused_vs_not": {k: v.cell() for k, v in by_reuse.items()}}
+                   "flagged_vs_unflagged": {k: v.cell() for k, v in by_flag.items()}, "reused_vs_not": {k: v.cell() for k, v in by_reuse.items()}, "rubric": {k: v.cell() for k, v in sorted(by_rubric.items())}}
     out["moneyline_model_vs_market"] = {"note": "expected = the MARKET's no-vig probability for the side; a model edge is real only if the side beats it", "by_model_market_gap": {k: v.cell() for k, v in ml_gap.items()},
                                          "market_probability_as_predictor": ml_market["market no-vig"].cell() if ml_market else None, "hockey_model_as_predictor": ml_model["hockey model"].cell() if ml_model else None}
     # a band that has OVER-predicted by 2+ standard errors over at least MIN_N settled legs is a standing caution on legs the engine puts in that band: evidence, not three bad days
@@ -173,7 +177,8 @@ def compute(conn, postmortem: dict | None = None, now: dt.datetime | None = None
         from operational import evidence_refresh as er
         out["evidence_health"] = er.status(now or dt.datetime.now(dt.timezone.utc))
         pp = ei.points_policy()
-        out["points"] = {"enabled_thresholds": sorted(pp["enabled"]), "recalibrated_thresholds": sorted(pp["recalibration"]), "validated_through": pp["validated_through"],
+        out["points"] = {"enabled_thresholds": sorted(pp["enabled"]), "actionable_thresholds": pp["actionable"], "research_only_thresholds": pp["research_only"], "cases_at_or_above_the_leg_floor": pp["cases_at_or_above_the_leg_floor"],
+                         "recalibrated_thresholds": sorted(pp["recalibration"]), "validated_through": pp["validated_through"],
                          "live_points_legs_settled": sum(c["n"] for k, c in out["legs"]["by_market_and_threshold"].items() if k.startswith("PLAYER_POINTS"))}
     except Exception as exc:  # noqa: BLE001 - the instrument never stops the postmortem
         out["evidence_health"] = {"state": "UNAVAILABLE", "why": f"{exc.__class__.__name__}"}
