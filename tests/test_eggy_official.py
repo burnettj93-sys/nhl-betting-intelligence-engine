@@ -57,8 +57,8 @@ class TestOfficialOutput(unittest.TestCase):
     def test_the_policy_digest_is_pinned_to_this_exact_policy(self):
         self.assertEqual(ec.OFFICIAL_POLICY["max_outputs_per_day"], 1)
         self.assertEqual(ec.OFFICIAL_POLICY["no_qualifying_side"], "PASS")
-        self.assertEqual(ec.OFFICIAL_POLICY["policy_id"], "EGGY_SIDE_PICK_V1")                  # Eggy's output is now ONE moneyline / puck-line side or PASS (operational/eggy_pick.py)
-        self.assertEqual(ec.official_policy_digest(), "22a33ebb28e24889")
+        self.assertEqual(ec.OFFICIAL_POLICY["policy_id"], "EGGY_SIDE_PICK_V2")                  # Eggy's output is now ONE moneyline / puck-line side or PASS (operational/eggy_pick.py)
+        self.assertEqual(ec.official_policy_digest(), "836323e744c86fa7")
 
     def test_the_board_reads_the_existing_flagship_and_has_no_second_selection_path(self):
         src = inspect.getsource(slate_board)

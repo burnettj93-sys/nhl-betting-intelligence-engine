@@ -30,7 +30,7 @@ FLAGSHIP = "OFFICIAL_EGGY_FLAGSHIP_PARLAY"
 
 # Eggy's OFFICIAL daily output (owner 2026-10-21): at most ONE flagship parlay, the learning pool's own flagship (operational/learning_cohort._flagship_public: the strongest GOOD, RECORD parlay of the
 # day), or PASS. It replaces the primary slip (policy digest 1fad3ba03503cf94) as the official output; that code is kept, not used for the official pick. No selection happens here.
-OFFICIAL_POLICY = {"policy_id": "EGGY_SIDE_PICK_V1", "unit": "SIDE", "max_outputs_per_day": 1, "markets": ["MONEYLINE", "PUCK_LINE"], "no_qualifying_side": "PASS",
+OFFICIAL_POLICY = {"policy_id": "EGGY_SIDE_PICK_V2", "unit": "SIDE", "max_outputs_per_day": 1, "markets": ["MONEYLINE", "PUCK_LINE"], "no_qualifying_side": "PASS",
                    "source": "operational.eggy_pick (decision) and operational.eggy_pick_ledger (record, postmortem, signal trust)", "price": "preferred -130 to +130; a shoulder to -160 / +160 needs twice the edge",
                    "supported_probability": "the hockey model's only where the prospective record proves the disagreement; otherwise the market's no-vig probability",
                    "learning_engine": "separate and unchanged: up to 10 unpriced learning parlays a day (operational/learning_cohort.py); its strongest GOOD ticket is displayed as the 'strongest learning ticket', not as Eggy's pick",

@@ -1,6 +1,6 @@
 {
- "generated_at_utc": "2026-10-26T21:16:27Z",
- "policy_digest": "a2cae8721bf081b4",
+ "generated_at_utc": "2026-10-26T22:25:38Z",
+ "policy_digest": "633555154f5891b7",
  "days": {
   "2026-10-22": {
    "decision_time_utc": "2026-10-22T21:39:20Z",
@@ -8,102 +8,229 @@
    "candidate_sides": 48,
    "in_preferred_region": 14,
    "fresh_prices": 48,
-   "trust_states_ml": {
-    "MODEL_AND_MARKET_AGREE": 6,
-    "INSUFFICIENT_EVIDENCE": 18
+   "blend_estimate_before_the_day": {
+    "games": 89,
+    "k_hat": 0.35,
+    "ci95": [
+     -1.0,
+     1.8
+    ]
    },
-   "decision": "PASS",
-   "pass_reason": "no side meets the standard. The closest, OTT MONEYLINE -135: no supported edge: market no-vig 55.1% against a break-even of 57.5% = -2.3 points (needs 6); the hockey model sees 65.6% (+10.4 pts) but that disagreement is unproven (insufficient evidence)",
-   "pick": null,
-   "shadow_top5": [
+   "qualifying_sides": 1,
+   "structures_qualifying": {
+    "CONSENSUS_QUALITY": 1
+   },
+   "decision": "PICK",
+   "pass_reason": null,
+   "pick": {
+    "matchup": "VGK @ STL",
+    "side": "VGK",
+    "market": "MONEYLINE",
+    "line": null,
+    "price": -130.0,
+    "structure": "CONSENSUS_QUALITY",
+    "supported_probability": 0.5533,
+    "edge": -0.0119,
+    "confidence": "LOW",
+    "result_shadow_only": "LOSS"
+   },
+   "top_three": [
     {
-     "side": "OTT",
-     "matchup": "SJS @ OTT",
+     "matchup": "VGK @ STL",
+     "side": "VGK",
      "market": "MONEYLINE",
      "line": null,
-     "price": -135.0,
-     "model": 0.6558,
-     "market_nv": 0.5514,
-     "gap": 0.1044,
+     "price": -130.0,
+     "model_probability": 0.573,
+     "model_probability_raw": 0.573,
+     "market_probability_market": 0.5427,
+     "gap": 0.0303,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0231,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
+     "model_weight": 0.35,
+     "supported_probability": 0.5533,
+     "edge": -0.0119,
+     "conservative_edge": -0.0211,
+     "probability_uncertainty": 0.0092,
+     "price_class": "IN_PREFERRED_REGION",
+     "structure": "CONSENSUS_QUALITY",
+     "qualifies": true,
+     "not_qualifying_because": [],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 2,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -125,
+      "earliest_at_utc": "2026-10-22T12:00:04Z",
+      "current_price": -130,
+      "current_at_utc": "2026-10-22T21:37:20Z",
+      "earliest_no_vig": 0.5325,
+      "current_no_vig": 0.5427,
+      "change": 0.0103,
+      "direction": "TOWARD",
+      "magnitude_points": 1.0,
+      "largest_step_at_utc": "2026-10-22T21:37:20Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates VGK the better team (57.3%, a slight gap); drivers: goal differential (decayed), expected-goal differential",
+      "the market (54.3%) and the hockey model (57.3%) are independent reads and agree within 3.0 points",
+      "the model gives 57.3% against the market's 54.3% (+3.0 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick"
+     ],
+     "market_price_case": [
+      "the market (no-vig 54.3%) leans to this side",
+      "the price moved toward VGK by 1.0 pts (-125 at 12:00Z to -130 at 21:37Z; movement is market information, not called sharp money, and has not yet been validated)",
+      "-130 is inside the preferred near-even region"
+     ],
+     "case_against": [
+      "the bookmaker's margin costs about 2.2 points of break-even on this side",
+      "starting goalies are not confirmed by an approved source (not available to Eggy)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "LOSS"
     },
     {
-     "side": "PIT",
+     "matchup": "WPG @ DAL",
+     "side": "DAL",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -205.0,
+     "model_probability": 0.6482,
+     "model_probability_raw": 0.6482,
+     "market_probability_market": 0.6447,
+     "gap": 0.0035,
+     "trust_state": "MODEL_AND_MARKET_AGREE",
+     "model_weight": 0.35,
+     "supported_probability": 0.6459,
+     "edge": -0.0262,
+     "conservative_edge": -0.0366,
+     "probability_uncertainty": 0.0104,
+     "price_class": "EXTREME",
+     "structure": "NONE",
+     "qualifies": false,
+     "not_qualifying_because": [
+      "price -205 is extreme: Eggy does not hunt prices beyond -200 / +200 (heuristic)",
+      "no SUPPORTED market gap: the model's gap is +0.4 pts",
+      "no market / situational opportunity: 0 measured fact(s) of the two needed (none); the price is 2.6 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 64.5% / model 64.8% / gap +0.4 pts / price -205"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 3,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -205,
+      "earliest_at_utc": "2026-10-22T12:00:04Z",
+      "current_price": -205,
+      "current_at_utc": "2026-10-22T21:37:20Z",
+      "earliest_no_vig": 0.6447,
+      "current_no_vig": 0.6447,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-22T21:37:20Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates DAL the better team (64.8%, a clear gap); drivers: home ice, goal differential (decayed), expected-goal differential",
+      "the market (64.5%) and the hockey model (64.8%) are independent reads and agree within 0.4 points"
+     ],
+     "market_price_case": [
+      "the market (no-vig 64.5%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "the bookmaker's margin costs about 2.7 points of break-even on this side",
+      "starting goalies are not confirmed by an approved source (not available to Eggy)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
+    },
+    {
      "matchup": "FLA @ PIT",
+     "side": "PIT",
      "market": "MONEYLINE",
      "line": null,
      "price": -108.0,
-     "model": 0.5915,
-     "market_nv": 0.4957,
+     "model_probability": 0.5915,
+     "model_probability_raw": 0.5915,
+     "market_probability_market": 0.4957,
      "gap": 0.0958,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": -0.0152,
-     "edge": -0.0235,
+     "model_weight": 0.35,
+     "supported_probability": 0.5292,
+     "edge": 0.01,
+     "conservative_edge": 0.0008,
+     "probability_uncertainty": 0.0092,
+     "price_class": "IN_PREFERRED_REGION",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "WIN"
-    },
-    {
-     "side": "ANA",
-     "matchup": "ANA @ NJD",
-     "market": "PUCK_LINE",
-     "line": 1.5,
-     "price": -135.0,
-     "model": 0.6343,
-     "market_nv": 0.5514,
-     "gap": 0.0829,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": -0.0206,
-     "edge": -0.0231,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "NYI",
-     "matchup": "LAK @ NYI",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -105.0,
-     "model": 0.5637,
-     "market_nv": 0.4892,
-     "gap": 0.0745,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": -0.0217,
-     "edge": -0.023,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "CGY",
-     "matchup": "MIN @ CGY",
-     "market": "PUCK_LINE",
-     "line": 1.5,
-     "price": -148.0,
-     "model": 0.637,
-     "market_nv": 0.5721,
-     "gap": 0.065,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": -0.0109,
-     "edge": -0.0247,
-     "qualifies": false,
-     "result_if_bet": "WIN"
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's +9.6-pt gap is unproven (insufficient evidence)",
+      "no market / situational opportunity: 2 measured fact(s) of the two needed (rest advantage, evidence-weighted probability above break-even); the price moved AWAY from the side",
+      "not a consensus side: market 49.6% / model 59.2% / gap +9.6 pts / price -108"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 2,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY",
+       "SITUATION"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -115,
+      "earliest_at_utc": "2026-10-22T12:00:04Z",
+      "current_price": -108,
+      "current_at_utc": "2026-10-22T21:37:20Z",
+      "earliest_no_vig": 0.5108,
+      "current_no_vig": 0.4957,
+      "change": -0.0152,
+      "direction": "AWAY",
+      "magnitude_points": 1.5,
+      "largest_step_at_utc": "2026-10-22T21:37:20Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates PIT the better team (59.2%, a slight gap); drivers: home ice, back-to-back",
+      "the model gives 59.2% against the market's 49.6% (+9.6 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick",
+      "FLA is on a back-to-back and PIT is rested"
+     ],
+     "market_price_case": [
+      "-108 is inside the preferred near-even region",
+      "the evidence-weighted probability (52.9%) is above the break-even (51.9%) by +1.0 pts"
+     ],
+     "case_against": [
+      "the price moved away PIT by 1.5 pts (-115 at 12:00Z to -108 at 21:37Z; movement is market information, not called sharp money, and has not yet been validated)",
+      "the bookmaker's margin costs about 2.4 points of break-even on this side"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
     }
-   ],
-   "model_edge_candidates_3plus_unproven": 15,
-   "largest_model_gap": 0.1044
+   ]
   },
   "2026-10-23": {
    "decision_time_utc": "2026-10-23T23:10:38Z",
@@ -111,101 +238,217 @@
    "candidate_sides": 8,
    "in_preferred_region": 2,
    "fresh_prices": 8,
-   "trust_states_ml": {
-    "INSUFFICIENT_EVIDENCE": 4
+   "blend_estimate_before_the_day": {
+    "games": 101,
+    "k_hat": 0.0,
+    "ci95": [
+     -1.0,
+     1.45
+    ]
    },
+   "qualifying_sides": 0,
+   "structures_qualifying": {},
    "decision": "PASS",
-   "pass_reason": "no side meets the standard. The closest, COL MONEYLINE -125: no supported edge: market no-vig 53.2% against a break-even of 55.6% = -2.3 points (needs 3); the hockey model sees 60.1% (+6.9 pts) but that disagreement is unproven (insufficient evidence)",
+   "pass_reason": "no side meets the standard. The most researched side, MTL MONEYLINE -170, does not qualify: no SUPPORTED market gap: the model's +3.4-pt gap is unproven (insufficient evidence); no market / situational opportunity: 1 measured fact(s) of the two needed (price moved toward the side); the price is 2.6 pts worse than the evidence supports (limit 1); not a consensus side: market 60.4% / model 63.8% / gap +3.4 pts / price -170. Total evidence for it: 0 strong / 4 moderate; against: 0 strong / 1 moderate.",
    "pick": null,
-   "shadow_top5": [
+   "top_three": [
     {
-     "side": "COL",
+     "matchup": "MTL @ CHI",
+     "side": "MTL",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -170.0,
+     "model_probability": 0.6376,
+     "model_probability_raw": 0.6376,
+     "market_probability_market": 0.6038,
+     "gap": 0.0338,
+     "trust_state": "INSUFFICIENT_EVIDENCE",
+     "model_weight": 0.0,
+     "supported_probability": 0.6038,
+     "edge": -0.0258,
+     "conservative_edge": -0.0362,
+     "probability_uncertainty": 0.0104,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
+     "qualifies": false,
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's +3.4-pt gap is unproven (insufficient evidence)",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (price moved toward the side); the price is 2.6 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 60.4% / model 63.8% / gap +3.4 pts / price -170"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 4,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MARKET_BEHAVIOUR",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -148,
+      "earliest_at_utc": "2026-10-23T12:00:05Z",
+      "current_price": -170,
+      "current_at_utc": "2026-10-23T23:08:38Z",
+      "earliest_no_vig": 0.5721,
+      "current_no_vig": 0.6038,
+      "change": 0.0317,
+      "direction": "TOWARD",
+      "magnitude_points": 3.2,
+      "largest_step_at_utc": "2026-10-23T23:08:38Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates MTL the better team (63.8%, a clear gap); drivers: goal differential (decayed), expected-goal differential",
+      "the market (60.4%) and the hockey model (63.8%) are independent reads and agree within 3.4 points",
+      "the model gives 63.8% against the market's 60.4% (+3.4 pts); not yet proven (state: insufficient evidence), so it carries weight 0.00, not the pick"
+     ],
+     "market_price_case": [
+      "the market (no-vig 60.4%) rates this side a clear favourite",
+      "the price moved toward MTL by 3.2 pts (-148 at 12:00Z to -170 at 23:08Z; movement is market information, not called sharp money, and has not yet been validated)"
+     ],
+     "case_against": [
+      "-170 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
+    },
+    {
      "matchup": "TBL @ COL",
+     "side": "COL",
      "market": "MONEYLINE",
      "line": null,
      "price": -125.0,
-     "model": 0.601,
-     "market_nv": 0.5325,
+     "model_probability": 0.601,
+     "model_probability_raw": 0.601,
+     "market_probability_market": 0.5325,
      "gap": 0.0685,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0,
+     "model_weight": 0.0,
+     "supported_probability": 0.5325,
      "edge": -0.0231,
+     "conservative_edge": -0.0335,
+     "probability_uncertainty": 0.0104,
+     "price_class": "IN_PREFERRED_REGION",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "WIN"
+     "not_qualifying_because": [
+      "the case for does not materially exceed the case against (for_strong 0, for_moderate 1, against_strong 0, against_moderate 0, materially_outweighs False; supporting categories ['HOCKEY'])",
+      "no SUPPORTED market gap: the model's +6.9-pt gap is unproven (insufficient evidence)",
+      "no market / situational opportunity: 0 measured fact(s) of the two needed (none); the price is 2.3 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 53.2% / model 60.1% / gap +6.9 pts / price -125"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 1,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY"
+      ],
+      "materially_outweighs": false
+     },
+     "movement": {
+      "earliest_price": -125,
+      "earliest_at_utc": "2026-10-23T12:00:05Z",
+      "current_price": -125,
+      "current_at_utc": "2026-10-23T23:08:38Z",
+      "earliest_no_vig": 0.5325,
+      "current_no_vig": 0.5325,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-23T23:08:38Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates COL the better team (60.1%, a slight gap); drivers: home ice, goal differential (decayed), expected-goal differential",
+      "the model gives 60.1% against the market's 53.2% (+6.9 pts); not yet proven (state: insufficient evidence), so it carries weight 0.00, not the pick"
+     ],
+     "market_price_case": [
+      "the market (no-vig 53.2%) leans to this side",
+      "-125 is inside the preferred near-even region"
+     ],
+     "case_against": [
+      "the bookmaker's margin costs about 2.3 points of break-even on this side",
+      "starting goalies are not confirmed by an approved source (not available to Eggy)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
     },
     {
-     "side": "MTL",
      "matchup": "MTL @ CHI",
+     "side": "MTL",
      "market": "PUCK_LINE",
      "line": -1.5,
      "price": 150.0,
-     "model": 0.3902,
-     "market_nv": 0.3836,
-     "gap": 0.0066,
+     "model_probability": 0.3654,
+     "model_probability_raw": 0.3902,
+     "market_probability_market": 0.3836,
+     "gap": -0.0182,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0283,
+     "model_weight": 0.0,
+     "supported_probability": 0.3836,
      "edge": -0.0164,
+     "conservative_edge": -0.0412,
+     "probability_uncertainty": 0.0248,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "WIN"
-    },
-    {
-     "side": "CHI",
-     "matchup": "MTL @ CHI",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": 142.0,
-     "model": 0.3624,
-     "market_nv": 0.3962,
-     "gap": -0.0338,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": -0.0317,
-     "edge": -0.017,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "TBL",
-     "matchup": "TBL @ COL",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": 105.0,
-     "model": 0.399,
-     "market_nv": 0.4675,
-     "gap": -0.0685,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0203,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "COL",
-     "matchup": "TBL @ COL",
-     "market": "PUCK_LINE",
-     "line": -1.5,
-     "price": 195.0,
-     "model": 0.3603,
-     "market_nv": 0.325,
-     "gap": 0.0353,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "OUTSIDE",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.014,
-     "qualifies": false,
-     "result_if_bet": "WIN"
+     "not_qualifying_because": [
+      "the case for does not materially exceed the case against (for_strong 0, for_moderate 2, against_strong 0, against_moderate 2, materially_outweighs False; supporting categories ['HOCKEY', 'MARKET_BEHAVIOUR'])",
+      "no SUPPORTED market gap: the model's gap is -1.8 pts",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (price moved toward the side); the price is 1.6 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 38.4% / model 36.5% / gap -1.8 pts / price +150"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 2,
+      "against_strong": 0,
+      "against_moderate": 2,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET_BEHAVIOUR"
+      ],
+      "materially_outweighs": false
+     },
+     "movement": {
+      "earliest_price": 170,
+      "earliest_at_utc": "2026-10-23T12:00:05Z",
+      "current_price": 150,
+      "current_at_utc": "2026-10-23T23:08:38Z",
+      "earliest_no_vig": 0.3553,
+      "current_no_vig": 0.3836,
+      "change": 0.0283,
+      "direction": "TOWARD",
+      "magnitude_points": 2.8,
+      "largest_step_at_utc": "2026-10-23T23:08:38Z",
+      "captures": 2
+     },
+     "calibration": "MEDIUM",
+     "calibration_note": "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
+     "hockey_case": [
+      "the team model rates MTL the better team (63.8%, a clear gap); drivers: goal differential (decayed), expected-goal differential"
+     ],
+     "market_price_case": [
+      "the price moved toward MTL by 2.8 pts (+170 at 12:00Z to +150 at 23:08Z; movement is market information, not called sharp money, and has not yet been validated)"
+     ],
+     "case_against": [
+      "+150 is outside the preferred near-even region (heuristic preference)",
+      "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction; its uncertainty is 2.5 points and its agreement with the puck-line MARKET has no prospective record yet"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
     }
-   ],
-   "model_edge_candidates_3plus_unproven": 3,
-   "largest_model_gap": 0.0685
+   ]
   },
   "2026-10-24": {
    "decision_time_utc": "2026-10-24T15:34:17Z",
@@ -213,102 +456,219 @@
    "candidate_sides": 48,
    "in_preferred_region": 13,
    "fresh_prices": 48,
-   "trust_states_ml": {
-    "MODEL_AND_MARKET_AGREE": 12,
-    "INSUFFICIENT_EVIDENCE": 12
+   "blend_estimate_before_the_day": {
+    "games": 103,
+    "k_hat": 0.15,
+    "ci95": [
+     -1.0,
+     1.6
+    ]
    },
+   "qualifying_sides": 0,
+   "structures_qualifying": {},
    "decision": "PASS",
-   "pass_reason": "no side meets the standard. The closest, OTT MONEYLINE -125: no supported edge: market no-vig 53.2% against a break-even of 55.6% = -2.3 points (needs 3); the hockey model sees 62.0% (+8.7 pts) but that disagreement is unproven (insufficient evidence)",
+   "pass_reason": "no side meets the standard. The most researched side, UTA MONEYLINE -142, does not qualify: no SUPPORTED market gap: the model's gap is +1.6 pts; no market / situational opportunity: 1 measured fact(s) of the two needed (rest advantage); the price is 2.1 pts worse than the evidence supports (limit 1); not a consensus side: market 56.4% / model 58.0% / gap +1.6 pts / price -142. Total evidence for it: 0 strong / 4 moderate; against: 0 strong / 1 moderate.",
    "pick": null,
-   "shadow_top5": [
+   "top_three": [
     {
-     "side": "OTT",
-     "matchup": "NYR @ OTT",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -125.0,
-     "model": 0.6198,
-     "market_nv": 0.5325,
-     "gap": 0.0873,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0231,
-     "qualifies": false,
-     "result_if_bet": "WIN"
-    },
-    {
-     "side": "PIT",
-     "matchup": "NSH @ PIT",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -135.0,
-     "model": 0.6377,
-     "market_nv": 0.5514,
-     "gap": 0.0863,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0231,
-     "qualifies": false,
-     "result_if_bet": "WIN"
-    },
-    {
-     "side": "CAR",
-     "matchup": "CAR @ STL",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -155.0,
-     "model": 0.6545,
-     "market_nv": 0.583,
-     "gap": 0.0715,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0248,
-     "qualifies": false,
-     "result_if_bet": "WIN"
-    },
-    {
-     "side": "EDM",
-     "matchup": "TOR @ EDM",
-     "market": "PUCK_LINE",
-     "line": -1.5,
-     "price": 136.0,
-     "model": 0.4493,
-     "market_nv": 0.4066,
-     "gap": 0.0426,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": -0.0104,
-     "edge": -0.0171,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "VGK",
-     "matchup": "VGK @ CBJ",
+     "matchup": "TBL @ UTA",
+     "side": "UTA",
      "market": "MONEYLINE",
      "line": null,
      "price": -142.0,
-     "model": 0.5975,
-     "market_nv": 0.5635,
+     "model_probability": 0.5797,
+     "model_probability_raw": 0.5797,
+     "market_probability_market": 0.5635,
+     "gap": 0.0162,
+     "trust_state": "MODEL_AND_MARKET_AGREE",
+     "model_weight": 0.15,
+     "supported_probability": 0.5659,
+     "edge": -0.0209,
+     "conservative_edge": -0.0301,
+     "probability_uncertainty": 0.0092,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
+     "qualifies": false,
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's gap is +1.6 pts",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (rest advantage); the price is 2.1 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 56.4% / model 58.0% / gap +1.6 pts / price -142"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 4,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MODEL",
+       "SITUATION"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -142,
+      "earliest_at_utc": "2026-10-24T12:00:05Z",
+      "current_price": -142,
+      "current_at_utc": "2026-10-24T15:32:17Z",
+      "earliest_no_vig": 0.5635,
+      "current_no_vig": 0.5635,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-24T15:32:17Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates UTA the better team (58.0%, a slight gap); drivers: home ice, high-danger chances (offsets xGD), back-to-back",
+      "the market (56.4%) and the hockey model (58.0%) are independent reads and agree within 1.6 points",
+      "TBL is on a back-to-back and UTA is rested"
+     ],
+     "market_price_case": [
+      "the market (no-vig 56.4%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "-142 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
+    },
+    {
+     "matchup": "LAK @ NJD",
+     "side": "NJD",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -192.0,
+     "model_probability": 0.6206,
+     "model_probability_raw": 0.6206,
+     "market_probability_market": 0.6309,
+     "gap": -0.0103,
+     "trust_state": "MODEL_AND_MARKET_AGREE",
+     "model_weight": 0.15,
+     "supported_probability": 0.6294,
+     "edge": -0.0281,
+     "conservative_edge": -0.0385,
+     "probability_uncertainty": 0.0104,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
+     "qualifies": false,
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's gap is -1.0 pts",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (price moved toward the side); the price is 2.8 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 63.1% / model 62.1% / gap -1.0 pts / price -192"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 4,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MARKET_BEHAVIOUR",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -166,
+      "earliest_at_utc": "2026-10-24T12:00:05Z",
+      "current_price": -192,
+      "current_at_utc": "2026-10-24T15:32:17Z",
+      "earliest_no_vig": 0.5996,
+      "current_no_vig": 0.6309,
+      "change": 0.0313,
+      "direction": "TOWARD",
+      "magnitude_points": 3.1,
+      "largest_step_at_utc": "2026-10-24T15:32:17Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates NJD the better team (62.1%, a slight gap); drivers: home ice, goal differential (decayed), expected-goal differential",
+      "the market (63.1%) and the hockey model (62.1%) are independent reads and agree within 1.0 points"
+     ],
+     "market_price_case": [
+      "the market (no-vig 63.1%) rates this side a clear favourite",
+      "the price moved toward NJD by 3.1 pts (-166 at 12:00Z to -192 at 15:32Z; movement is market information, not called sharp money, and has not yet been validated)"
+     ],
+     "case_against": [
+      "-192 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
+    },
+    {
+     "matchup": "VGK @ CBJ",
+     "side": "VGK",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -142.0,
+     "model_probability": 0.5975,
+     "model_probability_raw": 0.5975,
+     "market_probability_market": 0.5635,
      "gap": 0.034,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0121,
-     "edge": -0.0233,
+     "model_weight": 0.15,
+     "supported_probability": 0.5686,
+     "edge": -0.0182,
+     "conservative_edge": -0.0274,
+     "probability_uncertainty": 0.0092,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "LOSS"
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's +3.4-pt gap is unproven (insufficient evidence)",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (price moved toward the side); the price is 1.8 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 56.4% / model 59.8% / gap +3.4 pts / price -142"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 3,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -135,
+      "earliest_at_utc": "2026-10-24T12:00:05Z",
+      "current_price": -142,
+      "current_at_utc": "2026-10-24T15:32:17Z",
+      "earliest_no_vig": 0.5514,
+      "current_no_vig": 0.5635,
+      "change": 0.0121,
+      "direction": "TOWARD",
+      "magnitude_points": 1.2,
+      "largest_step_at_utc": "2026-10-24T15:32:17Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates VGK the better team (59.8%, a slight gap); drivers: goal differential (decayed), expected-goal differential",
+      "the market (56.4%) and the hockey model (59.8%) are independent reads and agree within 3.4 points",
+      "the model gives 59.8% against the market's 56.4% (+3.4 pts); not yet proven (state: insufficient evidence), so it carries weight 0.15, not the pick"
+     ],
+     "market_price_case": [
+      "the market (no-vig 56.4%) rates this side a clear favourite",
+      "the price moved toward VGK by 1.2 pts (-135 at 12:00Z to -142 at 15:32Z; movement is market information, not called sharp money, and has not yet been validated)"
+     ],
+     "case_against": [
+      "-142 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "LOSS"
     }
-   ],
-   "model_edge_candidates_3plus_unproven": 13,
-   "largest_model_gap": 0.0873
+   ]
   },
   "2026-10-25": {
    "decision_time_utc": "2026-10-25T17:36:51Z",
@@ -316,102 +676,218 @@
    "candidate_sides": 20,
    "in_preferred_region": 5,
    "fresh_prices": 20,
-   "trust_states_ml": {
-    "INSUFFICIENT_EVIDENCE": 6,
-    "MODEL_AND_MARKET_AGREE": 4
+   "blend_estimate_before_the_day": {
+    "games": 115,
+    "k_hat": 0.25,
+    "ci95": [
+     -1.0,
+     1.6
+    ]
    },
+   "qualifying_sides": 0,
+   "structures_qualifying": {},
    "decision": "PASS",
-   "pass_reason": "no side meets the standard. The closest, WPG MONEYLINE -102: no supported edge: market no-vig 48.3% against a break-even of 50.5% = -2.2 points (needs 3)",
+   "pass_reason": "no side meets the standard. The most researched side, COL MONEYLINE -230, does not qualify: price -230 is extreme: Eggy does not hunt prices beyond -200 / +200 (heuristic); data completeness 0.714 / calibration LOW too weak to stand a pick on; no SUPPORTED market gap: the model's +7.2-pt gap is unproven (insufficient evidence). Total evidence for it: 1 strong / 2 moderate; against: 0 strong / 0 moderate.",
    "pick": null,
-   "shadow_top5": [
+   "top_three": [
     {
-     "side": "WPG",
-     "matchup": "MTL @ WPG",
+     "matchup": "COL @ NSH",
+     "side": "COL",
      "market": "MONEYLINE",
      "line": null,
-     "price": -102.0,
-     "model": 0.5042,
-     "market_nv": 0.4826,
-     "gap": 0.0216,
-     "trust_state": "MODEL_AND_MARKET_AGREE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0087,
-     "edge": -0.0224,
-     "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "FLA",
-     "matchup": "FLA @ CHI",
-     "market": "PUCK_LINE",
-     "line": -1.5,
-     "price": 136.0,
-     "model": 0.4281,
-     "market_nv": 0.4066,
-     "gap": 0.0215,
+     "price": -230.0,
+     "model_probability": 0.741,
+     "model_probability_raw": 0.741,
+     "market_probability_market": 0.669,
+     "gap": 0.072,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0171,
+     "model_weight": 0.25,
+     "supported_probability": 0.687,
+     "edge": -0.01,
+     "conservative_edge": -0.0259,
+     "probability_uncertainty": 0.0159,
+     "price_class": "EXTREME",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "LOSS"
+     "not_qualifying_because": [
+      "price -230 is extreme: Eggy does not hunt prices beyond -200 / +200 (heuristic)",
+      "data completeness 0.714 / calibration LOW too weak to stand a pick on",
+      "no SUPPORTED market gap: the model's +7.2-pt gap is unproven (insufficient evidence)",
+      "no market / situational opportunity: 1 measured fact(s) of the two needed (rest advantage)",
+      "not a consensus side: market 66.9% / model 74.1% / gap +7.2 pts / price -230"
+     ],
+     "balance": {
+      "for_strong": 1,
+      "for_moderate": 2,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "SITUATION"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -230,
+      "earliest_at_utc": "2026-10-25T12:00:15Z",
+      "current_price": -230,
+      "current_at_utc": "2026-10-25T17:34:51Z",
+      "earliest_no_vig": 0.669,
+      "current_no_vig": 0.669,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-25T17:34:51Z",
+      "captures": 2
+     },
+     "calibration": "LOW",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates COL the better team (74.1%, a strong gap); drivers: goal differential (decayed), expected-goal differential, back-to-back",
+      "the model gives 74.1% against the market's 66.9% (+7.2 pts); not yet proven (state: insufficient evidence), so it carries weight 0.25, not the pick",
+      "NSH is on a back-to-back and COL is rested"
+     ],
+     "market_price_case": [
+      "the market (no-vig 66.9%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "the bookmaker's margin costs about 2.8 points of break-even on this side",
+      "starting goalies are not confirmed by an approved source (not available to Eggy)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "LOSS"
     },
     {
-     "side": "COL",
      "matchup": "COL @ NSH",
+     "side": "COL",
      "market": "PUCK_LINE",
      "line": -1.5,
      "price": 105.0,
-     "model": 0.4881,
-     "market_nv": 0.4675,
-     "gap": 0.0205,
+     "model_probability": 0.4633,
+     "model_probability_raw": 0.4881,
+     "market_probability_market": 0.4675,
+     "gap": -0.0042,
      "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0103,
-     "edge": -0.0203,
+     "model_weight": 0.25,
+     "supported_probability": 0.4665,
+     "edge": -0.0213,
+     "conservative_edge": -0.0461,
+     "probability_uncertainty": 0.0248,
+     "price_class": "IN_PREFERRED_REGION",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "LOSS"
+     "not_qualifying_because": [
+      "the case for does not materially exceed the case against (for_strong 1, for_moderate 1, against_strong 0, against_moderate 1, materially_outweighs False; supporting categories ['HOCKEY', 'SITUATION'])",
+      "no SUPPORTED market gap: the model's gap is -0.4 pts",
+      "no market / situational opportunity: 2 measured fact(s) of the two needed (price moved toward the side, rest advantage); the price is 2.1 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 46.8% / model 46.3% / gap -0.4 pts / price +105"
+     ],
+     "balance": {
+      "for_strong": 1,
+      "for_moderate": 1,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "SITUATION"
+      ],
+      "materially_outweighs": false
+     },
+     "movement": {
+      "earliest_price": 110,
+      "earliest_at_utc": "2026-10-25T12:00:15Z",
+      "current_price": 105,
+      "current_at_utc": "2026-10-25T17:34:51Z",
+      "earliest_no_vig": 0.4573,
+      "current_no_vig": 0.4675,
+      "change": 0.0103,
+      "direction": "TOWARD",
+      "magnitude_points": 1.0,
+      "largest_step_at_utc": "2026-10-25T17:34:51Z",
+      "captures": 2
+     },
+     "calibration": "MEDIUM",
+     "calibration_note": "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
+     "hockey_case": [
+      "the team model rates COL the better team (74.1%, a strong gap); drivers: goal differential (decayed), expected-goal differential, back-to-back",
+      "NSH is on a back-to-back and COL is rested"
+     ],
+     "market_price_case": [
+      "the price moved toward COL by 1.0 pts (+110 at 12:00Z to +105 at 17:34Z; movement is market information, not called sharp money, and has not yet been validated)",
+      "+105 is inside the preferred near-even region"
+     ],
+     "case_against": [
+      "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction; its uncertainty is 2.5 points and its agreement with the puck-line MARKET has no prospective record yet"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "LOSS"
     },
     {
-     "side": "VAN",
-     "matchup": "MIN @ VAN",
-     "market": "PUCK_LINE",
-     "line": 1.5,
-     "price": -148.0,
-     "model": 0.5885,
-     "market_nv": 0.5721,
-     "gap": 0.0165,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "SHOULDER",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0247,
+     "matchup": "NYI @ DAL",
+     "side": "DAL",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -198.0,
+     "model_probability": 0.627,
+     "model_probability_raw": 0.627,
+     "market_probability_market": 0.6369,
+     "gap": -0.0099,
+     "trust_state": "MODEL_AND_MARKET_AGREE",
+     "model_weight": 0.25,
+     "supported_probability": 0.6344,
+     "edge": -0.03,
+     "conservative_edge": -0.0404,
+     "probability_uncertainty": 0.0104,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
      "qualifies": false,
-     "result_if_bet": "LOSS"
-    },
-    {
-     "side": "MIN",
-     "matchup": "MIN @ VAN",
-     "market": "PUCK_LINE",
-     "line": -1.5,
-     "price": 124.0,
-     "model": 0.4115,
-     "market_nv": 0.4279,
-     "gap": -0.0165,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "price_class": "IN_REGION",
-     "freshness": "FRESH",
-     "moved": 0.0,
-     "edge": -0.0185,
-     "qualifies": false,
-     "result_if_bet": "WIN"
+     "not_qualifying_because": [
+      "no SUPPORTED market gap: the model's gap is -1.0 pts",
+      "no market / situational opportunity: 0 measured fact(s) of the two needed (none); the price is 3.0 pts worse than the evidence supports (limit 1)",
+      "not a consensus side: market 63.7% / model 62.7% / gap -1.0 pts / price -198"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 3,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY",
+       "MARKET",
+       "MODEL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -198,
+      "earliest_at_utc": "2026-10-25T12:00:15Z",
+      "current_price": -198,
+      "current_at_utc": "2026-10-25T17:34:51Z",
+      "earliest_no_vig": 0.6369,
+      "current_no_vig": 0.6369,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-25T17:34:51Z",
+      "captures": 2
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates DAL the better team (62.7%, a clear gap); drivers: home ice, goal differential (decayed), expected-goal differential",
+      "the market (63.7%) and the hockey model (62.7%) are independent reads and agree within 1.0 points"
+     ],
+     "market_price_case": [
+      "the market (no-vig 63.7%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "-198 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "price_freshness": "FRESH",
+     "result_if_bet_shadow_only": "WIN"
     }
-   ],
-   "model_edge_candidates_3plus_unproven": 3,
-   "largest_model_gap": 0.072
+   ]
   }
  }
 }

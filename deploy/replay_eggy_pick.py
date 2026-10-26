@@ -64,14 +64,16 @@ def main(argv=None) -> int:
             t = starts[str(r["game_id"])]
             if t > T:
                 games.append({"game_id": r["game_id"], "home": r["home_team"], "away": r["away_team"], "start_utc": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "date": day})
+        prior = [r for r in ledger_rows if r["date"] < day]
+        blend = ep.blend_estimate(prior)
         cands = []
         for g in games:
-            cands.extend(ep.evaluate_game(ctx, g, caps, T, cap, {"state": "INSUFFICIENT_EVIDENCE"}))
-        doc = ep.decide(cands, now=T)
+            cands.extend(ep.evaluate_game(ctx, g, caps, T, cap, {"state": "INSUFFICIENT_EVIDENCE"}, blend, {}))
+        doc = ep.decide(cands, now=T, structure_state={})
         res = {}
         for r in final.execute("SELECT game_id, home_team, away_team, home_score, away_score FROM games WHERE game_date = ?", (day,)):
             res[str(r["game_id"])] = (r["home_team"], int(r["home_score"] or 0) - int(r["away_score"] or 0))
-        def outcome(c):
+        def outcome(c):                                                # read ONLY after the decision is made: never an input to it
             home, m = res.get(str(c["game_id"]), (None, None))
             if m is None:
                 return None
@@ -79,18 +81,23 @@ def main(argv=None) -> int:
             if c["market"] == "MONEYLINE":
                 return "WIN" if sm > 0 else "LOSS"
             return "WIN" if (sm >= 2 if c["line"] < 0 else sm > -2) else "LOSS"
-        ranked = sorted(cands, key=lambda c: (c["price_class"] == "OUTSIDE" or c["price_freshness"]["status"] != "FRESH", -round(c["edge"], 2), -c["gap"], c["market"] != "MONEYLINE"))
-        shadow = [{"side": c["side"], "matchup": c["matchup"], "market": c["market"], "line": c["line"], "price": c["price"], "model": c["model_probability"], "market_nv": c["market_probability_market"], "gap": c["gap"],
-                   "trust_state": c["trust_state"], "price_class": c["price_class"], "freshness": c["price_freshness"]["status"], "moved": c.get("movement_toward_side"), "edge": c["edge"],
-                   "qualifies": c["qualifies_before_the_case"], "result_if_bet": outcome(c)} for c in ranked[:5]]
-        in_region = [c for c in cands if c["price_class"] == "IN_REGION"]
-        out["days"][day] = {"decision_time_utc": T.strftime("%Y-%m-%dT%H:%M:%SZ"), "games_open": len(games), "candidate_sides": len(cands), "in_preferred_region": len(in_region), "fresh_prices": sum(1 for c in cands if c["price_freshness"]["status"] == "FRESH"),
-                            "trust_states_ml": dict(collections.Counter(c["trust_state"] for c in cands if c["market"] == "MONEYLINE")), "decision": doc["decision"], "pass_reason": doc.get("pass_reason"), "pick": None if doc["decision"] != "PICK" else
-                            {k: doc["pick"][k] for k in ("matchup", "side", "market", "line", "price", "edge", "confidence")} | {"result": outcome(doc["pick"])}, "shadow_top5": shadow,
-                            "model_edge_candidates_3plus_unproven": sum(1 for c in cands if c["gap"] >= ei.EDGE_MIN), "largest_model_gap": max((c["gap"] for c in cands), default=None)}
+        by_key = {(c["matchup"], c["side"], c["market"]): c for c in cands}
+        top3 = []
+        for t in doc["top_three"]:
+            full = by_key[(t["matchup"], t["side"], t["market"])]
+            top3.append({**t, "result_if_bet_shadow_only": outcome(full)})
+        in_region = [c for c in cands if c["price_class"] == "IN_PREFERRED_REGION"]
+        out["days"][day] = {"decision_time_utc": T.strftime("%Y-%m-%dT%H:%M:%SZ"), "games_open": len(games), "candidate_sides": len(cands), "in_preferred_region": len(in_region),
+                            "fresh_prices": sum(1 for c in cands if c["price_freshness"]["status"] == "FRESH"), "blend_estimate_before_the_day": blend,
+                            "qualifying_sides": sum(1 for c in cands if c["qualifies"]), "structures_qualifying": dict(collections.Counter(c["structure"] for c in cands if c["qualifies"])),
+                            "decision": doc["decision"], "pass_reason": doc.get("pass_reason"),
+                            "pick": None if doc["decision"] != "PICK" else {k: doc["pick"][k] for k in ("matchup", "side", "market", "line", "price", "structure", "supported_probability", "edge", "confidence")} | {"result_shadow_only": outcome(doc["pick"])},
+                            "top_three": top3}
     Path(a.out).write_text(json.dumps(out, indent=1, default=str))
     for d, x in out["days"].items():
-        print(d, x.get("decision"), "|", (x.get("pass_reason") or "")[:220])
+        print(d, x.get("decision"), "|", (x.get("pass_reason") or "")[:260])
+        for t in x.get("top_three", []):
+            print("    ", t["side"], t["market"], t["price"], f"M={t['market_probability_market']:.3f} H={t['model_probability']:.3f} gap={t['gap']:+.3f} {t['trust_state']} -> {t['structure']} qualifies={t['qualifies']} {t['result_if_bet_shadow_only']}")
     return 0
 
 

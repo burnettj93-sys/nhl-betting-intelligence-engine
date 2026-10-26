@@ -1095,6 +1095,20 @@ def _eggy_official_card(eggy: dict) -> None:
         st.caption("Hit chances are estimates, not promises; any parlay can lose.")
 
 
+def _eggy_top_three(d: dict) -> None:
+    """The three most researched sides of the day, with the verdict on each (shown on a PASS day too)."""
+    top = d.get("top_three") or []
+    if not top:
+        return
+    with st.expander("The three sides Eggy researched most" + (" (the pick is the first that qualifies)" if d["decision"] == "PICK" else " (none qualified)")):
+        for t in top:
+            ln = f" {t['line']:+.1f}" if t.get("line") is not None else ""
+            st.markdown(f"**{esc(t['side'])} {esc(t['market'].replace('_', ' '))}{esc(ln)} {t['price']:+.0f}** · market {t['market_probability_market']:.1%} · hockey model {t['model_probability']:.1%} · gap {t['gap'] * 100:+.1f} pts · {esc(t['trust_state'].replace('_', ' ').lower())} · evidence: {esc((t['structure'] or 'NONE').replace('_', ' ').lower())} · {'QUALIFIES' if t['qualifies'] else 'does not qualify'}")
+            st.caption("Hockey: " + esc("; ".join(t["hockey_case"]) or "nothing in its favour") + " | Market / price: " + esc("; ".join(t["market_price_case"]) or "nothing in its favour") + " | Against: " + esc("; ".join(t["case_against"])))
+            if t.get("not_qualifying_because"):
+                st.caption("Why not: " + esc("; ".join(t["not_qualifying_because"][:3])))
+
+
 def eggy_side_pick_card(doc: dict | None) -> None:
     """EGGY PICK OF THE DAY: one NHL side (moneyline or puck line) or PASS, with the case for and against, the model-versus-market state, the price and its source, and the record. Separate from the learning
     parlays, which are shown elsewhere. Nothing is invented: what the engine cannot see (public tickets, handle, reverse line movement, closing prices) is shown as NOT AVAILABLE."""
@@ -1116,23 +1130,23 @@ def eggy_side_pick_card(doc: dict | None) -> None:
             st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY</div><div class='ttl'>PASS</div><div class='sub'>{_h(d.get('pass_reason') or '')}</div></div></div>", unsafe_allow_html=True)
             if d.get("what_would_change_it"):
                 st.caption("What would change it: " + esc(d["what_would_change_it"]))
-            top = (d.get("ranked") or [None])[0]
-            if top:
-                st.caption(f"Closest side (shadow, not a pick): {esc(top['side'])} {esc(top['market'].replace('_', ' '))} {top['price']:+.0f} · model {top['model_probability']:.1%} vs market {top['market_probability_market']:.1%} · edge {top['edge'] * 100:+.1f} pts · {esc(top['trust_state'].replace('_', ' ').lower())}")
+            _eggy_top_three(d)
         else:
             p = d["pick"]
             line = f" {p['line']:+.1f}" if p.get("line") is not None else ""
             st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY · {_h(p['matchup'])}</div><div class='ttl'>{_h(p['side'])} {_h(p['market'].replace('_', ' '))}{_h(line)} {p['price']:+.0f}</div></div></div>", unsafe_allow_html=True)
-            st.markdown(f"**EGGY CONFIDENCE:** {esc(p.get('confidence', 'LOW'))} (an evidence category, not a percentage)")
+            names = {"SUPPORTED_MARKET_GAP": "Supported market gap", "CONSENSUS_QUALITY": "Consensus quality", "MARKET_SITUATIONAL_OPPORTUNITY": "Market / situational opportunity"}
+            st.markdown(f"**EGGY CONFIDENCE:** {esc(p.get('confidence', 'LOW'))} (an evidence category, not a percentage) · **EVIDENCE:** {esc(names.get(p.get('structure'), p.get('structure') or ''))}")
             st.markdown("**WHY EGGY LIKES IT**")
             for x in [x for x in p["case_for"] if x["strength"] in ("STRONG", "MODERATE")][:5] or p["case_for"][:3]:
                 st.markdown("- " + esc(x["text"]))
-            st.markdown(f"**MARKET SIGNAL:** " + esc("; ".join(x["text"] for x in p["case_for"] + p["case_against"] if x["kind"] == "LINE_MOVEMENT") or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
-            hv = p.get("hockey_view") or {}
-            st.markdown("**HOCKEY EDGE:** " + esc("; ".join(x["text"] for x in p["case_for"] if x["kind"] in ("HOCKEY_INDICATORS", "REST")) or f"model win probability {p['model_win_probability']:.1%}"))
+            st.markdown("**MARKET SIGNAL:** " + esc("; ".join(x["text"] for x in p["case_for"] + p["case_against"] if x["kind"] == "PRICE_MOVEMENT") or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
+            st.markdown("**HOCKEY EDGE:** " + esc("; ".join(x["text"] for x in p["case_for"] if x["category"] in ("HOCKEY", "SITUATION")) or f"model win probability {p['model_win_probability']:.1%}"))
             st.markdown("**CASE AGAINST:** " + esc("; ".join(x["text"] for x in p["case_against"] if x["strength"] in ("STRONG", "MODERATE")) or "; ".join(x["text"] for x in p["case_against"][:2])))
-            st.markdown(f"**MODEL VS MARKET:** model {p['model_probability']:.1%} · market no-vig {p['market_probability_market']:.1%} · gap {p['gap'] * 100:+.1f} pts · trust state: {esc(p['trust_state'].replace('_', ' ').lower())}")
-            st.markdown(f"**PRICE:** {p['price']:+.0f} ({esc(p['price_freshness']['status'])}, DraftKings, captured {esc(p['capture_at_utc'])}); break-even {p['implied_with_margin']:.1%}; supported edge {p['edge'] * 100:+.1f} pts")
+            st.markdown(f"**MODEL VS MARKET:** model {p['model_probability']:.1%} · market no-vig {p['market_probability_market']:.1%} · gap {p['gap'] * 100:+.1f} pts · trust state: {esc(p['trust_state'].replace('_', ' ').lower())} (weight {p.get('model_weight', 0):.2f}) · evidence-weighted probability {p['supported_probability']:.1%}")
+            st.markdown(f"**PRICE:** {p['price']:+.0f} ({esc(p['price_freshness']['status'])}, DraftKings, captured {esc(p['capture_at_utc'])}); break-even {p['implied_with_margin']:.1%}; evidence-weighted edge {p['edge'] * 100:+.1f} pts"
+                        + ("" if p["edge"] > 0 else " (a consensus or situational pick claims no positive expected value: the bookmaker's margin is the cost of the bet)"))
+            _eggy_top_three(d)
         rec = doc.get("record") or {}
         st.caption(f"Eggy's own record: {rec.get('picks', 0)} pick(s), {rec.get('wins', 0)}-{rec.get('losses', 0)} settled, {rec.get('passes', 0)} pass day(s). Hit or miss only; kept apart from the learning parlays.")
         with st.expander("What Eggy can and cannot see today, and which signals are earning trust"):

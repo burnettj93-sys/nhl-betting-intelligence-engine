@@ -84,13 +84,13 @@ class TestBoardAndToday(unittest.TestCase):
     def eggy_snap(self, decision):
         from operational import eggy_pick as ep_
         s = self.snap()
-        s["eggy_pick"] = {"policy": {"policy_id": "EGGY_SIDE_PICK_V1", "digest": ep_.policy_digest(), "markets": ["MONEYLINE", "PUCK_LINE"], "price_policy": ep_.POLICY["price_policy"], "max_outputs_per_day": 1},
+        s["eggy_pick"] = {"policy": {"policy_id": "EGGY_SIDE_PICK_V2", "digest": ep_.policy_digest(), "markets": ["MONEYLINE", "PUCK_LINE"], "price_policy": ep_.POLICY["price_policy"], "max_outputs_per_day": 1},
                           "date_et": "2026-10-15", "today": decision, "record": {"picks": 0, "wins": 0, "losses": 0, "passes": 1, "settled": 0}, "signals": {}, "observed_games": 0,
                           "settled_games": 0, "availability": ep_.AVAILABILITY}
         return s
 
     def test_the_slate_board_shows_eggys_one_side_pick_or_pass_and_labels_the_learning_ticket_as_the_learning_engines(self):
-        d = {"decision": "PASS", "pass_reason": "no side meets the standard. The closest, DAL MONEYLINE +105: no supported edge", "ranked": [], "what_would_change_it": "a proven disagreement"}
+        d = {"decision": "PASS", "pass_reason": "no side meets the standard. The closest, DAL MONEYLINE +105: no supported edge", "ranked": [], "top_three": [], "what_would_change_it": "a proven disagreement"}
         at = run_page("41_Slate_Board.py", self.eggy_snap(d))
         self.assertFalse(at.exception, at.exception)
         t = text(at)

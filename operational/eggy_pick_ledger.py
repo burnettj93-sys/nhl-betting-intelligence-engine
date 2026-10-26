@@ -48,15 +48,17 @@ def _append(events: list[dict]) -> None:
 
 
 # ------------------------------------------------------------------------------------------------ observations (one per game)
-def observation(c_by_market: dict, game: dict, decided_at: str) -> dict:
-    """One game as Eggy saw it: both markets, both sides, the signals. `c_by_market`: {(side, market): candidate}."""
-    home, away = game["home"], game["away"]
-    g = lambda side, mk, k: (c_by_market.get((side, mk)) or {}).get(k)
-    return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{away} @ {home}", "home": home, "away": away, "start_utc": game.get("start_utc"), "decided_at_utc": decided_at,
-            "ml": {side: {"price": g(side, "MONEYLINE", "price"), "market": g(side, "MONEYLINE", "market_probability_market"), "model": g(side, "MONEYLINE", "model_probability"),
-                          "moved": g(side, "MONEYLINE", "movement_toward_side"), "trust": g(side, "MONEYLINE", "trust_state")} for side in (home, away)},
-            "pl": {side: {"line": g(side, "PUCK_LINE", "line"), "price": g(side, "PUCK_LINE", "price"), "market": g(side, "PUCK_LINE", "market_probability_market"), "model": g(side, "PUCK_LINE", "model_probability")} for side in (home, away)},
-            "rest_days": g(home, "MONEYLINE", "rest_days"), "freshness": g(home, "MONEYLINE", "price_freshness") and g(home, "MONEYLINE", "price_freshness")["status"]}
+def observation(cands: list[dict], game: dict, decided_at: str, structure_state: dict | None = None) -> dict:
+    """One game as Eggy saw it: every candidate side in both markets, with the facts the evidence structures and signals are measured from."""
+    sides = []
+    for c in cands:
+        mv = c.get("movement") or {}
+        sides.append({"side": c["side"], "market": c["market"], "line": c["line"], "price": c["price"], "market_p": c["market_probability_market"], "model_p": c["model_probability"], "gap": c["gap"],
+                      "supported_p": c["supported_probability"], "edge": c["edge"], "conservative_edge": c["conservative_edge"], "structure": c["structure"], "qualifies": c["qualifies"], "price_class": c["price_class"],
+                      "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
+                      "trust_state": c["trust_state"], "calibration": c.get("calibration")})
+    return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "home": game["home"], "away": game["away"], "start_utc": game.get("start_utc"),
+            "decided_at_utc": decided_at, "sides": sides}
 
 
 def settle(nhl_conn, now: dt.datetime) -> dict:
@@ -106,12 +108,13 @@ def grade(decision_doc: dict) -> dict:
     bad, doubt = [], []
     if p["price_freshness"]["status"] != "FRESH":
         bad.append(("STALE_PRICE", "the price was not FRESH at decision"))
-    if p["trust_state"] != "DISAGREEMENT_HAS_SIGNAL" and p["supported_probability"] != p["market_probability_market"]:
-        bad.append(("UNPROVEN_EDGE_CLAIMED", "a model probability was used as the edge without a proven disagreement"))
-    need = ep.required_edge(p["price_class"])
-    if need is None or p["edge"] < need:
-        bad.append(("EDGE_OR_PRICE_POLICY", "the edge or the price was outside the policy"))
-    if (p.get("data_completeness") or 0) < 0.5 or p.get("calibration") in ("INSUFFICIENT", None):
+    if p.get("price_class") == "EXTREME":
+        bad.append(("EXTREME_PRICE", "the price was beyond the extreme guard"))
+    if p.get("structure") in (None, "NONE"):
+        bad.append(("NO_EVIDENCE_STRUCTURE", "no evidence structure was satisfied"))
+    if p.get("structure") == "SUPPORTED_MARKET_GAP" and p["trust_state"] != "DISAGREEMENT_HAS_SIGNAL":
+        bad.append(("UNPROVEN_GAP_CLAIMED", "a supported market gap was claimed without a proven disagreement"))
+    if (p.get("data_completeness") or 0) < 0.6 or p.get("calibration") in ("INSUFFICIENT", "LOW", None):
         bad.append(("DATA_OR_CALIBRATION", "data completeness or calibration was inadequate"))
     if not p["balance"]["materially_outweighs"] or p["balance"]["against_strong"]:
         bad.append(("CASE_NOT_BALANCED", "the case against was not outweighed"))
@@ -119,15 +122,15 @@ def grade(decision_doc: dict) -> dict:
         return {"label": "BAD_DECISION", "reasons": [t for _, t in bad], "criteria": [c for c, _ in bad]}
     if p["balance"]["against_moderate"]:
         doubt.append(("MODERATE_AGAINST", f"{p['balance']['against_moderate']} moderate reason(s) against stood"))
-    if p["price_class"] == "SHOULDER":
-        doubt.append(("SHOULDER_PRICE", "the price was outside the preferred region"))
+    if p.get("price_class") == "OUTSIDE_PREFERRED":
+        doubt.append(("OUTSIDE_PREFERRED_PRICE", "the price was outside the preferred region"))
     if p.get("calibration") == "MEDIUM":
         doubt.append(("CALIBRATION_MEDIUM", "calibration was MEDIUM, not HIGH"))
     if p.get("confidence") == "LOW":
         doubt.append(("LOW_CONFIDENCE", "the evidence category was LOW"))
     if doubt:
         return {"label": "QUESTIONABLE_DECISION", "reasons": [t for _, t in doubt], "criteria": [c for c, _ in doubt]}
-    return {"label": "GOOD_DECISION", "reasons": ["a proven disagreement at a fresh price in the preferred region, adequate data and calibration, the case for outweighing the case against"], "criteria": []}
+    return {"label": "GOOD_DECISION", "reasons": ["a recognised evidence structure at a fresh price in the preferred region, adequate data and calibration, the case for outweighing the case against"], "criteria": []}
 
 
 # ------------------------------------------------------------------------------------------------ prospective signal trust
@@ -141,35 +144,55 @@ def _settled_observations(events: list[dict]) -> list[dict]:
 
 
 SIGNALS = {
+    "SUPPORTED_MARKET_GAP": "evidence structure: a model-market gap the record has proven (Type B)",
+    "CONSENSUS_QUALITY": "evidence structure: market and hockey agree, price attractive (Type A)",
+    "MARKET_SITUATIONAL_OPPORTUNITY": "evidence structure: sound hockey picture plus measured market / situational facts (Type C)",
     "ML_MODEL_GAP_3PLUS": "the moneyline side the hockey model rates 3+ points above the market",
     "PL_MODEL_GAP_3PLUS": "the puck-line side the model's goal-margin mapping rates 3+ points above the market",
     "ML_MOVED_TOWARD_1PT": "the moneyline side the market moved toward by 1+ point since the day's first capture",
     "ML_MOVED_AWAY_1PT": "the moneyline side the market moved away from by 1+ point since the day's first capture",
     "REST_ADVANTAGE": "the side that is rested when its opponent is on a back-to-back",
+    "PRICE_IN_PREFERRED": "a qualifying side priced inside the preferred near-even region",
+    "PRICE_OUTSIDE_PREFERRED": "a qualifying side priced outside the preferred region",
+    "QUALIFYING_MONEYLINE": "qualifying moneyline sides",
+    "QUALIFYING_PUCK_LINE": "qualifying puck-line sides",
+    "CONFIDENCE_HIGH": "qualifying sides graded HIGH confidence",
+    "CONFIDENCE_MEDIUM": "qualifying sides graded MEDIUM confidence",
+    "CONFIDENCE_LOW": "qualifying sides graded LOW confidence",
 }
 
 
 def signal_bets(o: dict):
-    """(signal, expected probability, 1/0 outcome) for every oriented side a signal flags in one settled observation: ONE game gives each signal at most one flagged side per market."""
+    """(signal, expected probability at the market price, 1/0 outcome) for every side a signal flags in one settled observation."""
     home, away, m = o["home"], o["away"], o["home_margin"]
-    won = {home: 1 if m > 0 else 0, away: 1 if m < 0 else 0}
     sm = {home: m, away: -m}
     out = []
-    for side in (home, away):
-        ml, pl = o["ml"].get(side) or {}, o["pl"].get(side) or {}
-        if ml.get("market") is not None and ml.get("model") is not None:
-            if ml["model"] - ml["market"] >= ei.EDGE_MIN:
-                out.append(("ML_MODEL_GAP_3PLUS", ml["market"], won[side]))
-            if (ml.get("moved") or 0) >= 0.01:
-                out.append(("ML_MOVED_TOWARD_1PT", ml["market"], won[side]))
-            if (ml.get("moved") or 0) <= -0.01:
-                out.append(("ML_MOVED_AWAY_1PT", ml["market"], won[side]))
-        if pl.get("market") is not None and pl.get("model") is not None and pl["model"] - pl["market"] >= ei.EDGE_MIN and pl.get("line") is not None:
-            out.append(("PL_MODEL_GAP_3PLUS", pl["market"], 1 if (sm[side] >= 2 if pl["line"] < 0 else sm[side] > -2) else 0))
-    rd = o.get("rest_days") or {}
-    for side, opp in ((home, away), (away, home)):
-        if rd.get(opp) is not None and rd.get(side) is not None and rd[opp] <= 1 < rd[side] and (o["ml"].get(side) or {}).get("market") is not None:
-            out.append(("REST_ADVANTAGE", o["ml"][side]["market"], won[side]))
+    for s in o.get("sides") or []:
+        if s.get("market_p") is None:
+            continue
+        side = s["side"]
+        if s["market"] == "MONEYLINE":
+            y = 1 if sm[side] > 0 else 0
+        elif s.get("line") is not None:
+            y = 1 if (sm[side] >= 2 if s["line"] < 0 else sm[side] > -2) else 0
+        else:
+            continue
+        p = s["market_p"]
+        if (s.get("gap") or 0) >= ei.EDGE_MIN:
+            out.append(("ML_MODEL_GAP_3PLUS" if s["market"] == "MONEYLINE" else "PL_MODEL_GAP_3PLUS", p, y))
+        if s["market"] == "MONEYLINE":
+            if (s.get("moved") or 0) >= 0.01:
+                out.append(("ML_MOVED_TOWARD_1PT", p, y))
+            if (s.get("moved") or 0) <= -0.01:
+                out.append(("ML_MOVED_AWAY_1PT", p, y))
+        if s.get("rest_advantage") and s["market"] == "MONEYLINE":
+            out.append(("REST_ADVANTAGE", p, y))
+        if s.get("qualifies"):
+            out.append((s["structure"], p, y))
+            out.append(("PRICE_IN_PREFERRED" if s["price_class"] == "IN_PREFERRED_REGION" else "PRICE_OUTSIDE_PREFERRED", p, y))
+            out.append(("QUALIFYING_MONEYLINE" if s["market"] == "MONEYLINE" else "QUALIFYING_PUCK_LINE", p, y))
+            if s.get("confidence"):
+                out.append(("CONFIDENCE_" + s["confidence"], p, y))
     return out
 
 
@@ -216,7 +239,7 @@ def record(events: list[dict] | None = None) -> dict:
         row = {"date": e["date"], "decision": d["decision"], "decided_at_utc": d["decided_at_utc"]}
         if d["decision"] == "PICK":
             p = d["pick"]
-            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class")}, grade=g,
+            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class", "structure", "supported_probability")}, grade=g,
                        result=(o or {}).get("result", "PENDING"), final=None if not o else f"{o['home_score']}-{o['away_score']}")
             if o:
                 grid[(g["label"], o["result"])] += 1
@@ -240,6 +263,14 @@ def snapshot_section(today: str | None = None) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------ the cycle
+def _prospective_rows() -> list[dict]:
+    from operational import prospective_moneyline as pm
+    try:
+        return pm.read_ledger()
+    except Exception:                                                  # the moneyline record is an input, never a precondition
+        return []
+
+
 def run_cycle(nhl_conn, now: dt.datetime) -> dict:
     """One trader cycle: settle what is final, and (once a day, when the pregame pull is in and before the first game) make and lock the day's decision."""
     from operational import learning_cohort as lc
@@ -285,13 +316,15 @@ def run_cycle(nhl_conn, now: dt.datetime) -> dict:
         out["reason"] = why
         return out
     trust_pl = puck_line_trust(events)
-    cands, by_game = [], defaultdict(dict)
+    structure_state = signal_trust(events)
+    blend = ep.blend_estimate(_prospective_rows())
+    cands, by_game = [], defaultdict(list)
     for g in upcoming:
-        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl):
+        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl, blend, structure_state):
             cands.append(c)
-            by_game[g["game_id"]][(c["side"], c["market"])] = c
-    doc = ep.decide(cands, now=now)
-    obs = [observation(by_game[g["game_id"]], g, doc["decided_at_utc"]) for g in upcoming if by_game.get(g["game_id"])]
+            by_game[g["game_id"]].append(c)
+    doc = ep.decide(cands, now=now, structure_state=structure_state)
+    obs = [observation(by_game[g["game_id"]], g, doc["decided_at_utc"], structure_state) for g in upcoming if by_game.get(g["game_id"])]
     _append([{"type": "DECISION", "date": today, "game_id": None, "decision_doc": json.loads(json.dumps(doc, default=str))}] + obs)
     out["status"] = doc["decision"]
     _write_postmortem(read())

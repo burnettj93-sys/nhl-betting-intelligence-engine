@@ -1,18 +1,25 @@
 """EGGY PICK OF THE DAY: at most ONE NHL side per day, MONEYLINE or PUCK LINE, or PASS. Separate from the learning-parlay engine (operational/learning_cohort.py), which is untouched and keeps recording,
 settling, postmortem-ing and learning. Eggy shares the NHL intelligence (the team model, the moneyline review, the prospective trust record, price freshness) and has its own decision policy and its own record.
 
-THE STANDARD. A side is OFFICIAL only when ALL hold:
-  1. its price is FRESH (operational/price_freshness.py) and inside the price policy: preferred region -130 to +130; a SHOULDER out to -160 / +160 needs twice the edge; beyond it Eggy does not hunt;
-  2. it has a SUPPORTED probability that beats the price: the hockey model's probability counts only where the prospective record shows the model's disagreement with the market is real
-     (`DISAGREEMENT_HAS_SIGNAL`, 100 independent games in the gap band, |z| >= 2: operational/prospective_moneyline.py; for the puck line, Eggy's own record of puck-line observations). Otherwise the market's no-vig
-     probability is the best estimate, and a market-only estimate cannot beat the bookmaker's margin: there is no edge to claim, so there is no pick. The model liking a side more than the market is never trusted by default;
-  3. the edge over the break-even price is at least the engine's edge threshold (3 points; 6 on a shoulder);
-  4. the CASE FOR materially outweighs the CASE AGAINST (see `balance`).
-Anything else is PASS, with the specific reason. PASS is the correct answer far more often than not, and until the trust record earns it the engine says so rather than manufacturing a pick. Every game is nevertheless
-OBSERVED each day (both markets, with the signals, then the result) so that signals earn or lose trust prospectively (operational/eggy_pick_ledger.py): reverse line movement and handle splits are NOT AVAILABLE (no approved
-source), and nothing here pretends otherwise.
+THE DECISION HIERARCHY (the whole body of evidence, no single source decides):
+  A. MARKET BASELINE   the fresh no-vig sportsbook probability is the prior, and an extremely strong one.
+  B. HOCKEY SUPPORT    the validated team intelligence (strength, expected-goal / goal / high-danger profile, home ice, rest and back-to-back, opponent context) supports or contradicts the side.
+  C. PRICE QUALITY     the offered moneyline or puck line against the EVIDENCE-WEIGHTED probability: the market's, moved toward the hockey model's by the weight the model has earned.
+  D. MARKET BEHAVIOUR  price movement across the day's captures (earliest, current, direction, size, when): information, not a rule; no betting splits exist here and none are invented.
+  E. MODEL-MARKET GAP  an important signal whose WEIGHT is its prospective trust: PROVEN -> the model's probability, and a STRONG reason; ACCUMULATING / INSUFFICIENT -> the weight the record's own blend estimate
+                       supports (never above one half), UNPROVEN supporting context that cannot carry a pick alone; FAILS -> no weight, and a reason AGAINST trusting the model.
+  F. CASE FOR / AGAINST evaluated together. Nothing is mandatory except a FRESH price, adequate data and calibration, and a price that is not extreme.
 
-MONEYLINE or PUCK LINE: each side is priced in both; the market with the larger SUPPORTED edge wins, ties go to the moneyline (the lower-variance bet). A higher payout is never a reason.
+THREE VALID EVIDENCE STRUCTURES (a pick must be one; each needs quantitative support, never narrative alone):
+  TYPE B  SUPPORTED MARKET GAP        the model rates the side materially above the market AND the prospective record has proven that disagreement. Extra confidence.
+  TYPE A  CONSENSUS QUALITY           market and hockey intelligence agree the side is the better team (both at least a clear lean, within five points of each other) at a price in the preferred region, with the hockey
+                                      drivers behind it. The model does not have to beat the market. No positive expected value is CLAIMED: the bookmaker's margin is the cost and the card says so.
+  TYPE C  MARKET / SITUATIONAL        the hockey picture is sound (not below the market, drivers favour the side) AND at least two measured, independent facts make the price unusually attractive: the market has moved toward
+          OPPORTUNITY                 the side since the first capture, a rest advantage, an unproven model gap of 3+ points, or (puck line) a conservative cover probability 3+ points above the line's no-vig.
+A pick also needs a case FOR that materially exceeds the case AGAINST (see `balance`). PASS is valid and frequent; it is never manufactured.
+
+MONEYLINE or PUCK LINE: compared on the CONSERVATIVE supported edge (edge less the probability's own uncertainty); the puck line carries the larger uncertainty (its probability is the model's win probability mapped
+through a goal-margin calibration that over-predicts by up to ~4.7 points in one bucket out of time). A larger nominal edge on the less trustworthy model does not win. Ties go to the moneyline.
 """
 from __future__ import annotations
 
@@ -28,13 +35,22 @@ from operational import eggy_intelligence as ei
 from operational import price_freshness as pf
 
 REPO = Path(__file__).resolve().parent.parent
-POLICY = {"policy_id": "EGGY_SIDE_PICK_V1", "unit": "SIDE", "max_outputs_per_day": 1, "markets": ["MONEYLINE", "PUCK_LINE"], "no": ["player props", "player points", "shots", "parlays"],
-          "price_policy": {"preferred_region_american": [-130, 130], "shoulder_american": [-160, 160], "edge_in_region": ei.EDGE_MIN, "edge_on_shoulder": 2 * ei.EDGE_MIN, "beyond_shoulder": "not hunted"},
-          "supported_probability": "the hockey model's only where the prospective record shows the disagreement is real; otherwise the market's no-vig probability",
+POLICY = {"policy_id": "EGGY_SIDE_PICK_V2", "unit": "SIDE", "max_outputs_per_day": 1, "markets": ["MONEYLINE", "PUCK_LINE"], "no": ["player props", "player points", "shots", "parlays"],
+          "decision_hierarchy": ["A market baseline (no-vig prior)", "B hockey support", "C price quality against the evidence-weighted probability", "D market behaviour (movement across captures)", "E model-market gap, weighted by its prospective trust",
+                                 "F case for versus case against"],
+          "evidence_structures": {"B": "SUPPORTED_MARKET_GAP", "A": "CONSENSUS_QUALITY", "C": "MARKET_SITUATIONAL_OPPORTUNITY"},
+          "price_policy": {"preferred_region_american": [-130, 130], "preferred_region_status": "HEURISTIC preference (a ranking factor and a reason against when outside); not validated",
+                           "extreme_guard_american": [-200, 200], "extreme_guard_status": "HEURISTIC: Eggy does not hunt extreme prices (a -300 favourite is not what it is for); not validated",
+                           "no_edge_requirement": "a pick does not need a positive supported edge: consensus and situational picks pay the margin and are labelled so"},
+          "model_weight": {"proven": 1.0, "failing": 0.0, "accumulating": "the blend estimate k of the prospective record (market + k (model - market)), bounded to [0, 0.5]", "status": "k is measured; the bounds are heuristic"},
+          "balance": {"rule": "no STRONG reason against; at least two evidence categories supporting at MODERATE or better; (strong + moderate for) >= (2 x strong + moderate against) + 2", "status": "HEURISTIC ordinal rule, not a weighted score"},
+          "thresholds": {"model_gap_material": ei.EDGE_MIN, "consensus_agreement_max_gap": 0.05, "consensus_min_market": 0.50, "consensus_min_model": 0.52, "movement_material": 0.01, "situational_min_edge": -0.01, "status": "HEURISTIC except the engine's own edge threshold"},
           "decision_time": "once a day, after the pregame league pull is observed and before the first game (or PASS: no current prices)", "freshness": "FRESH only (operational/price_freshness.py)",
-          "pass": "the correct answer without a supported edge; never manufactured", "record": "own ledger, own postmortem, own signal trust (operational/eggy_pick_ledger.py)"}
+          "pass": "valid and never manufactured", "record": "own ledger, own postmortem, own evidence-structure and signal trust (operational/eggy_pick_ledger.py)"}
 PUCK = 1.5
 CAL_PATH = REPO / "docs" / "validation" / "eggy_pick_calibration.json"
+STRUCTURES = ("SUPPORTED_MARKET_GAP", "CONSENSUS_QUALITY", "MARKET_SITUATIONAL_OPPORTUNITY")
+PRIORITY = {"SUPPORTED_MARKET_GAP": 0, "MARKET_SITUATIONAL_OPPORTUNITY": 1, "CONSENSUS_QUALITY": 2}
 
 
 def policy_digest() -> str:
@@ -43,12 +59,12 @@ def policy_digest() -> str:
 
 
 AVAILABILITY = {
-    "AVAILABLE": ["moneyline and puck-line (+/-1.5) prices, DraftKings, from the league pulls (morning and pregame)", "movement between the day's first capture and the decision (the first capture is NOT the true opening line)",
+    "AVAILABLE": ["moneyline and puck-line (+/-1.5) prices, DraftKings, from the league pulls (morning and pregame)", "every captured price per side across the day: earliest, current, direction, size and time of movement (the first capture is NOT the true opening line)",
                   "authoritative hockey probability (eggy-matchup-v1), expected-goal / goal / high-danger indicators with league ranks, rest and back-to-back, special teams, recent games",
                   "the prospective model-versus-market record (one observation per game)", "price freshness"],
     "NOT AVAILABLE": ["ticket percentages", "handle / money percentages", "ticket-versus-handle divergence", "reverse line movement and market resistance (they need the splits)", "cross-book disagreement (one book only)",
                       "the true opening line and the closing line (only the captures the engine took)", "confirmed starting goalies (no approved confirmation source feeds Eggy today)", "reliable lineup and injury information (no approved source)"],
-    "note": "The Odds API (the only odds source) returns prices, not betting splits; scraping a splits site would be a terms-of-service risk and is not done."}
+    "note": "The Odds API (the only odds source) returns prices, not betting splits; scraping a splits site would be a terms-of-service risk and is not done. Price movement is market information; it is not called sharp money."}
 
 
 # ------------------------------------------------------------------------------------------------ the market
@@ -133,9 +149,59 @@ def price_class(american: float) -> str:
     return "OUTSIDE"
 
 
-def required_edge(klass: str) -> float | None:
-    p = POLICY["price_policy"]
-    return {"IN_REGION": p["edge_in_region"], "SHOULDER": p["edge_on_shoulder"]}.get(klass)
+# ------------------------------------------------------------------------------------------------ the model's weight
+def blend_estimate(rows: list[dict]) -> dict:
+    """The record's own estimate of how much weight the hockey model deserves: k in  p = market + k (model - market), by maximum likelihood over the finished priced games (one observation per game), with a
+    likelihood-ratio 95% interval. k = 0 trusts the market, k = 1 the model. It is the evidence behind the weight; the weight itself is bounded (see `weight_for`)."""
+    if not rows:
+        return {"games": 0, "k_hat": None, "ci95": None}
+    def ll(k):
+        t = 0.0
+        for r in rows:
+            m, h, y = r["market_home"], r["hockey_home"], r["home_won"]
+            p = min(max(m + k * (h - m), 1e-4), 1 - 1e-4)
+            t += y * math.log(p) + (1 - y) * math.log(1 - p)
+        return t
+    ks = [i / 20 for i in range(-20, 41)]
+    ls = [ll(k) for k in ks]
+    best = max(range(len(ks)), key=lambda i: ls[i])
+    ci = [k for k, l in zip(ks, ls) if l >= ls[best] - 1.92]
+    return {"games": len(rows), "k_hat": ks[best], "ci95": [min(ci), max(ci)]}
+
+
+def weight_for(trust_state: str, gap: float, blend: dict | None) -> tuple[float, str]:
+    """(the weight the model's probability deserves for this side, why). PROVEN and above the market -> 1; FAILING -> 0; otherwise the blend estimate, bounded to [0, 0.5]."""
+    if trust_state == "DISAGREEMENT_HAS_SIGNAL" and gap > 0:
+        return 1.0, "the prospective record has proven this size of disagreement: the model's probability is used"
+    if trust_state == "DISAGREEMENT_IS_OVERCONFIDENCE":
+        return 0.0, "the prospective record shows the model overconfident in this band: it gets no weight"
+    k = (blend or {}).get("k_hat")
+    if k is None:
+        return 0.0, "no record yet: the market's probability stands"
+    return round(min(max(k, 0.0), 0.5), 3), f"the record's blend estimate is k = {k:.2f} ({(blend or {}).get('games', 0)} games, interval {(blend or {}).get('ci95')}): the model gets that weight, never more than half"
+
+
+# ------------------------------------------------------------------------------------------------ the puck line's own uncertainty
+def pl_uncertainty(p_side: float, point: float) -> dict:
+    """The puck-line probability, ADJUSTED CONSERVATIVELY for the out-of-time over-prediction of the goal-margin calibration in the relevant win-probability bucket, and its uncertainty. History may lower a probability, never
+    raise it (the engine's own rule): a bucket that over-predicted lowers the cover probability by the bias; the uncertainty is the larger of that bias and the calibration standard error."""
+    raw = puck_line_cover(p_side, point)
+    cal = (calibration().get("out_of_time_2025") or {}).get("calibration_by_team_win_probability") or []
+    p_for_bucket = p_side if point < 0 else 1.0 - p_side                   # -1.5 covers by the side winning by 2+; +1.5 fails when the OPPONENT wins by 2+
+    bias = 0.0
+    for b in cal:
+        lo, hi = (float(x) for x in b["team_win_probability"].split("-"))
+        if lo <= p_for_bucket < hi + (1e-9 if hi >= 1 else 0):
+            bias = b["predicted_win_by_2plus"] - b["observed"]
+            n = b["n"]
+            se = math.sqrt(max(b["observed"] * (1 - b["observed"]), 1e-4) / max(n, 1))
+            break
+    else:
+        se = 0.03
+    if raw is None:
+        return {"raw": None}
+    adj = -max(bias, 0.0) if point < 0 else -max(-bias, 0.0)               # +1.5: an UNDER-predicted opponent margin overstates the cover
+    return {"raw": raw, "adjusted": raw + adj, "bias_in_bucket": round(bias, 4), "uncertainty": round(max(abs(bias), se, 0.015), 4), "calibration": "MEDIUM"}
 
 
 # ------------------------------------------------------------------------------------------------ candidates
@@ -146,14 +212,47 @@ def _leg(gid: str, event: dict, team: str, opp: str, price: float, no_vig: float
                      model_threshold_eligible=True, identity_resolved=True, price_fresh=True, event_not_started=True, team=team, opponent=opp, game_start_utc=start, market_probability=no_vig)
 
 
-def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, capture_ctx: dict | None = None, trust_pl: dict | None = None) -> list[dict]:
-    """Every candidate side of one game: both teams in both markets, with the hockey and market facts, the supported probability, the edge and the reasons it does or does not qualify."""
+def movement(captures: list[dict], home: str, away: str, team: str, market: str, point: float | None = None) -> dict | None:
+    """The side's price across every capture of the day: earliest and current price and no-vig probability, the change, its direction and size, and when the largest step happened. None with a single capture."""
+    opp = away if team == home else home
+    series = []
+    for c in captures:
+        e = next((e for e in c["events"].values() if e["home"] == home and e["away"] == away), None)
+        if not e:
+            continue
+        a, b = (e["ml"].get(team), e["ml"].get(opp)) if market == "MONEYLINE" else (e["pl"].get(team), e["pl"].get(opp))
+        if market == "PUCK_LINE":
+            if not a or not b or a[1] != point:
+                continue
+            a, b = a[0], b[0]
+        if a is None or b is None:
+            continue
+        series.append((c["at"], a, _no_vig(a, b)))
+    if len(series) < 2:
+        return None
+    steps = [(series[i + 1][0], series[i + 1][2] - series[i][2]) for i in range(len(series) - 1)]
+    big = max(steps, key=lambda s_: abs(s_[1]))
+    d = series[-1][2] - series[0][2]
+    return {"earliest_price": series[0][1], "earliest_at_utc": series[0][0].strftime("%Y-%m-%dT%H:%M:%SZ"), "current_price": series[-1][1], "current_at_utc": series[-1][0].strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "earliest_no_vig": round(series[0][2], 4), "current_no_vig": round(series[-1][2], 4), "change": round(d, 4), "direction": "TOWARD" if d >= 0.01 else ("AWAY" if d <= -0.01 else "FLAT"),
+            "magnitude_points": round(abs(d) * 100, 1), "largest_step_at_utc": big[0].strftime("%Y-%m-%dT%H:%M:%SZ"), "captures": len(series)}
+
+
+def price_class(american: float) -> str:
+    lo, hi = POLICY["price_policy"]["preferred_region_american"]
+    elo, ehi = POLICY["price_policy"]["extreme_guard_american"]
+    if lo <= american <= hi:
+        return "IN_PREFERRED_REGION"
+    return "OUTSIDE_PREFERRED" if elo <= american <= ehi else "EXTREME"
+
+
+def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, capture_ctx: dict | None = None, trust_pl: dict | None = None, blend: dict | None = None, structure_state: dict | None = None) -> list[dict]:
+    """Every candidate side of one game: both teams in both markets, with the hockey and market facts, the evidence-weighted probability, the price quality, the cases and the evidence structure."""
     gid, home, away = str(game["game_id"]), game["home"], game["away"]
     ev_now = next((c["events"][eid] for c in reversed(captures) for eid in c["events"] if c["events"][eid]["home"] == home and c["events"][eid]["away"] == away), None)
     if ev_now is None:
         return []
     at_now = next(c["at"] for c in reversed(captures) if any(e["home"] == home and e["away"] == away for e in c["events"].values()))
-    first = next(((c["at"], e) for c in captures for e in c["events"].values() if e["home"] == home and e["away"] == away), None)
     mv = ei.team_view(ctx, home, away)
     out = []
     cap = capture_ctx or {}
@@ -167,141 +266,223 @@ def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, captu
         card = ei.review_moneyline(ctx, leg, "MARKET_NO_VIG", m_nv)
         fresh = pf.classify(SimpleNamespace(market_family="MONEYLINE", retrieved_at_utc=at_now.strftime("%Y-%m-%dT%H:%M:%SZ"), quote_updated_utc=None, captured_at_utc=None, game_start_utc=game.get("start_utc"),
                                             provider_start_utc=None), now, wave_first_start=(cap.get("by_game") or {}).get(gid), first_wave_start=cap.get("first_start"), wave_pulls_funded=bool(cap.get("funded")))
-        moved = None
-        if first and first[0] < at_now and first[1]["ml"].get(team) is not None and first[1]["ml"].get(opp) is not None:
-            moved = round(m_nv - _no_vig(first[1]["ml"][team], first[1]["ml"][opp]), 4)
         trust_state = (card.get("market_trust") or {}).get("disagreement_state") or "INSUFFICIENT_EVIDENCE"
+        ml_se = ((card.get("calibration_confidence") or {}).get("evidence") or {}).get("standard_error") or 0.0104
         base = {"game_id": gid, "matchup": f"{away} @ {home}", "side": team, "opponent": opp, "home": home, "away": away, "start_utc": game.get("start_utc"), "capture_at_utc": at_now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "first_capture_at_utc": None if not first else first[0].strftime("%Y-%m-%dT%H:%M:%SZ"), "price_freshness": fresh, "model_win_probability": round(p_model, 4), "market_win_probability": round(m_nv, 4),
-                "hockey_view": {k: mv.get(k) for k in ("favourite", "p_favourite", "gap", "drivers")}, "calibration": (card.get("calibration_confidence") or {}).get("level"),
+                "price_freshness": fresh, "model_win_probability": round(p_model, 4), "hockey_view": {k: mv.get(k) for k in ("favourite", "p_favourite", "gap", "drivers")}, "calibration": (card.get("calibration_confidence") or {}).get("level"),
                 "data_completeness": (card.get("data_completeness") or {}).get("fraction"), "flags": [f["name"] for f in (card.get("contradiction") or {}).get("flags", [])], "card_thesis": (card.get("thesis") or {}).get("type"),
-                "rest_days": {t: ((mv.get("indicators") or {}).get(t) or {}).get("rest_days") for t in (home, away)}, "model_trust_overall": (ctx.moneyline_trust or {}).get("state")}
+                "rest_days": {t: ((mv.get("indicators") or {}).get(t) or {}).get("rest_days") for t in (home, away)}, "model_trust_overall": (ctx.moneyline_trust or {}).get("state"), "blend": blend}
         out.append({**base, "market": "MONEYLINE", "line": None, "price": float(price), "implied_with_margin": round(_implied(price), 4), "market_probability_market": round(m_nv, 4), "model_probability": round(p_model, 4),
-                    "gap": round(p_model - m_nv, 4), "trust_state": trust_state, "movement_toward_side": moved, "card": {"case_for": card.get("case_for"), "case_against": card.get("case_against")}})
+                    "model_probability_raw": round(p_model, 4), "probability_uncertainty": round(float(ml_se), 4), "calibration_note": None, "trust_state": trust_state, "movement": movement(captures, home, away, team, "MONEYLINE")})
         pl = ev_now["pl"].get(team), ev_now["pl"].get(opp)
         if pl[0] and pl[1] and abs(pl[0][1]) == PUCK and pl[1][0]:
             (pp, pt), (op, _o) = pl[0], pl[1]
             pl_nv = _no_vig(pp, op)
-            p_cov = puck_line_cover(p_model, pt)
-            pl_move = None
-            if first and first[1]["pl"].get(team) and first[1]["pl"].get(opp):
-                f1, f2 = first[1]["pl"][team], first[1]["pl"][opp]
-                if f1 and f2 and f1[1] == pt:
-                    pl_move = round(pl_nv - _no_vig(f1[0], f2[0]), 4)
-            if p_cov is not None:
-                gap = p_cov - pl_nv
-                out.append({**base, "market": "PUCK_LINE", "line": pt, "price": float(pp), "implied_with_margin": round(_implied(pp), 4), "market_probability_market": round(pl_nv, 4), "model_probability": round(p_cov, 4),
-                            "gap": round(gap, 4), "trust_state": (trust_pl or {}).get("state") or "INSUFFICIENT_EVIDENCE", "movement_toward_side": pl_move, "card": {"case_for": card.get("case_for"), "case_against": card.get("case_against")}})
+            u = pl_uncertainty(p_model, pt)
+            if u.get("raw") is not None:
+                out.append({**base, "market": "PUCK_LINE", "line": pt, "price": float(pp), "implied_with_margin": round(_implied(pp), 4), "market_probability_market": round(pl_nv, 4), "model_probability": round(u["adjusted"], 4),
+                            "model_probability_raw": round(u["raw"], 4), "probability_uncertainty": u["uncertainty"], "calibration": "MEDIUM", "calibration_note": f"the goal-margin calibration over-predicted by {u['bias_in_bucket'] * 100:+.1f} points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
+                            "trust_state": (trust_pl or {}).get("state") or "INSUFFICIENT_EVIDENCE", "movement": movement(captures, home, away, team, "PUCK_LINE", pt)})
     for c in out:
-        _qualify(c)
+        _qualify(c, structure_state)
     return out
 
 
-def _qualify(c: dict) -> None:
-    """The supported probability, the edge and the reasons the candidate does or does not qualify (the standard, in order)."""
+def _qualify(c: dict, structure_state: dict | None = None) -> None:
+    """The evidence-weighted probability, the price quality, the hard blockers, the cases and the evidence structure."""
     c["price_class"] = price_class(c["price"])
-    trusted = c["trust_state"] == "DISAGREEMENT_HAS_SIGNAL" and c["gap"] > 0
-    c["supported_probability"] = c["model_probability"] if trusted else c["market_probability_market"]
-    c["probability_basis"] = "HOCKEY MODEL (disagreement proven in this band)" if trusted else "MARKET NO-VIG (the model's disagreement is not proven)"
-    c["edge"] = round(c["supported_probability"] - c["implied_with_margin"], 4)
-    need = required_edge(c["price_class"])
-    why = []
+    c["gap"] = round(c["model_probability"] - c["market_probability_market"], 4)
+    w, why_w = weight_for(c["trust_state"], c["gap"], c.get("blend"))
+    c["model_weight"], c["model_weight_why"] = w, why_w
+    c["supported_probability"] = round(c["market_probability_market"] + w * c["gap"], 4)
+    c["edge"] = round(c["supported_probability"] - c["implied_with_margin"], 4)                   # may be negative: the margin is the cost of a consensus pick
+    c["conservative_edge"] = round(c["edge"] - c["probability_uncertainty"], 4)
+    c["margin_cost"] = round(c["implied_with_margin"] - c["market_probability_market"], 4)
+    blockers = []
     if c["price_freshness"]["status"] != pf.FRESH:
-        why.append(f"MARKET DATA QUALITY: the price is {c['price_freshness']['status']} ({c['price_freshness']['reason'][:90]})")
-    if need is None:
-        why.append(f"price {c['price']:+.0f} is outside the {POLICY['price_policy']['shoulder_american'][0]} to +{POLICY['price_policy']['shoulder_american'][1]} range Eggy hunts")
+        blockers.append(f"MARKET DATA QUALITY: the price is {c['price_freshness']['status']} ({c['price_freshness']['reason'][:90]})")
+    if c["price_class"] == "EXTREME":
+        blockers.append(f"price {c['price']:+.0f} is extreme: Eggy does not hunt prices beyond {POLICY['price_policy']['extreme_guard_american'][0]} / +{POLICY['price_policy']['extreme_guard_american'][1]} (heuristic)")
     if (c.get("data_completeness") or 0) < 0.6 or c.get("calibration") in ("INSUFFICIENT", "LOW", None):
-        why.append(f"data completeness {c.get('data_completeness')} / calibration {c.get('calibration')} too weak to stand a pick on")
-    if need is not None and c["edge"] < need:
-        why.append(("no supported edge: " if not trusted else "edge too small: ") + f"{c['probability_basis'].split(' (')[0].lower()} {c['supported_probability']:.1%} against a break-even of {c['implied_with_margin']:.1%} = {c['edge'] * 100:+.1f} points (needs {need * 100:.0f})"
-                   + ("" if trusted or abs(c["gap"]) < ei.EDGE_MIN else f"; the hockey model sees {c['model_probability']:.1%} ({c['gap'] * 100:+.1f} pts) but that disagreement is unproven ({c['trust_state'].replace('_', ' ').lower()})"))
-    c["qualifies_before_the_case"] = not why
-    c["not_qualifying_because"] = why
+        blockers.append(f"data completeness {c.get('data_completeness')} / calibration {c.get('calibration')} too weak to stand a pick on")
+    c["blockers"] = blockers
+    cs = cases(c)
+    c.update(cs)
+    c["balance"] = balance(cs["case_for"], cs["case_against"])
+    c["structure"], c["structure_reasons"] = classify_structure(c, structure_state)
+    c["qualifies"] = bool(not blockers and c["structure"] != "NONE")
+    c["not_qualifying_because"] = blockers + ([] if c["structure"] != "NONE" else c["structure_reasons"])
 
 
 # ------------------------------------------------------------------------------------------------ the case for and against
+def _item(kind, category, strength, text):
+    return {"kind": kind, "category": category, "strength": strength, "text": text}
+
+
 def cases(c: dict) -> dict:
-    """CASE FOR and CASE AGAINST as lists of {kind, text, strength}; strengths are STRONG / MODERATE / WEAK / UNPROVEN (listed, never counted)."""
+    """CASE FOR and CASE AGAINST: items {kind, category, strength, text}. Categories: MARKET, HOCKEY, PRICE, MARKET_BEHAVIOUR, MODEL, SITUATION, DATA. Strengths: STRONG / MODERATE / WEAK / UNPROVEN (shown, never counted)."""
     f, a = [], []
-    trusted = c["trust_state"] == "DISAGREEMENT_HAS_SIGNAL" and c["gap"] > 0
-    if c["gap"] >= ei.EDGE_MIN:
-        if trusted:
-            f.append({"kind": "MODEL_EDGE", "strength": "STRONG", "text": f"the hockey model gives {c['model_probability']:.1%} against the market's {c['market_probability_market']:.1%} ({c['gap'] * 100:+.1f} pts) and the prospective record says this size of disagreement is real"})
-        else:
-            f.append({"kind": "MODEL_EDGE", "strength": "UNPROVEN", "text": f"the hockey model gives {c['model_probability']:.1%} against the market's {c['market_probability_market']:.1%} ({c['gap'] * 100:+.1f} pts), but disagreement of this size has not been shown to beat the market (state: {c['trust_state']})"})
-            a.append({"kind": "UNPROVEN_EDGE", "strength": "MODERATE", "text": "the case for this side rests on a model-versus-market gap the prospective record has not yet validated"})
-    elif c["gap"] <= -ei.EDGE_MIN:
-        a.append({"kind": "MARKET_STRONGER", "strength": "MODERATE", "text": f"the market ({c['market_probability_market']:.1%}) rates this side higher than our model ({c['model_probability']:.1%})"})
-    else:
-        f.append({"kind": "MARKET_AGREES", "strength": "WEAK", "text": f"model {c['model_probability']:.1%} and market {c['market_probability_market']:.1%} agree: no disagreement to exploit"})
+    M, H, g = c["market_probability_market"], c["model_probability"], c["gap"]
+    proven = c["trust_state"] == "DISAGREEMENT_HAS_SIGNAL" and g > 0
+    failing = c["trust_state"] == "DISAGREEMENT_IS_OVERCONFIDENCE"
+    # --- market baseline
+    if M >= 0.55:
+        f.append(_item("MARKET_BASELINE", "MARKET", "MODERATE", f"the market (no-vig {M:.1%}) rates this side a clear favourite"))
+    elif M >= 0.50:
+        f.append(_item("MARKET_BASELINE", "MARKET", "WEAK", f"the market (no-vig {M:.1%}) leans to this side"))
+    elif M < 0.45:
+        a.append(_item("MARKET_BASELINE", "MARKET", "WEAK", f"the market (no-vig {M:.1%}) rates this side the underdog"))
+    # --- hockey support
     drv = [d for d in (c["hockey_view"].get("drivers") or []) if d.get("favours") == c["side"] and abs(d.get("log_odds_toward_home", 0)) >= 0.05]
-    if len(drv) >= 2:
-        f.append({"kind": "HOCKEY_INDICATORS", "strength": "MODERATE", "text": "the team model's drivers favour " + c["side"] + ": " + ", ".join(d["label"] for d in drv[:3])})
-    elif c["hockey_view"].get("favourite") not in (None, c["side"]) and c["market"] == "MONEYLINE":
-        a.append({"kind": "HOCKEY_FAVOURS_OPPONENT", "strength": "MODERATE", "text": f"the hockey model rates {c['opponent']} the better team ({c['hockey_view'].get('p_favourite'):.1%})"})
+    label = c["hockey_view"].get("gap")
+    fav = c["hockey_view"].get("favourite")
+    if c["market"] == "MONEYLINE" or c["market"] == "PUCK_LINE":
+        if fav == c["side"] and len(drv) >= 2:
+            strength = "STRONG" if label in ("STRONG", "DOMINANT") else "MODERATE"
+            f.append(_item("HOCKEY_STRENGTH", "HOCKEY", strength, f"the team model rates {c['side']} the better team ({c['hockey_view'].get('p_favourite'):.1%}, a {str(label).lower()} gap); drivers: " + ", ".join(d["label"] for d in drv[:3])))
+        elif fav not in (None, c["side"]):
+            a.append(_item("HOCKEY_FAVOURS_OPPONENT", "HOCKEY", "STRONG" if label in ("STRONG", "DOMINANT") else "MODERATE", f"the team model rates {c['opponent']} the better team ({c['hockey_view'].get('p_favourite'):.1%}, a {str(label).lower()} gap)"))
+    if H >= M - 0.02 and abs(g) <= 0.05 and min(M, H) >= 0.50:
+        f.append(_item("INDEPENDENT_READS_AGREE", "MODEL", "MODERATE", f"the market ({M:.1%}) and the hockey model ({H:.1%}) are independent reads and agree within {abs(g) * 100:.1f} points"))
+    # --- model-market gap, by trust
+    if g >= ei.EDGE_MIN:
+        if proven:
+            f.append(_item("MODEL_EDGE", "MODEL", "STRONG", f"the model gives {H:.1%} against the market's {M:.1%} ({g * 100:+.1f} pts) and the prospective record says disagreement of this size is real"))
+        else:
+            f.append(_item("MODEL_EDGE", "MODEL", "UNPROVEN", f"the model gives {H:.1%} against the market's {M:.1%} ({g * 100:+.1f} pts); not yet proven (state: {c['trust_state'].replace('_', ' ').lower()}), so it carries weight {c['model_weight']:.2f}, not the pick"))
+    elif g <= -ei.EDGE_MIN:
+        a.append(_item("MARKET_STRONGER", "MODEL", "MODERATE", f"the market ({M:.1%}) rates this side higher than our model ({H:.1%})"))
+    if failing:
+        a.append(_item("MODEL_OVERCONFIDENT", "MODEL", "MODERATE", "the prospective record shows the model overconfident where it disagrees by this much: its disagreement is a reason to doubt the model, not the market"))
+    # --- situation
     rd = c["rest_days"]
     if rd.get(c["opponent"]) is not None and rd.get(c["side"]) is not None:
         if rd[c["opponent"]] <= 1 < rd[c["side"]]:
-            f.append({"kind": "REST", "strength": "WEAK", "text": f"{c['opponent']} is on a back-to-back and {c['side']} is rested"})
+            f.append(_item("REST_ADVANTAGE", "SITUATION", "MODERATE", f"{c['opponent']} is on a back-to-back and {c['side']} is rested"))
         elif rd[c["side"]] <= 1 < rd[c["opponent"]]:
-            a.append({"kind": "REST", "strength": "MODERATE", "text": f"{c['side']} is on a back-to-back and {c['opponent']} is rested"})
-    mvt = c.get("movement_toward_side")
-    if mvt is not None and abs(mvt) >= 0.01:
-        (f if mvt > 0 else a).append({"kind": "LINE_MOVEMENT", "strength": "UNPROVEN", "text": f"the market moved {'toward' if mvt > 0 else 'away from'} {c['side']} by {abs(mvt) * 100:.1f} pts since the day's first capture (movement has not yet been shown to predict anything)"})
+            a.append(_item("REST_DISADVANTAGE", "SITUATION", "MODERATE", f"{c['side']} is on a back-to-back and {c['opponent']} is rested"))
+    # --- market behaviour: information, not a rule
+    mv = c.get("movement")
+    if mv and mv["direction"] != "FLAT":
+        txt = (f"the price moved {mv['direction'].lower()} {c['side']} by {mv['magnitude_points']} pts ({mv['earliest_price']:+.0f} at {mv['earliest_at_utc'][11:16]}Z to {mv['current_price']:+.0f} at {mv['current_at_utc'][11:16]}Z; "
+               "movement is market information, not called sharp money, and has not yet been validated")
+        (f if mv["direction"] == "TOWARD" else a).append(_item("PRICE_MOVEMENT", "MARKET_BEHAVIOUR", "MODERATE" if mv["magnitude_points"] >= 2.0 else "WEAK", txt + ")"))
+    # --- price
+    if c["price_class"] == "IN_PREFERRED_REGION":
+        f.append(_item("PRICE_REGION", "PRICE", "WEAK", f"{c['price']:+.0f} is inside the preferred near-even region"))
+    elif c["price_class"] == "OUTSIDE_PREFERRED":
+        a.append(_item("PRICE_REGION", "PRICE", "MODERATE", f"{c['price']:+.0f} is outside the preferred near-even region (heuristic preference)"))
+    if c["edge"] > 0:
+        f.append(_item("PRICE_QUALITY", "PRICE", "MODERATE" if c["edge"] >= ei.EDGE_MIN else "WEAK", f"the evidence-weighted probability ({c['supported_probability']:.1%}) is above the break-even ({c['implied_with_margin']:.1%}) by {c['edge'] * 100:+.1f} pts"))
+    a.append(_item("MARGIN", "PRICE", "WEAK", f"the bookmaker's margin costs about {c['margin_cost'] * 100:.1f} points of break-even on this side"))
+    # --- freshness, data, calibration
     fr = c["price_freshness"]
     if fr["status"] != pf.FRESH:
-        a.append({"kind": "STALE_PRICE", "strength": "STRONG", "text": f"MARKET DATA QUALITY: {fr['reason']}"})
-    if c["price_class"] == "SHOULDER":
-        a.append({"kind": "PRICE_REGION", "strength": "MODERATE", "text": f"{c['price']:+.0f} is outside the preferred -130 to +130 region: it needs twice the edge"})
-    elif c["price_class"] == "OUTSIDE":
-        a.append({"kind": "PRICE_REGION", "strength": "STRONG", "text": f"{c['price']:+.0f} is beyond what Eggy hunts"})
-    else:
-        f.append({"kind": "PRICE_REGION", "strength": "WEAK", "text": f"{c['price']:+.0f} is inside the preferred -130 to +130 region"})
+        a.append(_item("STALE_PRICE", "DATA", "STRONG", f"MARKET DATA QUALITY: {fr['reason']}"))
     if c["market"] == "PUCK_LINE":
-        a.append({"kind": "PUCK_LINE_UNPROVEN", "strength": "MODERATE", "text": "the puck-line probability is the hockey model's win probability mapped through a historical goal-margin calibration; its agreement with the puck-line MARKET has no prospective record yet"}) if c["trust_state"] != "DISAGREEMENT_HAS_SIGNAL" else None
-    a.append({"kind": "GOALIE", "strength": "WEAK", "text": "starting goalies are not confirmed by an approved source (not available to Eggy)"})
-    a.append({"kind": "VIG", "strength": "WEAK", "text": f"the bookmaker's margin costs about {(c['implied_with_margin'] - c['market_probability_market']) * 100:.1f} points of break-even on this side"})
+        a.append(_item("PUCK_LINE_CALIBRATION", "MODEL", "MODERATE", (c.get("calibration_note") or "the puck-line probability is mapped from the win probability through a goal-margin calibration") + f"; its uncertainty is {c['probability_uncertainty'] * 100:.1f} points and its agreement with the puck-line MARKET has no prospective record yet"))
+    if (c.get("data_completeness") or 1) < 0.7:
+        a.append(_item("DATA_COMPLETENESS", "DATA", "MODERATE", f"data completeness is {c.get('data_completeness')}"))
+    a.append(_item("GOALIE", "DATA", "WEAK", "starting goalies are not confirmed by an approved source (not available to Eggy)"))
     return {"case_for": f, "case_against": a}
 
 
 def balance(f: list[dict], a: list[dict]) -> dict:
-    """Does the case FOR materially outweigh the case AGAINST? Ordinal and countable, never a weighted score: it needs at least one STRONG reason for, no STRONG reason against, and (strong + moderate for) greater than
-    (2 x strong + moderate against). UNPROVEN and WEAK items are shown and not counted."""
+    """Does the case FOR materially exceed the case AGAINST? Ordinal and countable (a HEURISTIC rule, not a weighted score): no STRONG reason against; reasons FOR at MODERATE or better from at least two distinct
+    evidence CATEGORIES; and (strong + moderate for) at least (2 x strong + moderate against) + 2. UNPROVEN and WEAK items are shown and not counted."""
     n = lambda xs, s: sum(1 for x in xs if x["strength"] == s)
     fs, fm, as_, am = n(f, "STRONG"), n(f, "MODERATE"), n(a, "STRONG"), n(a, "MODERATE")
-    ok = fs >= 1 and as_ == 0 and (fs + fm) > (2 * as_ + am)
-    return {"for_strong": fs, "for_moderate": fm, "against_strong": as_, "against_moderate": am, "materially_outweighs": bool(ok)}
+    cats = sorted({x["category"] for x in f if x["strength"] in ("STRONG", "MODERATE")})
+    ok = as_ == 0 and len(cats) >= 2 and (fs + fm) >= (2 * as_ + am) + 2
+    return {"for_strong": fs, "for_moderate": fm, "against_strong": as_, "against_moderate": am, "supporting_categories": cats, "materially_outweighs": bool(ok)}
 
 
-def confidence(c: dict, bal: dict) -> str:
-    """A calibrated evidence CATEGORY, never a percentage: HIGH needs a proven disagreement with a clear edge and nothing moderate against; MEDIUM a proven one with at most one; otherwise LOW."""
-    if c["trust_state"] != "DISAGREEMENT_HAS_SIGNAL":
-        return "LOW"
-    if c["edge"] >= 2 * ei.EDGE_MIN and bal["against_moderate"] == 0 and c["calibration"] == "HIGH":
-        return "HIGH"
-    return "MEDIUM" if bal["against_moderate"] <= 1 else "LOW"
+# ------------------------------------------------------------------------------------------------ the evidence structures
+def classify_structure(c: dict, structure_state: dict | None = None) -> tuple[str, list[str]]:
+    """TYPE B, then C, then A (the strongest applicable); NONE with the reasons when none applies. A structure the prospective record has shown to FAIL does not qualify."""
+    th = POLICY["thresholds"]
+    M, H, g = c["market_probability_market"], c["model_probability"], c["gap"]
+    bal = c["balance"]
+    drv = [d for d in (c["hockey_view"].get("drivers") or []) if d.get("favours") == c["side"] and abs(d.get("log_odds_toward_home", 0)) >= 0.05]
+    reasons = []
+    if not bal["materially_outweighs"]:
+        reasons.append("the case for does not materially exceed the case against (" + ", ".join(f"{k} {v}" for k, v in bal.items() if k != "supporting_categories") + f"; supporting categories {bal['supporting_categories']})")
+    failed = lambda s: ((structure_state or {}).get(s) or {}).get("decision_state") == "DISAGREEMENT_IS_OVERCONFIDENCE"
+    kinds = []
+    if c["trust_state"] == "DISAGREEMENT_HAS_SIGNAL" and g >= th["model_gap_material"] and c["edge"] >= ei.EDGE_MIN:
+        kinds.append("SUPPORTED_MARKET_GAP")
+    else:
+        reasons.append("no SUPPORTED market gap: " + (f"the model's {g * 100:+.1f}-pt gap is unproven ({c['trust_state'].replace('_', ' ').lower()})" if g >= th["model_gap_material"] else f"the model's gap is {g * 100:+.1f} pts"))
+    mvm = c.get("movement") or {}
+    toward = mvm.get("direction") == "TOWARD" and abs(mvm.get("change", 0)) >= th["movement_material"]
+    away = mvm.get("direction") == "AWAY" and abs(mvm.get("change", 0)) >= th["movement_material"]
+    facts = [x for x, on in (("price moved toward the side", toward), ("rest advantage", any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"])), ("evidence-weighted probability above break-even", c["edge"] > 0)) if on]
+    if H >= M - 0.02 and len(drv) >= 2 and len(facts) >= 2 and not away and c["edge"] >= th["situational_min_edge"]:
+        kinds.append("MARKET_SITUATIONAL_OPPORTUNITY")
+    elif not (H >= M - 0.02 and len(drv) >= 2):
+        reasons.append("the hockey picture does not support this side as a situational opportunity")
+    else:
+        reasons.append(f"no market / situational opportunity: {len(facts)} measured fact(s) of the two needed ({', '.join(facts) or 'none'})" + ("; the price moved AWAY from the side" if away else "") + (f"; the price is {abs(c['edge']) * 100:.1f} pts worse than the evidence supports (limit {abs(th['situational_min_edge']) * 100:.0f})" if c["edge"] < th["situational_min_edge"] else ""))
+    if M >= th["consensus_min_market"] and H >= th["consensus_min_model"] and abs(g) <= th["consensus_agreement_max_gap"] and c["price_class"] == "IN_PREFERRED_REGION" and len(drv) >= 2:
+        kinds.append("CONSENSUS_QUALITY")
+    else:
+        reasons.append(f"not a consensus side: market {M:.1%} / model {H:.1%} / gap {g * 100:+.1f} pts / price {c['price']:+.0f}" + ("" if len(drv) >= 2 else " / fewer than two hockey drivers behind it"))
+    kinds = [k for k in kinds if not failed(k)]
+    if bal["materially_outweighs"] and kinds:
+        return min(kinds, key=lambda k: PRIORITY[k]), []
+    return "NONE", reasons
 
 
-def decide(candidates: list[dict], *, now: dt.datetime, why_no_prices: str | None = None) -> dict:
-    """The day's decision from the evaluated candidates: rank every qualifying side by its supported edge (ties: the moneyline), take the best whose case balances, else PASS with the specific reason."""
+def confidence(c: dict, structure_state: dict | None = None) -> str:
+    """A calibrated evidence CATEGORY, never a percentage. Proven market gap with nothing moderate against -> HIGH; a proven gap, or a consensus / situational pick with three supporting categories, at most one moderate
+    reason against and HIGH calibration -> MEDIUM; otherwise LOW. A structure whose prospective record has proven itself is lifted one category; one that has failed does not qualify at all."""
+    bal = c["balance"]
+    if c["structure"] == "SUPPORTED_MARKET_GAP":
+        lvl = "HIGH" if bal["against_moderate"] == 0 and c["calibration"] == "HIGH" and c["edge"] >= 2 * ei.EDGE_MIN else "MEDIUM"
+    elif len(bal["supporting_categories"]) >= 3 and bal["against_moderate"] <= 1 and c["calibration"] == "HIGH":
+        lvl = "MEDIUM"
+    else:
+        lvl = "LOW"
+    if ((structure_state or {}).get(c["structure"]) or {}).get("decision_state") == "DISAGREEMENT_HAS_SIGNAL":
+        lvl = {"LOW": "MEDIUM", "MEDIUM": "HIGH", "HIGH": "HIGH"}[lvl]
+    return lvl
+
+
+def research_order(c: dict) -> tuple:
+    """How Eggy ranks sides: qualifying first, then the evidence structure (gap, situational, consensus), then the preferred price region, then the CONSERVATIVE supported edge (the less trustworthy probability does not win on a
+    larger nominal edge), then the case balance; the moneyline wins a tie. Nothing that happened after the decision is an input."""
+    b = c["balance"]
+    net = b["for_strong"] * 2 + b["for_moderate"] - b["against_strong"] * 2 - b["against_moderate"]
+    if not c["qualifies"]:                                             # among the sides that fail, the one with the best case is the most researched (a side the evidence opposes is not)
+        return (True, 0, -net, c["price_class"] != "IN_PREFERRED_REGION", -round(c["conservative_edge"], 3), c["market"] != "MONEYLINE")
+    return (False, PRIORITY.get(c["structure"], 9), c["price_class"] != "IN_PREFERRED_REGION", -round(c["conservative_edge"], 3), -net, c["market"] != "MONEYLINE")
+
+
+def summarize(c: dict) -> dict:
+    keep = ("matchup", "side", "market", "line", "price", "model_probability", "model_probability_raw", "market_probability_market", "gap", "trust_state", "model_weight", "supported_probability", "edge", "conservative_edge",
+            "probability_uncertainty", "price_class", "structure", "qualifies", "not_qualifying_because", "balance", "movement", "calibration", "calibration_note")
+    hockey = [x for x in c["case_for"] if x["category"] in ("HOCKEY", "MODEL", "SITUATION")]
+    market = [x for x in c["case_for"] if x["category"] in ("MARKET", "MARKET_BEHAVIOUR", "PRICE")]
+    return {**{k: c.get(k) for k in keep}, "hockey_case": [x["text"] for x in hockey], "market_price_case": [x["text"] for x in market], "case_against": [x["text"] for x in c["case_against"] if x["strength"] != "WEAK"] or [x["text"] for x in c["case_against"][:2]],
+            "price_freshness": c["price_freshness"]["status"]}
+
+
+def decide(candidates: list[dict], *, now: dt.datetime, why_no_prices: str | None = None, structure_state: dict | None = None) -> dict:
+    """The day's decision: rank every side by `research_order` (nothing that happened after the decision is an input), take the best qualifying one, else PASS with the specific reasons; the top three researched sides are always reported."""
     base = {"policy_id": POLICY["policy_id"], "policy_digest": policy_digest(), "decided_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "availability": AVAILABILITY}
     if why_no_prices:
-        return {**base, "decision": "PASS", "pass_reason": why_no_prices, "ranked": [], "candidates_examined": 0}
-    for c in candidates:
-        c.update(cases(c))
-        c["balance"] = balance(c["case_for"], c["case_against"])
-    ranked = sorted(candidates, key=lambda c: (c["price_class"] == "OUTSIDE" or c["price_freshness"]["status"] != pf.FRESH, -round(c["edge"], 2), -c["gap"], c["market"] != "MONEYLINE"))          # sides Eggy could hunt first; then the supported edge (without a proven disagreement every side sits at minus the margin, so the model's preference breaks the tie)
-    qualifying = [c for c in ranked if c["qualifies_before_the_case"]]
-    pick = next((c for c in qualifying if c["balance"]["materially_outweighs"]), None)
-    shadow = [{k: c[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "supported_probability", "edge", "price_class", "not_qualifying_because")} | {"balance": c["balance"]} for c in ranked[:5]]
+        return {**base, "decision": "PASS", "pass_reason": why_no_prices, "ranked": [], "top_three": [], "candidates_examined": 0}
+    ranked = sorted(candidates, key=research_order)
+    top = [summarize(c) for c in ranked[:3]]
+    pick = next((c for c in ranked if c["qualifies"]), None)
     if pick:
-        pick["confidence"] = confidence(pick, pick["balance"])
-        return {**base, "decision": "PICK", "pick": pick, "ranked": shadow, "candidates_examined": len(candidates)}
+        pick["confidence"] = confidence(pick, structure_state)
+        return {**base, "decision": "PICK", "pick": pick, "ranked": [summarize(c) for c in ranked[:5]], "top_three": top, "candidates_examined": len(candidates)}
     if ranked:
-        top = ranked[0]
-        reason = ("; ".join(top["not_qualifying_because"][:2]) if top["not_qualifying_because"] else "the case for the best side does not materially outweigh the case against (" + json.dumps(top["balance"]) + ")")
-        pass_reason = f"no side meets the standard. The closest, {top['side']} {top['market'].replace('_', ' ')} {top['price']:+.0f}: {reason}"
+        t = ranked[0]
+        pass_reason = (f"no side meets the standard. The most researched side, {t['side']} {t['market'].replace('_', ' ')} {t['price']:+.0f}, does not qualify: " + "; ".join(t["not_qualifying_because"][:3])
+                       + f". Total evidence for it: {t['balance']['for_strong']} strong / {t['balance']['for_moderate']} moderate; against: {t['balance']['against_strong']} strong / {t['balance']['against_moderate']} moderate.")
     else:
         pass_reason = "no game has a current moneyline and puck-line price"
-    return {**base, "decision": "PASS", "pass_reason": pass_reason, "ranked": shadow, "candidates_examined": len(candidates),
-            "what_would_change_it": "a side whose model-versus-market gap the prospective record has proven (100 independent games in its gap band, |z| >= 2) at a fresh price in the preferred region, with the case for outweighing the case against"}
+    return {**base, "decision": "PASS", "pass_reason": pass_reason, "ranked": [summarize(c) for c in ranked[:5]], "top_three": top, "candidates_examined": len(candidates),
+            "what_would_change_it": "a side where the hockey picture and the market agree it is the better team near even money, or where two measured, independent facts (movement toward it, a rest advantage, a gap the record has earned weight for) make the price unusually attractive, with the case for clearly exceeding the case against"}
