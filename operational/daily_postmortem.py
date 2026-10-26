@@ -707,6 +707,17 @@ def main() -> None:
         print("evidence refresh:", _er.maybe_prepare())
     except Exception as exc:  # noqa: BLE001 - never stops the postmortem
         print(f"evidence refresh skipped: {exc.__class__.__name__}: {exc}")
+    try:                                                      # Eggy's own side pick: settle what is final and rebuild its postmortem (decision quality, result, signal trust); the learning parlays are separate
+        from operational import eggy_pick_ledger as _epl
+        from datetime import datetime as _dt, timezone as _tz
+        import db as _db
+        _conn = _db.get_conn()
+        try:
+            print("eggy pick postmortem:", _epl.postmortem_refresh(_conn, _dt.now(_tz.utc)))
+        finally:
+            _conn.close()
+    except Exception as exc:  # noqa: BLE001 - never stops the postmortem
+        print(f"eggy pick postmortem skipped: {exc.__class__.__name__}: {exc}")
     # Cloud live-data sprint (2026-09-25): the Morning Review changed -> publish
     # (opt-in, downstream, never raises).
     from operational import cloud_publish_hook

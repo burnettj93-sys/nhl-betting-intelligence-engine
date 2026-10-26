@@ -174,6 +174,11 @@ def run(now: dt.datetime | None = None) -> dict:
             learning_summary = learning_cohort.run_cycle(nhl_conn, now, collected, collector=lambda: daily_tickets.collect_candidate_legs(nhl_conn, now, advisory_price_age=True))
         except Exception as exc:  # noqa: BLE001 - never stops the model book
             learning_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
+        try:                                       # Eggy's own daily side pick (moneyline or puck line, or PASS): its own ledger and postmortem, independent of the learning parlays
+            from operational import eggy_pick_ledger
+            eggy_summary = eggy_pick_ledger.run_cycle(nhl_conn, now)
+        except Exception as exc:  # noqa: BLE001 - never stops the model book or the learning cohort
+            eggy_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
         if settlement_summary.get("settled"):
             daily_tickets.refresh_state_only(bankroll_conn, now)
         try:
@@ -194,7 +199,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh, "board_scorecard": scorecard_summary,
-              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary, "learning_cohort": learning_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary, "learning_cohort": learning_summary, "eggy_pick": eggy_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

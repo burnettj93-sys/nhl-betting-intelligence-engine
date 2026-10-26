@@ -488,7 +488,7 @@ def ticket_card(t: dict, *, show_account_note: bool = False) -> None:
                 st.warning(esc(a["detail"]))
 
 
-EGGY_PICK_TITLE = "Eggy's Parlay Pick of the Day"
+EGGY_PICK_TITLE = "Eggy Pick of the Day"
 EGGY_NO_PICK = "No Eggy pick today"
 
 
@@ -504,7 +504,7 @@ def eggy_pick_card(primary: dict | None, *, recording_paused: bool = False) -> N
         if not ticket:
             reason = primary.get("reason") or "No combination of supported selections reaches +100 to +500 with value at the prices available."
             title = "Eggy's pick is unavailable right now" if primary.get("status") == "ERROR" else EGGY_NO_PICK
-            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div>"
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>Strongest learning ticket (not Eggy's pick)</div><div class='ttl'>{_h(title)}</div>"
                         f"<div class='sub'>{_h(reason)}</div></div></div>", unsafe_allow_html=True)
             if primary.get("data_limit"):
                 st.warning(primary["data_limit"]["note"])
@@ -1079,10 +1079,10 @@ def _eggy_official_card(eggy: dict) -> None:
     with st.container(border=True):
         if out != "OFFICIAL_EGGY_FLAGSHIP_PARLAY" or not fl:
             title, sub = (("Eggy's flagship is unavailable right now", eggy.get("error") or "")) if out == "UNAVAILABLE" else (
-                "PASS", "No GOOD qualifying parlay exists today. Eggy does not lower the bar to produce one.")
-            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>{_h(EGGY_PICK_TITLE)}</div><div class='ttl'>{_h(title)}</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
+                "No strong learning ticket", "The learning parlay engine has no GOOD qualifying ticket today. It does not lower the bar to produce one.")
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>Strongest learning ticket (not Eggy's pick)</div><div class='ttl'>{_h(title)}</div><div class='sub'>{_h(sub)}</div></div></div>", unsafe_allow_html=True)
             return
-        st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>Eggy's flagship parlay (one a day) · UNPRICED LEARNING PARLAY</div><div class='ttl'>{_h(EGGY_PICK_TITLE)}</div>"
+        st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>Strongest learning ticket today (from the learning parlay engine, not Eggy's pick) · UNPRICED LEARNING PARLAY</div><div class='ttl'>{_h(EGGY_PICK_TITLE)}</div>"
                     f"<div class='sub'>Unpriced: no combined price exists, so no stake, return or ROI is claimed. It is judged by its legs.</div></div></div>", unsafe_allow_html=True)
         for l in fl["legs"]:
             st.markdown("- " + esc(l["label"]) + f" · estimate {l['estimate']:.0%}")
@@ -1095,13 +1095,69 @@ def _eggy_official_card(eggy: dict) -> None:
         st.caption("Hit chances are estimates, not promises; any parlay can lose.")
 
 
+def eggy_side_pick_card(doc: dict | None) -> None:
+    """EGGY PICK OF THE DAY: one NHL side (moneyline or puck line) or PASS, with the case for and against, the model-versus-market state, the price and its source, and the record. Separate from the learning
+    parlays, which are shown elsewhere. Nothing is invented: what the engine cannot see (public tickets, handle, reverse line movement, closing prices) is shown as NOT AVAILABLE."""
+    from dashboard import theme
+    doc = doc or {}
+    today = et.eastern_today(_utcnow())
+    img = f"<img alt='Eggy' src='{theme.eggy_pick_uri()}'/>"
+    if not doc.get("policy"):
+        st.caption("Eggy's side pick is not available in this data snapshot.")
+        return
+    if doc.get("date_et") and doc["date_et"] != today:
+        st.caption(f"The Eggy side pick on file is for {esc(doc['date_et'])}, not today ({today}); it is not shown.")
+        return
+    d = doc.get("today")
+    with st.container(border=True):
+        if not d:
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY</div><div class='ttl'>Eggy has not decided yet</div><div class='sub'>It decides once, after the pregame odds pull is in and before the first game; or it passes.</div></div></div>", unsafe_allow_html=True)
+        elif d["decision"] == "PASS":
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY</div><div class='ttl'>PASS</div><div class='sub'>{_h(d.get('pass_reason') or '')}</div></div></div>", unsafe_allow_html=True)
+            if d.get("what_would_change_it"):
+                st.caption("What would change it: " + esc(d["what_would_change_it"]))
+            top = (d.get("ranked") or [None])[0]
+            if top:
+                st.caption(f"Closest side (shadow, not a pick): {esc(top['side'])} {esc(top['market'].replace('_', ' '))} {top['price']:+.0f} · model {top['model_probability']:.1%} vs market {top['market_probability_market']:.1%} · edge {top['edge'] * 100:+.1f} pts · {esc(top['trust_state'].replace('_', ' ').lower())}")
+        else:
+            p = d["pick"]
+            line = f" {p['line']:+.1f}" if p.get("line") is not None else ""
+            st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY · {_h(p['matchup'])}</div><div class='ttl'>{_h(p['side'])} {_h(p['market'].replace('_', ' '))}{_h(line)} {p['price']:+.0f}</div></div></div>", unsafe_allow_html=True)
+            st.markdown(f"**EGGY CONFIDENCE:** {esc(p.get('confidence', 'LOW'))} (an evidence category, not a percentage)")
+            st.markdown("**WHY EGGY LIKES IT**")
+            for x in [x for x in p["case_for"] if x["strength"] in ("STRONG", "MODERATE")][:5] or p["case_for"][:3]:
+                st.markdown("- " + esc(x["text"]))
+            st.markdown(f"**MARKET SIGNAL:** " + esc("; ".join(x["text"] for x in p["case_for"] + p["case_against"] if x["kind"] == "LINE_MOVEMENT") or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
+            hv = p.get("hockey_view") or {}
+            st.markdown("**HOCKEY EDGE:** " + esc("; ".join(x["text"] for x in p["case_for"] if x["kind"] in ("HOCKEY_INDICATORS", "REST")) or f"model win probability {p['model_win_probability']:.1%}"))
+            st.markdown("**CASE AGAINST:** " + esc("; ".join(x["text"] for x in p["case_against"] if x["strength"] in ("STRONG", "MODERATE")) or "; ".join(x["text"] for x in p["case_against"][:2])))
+            st.markdown(f"**MODEL VS MARKET:** model {p['model_probability']:.1%} · market no-vig {p['market_probability_market']:.1%} · gap {p['gap'] * 100:+.1f} pts · trust state: {esc(p['trust_state'].replace('_', ' ').lower())}")
+            st.markdown(f"**PRICE:** {p['price']:+.0f} ({esc(p['price_freshness']['status'])}, DraftKings, captured {esc(p['capture_at_utc'])}); break-even {p['implied_with_margin']:.1%}; supported edge {p['edge'] * 100:+.1f} pts")
+        rec = doc.get("record") or {}
+        st.caption(f"Eggy's own record: {rec.get('picks', 0)} pick(s), {rec.get('wins', 0)}-{rec.get('losses', 0)} settled, {rec.get('passes', 0)} pass day(s). Hit or miss only; kept apart from the learning parlays.")
+        with st.expander("What Eggy can and cannot see today, and which signals are earning trust"):
+            av = doc.get("availability") or {}
+            st.markdown("**Available:** " + esc("; ".join(av.get("AVAILABLE", []))))
+            st.markdown("**NOT AVAILABLE:** " + esc("; ".join(av.get("NOT AVAILABLE", []))))
+            sig = doc.get("signals") or {}
+            if sig:
+                st.dataframe([{"Signal": v["describes"], "Games": v["games"], "Wins": v["wins"], "Expected at the market price": v["expected_wins_at_the_market_price"], "z": v["z"], "State": _words(v["state"]),
+                               "Needed to drive a decision": v["games_needed_to_drive_a_decision"]} for v in sig.values()], hide_index=True, width="stretch")
+            st.caption("A signal changes a decision only after 100 independent games and |z| >= 2. None is assumed to work.")
+
+
 def eggy_candidate_card(eggy: dict | None, primary: dict | None, *, recording_paused: bool = False) -> None:
     """Eggy's Parlay Pick of the Day with its two stages. An official pick (stage B, the production recording policy) is shown exactly as before. Without one, the card shows the BEST EGGY CANDIDATE
     the whole-slate search found and says which certification gates stand in its way, or a TRUE PASS with what was examined. It never invents a joint probability or a combined price."""
     from dashboard import theme
     eggy = eggy or {}
     out = eggy.get("daily_output")
-    if eggy.get("official_policy"):                        # Eggy's official output is the flagship parlay or PASS (the primary slip is no longer the official pick)
+    if eggy.get("official_policy"):                        # Eggy's official output is its ONE side pick (moneyline or puck line) or PASS; the learning engine's strongest ticket is shown beneath it, labelled as such
+        try:
+            from dashboard import product_source as _ps
+            eggy_side_pick_card(_ps.eggy_pick())
+        except Exception:  # noqa: BLE001 - the side pick is read from its own ledger; a failure must not hide the learning ticket
+            st.caption("Eggy's side pick could not be read right now.")
         _eggy_official_card(eggy)
         return
     if (primary or {}).get("ticket"):                      # an official ticket (proposed or recorded) is always shown by the original card, whatever the candidate document says

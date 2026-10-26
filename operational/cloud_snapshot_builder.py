@@ -232,6 +232,12 @@ def _slate_board() -> dict:
     return slate_board.load() or {"generated_at_utc": None, "games": [], "primary": None}
 
 
+def _eggy_pick() -> dict:
+    """Eggy's daily side pick (operational/eggy_pick_ledger.py): today's decision (a PICK or a PASS with its reason), its record, the prospective signal trust and what data is not available."""
+    from operational import eggy_pick_ledger
+    return eggy_pick_ledger.snapshot_section()
+
+
 def _learning_experiment() -> dict:
     """The temporary 14-day paper learning cohort (operational/learning_cohort.py): status, scorecard, postmortem and, once it exists, the final report. Written by the 10-minute trader."""
     from operational import learning_postmortem
@@ -251,6 +257,7 @@ _SECTION_BUILDERS = {
     "builder_pool": _builder_pool,
     "slate_board": _slate_board,
     "learning_experiment": _learning_experiment,
+    "eggy_pick": _eggy_pick,
     "day_status": _day_status,
     "performance": _performance,
     "morning_review": _morning_review,
