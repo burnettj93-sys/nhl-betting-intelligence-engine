@@ -26,6 +26,7 @@ from collections import Counter
 
 from operational import eggy_intelligence as ei
 
+ASSESS_VERSION = 2              # bump when the assessment logic changes: a stored review of an older version is rebuilt, never reused
 SURPRISE_FLOOR = 0.10          # a loss the estimate called less than 10% likely is not explained by ordinary variance
 TOI_HELD = 2.0                 # minutes below the expectation that still count as the expected role
 TOI_FAILED = 3.0               # minutes below expectation
@@ -258,6 +259,27 @@ def process_category(card: dict, claims: list[dict]) -> tuple[str, str]:
     return "UNKNOWN", "no specific cause could be established from the data"
 
 
+def outcome_cause(card: dict, claims: list[dict], est) -> tuple[str, str]:
+    """The cause of a LOSS, kept apart from the quality of the decision: a QUESTIONABLE or BAD decision can still lose to chance. (taxonomy category, why). A specific cause (role, ice time, power play, calibration,
+    environment) is found first, from the review's own flags and the failed claims; only when none applies is the loss judged against what the estimate allowed. UNKNOWN is left for losses that facts and the
+    estimate together do NOT explain, and INSUFFICIENT_FACTS for losses whose game facts have not landed: neither is a dumping ground, and neither is rewarded as variance."""
+    cat, why = process_category(card, claims)
+    if cat != "UNKNOWN":
+        return cat, why
+    held = [c for c in claims if c["verdict"] == "HELD"]
+    partly = [c for c in claims if c["verdict"] == "PARTLY_HELD"]
+    testable = [c for c in claims if c["verdict"] in ("HELD", "FAILED", "PARTLY_HELD")]
+    if not testable:
+        return "INSUFFICIENT_FACTS", "none of the facts the decision rested on can be tested yet (the game data has not landed, or the bet has no testable claim)"
+    p_loss = None if est is None else 1.0 - float(est)
+    if partly:
+        return "UNKNOWN", "a fact the decision rested on held only in part (" + "; ".join(c["claim"] for c in partly[:2]) + "): chance cannot be assumed, investigate"
+    if held and p_loss is not None and p_loss >= SURPRISE_FLOOR:
+        return "OUTCOME_WITHIN_ESTIMATE", (f"the facts the decision rested on held ({', '.join(c['claim'] for c in held[:2])}) and the loss was a {p_loss:.0%} outcome by the estimate: chance explains the result; "
+                                           "the decision's own doubts (its quality label) are judged separately")
+    return "UNKNOWN", "the facts held but the loss was rarer than the estimate allowed, so chance alone is not an adequate explanation: investigate"
+
+
 def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: bool = False) -> dict:
     """Everything the postmortem says about one bet's decision: quality, claims checked, the lesson, and the category/action when the loss is not earned variance. `integrity_defect` is the loss classifier's
     verdict that the bet's data was defective (stale data treated as fresh, an identity failure, a pipeline failure): such a loss is never earned variance."""
@@ -273,11 +295,13 @@ def assess(bet: dict, card: dict | None, facts: dict | None, integrity_defect: b
         if lesson["variance"]:
             cat, why = "NORMAL_VARIANCE", lesson["text"]
         else:
-            cat, why = process_category(card or {}, claims)
+            cat, why = outcome_cause(card or {}, claims, est)
             action = "INVESTIGATE" if q["label"] in (BAD, GOOD) or lesson["signal"] == "GOOD_DECISION_LOST_NOT_VARIANCE" else "WATCH"
+            if cat in ("OUTCOME_WITHIN_ESTIMATE", "INSUFFICIENT_FACTS") and lesson["signal"] != "GOOD_DECISION_LOST_NOT_VARIANCE":
+                action = "NO_ACTION" if cat == "OUTCOME_WITHIN_ESTIMATE" and q["label"] != BAD else "WATCH"
     elif outcome == "WIN" and q["label"] == BAD:
         cat, why, action = "LUCKY_WIN", lesson["text"], "WATCH"
-    return {"decision_quality": q, "outcome": outcome, "claims": claims, "lesson": lesson, "classification": cat, "why": why, "recommended_action": action, "p_outcome": None if p_outcome is None else round(p_outcome, 4)}
+    return {"version": ASSESS_VERSION, "decision_quality": q, "outcome": outcome, "claims": claims, "lesson": lesson, "classification": cat, "why": why, "recommended_action": action, "p_outcome": None if p_outcome is None else round(p_outcome, 4)}
 
 
 # ------------------------------------------------------------------------------------------------ legacy bets (recorded before the review existed)

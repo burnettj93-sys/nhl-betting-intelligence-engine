@@ -1,0 +1,191 @@
+{
+ "method": "python3 deploy/validate_dependence.py --out docs/validation/dependence_lift.json",
+ "min_p": 0.45,
+ "pairs": {
+  "CONTROL_ML_PTS": {
+   "pairs": 39720,
+   "games": 1297,
+   "expected_joint_if_independent": 0.3192,
+   "observed_joint": 0.3085,
+   "raw_lift": 0.967
+  },
+  "CONTROL_ML_SOG": {
+   "pairs": 39720,
+   "games": 1297,
+   "expected_joint_if_independent": 0.3467,
+   "observed_joint": 0.3183,
+   "raw_lift": 0.918
+  },
+  "CONTROL_PTS_PTS": {
+   "pairs": 39750,
+   "games": 1298,
+   "expected_joint_if_independent": 0.2972,
+   "observed_joint": 0.3462,
+   "raw_lift": 1.165
+  },
+  "CONTROL_SOG_PTS": {
+   "pairs": 39750,
+   "games": 1298,
+   "expected_joint_if_independent": 0.3243,
+   "observed_joint": 0.3737,
+   "raw_lift": 1.152
+  },
+  "CONTROL_SOG_SOG": {
+   "pairs": 39750,
+   "games": 1298,
+   "expected_joint_if_independent": 0.353,
+   "observed_joint": 0.3856,
+   "raw_lift": 1.092
+  },
+  "ML_PTS_OPPOSING": {
+   "pairs": 7213,
+   "games": 1453,
+   "expected_joint_if_independent": 0.2983,
+   "observed_joint": 0.2149,
+   "raw_lift": 0.72,
+   "control_lift": 0.967,
+   "dependence_lift": 0.745,
+   "ci95": [
+    0.691,
+    0.799
+   ],
+   "usable": true,
+   "reading": "negative dependence"
+  },
+  "ML_PTS_SAMETEAM": {
+   "pairs": 8599,
+   "games": 1487,
+   "expected_joint_if_independent": 0.3168,
+   "observed_joint": 0.3582,
+   "raw_lift": 1.131,
+   "control_lift": 0.967,
+   "dependence_lift": 1.17,
+   "ci95": [
+    1.103,
+    1.25
+   ],
+   "usable": true,
+   "reading": "positive dependence"
+  },
+  "ML_SOG_OPPOSING": {
+   "pairs": 13040,
+   "games": 1490,
+   "expected_joint_if_independent": 0.3299,
+   "observed_joint": 0.2958,
+   "raw_lift": 0.897,
+   "control_lift": 0.918,
+   "dependence_lift": 0.977,
+   "ci95": [
+    0.909,
+    1.045
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "ML_SOG_SAMETEAM": {
+   "pairs": 14506,
+   "games": 1490,
+   "expected_joint_if_independent": 0.3421,
+   "observed_joint": 0.3171,
+   "raw_lift": 0.927,
+   "control_lift": 0.918,
+   "dependence_lift": 1.01,
+   "ci95": [
+    0.95,
+    1.074
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "PTS_PTS_OPPOSING": {
+   "pairs": 23599,
+   "games": 1441,
+   "expected_joint_if_independent": 0.2938,
+   "observed_joint": 0.3362,
+   "raw_lift": 1.144,
+   "control_lift": 1.165,
+   "dependence_lift": 0.982,
+   "ci95": [
+    0.927,
+    1.042
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "PTS_PTS_TEAMMATES": {
+   "pairs": 21597,
+   "games": 1489,
+   "expected_joint_if_independent": 0.298,
+   "observed_joint": 0.3849,
+   "raw_lift": 1.292,
+   "control_lift": 1.165,
+   "dependence_lift": 1.109,
+   "ci95": [
+    1.057,
+    1.157
+   ],
+   "usable": true,
+   "reading": "positive dependence"
+  },
+  "SOG_PTS_OPPOSING": {
+   "pairs": 83396,
+   "games": 1490,
+   "expected_joint_if_independent": 0.3214,
+   "observed_joint": 0.3621,
+   "raw_lift": 1.127,
+   "control_lift": 1.152,
+   "dependence_lift": 0.978,
+   "ci95": [
+    0.95,
+    1.008
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "SOG_PTS_TEAMMATES": {
+   "pairs": 76191,
+   "games": 1491,
+   "expected_joint_if_independent": 0.32,
+   "observed_joint": 0.3633,
+   "raw_lift": 1.135,
+   "control_lift": 1.152,
+   "dependence_lift": 0.985,
+   "ci95": [
+    0.953,
+    1.017
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "SOG_SOG_OPPOSING": {
+   "pairs": 73092,
+   "games": 1490,
+   "expected_joint_if_independent": 0.3508,
+   "observed_joint": 0.3838,
+   "raw_lift": 1.094,
+   "control_lift": 1.092,
+   "dependence_lift": 1.002,
+   "ci95": [
+    0.975,
+    1.033
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  },
+  "SOG_SOG_TEAMMATES": {
+   "pairs": 67980,
+   "games": 1491,
+   "expected_joint_if_independent": 0.3503,
+   "observed_joint": 0.3882,
+   "raw_lift": 1.108,
+   "control_lift": 1.092,
+   "dependence_lift": 1.014,
+   "ci95": [
+    0.988,
+    1.045
+   ],
+   "usable": true,
+   "reading": "indistinguishable from independent"
+  }
+ }
+}

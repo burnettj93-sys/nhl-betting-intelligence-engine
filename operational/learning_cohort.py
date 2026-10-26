@@ -67,7 +67,7 @@ ELIGIBLE_FAMILIES = ("MONEYLINE", "PLAYER_SOG_ALTERNATE", "PLAYER_SOG", "PLAYER_
 
 POLICY = {
     "policy_id": "postmortem-learning-14d-2026-10-20", "cohort": COHORT, "experiment_id": EXPERIMENT_ID, "timezone": "America/Toronto",
-    "start_date": START_DATE, "end_date": END_DATE, "days": 14, "daily_target": DAILY_TARGET, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
+    "start_date": START_DATE, "end_date": END_DATE, "days": 14, "continues_after_window": True, "daily_target": DAILY_TARGET, "stake_usd": STAKE, "max_daily_exposure_usd": DAILY_TARGET * STAKE,
     "odds_floor_american": ODDS_FLOOR, "unit": UNIT, "paper_only": True, "real_money": "NOT authorised",
     "eggy": {"official_picks_per_day": 1, "changed": False}, "initial_bankroll_usd": INITIAL_BANKROLL, "reset_to_usd": RESET_TO, "reset_when_below_usd": STAKE, "reset_reason": RESET_REASON,
     "eligible_market_families": list(ELIGIBLE_FAMILIES),
@@ -115,8 +115,10 @@ def phase(now: dt.datetime | None = None) -> dict:
     if d < d0:
         return {"phase": "NOT_STARTED", "day": 0, "today": today}
     if d > d1:
+        if UNIT == "PARLAY":              # the learning parlays continue as the production engine: the ledger, digest history and the 14-day window stay identifiable, nothing resets or ends
+            return {"phase": "ACTIVE", "day": (d - d0).days + 1, "today": today, "window": "PRODUCTION"}
         return {"phase": "ENDED", "day": 14, "today": today}
-    return {"phase": "ACTIVE", "day": (d - d0).days + 1, "today": today}
+    return {"phase": "ACTIVE", "day": (d - d0).days + 1, "today": today, "window": "EXPERIMENT"}
 
 
 def activation() -> dict | None:
@@ -409,6 +411,11 @@ def probability_basis(leg) -> tuple[float, str]:
     base = float(leg.conservative_probability)
     fam = leg.market_family
     if fam in anchor.SHOT_FAMILIES:
+        thr = int(leg.threshold or 0)
+        if leg.model_probability is not None and ei.estimate_policy().get(f"shots>={thr}"):
+            # out of time, the model's own calibrated probability predicted this threshold better than the record held to the model + 0.02 (deploy/validate_player_signals.py, docs/validation/player_signals.json:
+            # paired log-loss interval entirely on the model's side), so the estimate is the model's probability, still held to 70% for 3+ shots; the player's record stays visible on the card, not a ceiling
+            return min(float(leg.model_probability), anchor.HIGH_LINE_CAP if thr >= 3 else 1.0), "VALIDATED_MODEL_PROBABILITY"
         est = anchor.leg_estimate(leg)
         if est is not None:
             return min(base, float(est.p)), "ANCHORED_RECORD_ESTIMATE"
@@ -1033,8 +1040,10 @@ def status_doc(now: dt.datetime | None = None, conn=None) -> dict:
             "bets_today": [{k: r[k] for k in ("bet_id", "selection_rank", "market_family", "participant_name", "team", "opponent", "threshold", "american_price", "conservative_probability", "model_probability", "implied_probability", "edge",
                                               "edge_class", "price_status", "price_age_at_recording_min", "result_status", "profit_loss", "eggy_relation", "thesis_type", "action", "contradiction_level", "calibration_level",
                                               "decision_confidence")} | {"label": label_of(r)} for r in rows],
-            "unit": UNIT, "parlays_today": [_parlay_public(r) for r in _today_parlays(conn, today)] if UNIT == "PARLAY" else [], "eggy_flagship": _flagship_public(conn, today) if UNIT == "PARLAY" else None,
+            "unit": UNIT, "parlays_today": [_parlay_public(r) for r in _today_parlays(conn, today)] if UNIT == "PARLAY" else [],
+            "portfolio_today": (__import__("operational.learning_parlays", fromlist=["x"]).portfolio_from_rows(_today_parlays(conn, today)) if UNIT == "PARLAY" else None), "eggy_flagship": _flagship_public(conn, today) if UNIT == "PARLAY" else None,
             "cards": cards, "intelligence": {"version": ei.VERSION, "architecture": "game -> player -> market -> disagreement -> argue against -> decide -> rank and record"},
             "shortfall_today": (json.loads(daily["shortfall_json"]) if daily and daily["shortfall_json"] else None),
             "eggy": {"official_picks_per_day": 1, "note": "Eggy's Parlay Pick of the Day is separate: one official pick a day, its own ledger"},
-            "ends_automatically": "2026-11-03 (Eastern): no new bets, the reset rule stops, open bets still settle"}
+            "ends_automatically": ("the 14-day EXPERIMENT window ends 2026-11-02 (Eastern) and stays identifiable in the ledger; the learning parlays CONTINUE as the production engine after it" if UNIT == "PARLAY"
+                                   else "2026-11-03 (Eastern): no new bets, the reset rule stops, open bets still settle"), "window": ph.get("window")}

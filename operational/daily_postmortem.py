@@ -702,6 +702,11 @@ def main() -> None:
     # docstring) -- reaching this line at all is SUCCESS for health-
     # tracking purposes; a real failure would have raised before here.
     ingestion_health.record_run("postmortem", {"status": "SUCCESS", "report_path": str(path)})
+    try:                                                      # the controlled evidence refresh: a candidate and its proposal are PREPARED when the live evidence is old enough; nothing is changed in force
+        from operational import evidence_refresh as _er
+        print("evidence refresh:", _er.maybe_prepare())
+    except Exception as exc:  # noqa: BLE001 - never stops the postmortem
+        print(f"evidence refresh skipped: {exc.__class__.__name__}: {exc}")
     # Cloud live-data sprint (2026-09-25): the Morning Review changed -> publish
     # (opt-in, downstream, never raises).
     from operational import cloud_publish_hook

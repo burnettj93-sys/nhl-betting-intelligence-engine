@@ -77,6 +77,9 @@ class Base(unittest.TestCase):
         patcher = mock.patch.object(lc, "is_authorised", return_value=True)
         patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch.object(lc.ei, "estimate_policy", return_value={})          # the machinery tests keep the book's anchored shots estimate they were written for; the validated-model basis has its own tests (tests/test_signal_evidence.py)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         p = mock.patch("operational.learning_postmortem._load_rows", return_value=([], []))          # the postmortem's MoneyPuck files: never read in a unit test
         p.start()
         self.addCleanup(p.stop)
@@ -118,12 +121,17 @@ class Base(unittest.TestCase):
 
 
 class TestWindowAndAutoEnd(unittest.TestCase):
-    def test_the_window_is_fourteen_eastern_days_and_ends_by_arithmetic(self):
+    def test_the_window_is_fourteen_eastern_days_the_straight_unit_ends_by_arithmetic_and_the_parlay_engine_continues(self):
         et = lc.et.EASTERN
-        self.assertEqual(lc.phase(dt.datetime(2026, 10, 19, 23, 59, tzinfo=et))["phase"], "NOT_STARTED")
-        self.assertEqual(lc.phase(dt.datetime(2026, 10, 20, 0, 1, tzinfo=et)), {"phase": "ACTIVE", "day": 1, "today": "2026-10-20"})
-        self.assertEqual(lc.phase(dt.datetime(2026, 11, 2, 23, 59, tzinfo=et)), {"phase": "ACTIVE", "day": 14, "today": "2026-11-02"})
-        self.assertEqual(lc.phase(dt.datetime(2026, 11, 3, 0, 1, tzinfo=et))["phase"], "ENDED")
+        with mock.patch.object(lc, "UNIT", "STRAIGHT"):                                      # the earlier unit: the window ends and so do new bets
+            self.assertEqual(lc.phase(dt.datetime(2026, 10, 19, 23, 59, tzinfo=et))["phase"], "NOT_STARTED")
+            self.assertEqual(lc.phase(dt.datetime(2026, 10, 20, 0, 1, tzinfo=et)), {"phase": "ACTIVE", "day": 1, "today": "2026-10-20", "window": "EXPERIMENT"})
+            self.assertEqual(lc.phase(dt.datetime(2026, 11, 2, 23, 59, tzinfo=et)), {"phase": "ACTIVE", "day": 14, "today": "2026-11-02", "window": "EXPERIMENT"})
+            self.assertEqual(lc.phase(dt.datetime(2026, 11, 3, 0, 1, tzinfo=et))["phase"], "ENDED")
+        with mock.patch.object(lc, "UNIT", "PARLAY"):                                        # the production engine: the window is identifiable in the record, and nothing stops after it
+            after = lc.phase(dt.datetime(2026, 11, 3, 0, 1, tzinfo=et))
+            self.assertEqual((after["phase"], after["window"], after["day"]), ("ACTIVE", "PRODUCTION", 15))
+            self.assertEqual(lc.phase(dt.datetime(2027, 1, 20, 12, 0, tzinfo=et))["phase"], "ACTIVE")
 
     def test_the_policy_digest_changes_with_any_policy_field(self):
         d = lc.policy_digest()

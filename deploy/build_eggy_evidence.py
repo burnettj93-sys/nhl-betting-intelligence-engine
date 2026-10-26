@@ -54,11 +54,11 @@ def _paired(rows: list[dict]) -> list[dict]:
     return games
 
 
-def walk_features(rows: list[dict]) -> list[dict]:
+def walk_features(rows: list[dict], half_life: float | None = None) -> list[dict]:
     """One row per game: the as-of features for every candidate (gd, xgd, hd, cf5, pp, pk, fin, b2b), the outcome (None for a shootout) and who played."""
     from research.product_models import matchup as M
     games = _paired(rows)
-    st = M.State()
+    st = M.State() if half_life is None else M.State(half_life=half_life)
     out = []
     i = 0
     while i < len(games):                      # a day at a time: every game of a date is featured from the state through the PREVIOUS date, exactly as the live review builds it
@@ -72,6 +72,7 @@ def walk_features(rows: list[dict]) -> list[dict]:
             f = {m: st.est(h["t"], m) - st.est(a["t"], m) for m in ("gd", "xgd", "hd", "cf5", "pp", "pk", "fin", "xgd5")}
             rh, ra = st.rest_days(h["t"], h["d"]), st.rest_days(a["t"], a["d"])
             f["b2b"] = float(ra <= 1) - float(rh <= 1)
+            f["rest"] = float(min(rh, 5) - min(ra, 5))                       # days of rest, capped at 5 (a tested candidate, not in the fitted model)
             y = None if h["gf"] == a["gf"] else int(h["gf"] > a["gf"])
             out.append({"game": h["g"], "date": h["d"], "season": h["s"], "home": h["t"], "away": a["t"], "y": y, "f": f})
         for g in day:
@@ -330,23 +331,35 @@ def build_skater(env_preds: dict, rows_team: list[dict], log=print, before: str 
     return out
 
 
-def main() -> int:
+def build_document(rows: list[dict] | None = None, log=print) -> dict | None:
+    """The evidence document for the data on disk (None when there is no team file). Pure with respect to the repository: it writes nothing."""
     from research.product_models import matchup as M
-    t0 = time.time()
-    rows = M.team_games()
+    rows = rows if rows is not None else M.team_games()
     if not rows:
+        return None
+    log(f"team games on disk: {len(rows)} ({rows[0]['d']} to {rows[-1]['d']})")
+    log("matchup model ...")
+    matchup, env_preds = build_matchup(rows)
+    log("skater calibration cells ...")
+    skater = build_skater(env_preds, rows)
+    return {"version": VERSION, "built_at_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "data_through": rows[-1]["d"], "matchup": matchup, "skater": skater,
+            "notes": ["No historical sportsbook prices exist: nothing here is profit evidence.", "The MoneyPuck team file covers 2008-09 to the current season; the skater files cover 2022-23 to the current season."]}
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="Build the Eggy evidence file (to the live path by default; --out writes a CANDIDATE elsewhere and leaves the live file alone).")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args(argv)
+    t0 = time.time()
+    doc = build_document()
+    if doc is None:
         print("no MoneyPuck team file on disk: nothing to build")
         return 1
-    print(f"team games on disk: {len(rows)} ({rows[0]['d']} to {rows[-1]['d']})")
-    print("matchup model ...")
-    matchup, env_preds = build_matchup(rows)
-    print("skater calibration cells ...")
-    skater = build_skater(env_preds, rows)
-    doc = {"version": VERSION, "built_at_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "data_through": rows[-1]["d"], "matchup": matchup, "skater": skater,
-           "notes": ["No historical sportsbook prices exist: nothing here is profit evidence.", "The MoneyPuck team file covers 2008-09 to the current season; the skater files cover 2022-23 to the current season."]}
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(doc, indent=1, sort_keys=True))
-    print(f"wrote {OUT} ({OUT.stat().st_size // 1024} KB) in {time.time() - t0:.0f}s")
+    out = Path(a.out) if a.out else OUT
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=1, sort_keys=True))
+    print(f"wrote {out} ({out.stat().st_size // 1024} KB) in {time.time() - t0:.0f}s")
     return 0
 
 

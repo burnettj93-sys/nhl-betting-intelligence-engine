@@ -318,13 +318,26 @@ def build_state(now: dt.datetime | None = None, *, nhl=None, tickets_state: dict
         sm_state = tg_state
         date_of_last_obs = live_tg["newest_game_date"]
         games_out = []
+        try:                                                    # ONE authoritative hockey probability: the team model every Eggy review uses (research/product_models/matchup.py), so a page never shows a different team number
+            from research.product_models import matchup as _M
+            _hockey_state, _hockey_evidence = _M.build_state(_M.team_games(), through_date=today), _M.load_evidence()
+        except Exception:  # noqa: BLE001 - the strength model below stands in, and says so
+            _M = _hockey_state = _hockey_evidence = None
         for g in games:
             row = dict(g)
             row["tickets"] = tickets_by_game.get(g["game_id"], [])
             if g["state"] == "SCHEDULED" and g["type"] == "REGULAR":
                 wp = tg.win_probability(live_tg, g["home"], g["away"])
-                row["win_probability"] = {"home": round(wp["base"], 4), "away": round(1 - wp["base"], 4),
-                                          "model": "goalie-team-v1 strength model (validated on 2025-26 games, shootouts excluded)"}
+                strength = {"home": round(wp["base"], 4), "away": round(1 - wp["base"], 4), "model": "goalie-team-v1 strength model (validated on 2025-26 games, shootouts excluded)"}
+                hv = None
+                if _hockey_state is not None:
+                    try:
+                        hv = _M.view(_hockey_state, _hockey_evidence, g["home"], g["away"], g["date_et"])
+                    except Exception:  # noqa: BLE001
+                        hv = None
+                row["win_probability"], alt = authoritative_win_probability(hv, strength)
+                if alt:
+                    row["strength_model_win_probability"] = alt                       # kept, labelled, for comparison: it plays no part in a decision
                 q = quotes.get(g["game_id"])
                 row["moneyline"] = ({"home": q.get(g["home"]), "away": q.get(g["away"]), "provider": "DraftKings (US feed via The Odds API)"}
                                     if q else None)
@@ -636,6 +649,15 @@ def _topup_recent_games(sk: dict, nhl, now: dt.datetime) -> str | None:
     except Exception:  # noqa: BLE001 - the pages stay valid on the MoneyPuck rows
         return None
 
+
+
+def authoritative_win_probability(hockey_view: dict | None, strength: dict) -> tuple[dict, dict | None]:
+    """(the win probability a page shows, the other model kept for comparison or None). The team model every review uses is authoritative whenever it can speak; the older strength model is shown only when it
+    cannot, and says so in its own label."""
+    if hockey_view and hockey_view.get("available"):
+        return ({"home": round(hockey_view["p_home"], 4), "away": round(hockey_view["p_away"], 4),
+                 "model": "eggy-matchup-v1 (the team model every review uses: decayed goal and expected-goal differential, high-danger chances, back-to-back, home ice; validated 2017-2025)"}, strength)
+    return strength, None
 
 def _model_health(now, sk, live_tg, saves_verdicts, tickets_state, data_through, goalies_out, players_out, games_out) -> dict:
     from research.product_models import live as skater_live
