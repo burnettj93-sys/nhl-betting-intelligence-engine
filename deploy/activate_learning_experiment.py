@@ -44,7 +44,7 @@ def checks(now: dt.datetime) -> list[dict]:
         f"{lc.START_DATE} to {lc.END_DATE}; now {lc.phase(now)}")
     et = lc.et.EASTERN
     last, after = lc.phase(dt.datetime(2026, 11, 2, 23, 59, tzinfo=et)), lc.phase(dt.datetime(2026, 11, 3, 0, 1, tzinfo=et))
-    add("ends_automatically_on_nov_3", last["phase"] == "ACTIVE" and last["day"] == 14 and after["phase"] == "ENDED", f"Nov 2 23:59 ET {last['phase']}, Nov 3 00:01 ET {after['phase']}")
+    add("continues_as_production_after_nov_2", last["phase"] == "ACTIVE" and last["day"] == 14 and after["phase"] == "ACTIVE" and after.get("window") == "PRODUCTION", f"Nov 2 23:59 ET {last['phase']}, Nov 3 00:01 ET {after['phase']} window {after.get('window')}")
     try:
         pol = ticket_policy.checked_active()
         add("eggy_unchanged_one_official_pick_a_day", int(pol.slots) == 1 and pol.digest() == EGGY_POLICY_DIGEST, f"Eggy policy {pol.policy_id} digest {pol.digest()} slots {pol.slots}")
