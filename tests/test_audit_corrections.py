@@ -267,7 +267,7 @@ class TestLessonStates(unittest.TestCase):
 class TestVersionedDecisionArtifacts(unittest.TestCase):
     def test_the_policy_pins_every_decision_artifact_and_a_changed_one_changes_the_digest(self):
         pinned = lc.POLICY["decision_architecture"]["artifacts"]
-        self.assertEqual(set(pinned), {"player_signals", "points_thresholds", "dependence_lift"})
+        self.assertEqual(set(pinned), {"player_signals", "points_thresholds", "dependence_lift", "price_freshness"})
         before = lc.policy_digest()
         with mock.patch.dict(lc.POLICY["decision_architecture"]["artifacts"], {"dependence_lift": "0" * 16}):
             self.assertNotEqual(lc.policy_digest(), before)                                                              # a policy change: the cohort fails closed until it is approved

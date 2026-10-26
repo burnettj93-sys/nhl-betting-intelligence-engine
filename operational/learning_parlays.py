@@ -40,7 +40,7 @@ CODE = {"PLAYER_SOG_ALTERNATE": "SOG", "PLAYER_SOG": "SOG", "PLAYER_POINTS": "PT
 LEVEL = {"LOW": 0, "MODERATE": 1, "HIGH": 2, "SEVERE": 3}
 
 
-PRICE_FLAGS = ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "LONGSHOT_TAIL")          # about the straight bet's VALUE: a parlay leg is judged on the hockey and the player, and the ticket on its construction
+PRICE_FLAGS = ("PRICE_ABOVE_ESTIMATE", "MODEL_FAR_ABOVE_MARKET", "LONG_PRICE", "LONGSHOT_TAIL", "PRICE_AGING")          # about the straight bet's VALUE: a parlay leg is judged on the hockey and the player, and the ticket on its construction
 # The moneyline's model-ABOVE-market flags (operational/eggy_intelligence.py review_moneyline): the same kind of value-versus-price flag as MODEL_FAR_ABOVE_MARKET above, and like it they stay on the
 # review card as caution but do not enter the parlay leg's non-price contradiction. A moneyline leg's estimate is the market's own no-vig probability while the model has not beaten the market, so the model
 # liking a side MORE than the market does not touch the estimate; counting it would reject a favourite BECAUSE the model sees more value. Independent evidence still counts: MODEL_SAYS_OVERPRICED,
@@ -55,6 +55,9 @@ def leg_ok(c: dict) -> tuple[bool, str]:
     card = c["card"]
     if card.get("kind") == "ERROR":
         return False, "the review failed"
+    mdq = card.get("market_data_quality") or {}
+    if mdq.get("status") in ("STALE", "MISSING"):                                      # a market-data reason, first and by itself: the hockey review below is untouched and is not what refused the leg
+        return False, "STALE MARKET PRICE / MARKET DATA QUALITY" if mdq["status"] == "STALE" else "MISSING CURRENT PRICE / MARKET DATA QUALITY"
     leg = c.get("leg")
     if leg is not None and getattr(leg, "market_family", None) == "PLAYER_POINTS":                         # a points threshold is a live ingredient only where the out-of-time validation allows it
         k = int(getattr(leg, "threshold", 0) or 0)

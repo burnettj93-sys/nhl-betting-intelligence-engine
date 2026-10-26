@@ -150,3 +150,14 @@ The read-only audit of the promoted engine found defects where intelligence exis
 * **Goalie information is rejected by evidence** (`deploy/validate_goalie_signal.py`, `docs/validation/goalie_signal.json`): persistent but adds nothing demonstrable to team win probability or points out of time.
 * **The parlay product owns its daily maximum** (`learning_cohort.PARLAY_DAILY_MAX`), not the retired straight-bet target. The health check shows the primary slip as RETIRED history and the cohort's policy digest as the live recording system.
 * **Replay:** `deploy/replay_corrections.py` and `docs/validation/replay_corrections.json`.
+
+## 14. Price freshness is admission intelligence (2026-10-26)
+
+A sportsbook quote that is hours old is not the current market, and a moneyline's estimate IS its quote. `operational/price_freshness.py` classifies every reviewed leg's price before a parlay can use it, per market, from `docs/validation/price_freshness.json` (built by `deploy/analyze_price_freshness.py`, pinned by the cohort policy digest):
+
+* **FRESH**: age at most `fresh_max` = `CAPTURE_TARGET_MIN + WAVE_MINUTES` = 150 minutes, the oldest a price can be at any game's start when the capture schedule runs as designed (`operational/capture_timeline.py`). No mark on the card; behaviour exactly as before.
+* **AGING**: past that but within `aging_max`, and no newer scheduled capture for the game is overdue. Admitted with a visible `PRICE_AGING` note (informational; counts toward no contradiction). `aging_max` is evidence: the last age bucket whose 90th-percentile price move stays within one standard error of the estimate the price feeds. Moneyline: 240 minutes (p90 move 0.0086 at 2-4 h, 0.0109 at 4-8 h, against a standard error of 0.0098 on 4,924 snapshots). Shots, points and saves: no bucket qualifies, so no AGING band (their limit is the schedule's 150).
+* **STALE**: older than that, or a newer scheduled capture was due (target + 30 minutes) and does not exist. The leg is still REVIEWED (its probability, contradiction and calibration are untouched) but is not admitted: reason `STALE MARKET PRICE / MARKET DATA QUALITY`, kept apart from every hockey and value reason, and reported with the leg's age, capture time, start and hockey estimate in the day's shortfall.
+* **MISSING**: no real observation time; it cannot be called current.
+
+HOCKEY PROBABILITY is not MARKET DATA QUALITY is not PRICE / VALUE. `docs/validation/replay_price_freshness.json` is the replay.

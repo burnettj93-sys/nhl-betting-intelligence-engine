@@ -35,6 +35,17 @@
    "regenerate": "python3 deploy/validate_dependence.py --out docs/validation/dependence_lift.json",
    "data": "same-game pairs 2025-26 and 2026-27 to date, relative to a cross-game control",
    "data_through": "2026-10-20"
+  },
+  "price_freshness": {
+   "decides": "whether a leg's sportsbook price is FRESH, AGING (admitted with a visible note) or STALE (not admitted to a parlay), per market",
+   "read_by": [
+    "operational/price_freshness.py classify",
+    "operational/learning_cohort.py _record_parlays",
+    "operational/learning_parlays.py leg_ok"
+   ],
+   "regenerate": "python3 deploy/analyze_price_freshness.py --runtime <runtime> --out docs/validation/price_freshness.json",
+   "data_through": "2026-10-26",
+   "sha256": "5d1df9c12d9697862397da35877f04c81fc8ab85d573bffb97c73d51387368f6"
   }
  }
 }

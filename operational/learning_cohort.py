@@ -34,6 +34,7 @@ from types import SimpleNamespace
 
 from operational import decision_artifacts
 from operational import eastern_time as et
+from operational import price_freshness
 from operational import eggy_intelligence as ei
 from operational import state_paths
 from research.product_models import matchup
@@ -775,7 +776,7 @@ def _record_cycle(conn, nhl_conn, now: dt.datetime, collected: dict, ph: dict) -
             reasons[f"intelligence layer unavailable: {why_unusable}"] += len(prelim)
             return _write_day(conn, now, today, day, collected, legs, caps, game_wave, rows, [], [], reasons, 0, {"intelligence_unavailable": why_unusable})
     if UNIT == "PARLAY":
-        return _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx)
+        return _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx, capture=_capture_context(nhl_conn, today, now))
     by_key: dict[str, dict] = {}
     review_errors: Counter = Counter()
     for key, leg, pleg, basis in prelim:
@@ -858,13 +859,38 @@ def _today_parlays(conn, et_date: str) -> list[dict]:
     return [dict(r) for r in conn.execute("SELECT * FROM parlays WHERE et_date = ? ORDER BY parlay_rank", (et_date,)).fetchall()]
 
 
-def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx) -> dict:
+def _capture_context(nhl_conn, today: str, now: dt.datetime) -> dict:
+    """The day's CAPTURE schedule, for judging whether a price is current (operational/price_freshness.py): each game's capture wave (operational/capture_timeline.py), the day's first wave, and whether the plan
+    funds a league pull for later waves. Unknown parts are None / False, never guessed."""
+    from operational import capture_timeline as ct
+    out = {"by_game": {}, "first_start": None, "funded": False}
+    try:
+        starts = {}
+        for r in nhl_conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ?", (today,)).fetchall():
+            if r["scheduled_start_utc"]:
+                t = dt.datetime.fromisoformat(r["scheduled_start_utc"].replace("Z", "+00:00"))
+                starts[str(r["game_id"])] = t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+        waves = ct.waves(starts)
+        out["by_game"] = {g: w.first_start for w in waves for g in w.games}
+        out["first_start"] = min((w.first_start for w in waves), default=None)
+    except Exception:  # noqa: BLE001 - a schedule that cannot be read leaves only the age limits
+        pass
+    try:
+        from operational import credit_planner as cp
+        plan = cp.load_plan(today) or {}
+        out["funded"] = float((plan.get("league_pulls") or {}).get("extra_for_later_waves") or 0) > 0
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reasons, prelim, ctx, capture=None) -> dict:
     """The learning unit is the PARLAY: review every eligible leg (as for a straight bet), build up to 10 tickets from the survivors (operational/learning_parlays.py), record each once, UNPRICED. Nothing is
     staked and no return is claimed: the system has no combined sportsbook price. Fewer than 10 is a correct answer."""
     from operational import learning_parlays as lp
     today, day = ph["today"], ph["day"]
     rows = _today_parlays(conn, today)
-    cands, review_errors = [], Counter()
+    cands, review_errors, stale = [], Counter(), []
     for key, leg, pleg, basis in prelim:
         try:
             card = ei.review_leg(ctx, pleg, basis, pleg.conservative_probability)
@@ -875,6 +901,14 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
             est = float(card["estimate_used"])
             mp = card.get("model_probability")
             leg2 = dataclasses.replace(pleg, conservative_probability=round(est, 4), model_probability=(mp if mp is not None else pleg.model_probability))
+            cap = capture or {}
+            mdq = price_freshness.classify(leg, now, wave_first_start=(cap.get("by_game") or {}).get(str(leg.game_id)), first_wave_start=cap.get("first_start"), wave_pulls_funded=bool(cap.get("funded")))
+            card["market_data_quality"] = mdq                                  # the price's own verdict, kept apart from the hockey review (which is exactly what it was)
+            if mdq["status"] == price_freshness.AGING:
+                card["contradiction"]["flags"].append({"name": "PRICE_AGING", "level": "LOW", "text": "PRICE AGING: " + mdq["reason"]})          # visible; informational (a price caution counts toward no contradiction)
+            elif mdq["status"] in (price_freshness.STALE, price_freshness.MISSING):
+                stale.append({"leg": card["bet"]["label"], "market": mdq["market"], "age_min": mdq["age_min"], "observed_at_utc": mdq["observed_at_utc"], "game_start_utc": mdq["game_start_utc"],
+                              "newer_capture_due_at_utc": mdq["newer_capture_due_at_utc"], "reason": mdq["reason"], "hockey_estimate": round(est, 4)})
             cands.append({"leg": leg2, "key": key, "card": card, "action": card["action"]["decision"], "rank_key": ei.rank_key(card, ecls, est, edge, key)})
         except Exception as exc:  # noqa: BLE001
             review_errors[f"{exc.__class__.__name__}: {exc}"[:160]] += 1
@@ -911,6 +945,8 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
     reasons[f"legs not eligible for a parlay: {sum(out['legs_not_eligible'].values())}"] += 0
     extra = {"parlay_legs_eligible": out["eligible_legs"], "parlay_legs_not_eligible": out["legs_not_eligible"], "parlays_constructed": out["constructed"], "parlays_waiting_for_their_final_window": waiting,
              "unit": "PARLAY (unpriced learning parlays: no stake, no return, no ROI)"}
+    if stale:
+        extra["stale_price_legs"] = {"count": len(stale), "reason": price_freshness.REASON, "legs": stale[:12], "note": "reviewed legs whose price is not current: their hockey estimates are unchanged; they are not admitted to a parlay"}
     if review_errors:
         extra.update(review_errors=sum(review_errors.values()), review_error_examples=dict(review_errors.most_common(3)))
     res = _write_day(conn, now, today, day, collected, legs, {}, game_wave, rows, recorded_now, [], reasons, 0, extra)

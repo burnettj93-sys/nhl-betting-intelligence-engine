@@ -21,6 +21,7 @@ ARTIFACTS = {
     "player_signals": "player_signals.json",             # flag evidence (what a role / form flag is worth beyond the model) and the shots estimate rule
     "points_thresholds": "points_thresholds.json",       # which points thresholds are validated for live use and their recalibration
     "dependence_lift": "dependence_lift.json",           # the measured same-game dependence between legs
+    "price_freshness": "price_freshness.json",           # how old a sportsbook price may be and still be current, per market (operational/price_freshness.py)
 }
 
 
