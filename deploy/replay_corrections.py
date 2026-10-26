@@ -97,13 +97,19 @@ def main(argv=None) -> int:
     before = collections.Counter((((lr.get("assessment") or {}).get("decision_quality") or {}).get("label"), lr.get("outcome")) for p in stored_pm.get("parlays") or [] for lr in p.get("leg_reviews") or []
                                  if lr.get("outcome") in ("WIN", "LOSS"))
     seen, after = set(), collections.Counter()
+    uses = collections.Counter((r["et_date"], l["key"]) for r in rows for l in json.loads(r["legs_json"]))
+    per_leg, trig, ever = [], collections.Counter(), collections.Counter()
     for r in rows:
         res = {x["key"]: x["outcome"] for x in (json.loads(r["settlement_json"]).get("leg_results") or [])} if r.get("settlement_json") else {}
         for l in json.loads(r["legs_json"]):
             if (r["et_date"], l["key"]) in seen or res.get(l["key"]) not in ("WIN", "LOSS"):
                 continue
             seen.add((r["et_date"], l["key"]))
-            after[(ed.parlay_leg_quality(l["card"])["label"], res[l["key"]])] += 1
+            q = ed.parlay_leg_quality(l["card"], {"leg": l["leg"], "date": r["et_date"], "reuse_count": uses[(r["et_date"], l["key"])]})
+            after[(q["label"], res[l["key"]])] += 1
+            for c in q.get("criteria") or []:
+                trig[c] += 1
+            per_leg.append({"day": r["et_date"], "leg": l["card"]["bet"]["label"], "estimate": round(float(l["estimate"]), 3), "decision": q["label"], "outcome": res[l["key"]], "criteria": q.get("criteria"), "reasons": q.get("reasons")})
     seen_b = set()
     before_distinct = collections.Counter()
     for p in stored_pm.get("parlays") or []:
@@ -113,7 +119,9 @@ def main(argv=None) -> int:
             seen_b.add((p["et_date"], lr["key"]))
             before_distinct[(((lr.get("assessment") or {}).get("decision_quality") or {}).get("label"), lr["outcome"])] += 1
     fmt = lambda c: {f"{k[0]} / {k[1]}": v for k, v in sorted(c.items(), key=str)}
-    out["2_leg_decision_quality"] = {"settled_distinct_legs": sum(after.values()), "before_straight_bet_rubric": fmt(before_distinct), "after_parlay_leg_rubric": fmt(after)}
+    out["2_leg_decision_quality"] = {"settled_distinct_legs": sum(after.values()), "before_straight_bet_rubric": fmt(before_distinct), "after_parlay_leg_rubric": fmt(after),
+                                      "criteria_that_fired_after": dict(trig), "per_leg": per_leg,
+                                      "independence_of_the_outcome": "the rubric takes the card, the leg as recorded and the day's reuse; it has no outcome parameter (tests/test_audit_corrections.py)"}
 
     # ---- 3. loss causes (the postmortem rebuilt)
     try:
@@ -166,7 +174,7 @@ def main(argv=None) -> int:
             cands.append({"leg": leg, "key": k, "card": card, "action": (card.get("action") or {}).get("decision"), "rank_key": ei2.rank_key(card, ecls, est, edge, k)})
         def run(neutral):
             import unittest.mock as mock
-            with mock.patch.object(lp, "concentration_key", (lambda v, kept: (0, 0, 0, 0, 0, 0)) if neutral else lp.concentration_key), \
+            with mock.patch.object(lp, "concentration_key", (lambda v, kept: (0, 0, 0, 0, 0, 0, 0)) if neutral else lp.concentration_key), \
                     mock.patch.object(ei, "combine_contradiction", old_combine if neutral else ei.combine_contradiction):
                 res = lp.build(cands, slots=10)
             ts = res["parlays"]

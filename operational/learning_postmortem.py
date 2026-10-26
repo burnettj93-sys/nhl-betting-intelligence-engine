@@ -310,6 +310,7 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
     except sqlite3.OperationalError:
         return []
     prior = {x["parlay_id"]: x for x in (previous or {}).get("parlays") or []}
+    uses: collections.Counter = collections.Counter((r["et_date"], l["key"]) for r in rows for l in json.loads(r["legs_json"]))          # how many of the day's tickets stake each leg
     out, data = [], {}
     for r in rows:
         old = prior.get(r["parlay_id"])
@@ -332,7 +333,7 @@ def parlay_summaries(conn, nhl_conn, now: dt.datetime, previous: dict | None) ->
                    "result_status": res.get("outcome") or "PENDING"}
             facts = ed.facts_for(bet, card, nhl_conn, data["files"][2]) if settled and res.get("outcome") in ("WIN", "LOSS") else None
             reviews.append({"key": l["key"], "label": lc.ei_label(L), "player": L.get("participant_name"), "team": L.get("team"), "estimate": l["estimate"], "outcome": bet["result_status"], "facts": facts,
-                            "assessment": ed.assess(bet, card, facts, parlay_leg=True)})
+                            "assessment": ed.assess(bet, card, facts, parlay_leg=True, context={"leg": L, "date": r["et_date"], "reuse_count": uses[(r["et_date"], l["key"])]})})
             complete = complete and (not settled or ed.facts_are_complete(card, facts, bet_date=r["et_date"], now_date=now.astimezone(et.EASTERN).date().isoformat()))
         pub = lc._parlay_public(r)
         out.append({**pub, "et_date": r["et_date"], "verdict": PARLAY_WORD.get(r["construction_quality"]), "priced": False,

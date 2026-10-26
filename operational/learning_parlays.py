@@ -28,9 +28,12 @@ from operational.bet_labels import bet_label
 MIN_LEG_P = ei.LEG_FLOOR                 # an individually likely event (design choice; the pool's -150 floor means most legs sit between 55% and 70%)
 MIN_GOOD_WEAKEST = 0.62          # the weakest leg of a GOOD ticket
 MIN_FOURTH_P = 0.60
-POOL_LEGS = 14                   # the strongest eligible legs considered: keeps the search small and every constructed ticket made of the best of the day
 MAX_PARLAYS_PER_DAY = 10
 LEG_REUSE = 2                    # a leg appears in at most this many of the day's parlays
+POOL_LEGS = -(-MAX_PARLAYS_PER_DAY * 3 * 6 // (LEG_REUSE * 5))          # the strongest eligible legs considered (18). Ten three-leg tickets need 30 leg slots and each leg gives LEG_REUSE of them: 15 legs is the exact minimum for the day's
+                                                              # maximum to be possible AT ALL, and a one-pass search cannot use a pool with no slack (measured: 15 legs fill 8 to 9 slots, 18 fill 10, on pools of equally
+                                                              # strong legs). The pool is only what is SEARCHED: a weaker leg enters a ticket only after the stronger tickets are taken, and every ticket still has to pass the
+                                                              # same gates, so a larger pool never admits anything the gates refuse. (14 legs gave 28 leg slots: at most nine tickets whatever their quality.)
 MAX_SAME_GAME = 3
 QUALITY = ("GOOD", "QUESTIONABLE", "BAD")
 CODE = {"PLAYER_SOG_ALTERNATE": "SOG", "PLAYER_SOG": "SOG", "PLAYER_POINTS": "PTS", "PLAYER_GOALS": "GOAL", "MONEYLINE": "ML", "GOALIE_SAVES": "SAVES"}
@@ -212,7 +215,7 @@ def construct(cands: list[dict]) -> dict | None:
 # ------------------------------------------------------------------------------------------------ the day's tickets as a portfolio
 # ONE authoritative portfolio assessment. The ticket search (build) uses it to choose between similarly strong tickets, and the status and the postmortem report the SAME function over the recorded rows, so
 # the portfolio that selected the day's tickets and the portfolio shown afterwards are one piece of logic (`leg_view` builds a leg the same way from a candidate and from a stored row).
-SIMILAR_STRENGTH = 0.02          # weakest-leg estimates this close are not distinguishable by the engine's own declared calibration rule (docs/validation/points_thresholds.json: case-weighted mean band error <= 0.02)
+SIMILARITY_Z = ei.Z_SIGNIFICANT  # two weakest legs are NOT distinguishable when their estimates differ by less than this many standard errors of the difference (the engine's own bar for a finding)
 COV_RESOLUTION = 0.005           # a difference in how two tickets move together smaller than half a point of probability is below the noise of the leg estimates themselves
 ROLE_FAMILIES = ("TOI_ROLE", "PP_ROLE")
 MODEL_FAMILIES = ("MODEL_OVERCONFIDENCE", "PRODUCTION_BELOW_MODEL")
@@ -373,22 +376,42 @@ def portfolio_from_rows(rows: list[dict]) -> dict:
     return portfolio_summary([view_of_row(r) for r in rows])
 
 
+def weakest_se(p: dict) -> float | None:
+    """The standard error of the calibration evidence behind the ticket's WEAKEST leg: how precisely the engine knows that leg's estimate (the cell its calibration confidence stands on). None when the card
+    carries no such evidence."""
+    card = p["cands"][p["weakest_leg"]["index"]]["card"]
+    ev = (card.get("calibration_confidence") or {}).get("evidence") or {}
+    se = ev.get("se", ev.get("standard_error"))
+    return None if se is None else float(se)
+
+
+def similar_strength(a: dict, b: dict) -> bool:
+    """Are two tickets' weakest legs indistinguishable? The difference of their estimates is smaller than SIMILARITY_Z standard errors of that difference, each leg's error being the standard error of its own
+    calibration evidence. No such evidence on either leg means no claim of similarity: they are then compared strictly, by their estimates (the transparent rule, with no tolerance to defend)."""
+    sa, sb = weakest_se(a), weakest_se(b)
+    if sa is None or sb is None:
+        return a["weakest_leg"]["estimate"] == b["weakest_leg"]["estimate"]
+    return abs(a["weakest_leg"]["estimate"] - b["weakest_leg"]["estimate"]) < SIMILARITY_Z * (sa * sa + sb * sb) ** 0.5
+
+
 def concentration_key(view: dict, kept: list[dict]) -> tuple:
     """How much a candidate ticket adds to what the day already concentrates, most important first; used ONLY to choose between tickets of similar strength (see build). Lower is more diversified.
-    (1) legs it shares with kept tickets (one failure kills both); (2) how much it moves WITH the kept tickets: the covariance of the tickets' results at the measured lifts, in COV_RESOLUTION steps; (3) legs in a game
-    the day already uses; (4) legs of a team the day already uses; (5) role-uncertain legs on a team that already carries role uncertainty; (6) model-uncertain legs of a market the day already trusts the model on."""
+    (1) legs it shares with kept tickets (one failure kills both); (2) other legs of a player the day already stakes (a different threshold of the same player fails with him); (3) how much it moves WITH the kept
+    tickets: the covariance of the tickets' results at the measured lifts, in COV_RESOLUTION steps; (4) legs in a game
+    the day already uses; (5) legs of a team the day already uses; (6) role-uncertain legs on a team that already carries role uncertainty; (7) model-uncertain legs of a market the day already trusts the model on."""
     if not kept:
-        return (0, 0, 0, 0, 0, 0)
+        return (0, 0, 0, 0, 0, 0, 0)
     kept_keys = [{l["key"] for l in k["legs"]} for k in kept]
     shared = sum(len({l["key"] for l in view["legs"]} & ks) for ks in kept_keys)
     cov = sum(joint_probability(view, k) - view["probability"] * k["probability"] for k in kept)
     kl = [l for k in kept for l in k["legs"]]
+    k_players = {str(l["player"]) for l in kl if l.get("player")}
     k_games = {str(l["game_id"]) for l in kl if l.get("game_id") is not None}
     k_teams = {str(l["team"]) for l in kl if l.get("team")}
     k_role_teams = {str(l["team"]) for l in kl if l.get("role_risk") and l.get("team")}
     k_model_mkts = {(l.get("market_family"), l.get("threshold")) for l in kl if l.get("model_risk")}
     own = [l for l in view["legs"] if l["key"] not in set().union(*kept_keys)]
-    return (shared, int(max(cov, 0.0) / COV_RESOLUTION), sum(1 for l in own if str(l.get("game_id")) in k_games), sum(1 for l in own if str(l.get("team")) in k_teams),
+    return (shared, sum(1 for l in own if l.get("player") and str(l["player"]) in k_players), int(max(cov, 0.0) / COV_RESOLUTION), sum(1 for l in own if str(l.get("game_id")) in k_games), sum(1 for l in own if str(l.get("team")) in k_teams),
             sum(1 for l in own if l.get("role_risk") and str(l.get("team")) in k_role_teams), sum(1 for l in own if l.get("model_risk") and (l.get("market_family"), l.get("threshold")) in k_model_mkts))
 
 
@@ -409,7 +432,7 @@ def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX
     correct answer.
 
     SELECTION IS PORTFOLIO-AWARE. The tickets are not taken in rank order: at each step the best remaining ticket sets the bar, every ticket of the same quality and length whose weakest leg is not
-    distinguishably weaker (within SIMILAR_STRENGTH) is 'similarly strong', and among those the one that adds the LEAST concentration to what is already kept is taken (concentration_key: shared legs, how the tickets
+    distinguishably weaker (see similar_strength: within two standard errors of the difference) is 'similarly strong', and among those the one that adds the LEAST concentration to what is already kept is taken (concentration_key: shared legs, how the tickets
     move together at the measured lifts, repeated games, teams, role uncertainty and model uncertainty), rank order breaking ties. A clearly stronger ticket is never passed over for diversification, and no ticket
     that the old order would not have admitted is admitted: the candidate set, the quality gate, the reuse cap of 2 and the two-leg difference are unchanged."""
     ok, rejected = [], Counter()
@@ -442,14 +465,13 @@ def build(cands: list[dict], already: list[dict] | None = None, slots: int = MAX
     chosen = []
     remaining = [p for p in built if p["action"] == "RECORD" and p["key"] not in have]
     views = {p["key"]: view_of_candidates(p) for p in remaining}
-    while len(chosen) + len(kept_sets) < slots and remaining:                                  # the slot arithmetic is the one the earlier builder used, unchanged: this pass changes the ORDER, not the volume
+    while len(kept_sets) < slots and remaining:                                                 # kept_sets holds the day's tickets so far (recorded + chosen): one ticket, one slot
         allowed = [p for p in remaining if not any(used[c["key"]] >= LEG_REUSE for c in p["cands"])
                    and not any(len({c["key"] for c in p["cands"]} & other) >= min(p["n_legs"], len(other)) - 1 for other in kept_sets)]
         if not allowed:
             break
         lead = allowed[0]
-        similar = [p for p in allowed if p["construction_quality"] == lead["construction_quality"] and p["n_legs"] == lead["n_legs"]
-                   and p["weakest_leg"]["estimate"] >= lead["weakest_leg"]["estimate"] - SIMILAR_STRENGTH]
+        similar = [p for p in allowed if p["construction_quality"] == lead["construction_quality"] and p["n_legs"] == lead["n_legs"] and similar_strength(lead, p)]
         pick = min(similar, key=lambda p: (concentration_key(views[p["key"]], kept_views), rank_key(p)))
         ks = {c["key"] for c in pick["cands"]}
         chosen.append(pick)

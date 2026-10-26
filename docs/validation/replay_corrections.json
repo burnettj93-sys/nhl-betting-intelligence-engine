@@ -1,5 +1,5 @@
 {
- "generated_at_utc": "2026-10-26T02:10:46Z",
+ "generated_at_utc": "2026-10-26T02:52:14Z",
  "ledger_tickets": 34,
  "days": [
   "2026-10-22",
@@ -25,39 +25,849 @@
   "note": "the cards were reviewed before the corrections; only the contradiction rule is re-applied here (a probability or flag the corrections also change is not re-derived)"
  },
  "2_leg_decision_quality": {
-  "settled_distinct_legs": 59,
+  "settled_distinct_legs": 64,
   "before_straight_bet_rubric": {
    "BAD_DECISION / LOSS": 4,
    "BAD_DECISION / WIN": 11,
    "GOOD_DECISION / LOSS": 1,
-   "QUESTIONABLE_DECISION / LOSS": 14,
-   "QUESTIONABLE_DECISION / WIN": 29
+   "QUESTIONABLE_DECISION / LOSS": 15,
+   "QUESTIONABLE_DECISION / WIN": 33
   },
   "after_parlay_leg_rubric": {
-   "GOOD_DECISION / LOSS": 8,
-   "GOOD_DECISION / WIN": 27,
-   "QUESTIONABLE_DECISION / LOSS": 11,
-   "QUESTIONABLE_DECISION / WIN": 13
-  }
+   "BAD_DECISION / LOSS": 1,
+   "BAD_DECISION / WIN": 2,
+   "GOOD_DECISION / LOSS": 9,
+   "GOOD_DECISION / WIN": 24,
+   "QUESTIONABLE_DECISION / LOSS": 10,
+   "QUESTIONABLE_DECISION / WIN": 18
+  },
+  "criteria_that_fired_after": {
+   "ESTIMATE_MARGIN": 12,
+   "COUNTED_CONTRADICTION": 14,
+   "UNCERTAINTY_STAKED_TWICE": 14,
+   "CLAIM_EXCEEDS_CALIBRATION": 4,
+   "STALE_MARKET_ESTIMATE": 3
+  },
+  "per_leg": [
+   {
+    "day": "2026-10-22",
+    "leg": "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+    "estimate": 0.698,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 70% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -220",
+    "estimate": 0.669,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 67% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+    "estimate": 0.778,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 78% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Alex Laferriere \u2014 SHOTS ON GOAL 2+ \u2014 -245",
+    "estimate": 0.675,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 67% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+    "estimate": 0.704,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 70% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -190",
+    "estimate": 0.647,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 65% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Evgeni Malkin \u2014 SHOTS ON GOAL 2+ \u2014 -165",
+    "estimate": 0.614,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 61%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "DAL \u2014 MONEYLINE \u2014 -205",
+    "estimate": 0.645,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "UTA \u2014 MONEYLINE \u2014 -170",
+    "estimate": 0.604,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 60%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Anton Lundell \u2014 SHOTS ON GOAL 2+ \u2014 -150",
+    "estimate": 0.583,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 58%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Trevor Moore \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+    "estimate": 0.63,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 63% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "BOS \u2014 MONEYLINE \u2014 -155",
+    "estimate": 0.583,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 58%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Clayton Keller \u2014 SHOTS ON GOAL 2+ \u2014 -285",
+    "estimate": 0.679,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 68% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Nick Schmaltz \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+    "estimate": 0.673,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 67% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Dylan Guenther \u2014 SHOTS ON GOAL 2+ \u2014 -475",
+    "estimate": 0.673,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Bobby McMann \u2014 SHOTS ON GOAL 2+ \u2014 -240",
+    "estimate": 0.651,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 65% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Brandon Montour \u2014 SHOTS ON GOAL 2+ \u2014 -240",
+    "estimate": 0.628,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 63% estimate, calibration MEDIUM, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-22",
+    "leg": "Anders Lee \u2014 SHOTS ON GOAL 2+ \u2014 -185",
+    "estimate": 0.594,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 59%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Martin Necas \u2014 SHOTS ON GOAL 2+ \u2014 -210",
+    "estimate": 0.671,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Nazem Kadri \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+    "estimate": 0.679,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 68% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -750",
+    "estimate": 0.778,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "CLAIM_EXCEEDS_CALIBRATION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "78% asserted on calibration MEDIUM",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+    "estimate": 0.768,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Juraj Slafkovsk\u00fd \u2014 SHOTS ON GOAL 2+ \u2014 -310",
+    "estimate": 0.647,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 65% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Patrick Kane \u2014 SHOTS ON GOAL 2+ \u2014 -245",
+    "estimate": 0.64,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Connor Bedard \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+    "estimate": 0.7,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 70% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -300",
+    "estimate": 0.665,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Cale Makar \u2014 SHOTS ON GOAL 2+ \u2014 -275",
+    "estimate": 0.614,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "ESTIMATE_MARGIN",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "an estimate of 61%, between the 55% floor and 62%",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Cole Caufield \u2014 SHOTS ON GOAL 3+ \u2014 -250",
+    "estimate": 0.584,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "ESTIMATE_MARGIN",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "an estimate of 58%, between the 55% floor and 62%",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Frank Nazar \u2014 SHOTS ON GOAL 2+ \u2014 -110",
+    "estimate": 0.557,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "an estimate of 56%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Brock Nelson \u2014 SHOTS ON GOAL 2+ \u2014 -145",
+    "estimate": 0.582,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "ESTIMATE_MARGIN",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "an estimate of 58%, between the 55% floor and 62%",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-23",
+    "leg": "Brayden Point \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+    "estimate": 0.553,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)",
+     "an estimate of 55%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Beckett Sennecke \u2014 SHOTS ON GOAL 2+ \u2014 -450",
+    "estimate": 0.673,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 67% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Leo Carlsson \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+    "estimate": 0.639,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Cutter Gauthier \u2014 SHOTS ON GOAL 2+ \u2014 -900",
+    "estimate": 0.752,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "CLAIM_EXCEEDS_CALIBRATION"
+    ],
+    "reasons": [
+     "75% asserted on calibration MEDIUM"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "BOS \u2014 MONEYLINE \u2014 -192",
+    "estimate": 0.631,
+    "decision": "BAD_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "STALE_MARKET_ESTIMATE"
+    ],
+    "reasons": [
+     "the estimate IS the market quote, and that quote was 223 minutes old (classed stale by the system)"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Jack Hughes \u2014 SHOTS ON GOAL 2+ \u2014 -750",
+    "estimate": 0.821,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "CLAIM_EXCEEDS_CALIBRATION"
+    ],
+    "reasons": [
+     "82% asserted on calibration MEDIUM"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Timo Meier \u2014 SHOTS ON GOAL 2+ \u2014 -475",
+    "estimate": 0.752,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "CLAIM_EXCEEDS_CALIBRATION"
+    ],
+    "reasons": [
+     "75% asserted on calibration MEDIUM"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Roman Josi \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+    "estimate": 0.649,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Filip Forsberg \u2014 SHOTS ON GOAL 2+ \u2014 -370",
+    "estimate": 0.673,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Rickard Rakell \u2014 SHOTS ON GOAL 2+ \u2014 -360",
+    "estimate": 0.673,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Sidney Crosby \u2014 SHOTS ON GOAL 2+ \u2014 -285",
+    "estimate": 0.627,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Steven Stamkos \u2014 SHOTS ON GOAL 2+ \u2014 -215",
+    "estimate": 0.621,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 62% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Erik Karlsson \u2014 SHOTS ON GOAL 2+ \u2014 -265",
+    "estimate": 0.585,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION",
+     "ESTIMATE_MARGIN",
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PP_ROLE)",
+     "an estimate of 59%, between the 55% floor and 62%",
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "MIN \u2014 MONEYLINE \u2014 -155",
+    "estimate": 0.583,
+    "decision": "BAD_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "STALE_MARKET_ESTIMATE"
+    ],
+    "reasons": [
+     "the estimate IS the market quote, and that quote was 444 minutes old (classed stale by the system)"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "DET \u2014 MONEYLINE \u2014 -148",
+    "estimate": 0.572,
+    "decision": "BAD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "STALE_MARKET_ESTIMATE"
+    ],
+    "reasons": [
+     "the estimate IS the market quote, and that quote was 444 minutes old (classed stale by the system)"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Jonathan Marchessault \u2014 SHOTS ON GOAL 2+ \u2014 -175",
+    "estimate": 0.567,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "ESTIMATE_MARGIN"
+    ],
+    "reasons": [
+     "an estimate of 57%, between the 55% floor and 62%"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Jake Guentzel \u2014 SHOTS ON GOAL 2+ \u2014 -250",
+    "estimate": 0.673,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 67% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -500",
+    "estimate": 0.758,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 76% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Nikita Kucherov \u2014 SHOTS ON GOAL 2+ \u2014 -390",
+    "estimate": 0.647,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Nick Schmaltz \u2014 SHOTS ON GOAL 2+ \u2014 -200",
+    "estimate": 0.642,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Dylan Guenther \u2014 SHOTS ON GOAL 2+ \u2014 -380",
+    "estimate": 0.693,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 69% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-24",
+    "leg": "Clayton Keller \u2014 SHOTS ON GOAL 2+ \u2014 -275",
+    "estimate": 0.643,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Sam Reinhart \u2014 SHOTS ON GOAL 2+ \u2014 -280",
+    "estimate": 0.7,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 70% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Matthew Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -350",
+    "estimate": 0.7,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "UNCERTAINTY_STAKED_TWICE"
+    ],
+    "reasons": [
+     "the same role or model uncertainty sits on 2 tickets"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Brady Tkachuk \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+    "estimate": 0.726,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "LOSS",
+    "criteria": [
+     "COUNTED_CONTRADICTION"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "DAL \u2014 MONEYLINE \u2014 -198",
+    "estimate": 0.637,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 64% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Sam Bennett \u2014 SHOTS ON GOAL 2+ \u2014 -230",
+    "estimate": 0.647,
+    "decision": "QUESTIONABLE_DECISION",
+    "outcome": "WIN",
+    "criteria": [
+     "COUNTED_CONTRADICTION"
+    ],
+    "reasons": [
+     "a counted MODERATE contradiction (PRODUCTION_BELOW_MODEL)"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Bo Horvat \u2014 SHOTS ON GOAL 2+ \u2014 -320",
+    "estimate": 0.745,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 74% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Matthew Schaefer \u2014 SHOTS ON GOAL 2+ \u2014 -425",
+    "estimate": 0.714,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 71% estimate, calibration MEDIUM, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Kyle Connor \u2014 SHOTS ON GOAL 2+ \u2014 -575",
+    "estimate": 0.799,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 80% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -500",
+    "estimate": 0.778,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 78% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Wyatt Johnston \u2014 SHOTS ON GOAL 2+ \u2014 -285",
+    "estimate": 0.648,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 65% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Cole Caufield \u2014 SHOTS ON GOAL 2+ \u2014 -700",
+    "estimate": 0.778,
+    "decision": "GOOD_DECISION",
+    "outcome": "LOSS",
+    "criteria": [],
+    "reasons": [
+     "a 78% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   },
+   {
+    "day": "2026-10-25",
+    "leg": "Juraj Slafkovsk\u00fd \u2014 SHOTS ON GOAL 2+ \u2014 -220",
+    "estimate": 0.633,
+    "decision": "GOOD_DECISION",
+    "outcome": "WIN",
+    "criteria": [],
+    "reasons": [
+     "a 63% estimate, calibration HIGH, no counted contradiction, no available data missing, a supported regime"
+    ]
+   }
+  ],
+  "independence_of_the_outcome": "the rubric takes the card, the leg as recorded and the day's reuse; it has no outcome parameter (tests/test_audit_corrections.py)"
  },
  "3_loss_causes": {
-  "lost_legs_before": 19,
+  "lost_legs_before": 20,
   "before": {
    "OUTCOME_WITHIN_ESTIMATE": 8,
+   "UNKNOWN": 5,
    "TOI_PROJECTION_ERROR": 4,
-   "UNKNOWN": 4,
    "MODEL_CALIBRATION": 2,
    "NORMAL_VARIANCE": 1
   },
-  "lost_legs_after": 19,
+  "lost_legs_after": 20,
   "after": {
-   "NORMAL_VARIANCE": 6,
+   "NORMAL_VARIANCE": 7,
    "TOI_PROJECTION_ERROR": 4,
    "UNKNOWN": 4,
    "OUTCOME_WITHIN_ESTIMATE": 3,
    "MODEL_CALIBRATION": 2
   },
-  "unknown_before": 4,
+  "unknown_before": 5,
   "unknown_after": 4,
   "note": "the cause taxonomy reads the review's flags and the game facts, which did not change: specific causes (TOI_PROJECTION_ERROR, MODEL_CALIBRATION) and UNKNOWN are identical. The two 'chance' categories move because they depend on the decision label: a GOOD leg that lost to variance is NORMAL_VARIANCE (earned), a QUESTIONABLE leg that lost within its estimate is OUTCOME_WITHIN_ESTIMATE"
  },
@@ -119,19 +929,20 @@
    "2026-10-22": {
     "recorded_legs_available": 18,
     "before": {
-     "n": 5,
+     "n": 10,
      "flagship": [
       "Artemi Panarin",
       "Jason Robertson",
       "Matthew Tkachuk"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 8,
+      "QUESTIONABLE": 2
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 9,
-      "leg_slots": 15,
+      "tickets": 10,
+      "distinct_legs": 16,
+      "leg_slots": 30,
       "most_reused_leg": {
        "label": "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
        "tickets": 2,
@@ -139,75 +950,76 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "LAK": 4,
-       "FLA": 3,
-       "DAL": 3
+       "LAK": 6,
+       "FLA": 5,
+       "UTA": 5
       },
       "game_exposure": {
-       "2026020159": 4,
-       "2026020158": 3,
-       "2026020161": 3
+       "2026020164": 9,
+       "2026020158": 7,
+       "2026020159": 6
       },
-      "expected_tickets_hit": 1.67,
-      "chance_no_ticket_hits": 0.2,
+      "expected_tickets_hit": 2.97,
+      "chance_no_ticket_hits": 0.067,
       "chance_no_ticket_hits_range": [
-       0.19,
-       0.207
+       0.067,
+       0.09
       ],
-      "spread_inflation_from_shared_legs": 1.52,
+      "spread_inflation_from_shared_legs": 1.58,
       "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 0
+      "tickets_with_a_model_risk_leg": 4
      }
     },
     "after": {
-     "n": 5,
+     "n": 10,
      "flagship": [
       "Artemi Panarin",
       "Jason Robertson",
       "Matthew Tkachuk"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 8,
+      "QUESTIONABLE": 2
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 10,
-      "leg_slots": 15,
+      "tickets": 10,
+      "distinct_legs": 18,
+      "leg_slots": 30,
       "most_reused_leg": {
-       "label": "Artemi Panarin \u2014 SHOTS ON GOAL 2+ \u2014 -255",
+       "label": "Jason Robertson \u2014 SHOTS ON GOAL 2+ \u2014 -450",
        "tickets": 2,
-       "chance_it_fails": 0.296,
+       "chance_it_fails": 0.222,
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "FLA": 4,
-       "LAK": 4,
-       "DAL": 3
+       "FLA": 6,
+       "UTA": 6,
+       "LAK": 4
       },
       "game_exposure": {
-       "2026020158": 4,
-       "2026020159": 4,
-       "2026020161": 3
+       "2026020164": 8,
+       "2026020158": 7,
+       "2026020159": 4
       },
-      "expected_tickets_hit": 1.63,
-      "chance_no_ticket_hits": 0.201,
+      "expected_tickets_hit": 2.87,
+      "chance_no_ticket_hits": 0.063,
       "chance_no_ticket_hits_range": [
-       0.186,
-       0.201
+       0.059,
+       0.079
       ],
-      "spread_inflation_from_shared_legs": 1.48,
+      "spread_inflation_from_shared_legs": 1.54,
       "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 0
+      "tickets_with_a_model_risk_leg": 4
      }
     },
     "same_tickets": 1,
-    "tickets_only_before": 4,
-    "tickets_only_after": 4
+    "tickets_only_before": 9,
+    "tickets_only_after": 9
    },
    "2026-10-23": {
     "recorded_legs_available": 13,
     "before": {
-     "n": 5,
+     "n": 8,
      "flagship": [
       "Brandon Hagel",
       "Connor Bedard",
@@ -215,12 +1027,12 @@
      ],
      "qualities": {
       "GOOD": 4,
-      "QUESTIONABLE": 1
+      "QUESTIONABLE": 4
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 8,
-      "leg_slots": 15,
+      "tickets": 8,
+      "distinct_legs": 13,
+      "leg_slots": 24,
       "most_reused_leg": {
        "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
        "tickets": 2,
@@ -228,39 +1040,40 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "TBL": 4,
-       "MTL": 4,
-       "CHI": 3
+       "MTL": 6,
+       "COL": 6,
+       "TBL": 5
       },
       "game_exposure": {
-       "2026020167": 5,
-       "2026020166": 5
+       "2026020167": 8,
+       "2026020166": 8
       },
-      "expected_tickets_hit": 1.7,
-      "chance_no_ticket_hits": 0.207,
+      "expected_tickets_hit": 2.32,
+      "chance_no_ticket_hits": 0.118,
       "chance_no_ticket_hits_range": [
-       0.19,
-       0.231
+       0.11,
+       0.153
       ],
-      "spread_inflation_from_shared_legs": 1.59,
-      "tickets_with_a_role_flagged_leg": 5,
-      "tickets_with_a_model_risk_leg": 2
+      "spread_inflation_from_shared_legs": 1.66,
+      "tickets_with_a_role_flagged_leg": 7,
+      "tickets_with_a_model_risk_leg": 5
      }
     },
     "after": {
-     "n": 5,
+     "n": 8,
      "flagship": [
       "Brandon Hagel",
       "Connor Bedard",
       "Cole Caufield"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 5,
+      "QUESTIONABLE": 3
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 8,
-      "leg_slots": 15,
+      "tickets": 8,
+      "distinct_legs": 13,
+      "leg_slots": 24,
       "most_reused_leg": {
        "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -575",
        "tickets": 2,
@@ -268,45 +1081,46 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "TBL": 4,
-       "MTL": 4,
-       "CHI": 3
+       "MTL": 6,
+       "TBL": 5,
+       "CHI": 5
       },
       "game_exposure": {
-       "2026020167": 5,
-       "2026020166": 5
+       "2026020167": 8,
+       "2026020166": 7
       },
-      "expected_tickets_hit": 1.69,
-      "chance_no_ticket_hits": 0.209,
+      "expected_tickets_hit": 2.32,
+      "chance_no_ticket_hits": 0.118,
       "chance_no_ticket_hits_range": [
-       0.191,
-       0.237
+       0.117,
+       0.149
       ],
-      "spread_inflation_from_shared_legs": 1.58,
-      "tickets_with_a_role_flagged_leg": 5,
-      "tickets_with_a_model_risk_leg": 2
+      "spread_inflation_from_shared_legs": 1.65,
+      "tickets_with_a_role_flagged_leg": 8,
+      "tickets_with_a_model_risk_leg": 5
      }
     },
-    "same_tickets": 3,
-    "tickets_only_before": 2,
-    "tickets_only_after": 2
+    "same_tickets": 1,
+    "tickets_only_before": 7,
+    "tickets_only_after": 7
    },
    "2026-10-24": {
     "recorded_legs_available": 22,
     "before": {
-     "n": 5,
+     "n": 10,
      "flagship": [
       "Brandon Hagel",
       "Jack Hughes",
       "Timo Meier"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 8,
+      "QUESTIONABLE": 2
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 9,
-      "leg_slots": 15,
+      "tickets": 10,
+      "distinct_legs": 16,
+      "leg_slots": 30,
       "most_reused_leg": {
        "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -500",
        "tickets": 2,
@@ -314,87 +1128,88 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "TBL": 4,
-       "NJD": 3,
-       "UTA": 3
+       "TBL": 6,
+       "UTA": 5,
+       "NSH": 5
       },
       "game_exposure": {
-       "2026020177": 5,
-       "2026020169": 3,
-       "2026020172": 2
+       "2026020177": 8,
+       "2026020172": 6,
+       "2026020169": 3
       },
-      "expected_tickets_hit": 1.79,
-      "chance_no_ticket_hits": 0.17,
+      "expected_tickets_hit": 3.14,
+      "chance_no_ticket_hits": 0.054,
       "chance_no_ticket_hits_range": [
-       0.17,
-       0.18
+       0.054,
+       0.065
       ],
-      "spread_inflation_from_shared_legs": 1.53,
-      "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 4
+      "spread_inflation_from_shared_legs": 1.6,
+      "tickets_with_a_role_flagged_leg": 2,
+      "tickets_with_a_model_risk_leg": 8
      }
     },
     "after": {
-     "n": 5,
+     "n": 10,
      "flagship": [
       "Brandon Hagel",
       "Jack Hughes",
       "Timo Meier"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 8,
+      "QUESTIONABLE": 2
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 9,
-      "leg_slots": 15,
+      "tickets": 10,
+      "distinct_legs": 18,
+      "leg_slots": 30,
       "most_reused_leg": {
-       "label": "Brandon Hagel \u2014 SHOTS ON GOAL 2+ \u2014 -500",
+       "label": "Jack Hughes \u2014 SHOTS ON GOAL 2+ \u2014 -750",
        "tickets": 2,
-       "chance_it_fails": 0.242,
+       "chance_it_fails": 0.179,
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "UTA": 4,
-       "TBL": 3,
-       "NJD": 2
+       "NSH": 6,
+       "UTA": 5,
+       "TBL": 4
       },
       "game_exposure": {
-       "2026020177": 5,
-       "2026020169": 2,
-       "2026020172": 2
+       "2026020177": 7,
+       "2026020172": 6,
+       "2026020169": 2
       },
-      "expected_tickets_hit": 1.74,
-      "chance_no_ticket_hits": 0.175,
+      "expected_tickets_hit": 2.93,
+      "chance_no_ticket_hits": 0.055,
       "chance_no_ticket_hits_range": [
-       0.171,
-       0.184
+       0.055,
+       0.064
       ],
-      "spread_inflation_from_shared_legs": 1.45,
-      "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 4
+      "spread_inflation_from_shared_legs": 1.48,
+      "tickets_with_a_role_flagged_leg": 2,
+      "tickets_with_a_model_risk_leg": 7
      }
     },
-    "same_tickets": 2,
-    "tickets_only_before": 3,
-    "tickets_only_after": 3
+    "same_tickets": 1,
+    "tickets_only_before": 9,
+    "tickets_only_after": 9
    },
    "2026-10-25": {
     "recorded_legs_available": 12,
     "before": {
-     "n": 5,
+     "n": 8,
      "flagship": [
       "Kyle Connor",
       "Jason Robertson",
       "Cole Caufield"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 8
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 9,
-      "leg_slots": 15,
+      "tickets": 8,
+      "distinct_legs": 12,
+      "leg_slots": 24,
       "most_reused_leg": {
        "label": "Kyle Connor \u2014 SHOTS ON GOAL 2+ \u2014 -575",
        "tickets": 2,
@@ -402,40 +1217,40 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
-       "DAL": 3,
-       "FLA": 3,
-       "NYI": 3
+       "DAL": 5,
+       "FLA": 5,
+       "MTL": 4
       },
       "game_exposure": {
-       "2026020181": 5,
-       "2026020182": 3,
-       "2026020180": 3
+       "2026020181": 7,
+       "2026020182": 5,
+       "2026020180": 5
       },
-      "expected_tickets_hit": 2.06,
-      "chance_no_ticket_hits": 0.136,
+      "expected_tickets_hit": 2.91,
+      "chance_no_ticket_hits": 0.065,
       "chance_no_ticket_hits_range": [
-       0.133,
-       0.139
+       0.065,
+       0.081
       ],
-      "spread_inflation_from_shared_legs": 1.64,
+      "spread_inflation_from_shared_legs": 1.65,
       "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 4
+      "tickets_with_a_model_risk_leg": 6
      }
     },
     "after": {
-     "n": 5,
+     "n": 7,
      "flagship": [
       "Kyle Connor",
       "Jason Robertson",
       "Cole Caufield"
      ],
      "qualities": {
-      "GOOD": 5
+      "GOOD": 7
      },
      "portfolio": {
-      "tickets": 5,
-      "distinct_legs": 8,
-      "leg_slots": 15,
+      "tickets": 7,
+      "distinct_legs": 12,
+      "leg_slots": 21,
       "most_reused_leg": {
        "label": "Kyle Connor \u2014 SHOTS ON GOAL 2+ \u2014 -575",
        "tickets": 2,
@@ -443,29 +1258,29 @@
        "expected_tickets_it_kills_if_it_fails": 2
       },
       "team_exposure": {
+       "DAL": 4,
        "FLA": 4,
-       "NYI": 3,
-       "WPG": 2
+       "MTL": 3
       },
       "game_exposure": {
-       "2026020181": 4,
-       "2026020180": 4,
-       "2026020182": 3
+       "2026020181": 6,
+       "2026020182": 4,
+       "2026020180": 4
       },
-      "expected_tickets_hit": 2.07,
-      "chance_no_ticket_hits": 0.135,
+      "expected_tickets_hit": 2.65,
+      "chance_no_ticket_hits": 0.083,
       "chance_no_ticket_hits_range": [
-       0.127,
-       0.15
+       0.078,
+       0.093
       ],
       "spread_inflation_from_shared_legs": 1.64,
       "tickets_with_a_role_flagged_leg": 0,
-      "tickets_with_a_model_risk_leg": 4
+      "tickets_with_a_model_risk_leg": 5
      }
     },
-    "same_tickets": 1,
-    "tickets_only_before": 4,
-    "tickets_only_after": 4
+    "same_tickets": 2,
+    "tickets_only_before": 6,
+    "tickets_only_after": 5
    }
   }
  }

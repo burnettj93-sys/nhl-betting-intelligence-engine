@@ -69,12 +69,124 @@ class TestParlayLegRubric(unittest.TestCase):
                 a = ed.assess({"result_status": o, "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2}, c, None, parlay_leg=True)
                 seen.add((a["decision_quality"]["label"], o))
         self.assertEqual(seen, {(g, o) for g in (ed.GOOD, ed.QUESTIONABLE, ed.BAD) for o in ("WIN", "LOSS")})
-        self.assertEqual(ed.ASSESS_VERSION, 3)                                                                       # stored assessments of the older rubric are rebuilt, never reused
+        self.assertEqual(ed.ASSESS_VERSION, 4)                                                                       # stored assessments of the older rubric are rebuilt, never reused
 
     def test_the_postmortem_grades_parlay_legs_with_the_parlay_rubric(self):
         import inspect
         from operational import learning_postmortem as lpm
         self.assertIn("parlay_leg=True", inspect.getsource(lpm.parlay_summaries))
+
+
+class TestTheRubricCanFindABadDecisionTheGateAdmitted(unittest.TestCase):
+    """The rubric is independent of the admission gate: every leg below passes leg_ok, and several are still BAD decisions on pregame information. No outcome is an input."""
+
+    def admitted(self, c):
+        self.assertTrue(lp.leg_ok({"leg": None, "card": c, "action": c["action"]["decision"]})[0], "the fixture must be a leg the gate lets in")
+        return c
+
+    def test_no_parameter_of_the_rubric_is_an_outcome(self):
+        import inspect
+        self.assertEqual(list(inspect.signature(ed.parlay_leg_quality).parameters), ["card", "context"])
+        for k in ("outcome", "result", "result_status", "won"):
+            self.assertNotIn(k, str(inspect.getsource(ed.parlay_leg_quality)).split('"""')[2])
+
+    def test_a_moneyline_leg_whose_estimate_is_a_stale_quote_is_bad_although_the_gate_admitted_it(self):
+        c = self.admitted(cand(p=0.64, fam="MONEYLINE", k=None, team="TOR")["card"])
+        c["data_completeness"] = {"fraction": 0.9, "missing": ["confirmed starting goalies", "injuries and lineup"]}
+        stale, fresh = {"leg": {"freshness_status": "STALE_QUOTE", "quote_age_min": 433.0}}, {"leg": {"freshness_status": "FRESH", "quote_age_min": 12.0}}
+        self.assertEqual(ed.parlay_leg_quality(c, stale)["label"], ed.BAD)
+        self.assertIn("STALE_MARKET_ESTIMATE", ed.parlay_leg_quality(c, stale)["criteria"])
+        self.assertEqual(ed.parlay_leg_quality(c, fresh)["label"], ed.GOOD)
+        p = card(p=0.66)
+        self.assertEqual(ed.parlay_leg_quality(p, {"leg": {"freshness_status": "STALE_QUOTE"}})["label"], ed.GOOD)          # a prop's PRICE does not enter its hit probability: not held against it
+
+    def test_an_estimate_two_standard_errors_above_what_its_own_analogues_did_is_bad(self):
+        c = self.admitted(card(p=0.70))
+        c["calibration_confidence"]["evidence"] = {"n": 1500, "z": -3.1, "obs": 0.64, "pred": 0.72, "se": 0.011}
+        self.assertEqual(ed.parlay_leg_quality(c)["label"], ed.BAD)
+        self.assertIn("CONTRADICTS_ITS_OWN_CALIBRATION", ed.parlay_leg_quality(c)["criteria"])
+        c["calibration_confidence"]["evidence"] = {"n": 1500, "z": -3.1, "obs": 0.69, "pred": 0.72, "se": 0.011}              # observed within two standard errors of the claim
+        self.assertEqual(ed.parlay_leg_quality(c)["label"], ed.GOOD)
+        c["calibration_confidence"]["evidence"] = {"n": 120, "z": -3.1, "obs": 0.60, "pred": 0.72, "se": 0.04}                # too few cases to adjust anything: the engine's own rule
+        self.assertEqual(ed.parlay_leg_quality(c)["label"], ed.GOOD)
+
+    def test_validated_evidence_that_was_not_applied_makes_a_leg_bad_only_if_applying_it_puts_the_estimate_under_the_floor(self):
+        ev = {"ROLE_ASSUMPTION": {"shots>=2": {"verdict": "BEYOND_MODEL_LOWER", "live_adjustment": -0.10}}}
+        flag = [{"name": "ROLE_ASSUMPTION", "level": "MODERATE", "text": "x"}]
+        leg_ = {"leg": {"market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2}, "date": "2026-10-22"}
+        with mock.patch.object(ei, "signal_evidence", return_value=ev):
+            low = self.admitted(card(p=0.62, contradiction="MODERATE", flags=flag))
+            self.assertEqual(ed.parlay_leg_quality(low, leg_)["label"], ed.BAD)                                               # 62% less 10 points is 52%
+            self.assertIn("EVIDENCE_NOT_APPLIED", ed.parlay_leg_quality(low, leg_)["criteria"])
+            high = self.admitted(card(p=0.75, contradiction="MODERATE", flags=flag))
+            self.assertEqual(ed.parlay_leg_quality(high, leg_)["label"], ed.QUESTIONABLE)                                      # 65% still clears the floor: a doubt, not a defect
+            self.assertEqual(ed.parlay_leg_quality(low, {**leg_, "date": "2026-10-19"})["label"], ed.QUESTIONABLE)             # the evidence did not exist before 2026-10-20: it cannot judge an earlier decision
+            applied = self.admitted(card(p=0.62, contradiction="MODERATE", flags=flag))
+            applied["signal_adjustment"] = {"signal": "ROLE_ASSUMPTION", "delta": -0.10}
+            self.assertEqual(ed.parlay_leg_quality(applied, leg_)["label"], ed.QUESTIONABLE)                                   # a card that already took it off is not charged twice
+
+    def test_a_player_with_fewer_prior_games_than_the_models_validation_required_is_bad_and_a_thin_record_is_a_doubt(self):
+        for games, want in ((3, ed.BAD), (30, ed.QUESTIONABLE), (120, ed.GOOD)):
+            c = self.admitted(card(p=0.66))
+            c["player_view"] = {"games_total": games}
+            self.assertEqual(ed.parlay_leg_quality(c)["label"], want, games)
+
+    def test_missing_data_that_a_source_could_have_supplied_counts_but_what_no_source_supplies_does_not(self):
+        base = lambda missing: dict(card(p=0.66), data_completeness={"fraction": 0.7, "missing": missing})
+        self.assertEqual(ed.parlay_leg_quality(base(["confirmed lineup", "injury news"]))["label"], ed.GOOD)
+        self.assertEqual(ed.parlay_leg_quality(base(["confirmed lineup", "hit-rate record"]))["label"], ed.QUESTIONABLE)
+        self.assertEqual(ed.parlay_leg_quality(base(["hit-rate record", "price observation"]))["label"], ed.BAD)
+
+    def test_a_claim_of_75_percent_or_more_on_calibration_below_high_is_a_doubt(self):
+        self.assertEqual(ed.parlay_leg_quality(card(p=0.78, cal="MEDIUM"))["label"], ed.QUESTIONABLE)
+        self.assertEqual(ed.parlay_leg_quality(card(p=0.78, cal="HIGH"))["label"], ed.GOOD)
+
+    def test_the_same_role_or_model_uncertainty_staked_on_two_tickets_is_a_doubt(self):
+        risky = card(p=0.70, cal="MEDIUM")
+        self.assertEqual(ed.parlay_leg_quality(risky, {"reuse_count": 1})["label"], ed.GOOD)
+        self.assertEqual(ed.parlay_leg_quality(risky, {"reuse_count": 2})["label"], ed.QUESTIONABLE)
+        self.assertEqual(ed.parlay_leg_quality(card(p=0.70), {"reuse_count": 2})["label"], ed.GOOD)                            # a reused leg with no uncertainty is not a doubt
+
+    def test_a_bad_decision_can_win_and_a_good_one_can_lose(self):
+        stale = self.admitted(cand(p=0.64, fam="MONEYLINE", k=None, team="TOR")["card"])
+        ctx = {"leg": {"freshness_status": "STALE_QUOTE", "quote_age_min": 400.0}}
+        win = ed.assess({"result_status": "WIN", "market_family": "MONEYLINE"}, stale, None, parlay_leg=True, context=ctx)
+        good_loss = ed.assess({"result_status": "LOSS", "market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2}, card(p=0.70), None, parlay_leg=True, context={})
+        self.assertEqual((win["decision_quality"]["label"], win["outcome"]), (ed.BAD, "WIN"))
+        self.assertEqual(win["lesson"]["signal"], "BAD_DECISION_WON_LUCK")
+        self.assertEqual((good_loss["decision_quality"]["label"], good_loss["outcome"]), (ed.GOOD, "LOSS"))
+        loss = ed.assess({"result_status": "LOSS", "market_family": "MONEYLINE"}, stale, None, parlay_leg=True, context=ctx)
+        self.assertEqual(loss["decision_quality"], win["decision_quality"])                                                      # the label is the same whichever way it ended
+
+
+class TestTheSimilarityBandIsEvidenceNotAConstant(unittest.TestCase):
+    def tick(self, est, se):
+        c = cand(p=est)
+        if se is not None:
+            c["card"]["calibration_confidence"]["evidence"] = {"se": se}
+        return {"cands": [c], "weakest_leg": {"index": 0, "estimate": est}}
+
+    def test_two_estimates_are_similar_only_when_their_difference_is_inside_two_standard_errors_of_the_difference(self):
+        a = self.tick(0.70, 0.011)
+        self.assertTrue(lp.similar_strength(a, self.tick(0.675, 0.011)))                 # 2.5 points < 2 * sqrt(2) * 1.1 = 3.1 points
+        self.assertFalse(lp.similar_strength(a, self.tick(0.66, 0.011)))                 # 4 points: distinguishable
+        self.assertTrue(lp.similar_strength(a, self.tick(0.66, 0.030)))                  # a poorly known leg is similar to more: the band follows the uncertainty
+        self.assertFalse(lp.similar_strength(a, self.tick(0.69, 0.001)) and lp.similar_strength(self.tick(0.70, 0.001), self.tick(0.69, 0.001)))     # precisely known legs: 1 point already differs
+
+    def test_with_no_calibration_evidence_there_is_no_tolerance_at_all(self):
+        self.assertFalse(lp.similar_strength(self.tick(0.70, None), self.tick(0.699, None)))
+        self.assertTrue(lp.similar_strength(self.tick(0.70, None), self.tick(0.70, None)))                                            # only an exact tie: strict ranking
+
+    def test_the_standard_error_is_the_one_of_the_weakest_leg_and_moneylines_carry_theirs_too(self):
+        c = cand(p=0.64, fam="MONEYLINE", k=None)
+        c["card"]["calibration_confidence"]["evidence"] = {"standard_error": 0.0104, "n": 2177}
+        self.assertEqual(lp.weakest_se({"cands": [c], "weakest_leg": {"index": 0}}), 0.0104)
+
+    def test_no_numeric_constant_is_borrowed_from_the_points_rule(self):
+        import inspect
+        self.assertFalse(hasattr(lp, "SIMILAR_STRENGTH"))
+        self.assertEqual(lp.SIMILARITY_Z, ei.Z_SIGNIFICANT)
+        self.assertNotIn("0.02", inspect.getsource(lp.similar_strength))
 
 
 class TestLessonStates(unittest.TestCase):

@@ -16,20 +16,25 @@ LIFTS = {"SOG_SOG_TEAMMATES": {"usable": True, "dependence_lift": 1.0, "ci95": [
          "ML_PTS_SAMETEAM": {"usable": True, "dependence_lift": 1.17, "ci95": [1.103, 1.25]}, "ML_PTS_OPPOSING": {"usable": True, "dependence_lift": 0.745, "ci95": [0.691, 0.799]}}
 
 
+def with_evidence(c, se=0.011):
+    c["card"]["calibration_confidence"]["evidence"] = {"se": se, "n": 1500}                       # how precisely the engine knows this leg's estimate (the cell its calibration stands on)
+    return c
+
+
 def pool(ps):
-    return [cand(pid=str(8470001 + i), game=str(i + 1), p=p, team=f"T{i}") for i, p in enumerate(ps)]
+    return [with_evidence(cand(pid=str(8470001 + i), game=str(i + 1), p=p, team=f"T{i}")) for i, p in enumerate(ps)]
 
 
 class TestSelectionIsPortfolioAware(unittest.TestCase):
     def picks(self, ps, neutral=False):
         with mock.patch.object(lp, "dependence_lifts", return_value=LIFTS):
-            ctx = mock.patch.object(lp, "concentration_key", lambda v, k: (0, 0, 0, 0, 0, 0)) if neutral else mock.patch.object(lp, "SIMILAR_STRENGTH", lp.SIMILAR_STRENGTH)
+            ctx = mock.patch.object(lp, "concentration_key", lambda v, k: (0, 0, 0, 0, 0, 0, 0)) if neutral else mock.patch.object(lp, "COV_RESOLUTION", lp.COV_RESOLUTION)
             with ctx:
                 out = lp.build(pool(ps), slots=4)
         return [tuple(sorted(c["key"] for c in p["cands"])) for p in out["parlays"]]
 
     def test_two_similarly_strong_tickets_are_chosen_to_share_no_leg_when_the_alternative_shares_one(self):
-        ps = (0.70, 0.69, 0.68, 0.67, 0.66, 0.65, 0.64)
+        ps = (0.70, 0.695, 0.69, 0.685, 0.68, 0.675, 0.67)
         rank_order, aware = self.picks(ps, neutral=True), self.picks(ps)
         self.assertEqual(aware[0], rank_order[0])                                                # the best ticket is the same
         shared = lambda a, b: len(set(a) & set(b))
@@ -38,7 +43,7 @@ class TestSelectionIsPortfolioAware(unittest.TestCase):
         self.assertEqual(shared(aware[0], aware[1]), 0)                                          # the diversified choice among similarly strong tickets
 
     def test_a_clearly_stronger_ticket_is_never_passed_over_for_diversification(self):
-        ps = (0.72, 0.71, 0.70, 0.69, 0.68, 0.56, 0.56)                                          # the only disjoint tickets rest on 56% legs: clearly weaker (not within SIMILAR_STRENGTH)
+        ps = (0.72, 0.71, 0.70, 0.69, 0.68, 0.56, 0.56)                                          # the only disjoint tickets rest on 56% legs: clearly weaker (not within two standard errors of the difference)
         aware = self.picks(ps)
         self.assertEqual(len(aware[0]), 3)
         second = aware[1]
@@ -46,7 +51,7 @@ class TestSelectionIsPortfolioAware(unittest.TestCase):
         self.assertGreaterEqual(weakest_second, 0.68 - 1e-9)                                     # the stronger overlapping ticket was kept
 
     def test_the_candidate_set_the_reuse_cap_and_the_ticket_gate_are_unchanged(self):
-        ps = (0.70, 0.69, 0.68, 0.67, 0.66, 0.65, 0.64, 0.63)
+        ps = (0.70, 0.695, 0.69, 0.685, 0.68, 0.675, 0.67, 0.665)
         aware, plain = self.picks(ps), self.picks(ps, neutral=True)
         self.assertEqual(len(aware), len(plain))                                                 # the volume is not changed by the diversification
         for tickets in (aware, plain):
@@ -68,6 +73,17 @@ class TestSelectionIsPortfolioAware(unittest.TestCase):
             k_same, k_cross = lp.concentration_key(same, [kept]), lp.concentration_key(cross, [kept])
         self.assertGreater(k_same, k_cross)                                                      # the positively dependent pair concentrates the day (covariance), the cross-game ticket does not
         self.assertEqual(k_same[0], 0)                                                           # no shared leg: the difference is the dependence, measured
+
+    def test_another_threshold_of_a_player_the_day_already_stakes_is_a_concentration(self):
+        base = {"market_family": "PLAYER_SOG_ALTERNATE", "model_risk": False, "role_risk": False}
+        kept = {"key": "K", "probability": 0.4, "legs": [{**base, "key": "a2", "threshold": 2, "estimate": 0.7, "game_id": "1", "team": "AAA", "player": "a"}]}
+        same_player = {"key": "S", "probability": 0.4, "legs": [{**base, "key": "a3", "threshold": 3, "estimate": 0.7, "game_id": "2", "team": "CCC", "player": "a"}]}
+        other = {"key": "O", "probability": 0.4, "legs": [{**base, "key": "c2", "threshold": 2, "estimate": 0.7, "game_id": "3", "team": "DDD", "player": "c"}]}
+        with mock.patch.object(lp, "dependence_lifts", return_value={}):
+            ks, ko = lp.concentration_key(same_player, [kept]), lp.concentration_key(other, [kept])
+        self.assertEqual(ks[0], 0)                                                                 # a different leg key: not a shared leg ...
+        self.assertEqual(ks[1], 1)                                                                 # ... but the same player: he fails with himself
+        self.assertGreater(ks, ko)
 
     def test_shared_role_uncertainty_on_one_team_is_a_concentration(self):
         base = {"market_family": "PLAYER_SOG_ALTERNATE", "threshold": 2, "model_risk": False}
