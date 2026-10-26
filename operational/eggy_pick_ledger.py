@@ -56,9 +56,33 @@ def observation(cands: list[dict], game: dict, decided_at: str, structure_state:
         sides.append({"side": c["side"], "market": c["market"], "line": c["line"], "price": c["price"], "market_p": c["market_probability_market"], "model_p": c["model_probability"], "gap": c["gap"],
                       "supported_p": c["supported_probability"], "edge": c["edge"], "conservative_edge": c["conservative_edge"], "structure": c["structure"], "qualifies": c["qualifies"], "price_class": c["price_class"],
                       "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
-                      "trust_state": c["trust_state"], "calibration": c.get("calibration")})
+                      "trust_state": c["trust_state"], "calibration": c.get("calibration"), "consensus": c["edge_thesis"]["consensus_quality"], "edge_families": c["edge_thesis"]["families"]})
     return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "home": game["home"], "away": game["away"], "start_utc": game.get("start_utc"),
             "decided_at_utc": decided_at, "sides": sides}
+
+
+def late_price(pick: dict) -> dict | None:
+    """The latest price the engine captured for the pick's side before the game started (a late / closing PROXY: the true closing line is not available), and whether it moved for or against the bet since the decision."""
+    try:
+        start = dt.datetime.fromisoformat(pick["start_utc"].replace("Z", "+00:00"))
+        caps = ep.league_captures(et.eastern_today(start), start)
+        for c in reversed(caps):
+            e = next((e for e in c["events"].values() if e["home"] == pick["home"] and e["away"] == pick["away"]), None)
+            if not e:
+                continue
+            if pick["market"] == "MONEYLINE":
+                q = e["ml"].get(pick["side"])
+            else:
+                pl = e["pl"].get(pick["side"]) or (None, None)
+                q = pl[0] if pl[1] == pick["line"] else None
+            if q is None:
+                continue
+            imp0, imp1 = ei.implied_from_american(pick["price"]), ei.implied_from_american(q)
+            return {"price": q, "captured_at_utc": c["at"].strftime("%Y-%m-%dT%H:%M:%SZ"), "moved": "IN_FAVOUR" if imp1 > imp0 + 0.005 else ("AGAINST" if imp1 < imp0 - 0.005 else "FLAT"),
+                    "note": "the latest captured price before the game, not the true closing line; IN_FAVOUR means the market moved toward the side after the decision"}
+    except Exception:                                                  # a late price is a nicety for the postmortem, never a precondition
+        return None
+    return None
 
 
 def settle(nhl_conn, now: dt.datetime) -> dict:
@@ -92,7 +116,7 @@ def settle(nhl_conn, now: dt.datetime) -> dict:
             else:
                 res = "WIN" if (side_margin >= 2 if pick["line"] < 0 else side_margin > -2) else "LOSS"
             new.append({"type": "OUTCOME", "kind": "PICK", "date": e["date"], "game_id": gid, "result": res, "side_margin": side_margin, "home_score": r["home_score"], "away_score": r["away_score"],
-                        "settled_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")})
+                        "late_price": late_price(pick), "settled_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")})
     if new:
         _append(new)
     return {"settled": len(new)}
@@ -101,36 +125,36 @@ def settle(nhl_conn, now: dt.datetime) -> dict:
 # ------------------------------------------------------------------------------------------------ decision quality, independent of the result
 def grade(decision_doc: dict) -> dict:
     """GOOD / QUESTIONABLE / BAD for a PICK, from what was known when it was made (the stored decision): never the result. BAD: a defect the standard should have prevented. QUESTIONABLE: a doubt the evidence supports.
-    A PASS is not graded as a bet (it carries a pass audit instead)."""
+    A best-available bet with no edge thesis is acceptable when it is honestly labelled LOW and nothing else is wrong. A PASS places no bet (it carries its reason)."""
     if decision_doc.get("decision") != "PICK":
-        return {"label": "NO_BET", "reasons": ["a PASS places no bet"], "criteria": []}
+        return {"label": "NO_BET", "reasons": ["no bet was placed: " + str(decision_doc.get("pass_kind") or "PASS")], "criteria": []}
     p = decision_doc["pick"]
     bad, doubt = [], []
     if p["price_freshness"]["status"] != "FRESH":
         bad.append(("STALE_PRICE", "the price was not FRESH at decision"))
-    if p.get("price_class") == "EXTREME":
-        bad.append(("EXTREME_PRICE", "the price was beyond the extreme guard"))
-    if p.get("structure") in (None, "NONE"):
-        bad.append(("NO_EVIDENCE_STRUCTURE", "no evidence structure was satisfied"))
     if p.get("structure") == "SUPPORTED_MARKET_GAP" and p["trust_state"] != "DISAGREEMENT_HAS_SIGNAL":
         bad.append(("UNPROVEN_GAP_CLAIMED", "a supported market gap was claimed without a proven disagreement"))
-    if (p.get("data_completeness") or 0) < 0.6 or p.get("calibration") in ("INSUFFICIENT", "LOW", None):
-        bad.append(("DATA_OR_CALIBRATION", "data completeness or calibration was inadequate"))
-    if not p["balance"]["materially_outweighs"] or p["balance"]["against_strong"]:
-        bad.append(("CASE_NOT_BALANCED", "the case against was not outweighed"))
+    if p.get("confidence") == "HIGH" and not any(e["family"] == "PROVEN_SIGNAL" for e in (p.get("edge_families") or {}).get("present", [])):
+        bad.append(("CONFIDENCE_OVERSTATED", "HIGH confidence without a proven signal"))
+    if p.get("price_class") == "EXTREME" and p.get("confidence") != "LOW":
+        bad.append(("EXTREME_PRICE_CONFIDENCE", "an extreme price carried more than LOW confidence"))
+    if p["balance"]["against_strong"] and p.get("confidence") != "LOW":
+        bad.append(("STRONG_AGAINST_IGNORED", "a STRONG reason against stood while confidence was above LOW"))
     if bad:
         return {"label": "BAD_DECISION", "reasons": [t for _, t in bad], "criteria": [c for c, _ in bad]}
+    if p["balance"]["against_strong"]:
+        doubt.append(("STRONG_AGAINST", "a STRONG reason against stood (confidence LOW)"))
     if p["balance"]["against_moderate"]:
         doubt.append(("MODERATE_AGAINST", f"{p['balance']['against_moderate']} moderate reason(s) against stood"))
-    if p.get("price_class") == "OUTSIDE_PREFERRED":
+    if p.get("price_class") in ("OUTSIDE_PREFERRED", "EXTREME"):
         doubt.append(("OUTSIDE_PREFERRED_PRICE", "the price was outside the preferred region"))
-    if p.get("calibration") == "MEDIUM":
-        doubt.append(("CALIBRATION_MEDIUM", "calibration was MEDIUM, not HIGH"))
-    if p.get("confidence") == "LOW":
-        doubt.append(("LOW_CONFIDENCE", "the evidence category was LOW"))
+    if p.get("calibration") in ("MEDIUM", "LOW", "INSUFFICIENT", None) or (p.get("data_completeness") or 0) < 0.6:
+        doubt.append(("CALIBRATION_OR_DATA", "calibration was below HIGH or the data was incomplete"))
+    if p.get("pick_basis") == "BEST_AVAILABLE" and p.get("confidence") != "LOW":
+        doubt.append(("BEST_AVAILABLE_NOT_LOW", "a best-available bet with no edge thesis was not labelled LOW"))
     if doubt:
         return {"label": "QUESTIONABLE_DECISION", "reasons": [t for _, t in doubt], "criteria": [c for c, _ in doubt]}
-    return {"label": "GOOD_DECISION", "reasons": ["a recognised evidence structure at a fresh price in the preferred region, adequate data and calibration, the case for outweighing the case against"], "criteria": []}
+    return {"label": "GOOD_DECISION", "reasons": ["a fresh price, a recognised edge thesis or an honestly labelled best-available bet, adequate data and calibration, the case for outweighing the case against"], "criteria": []}
 
 
 # ------------------------------------------------------------------------------------------------ prospective signal trust
@@ -145,7 +169,7 @@ def _settled_observations(events: list[dict]) -> list[dict]:
 
 SIGNALS = {
     "SUPPORTED_MARKET_GAP": "evidence structure: a model-market gap the record has proven (Type B)",
-    "CONSENSUS_QUALITY": "evidence structure: market and hockey agree, price attractive (Type A)",
+    "CONSENSUS_QUALITY": "consensus-quality state (market and hockey agree on a strong near-even side); never a pick on its own",
     "MARKET_SITUATIONAL_OPPORTUNITY": "evidence structure: sound hockey picture plus measured market / situational facts (Type C)",
     "ML_MODEL_GAP_3PLUS": "the moneyline side the hockey model rates 3+ points above the market",
     "PL_MODEL_GAP_3PLUS": "the puck-line side the model's goal-margin mapping rates 3+ points above the market",
@@ -159,6 +183,9 @@ SIGNALS = {
     "CONFIDENCE_HIGH": "qualifying sides graded HIGH confidence",
     "CONFIDENCE_MEDIUM": "qualifying sides graded MEDIUM confidence",
     "CONFIDENCE_LOW": "qualifying sides graded LOW confidence",
+    "EGGY_PICK": "Eggy's daily bets (the whole record of the product)",
+    "PICK_EDGE_THESIS": "daily bets that carried an edge thesis",
+    "PICK_BEST_AVAILABLE": "daily bets chosen as the best available with no edge thesis (LOW confidence)",
 }
 
 
@@ -187,6 +214,13 @@ def signal_bets(o: dict):
                 out.append(("ML_MOVED_AWAY_1PT", p, y))
         if s.get("rest_advantage") and s["market"] == "MONEYLINE":
             out.append(("REST_ADVANTAGE", p, y))
+        if s.get("picked"):
+            out.append(("EGGY_PICK", p, y))
+            out.append(("PICK_EDGE_THESIS" if s.get("qualifies") else "PICK_BEST_AVAILABLE", p, y))
+            if s.get("confidence"):
+                out.append(("CONFIDENCE_" + s["confidence"], p, y)) if not s.get("qualifies") else None
+        if s.get("consensus"):
+            out.append(("CONSENSUS_QUALITY", p, y))
         if s.get("qualifies"):
             out.append((s["structure"], p, y))
             out.append(("PRICE_IN_PREFERRED" if s["price_class"] == "IN_PREFERRED_REGION" else "PRICE_OUTSIDE_PREFERRED", p, y))
@@ -239,7 +273,7 @@ def record(events: list[dict] | None = None) -> dict:
         row = {"date": e["date"], "decision": d["decision"], "decided_at_utc": d["decided_at_utc"]}
         if d["decision"] == "PICK":
             p = d["pick"]
-            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class", "structure", "supported_probability")}, grade=g,
+            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class", "structure", "supported_probability", "pick_basis")}, card=p.get("card"), edge_thesis=p.get("edge_thesis"), late_price=(o or {}).get("late_price"), grade=g,
                        result=(o or {}).get("result", "PENDING"), final=None if not o else f"{o['home_score']}-{o['away_score']}")
             if o:
                 grid[(g["label"], o["result"])] += 1
@@ -325,6 +359,13 @@ def run_cycle(nhl_conn, now: dt.datetime) -> dict:
             by_game[g["game_id"]].append(c)
     doc = ep.decide(cands, now=now, structure_state=structure_state)
     obs = [observation(by_game[g["game_id"]], g, doc["decided_at_utc"], structure_state) for g in upcoming if by_game.get(g["game_id"])]
+    if doc["decision"] == "PICK":                                      # the one bet is flagged in its game's observation, with its confidence, for the prospective record
+        pk = doc["pick"]
+        for o in obs:
+            if o["game_id"] == str(pk["game_id"]):
+                for sd in o["sides"]:
+                    if sd["side"] == pk["side"] and sd["market"] == pk["market"]:
+                        sd["picked"], sd["confidence"] = True, pk["confidence"]
     _append([{"type": "DECISION", "date": today, "game_id": None, "decision_doc": json.loads(json.dumps(doc, default=str))}] + obs)
     out["status"] = doc["decision"]
     _write_postmortem(read())

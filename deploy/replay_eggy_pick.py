@@ -91,13 +91,16 @@ def main(argv=None) -> int:
                             "fresh_prices": sum(1 for c in cands if c["price_freshness"]["status"] == "FRESH"), "blend_estimate_before_the_day": blend,
                             "qualifying_sides": sum(1 for c in cands if c["qualifies"]), "structures_qualifying": dict(collections.Counter(c["structure"] for c in cands if c["qualifies"])),
                             "decision": doc["decision"], "pass_reason": doc.get("pass_reason"),
-                            "pick": None if doc["decision"] != "PICK" else {k: doc["pick"][k] for k in ("matchup", "side", "market", "line", "price", "structure", "supported_probability", "edge", "confidence")} | {"result_shadow_only": outcome(doc["pick"])},
-                            "top_three": top3}
+                            "pick": None if doc["decision"] != "PICK" else {k: doc["pick"][k] for k in ("matchup", "side", "market", "line", "price", "structure", "pick_basis", "supported_probability", "edge", "confidence")} | {"result_shadow_only": outcome(doc["pick"])},
+                            "top_three": top3,
+                            "consensus_quality_sides": [{**ep.summarize(c), "result_if_bet_shadow_only": outcome(c)} for c in cands if c["edge_thesis"]["consensus_quality"]]}
     Path(a.out).write_text(json.dumps(out, indent=1, default=str))
     for d, x in out["days"].items():
         print(d, x.get("decision"), "|", (x.get("pass_reason") or "")[:260])
         for t in x.get("top_three", []):
-            print("    ", t["side"], t["market"], t["price"], f"M={t['market_probability_market']:.3f} H={t['model_probability']:.3f} gap={t['gap']:+.3f} {t['trust_state']} -> {t['structure']} qualifies={t['qualifies']} {t['result_if_bet_shadow_only']}")
+            print("    ", t["side"], t["market"], t["price"], f"M={t['market_probability_market']:.3f} H={t['model_probability']:.3f} gap={t['gap']:+.3f} {t['trust_state']} -> {t['structure']} qualifies={t['qualifies']} families={t['edge_thesis']['families']} independent={t['edge_thesis']['independent']} {t['result_if_bet_shadow_only']}")
+        for t in x.get("consensus_quality_sides", []):
+            print("   [consensus-quality state]", t["side"], t["market"], t["price"], "->", t["structure"], "|", t["edge_thesis"]["thesis"][:100], "|", (t["not_qualifying_because"] or [""])[0][:150])
     return 0
 
 

@@ -1100,10 +1100,11 @@ def _eggy_top_three(d: dict) -> None:
     top = d.get("top_three") or []
     if not top:
         return
-    with st.expander("The three sides Eggy researched most" + (" (the pick is the first that qualifies)" if d["decision"] == "PICK" else " (none qualified)")):
+    with st.expander("The three sides Eggy researched most" + (" (the bet is the first)" if d["decision"] == "PICK" else "")):
         for t in top:
             ln = f" {t['line']:+.1f}" if t.get("line") is not None else ""
-            st.markdown(f"**{esc(t['side'])} {esc(t['market'].replace('_', ' '))}{esc(ln)} {t['price']:+.0f}** · market {t['market_probability_market']:.1%} · hockey model {t['model_probability']:.1%} · gap {t['gap'] * 100:+.1f} pts · {esc(t['trust_state'].replace('_', ' ').lower())} · evidence: {esc((t['structure'] or 'NONE').replace('_', ' ').lower())} · {'QUALIFIES' if t['qualifies'] else 'does not qualify'}")
+            st.markdown(f"**{esc(t['side'])} {esc(t['market'].replace('_', ' '))}{esc(ln)} {t['price']:+.0f}** · market {t['market_probability_market']:.1%} · hockey model {t['model_probability']:.1%} · gap {t['gap'] * 100:+.1f} pts · {esc(t['trust_state'].replace('_', ' ').lower())} · evidence: {esc((t['structure'] or 'NONE').replace('_', ' ').lower())} · families: {esc(', '.join((t.get('edge_thesis') or {}).get('families', [])).lower())} ({'independent' if (t.get('edge_thesis') or {}).get('independent') else 'not independent'}) · {'QUALIFIES' if t['qualifies'] else 'does not qualify'}")
+            st.caption("Edge thesis: " + esc((t.get('edge_thesis') or {}).get('thesis') or "none"))
             st.caption("Hockey: " + esc("; ".join(t["hockey_case"]) or "nothing in its favour") + " | Market / price: " + esc("; ".join(t["market_price_case"]) or "nothing in its favour") + " | Against: " + esc("; ".join(t["case_against"])))
             if t.get("not_qualifying_because"):
                 st.caption("Why not: " + esc("; ".join(t["not_qualifying_because"][:3])))
@@ -1125,27 +1126,29 @@ def eggy_side_pick_card(doc: dict | None) -> None:
     d = doc.get("today")
     with st.container(border=True):
         if not d:
-            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY</div><div class='ttl'>Eggy has not decided yet</div><div class='sub'>It decides once, after the pregame odds pull is in and before the first game; or it passes.</div></div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY'S PICK OF THE DAY</div><div class='ttl'>Eggy has not decided yet</div><div class='sub'>It makes ONE bet on every NHL slate day, after the pregame odds pull is in and before the first game.</div></div></div>", unsafe_allow_html=True)
         elif d["decision"] == "PASS":
-            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY</div><div class='ttl'>PASS</div><div class='sub'>{_h(d.get('pass_reason') or '')}</div></div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='eggy-pick-head eggy-pick-none'>{img}<div><div class='eyebrow'>EGGY'S PICK OF THE DAY</div><div class='ttl'>NO BET TODAY</div><div class='sub'>{_h(d.get('pass_reason') or '')}</div></div></div>", unsafe_allow_html=True)
             if d.get("what_would_change_it"):
                 st.caption("What would change it: " + esc(d["what_would_change_it"]))
             _eggy_top_three(d)
         else:
             p = d["pick"]
-            line = f" {p['line']:+.1f}" if p.get("line") is not None else ""
-            st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>EGGY PICK OF THE DAY · {_h(p['matchup'])}</div><div class='ttl'>{_h(p['side'])} {_h(p['market'].replace('_', ' '))}{_h(line)} {p['price']:+.0f}</div></div></div>", unsafe_allow_html=True)
-            names = {"SUPPORTED_MARKET_GAP": "Supported market gap", "CONSENSUS_QUALITY": "Consensus quality", "MARKET_SITUATIONAL_OPPORTUNITY": "Market / situational opportunity"}
-            st.markdown(f"**EGGY CONFIDENCE:** {esc(p.get('confidence', 'LOW'))} (an evidence category, not a percentage) · **EVIDENCE:** {esc(names.get(p.get('structure'), p.get('structure') or ''))}")
-            st.markdown("**WHY EGGY LIKES IT**")
-            for x in [x for x in p["case_for"] if x["strength"] in ("STRONG", "MODERATE")][:5] or p["case_for"][:3]:
-                st.markdown("- " + esc(x["text"]))
-            st.markdown("**MARKET SIGNAL:** " + esc("; ".join(x["text"] for x in p["case_for"] + p["case_against"] if x["kind"] == "PRICE_MOVEMENT") or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
-            st.markdown("**HOCKEY EDGE:** " + esc("; ".join(x["text"] for x in p["case_for"] if x["category"] in ("HOCKEY", "SITUATION")) or f"model win probability {p['model_win_probability']:.1%}"))
-            st.markdown("**CASE AGAINST:** " + esc("; ".join(x["text"] for x in p["case_against"] if x["strength"] in ("STRONG", "MODERATE")) or "; ".join(x["text"] for x in p["case_against"][:2])))
+            card = p.get("card") or {}
+            st.markdown(f"<div class='eggy-pick-head'>{img}<div><div class='eyebrow'>EGGY'S PICK OF THE DAY · {_h(p['matchup'])}</div><div class='ttl'>{_h(card.get('bet') or p['side'])}</div></div></div>", unsafe_allow_html=True)
+            basis = "an edge thesis" if p.get("pick_basis") == "EDGE_THESIS" else "the best available bet (no independent edge family cleared the bar)"
+            st.markdown(f"**CONFIDENCE:** {esc(p.get('confidence', 'LOW'))} (an evidence category, not a percentage) · chosen on {basis}")
+            st.markdown("**WHY THIS IS TODAY'S #1 BET:** " + esc(card.get("why_number_one") or ""))
+            th = p.get("edge_thesis") or {}
+            st.caption("Edge thesis: " + esc(th.get("thesis") or "none") + " | independent evidence families: " + esc(", ".join(f.replace("_", " ").lower() for f in th.get("families", [])) or "none") + ". " + esc(th.get("expected_value_claim") or ""))
+            st.markdown("**HOCKEY CASE:** " + esc("; ".join(card.get("hockey_case") or []) or f"model win probability {p['model_win_probability']:.1%}"))
+            st.markdown("**MARKET CASE:** " + esc("; ".join(card.get("market_case") or []) or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
+            wm = card.get("why_this_market") or {}
+            st.markdown("**WHY THIS MARKET:** " + esc(wm.get("why") or "") + (f" (other market: {esc((wm.get('other') or {}).get('bet', ''))})" if wm.get("other") else ""))
+            st.markdown("**CASE AGAINST:** " + esc("; ".join(card.get("case_against") or [])))
             st.markdown(f"**MODEL VS MARKET:** model {p['model_probability']:.1%} · market no-vig {p['market_probability_market']:.1%} · gap {p['gap'] * 100:+.1f} pts · trust state: {esc(p['trust_state'].replace('_', ' ').lower())} (weight {p.get('model_weight', 0):.2f}) · evidence-weighted probability {p['supported_probability']:.1%}")
             st.markdown(f"**PRICE:** {p['price']:+.0f} ({esc(p['price_freshness']['status'])}, DraftKings, captured {esc(p['capture_at_utc'])}); break-even {p['implied_with_margin']:.1%}; evidence-weighted edge {p['edge'] * 100:+.1f} pts"
-                        + ("" if p["edge"] > 0 else " (a consensus or situational pick claims no positive expected value: the bookmaker's margin is the cost of the bet)"))
+                        + ("" if p["edge"] > 0 else " (no positive expected value is claimed: the bookmaker's margin is the cost of the bet)"))
             _eggy_top_three(d)
         rec = doc.get("record") or {}
         st.caption(f"Eggy's own record: {rec.get('picks', 0)} pick(s), {rec.get('wins', 0)}-{rec.get('losses', 0)} settled, {rec.get('passes', 0)} pass day(s). Hit or miss only; kept apart from the learning parlays.")

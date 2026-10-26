@@ -90,11 +90,11 @@ class TestBoardAndToday(unittest.TestCase):
         return s
 
     def test_the_slate_board_shows_eggys_one_side_pick_or_pass_and_labels_the_learning_ticket_as_the_learning_engines(self):
-        d = {"decision": "PASS", "pass_reason": "no side meets the standard. The closest, DAL MONEYLINE +105: no supported edge", "ranked": [], "top_three": [], "what_would_change_it": "a proven disagreement"}
+        d = {"decision": "PASS", "pass_reason": "no side of the slate has a FRESH current price, so no legitimate bet can be evaluated: no valid fresh market", "ranked": [], "top_three": []}
         at = run_page("41_Slate_Board.py", self.eggy_snap(d))
         self.assertFalse(at.exception, at.exception)
         t = text(at)
-        for want in ("EGGY PICK OF THE DAY", "no side meets the standard", "What would change it", "Strongest learning ticket", "NOT AVAILABLE", "ticket percentages"):
+        for want in ("EGGY'S PICK OF THE DAY", "no valid fresh market", "Strongest learning ticket", "NOT AVAILABLE", "ticket percentages"):
             self.assertIn(want, t, want)
         self.assertNotIn("Eggy's flagship parlay", t)
 
@@ -105,7 +105,7 @@ class TestBoardAndToday(unittest.TestCase):
         at = run_page("41_Slate_Board.py", self.eggy_snap(pick))
         self.assertFalse(at.exception, at.exception)
         t = text(at)
-        for want in ("EGGY CONFIDENCE", "WHY EGGY LIKES IT", "MARKET SIGNAL", "HOCKEY EDGE", "CASE AGAINST", "MODEL VS MARKET", "PRICE", "DraftKings"):
+        for want in ("CONFIDENCE", "WHY THIS IS TODAY'S #1 BET", "HOCKEY CASE", "MARKET CASE", "WHY THIS MARKET", "CASE AGAINST", "MODEL VS MARKET", "PRICE", "DraftKings"):
             self.assertIn(want, t, want)
 
     def test_the_slate_board_shows_the_current_product_and_none_of_the_retired_primary_slip_text(self):
