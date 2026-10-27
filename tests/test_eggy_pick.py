@@ -23,10 +23,11 @@ Z = dt.timezone.utc
 FRESH = {"status": "FRESH", "reason": "62 minutes old", "category": "MARKET_DATA_QUALITY"}
 
 
-def mv(change):
-    d = "TOWARD" if change >= 0.01 else ("AWAY" if change <= -0.01 else "FLAT")
+def mv(change, span=9.0):
+    klass, pct = ep.classify_move(abs(change), span, 2)
+    d = "TOWARD" if change > 0 else ("AWAY" if change < 0 else "FLAT")
     return {"earliest_price": -110, "earliest_at_utc": "2026-10-26T12:00:00Z", "current_price": -118, "current_at_utc": "2026-10-26T21:35:00Z", "earliest_no_vig": 0.5, "current_no_vig": 0.5 + change, "change": change,
-            "direction": d, "magnitude_points": round(abs(change) * 100, 1), "largest_step_at_utc": "2026-10-26T21:35:00Z", "captures": 2}
+            "direction": d, "magnitude_points": round(abs(change) * 100, 1), "largest_step_at_utc": "2026-10-26T21:35:00Z", "captures": 2, "span_hours": span, "class": klass, "percentile": pct}
 
 
 def cand(side="DAL", market="MONEYLINE", price=105.0, model=0.52, mkt=0.47, trust="DISAGREEMENT_HAS_SIGNAL", line=None, fresh=FRESH, calib="HIGH", comp=0.9, moved=None, drivers=2, rest=None, opponent="WPG", blend=None, unc=0.0104,
@@ -204,7 +205,8 @@ class TestIndependentEvidenceFamilies(unittest.TestCase):
         self.assertIn("confirmation of probability", c["edge_thesis"]["thesis"])
         d = ep.decide([c], now=dt.datetime(2026, 10, 26, 21, 40, tzinfo=Z))
         self.assertEqual((d["decision"], d["pick"]["pick_basis"], d["pick"]["confidence"]), ("PICK", "BEST_AVAILABLE", "LOW"))
-        self.assertIn("strongest AVAILABLE bet, not a high-conviction one", d["pick"]["card"]["why_number_one"])
+        self.assertIn("BEST AVAILABLE", d["pick"]["card"]["why_number_one"])
+        self.assertEqual(d["pick"]["label"], "BEST AVAILABLE — LOW CONFIDENCE")
 
     def test_consensus_quality_alone_never_picks_and_with_an_independent_edge_family_it_may(self):
         alone = cand(price=-115, model=0.55, mkt=0.52, trust="INSUFFICIENT_EVIDENCE", drivers=3)
@@ -256,7 +258,7 @@ class TestIndependentEvidenceFamilies(unittest.TestCase):
         self.assertTrue(c["qualifies"])
         lifted = {c["structure"]: {"decision_state": "DISAGREEMENT_HAS_SIGNAL"}}                        # even a proven structure label cannot lift a movement thesis to HIGH
         self.assertNotEqual(ep.confidence(c, lifted), "HIGH")
-        proven = {**lifted, "ML_MOVED_TOWARD_1PT": {"decision_state": "DISAGREEMENT_HAS_SIGNAL"}}
+        proven = {**lifted, "MOVE_TOWARD_NOTABLE": {"decision_state": "DISAGREEMENT_HAS_SIGNAL"}}
         self.assertIn(ep.confidence(c, proven), ("MEDIUM", "HIGH"))
 
     def test_matchup_personnel_is_not_available_and_never_counted(self):
@@ -281,6 +283,117 @@ class TestIndependentEvidenceFamilies(unittest.TestCase):
         b = cand(price=105, model=0.55, mkt=0.47, drivers=3)
         a = cand(side="FLA", opponent="CHI", price=-115, model=0.56, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=3, moved=0.03)
         self.assertEqual(ep.decide([a, b], now=dt.datetime(2026, 10, 26, 21, 40, tzinfo=Z))["pick"]["structure"], "SUPPORTED_MARKET_GAP")
+
+
+class TestTheFinalRedTeam(unittest.TestCase):
+    NOW = dt.datetime(2026, 10, 26, 21, 40, tzinfo=Z)
+
+    def pick(self, *cands):
+        return ep.decide(list(cands), now=self.NOW)["pick"]
+
+    def test_A_a_minus_105_with_a_weak_case_does_not_beat_a_minus_125_with_a_materially_stronger_case(self):
+        weak = cand(side="AAA", opponent="XXX", price=-105, model=0.50, mkt=0.512, trust="INSUFFICIENT_EVIDENCE", drivers=0)
+        strong = cand(side="BBB", opponent="YYY", price=-125, model=0.60, mkt=0.555, trust="INSUFFICIENT_EVIDENCE", drivers=3, rest={"BBB": 3, "YYY": 1})
+        self.assertEqual(self.pick(weak, strong)["side"], "BBB")
+
+    def test_B_a_plus_120_puck_line_with_weak_calibration_does_not_beat_a_minus_115_moneyline_with_calibrated_evidence(self):
+        pl = cand(market="PUCK_LINE", line=-1.5, price=120, model=0.46, mkt=0.455, trust="INSUFFICIENT_EVIDENCE", drivers=3, calib="MEDIUM", unc=0.047)
+        ml = cand(market="MONEYLINE", price=-115, model=0.56, mkt=0.535, trust="INSUFFICIENT_EVIDENCE", drivers=3, calib="HIGH")
+        d = ep.decide([pl, ml], now=self.NOW)
+        self.assertEqual(d["pick"]["market"], "MONEYLINE")
+        self.assertIn("calibration", d["pick"]["card"]["why_this_market"]["why"])
+        proven_pl = cand(market="PUCK_LINE", line=-1.5, price=120, model=0.50, mkt=0.42, trust="DISAGREEMENT_HAS_SIGNAL", drivers=3, calib="HIGH", unc=0.01)
+        self.assertEqual(self.pick(ml, proven_pl)["market"], "PUCK_LINE")                              # the puck line is not penalised by default, only by weaker evidence
+
+    def test_C_an_elite_minus_250_favourite_loses_to_a_near_even_side_with_a_comparable_case(self):
+        elite = cand(side="EDM", opponent="CGY", price=-250, model=0.74, mkt=0.70, trust="INSUFFICIENT_EVIDENCE", drivers=3)
+        near = cand(side="DAL", price=-115, model=0.56, mkt=0.535, trust="INSUFFICIENT_EVIDENCE", drivers=3)
+        self.assertEqual(self.pick(elite, near)["side"], "DAL")
+
+    def test_D_of_two_near_even_sides_the_one_with_the_cleaner_case_against_wins(self):
+        clean = cand(side="AAA", opponent="XXX", price=-110, model=0.56, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=3)
+        dirty = cand(side="BBB", opponent="YYY", price=-110, model=0.44, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=0)
+        self.assertTrue(ep.major_against(dirty))
+        self.assertEqual(self.pick(dirty, clean)["side"], "AAA")
+
+    def test_E_with_no_edge_thesis_exactly_one_low_confidence_best_available_bet_is_still_selected(self):
+        d = ep.decide([cand(side="AAA", opponent="XXX", price=-110, model=0.52, mkt=0.51, trust="INSUFFICIENT_EVIDENCE", drivers=1), cand(side="BBB", opponent="YYY", price=105, model=0.49, mkt=0.48, trust="INSUFFICIENT_EVIDENCE", drivers=1)], now=self.NOW)
+        self.assertEqual(d["decision"], "PICK")
+        self.assertEqual((d["pick"]["pick_basis"], d["pick"]["confidence"], d["pick"]["label"]), ("BEST_AVAILABLE", "LOW", "BEST AVAILABLE — LOW CONFIDENCE"))
+        self.assertNotIsInstance(d["pick"], list)
+        self.assertIn("no positive expected value is claimed", d["pick"]["edge_thesis"]["expected_value_claim"])
+
+    def test_F_a_proven_edge_thesis_outranks_an_ordinary_best_available_candidate(self):
+        ordinary = cand(side="AAA", opponent="XXX", price=-110, model=0.60, mkt=0.55, trust="INSUFFICIENT_EVIDENCE", drivers=4)
+        proven = cand(side="BBB", opponent="YYY", price=115, model=0.50, mkt=0.44, trust="DISAGREEMENT_HAS_SIGNAL", drivers=3)
+        self.assertEqual(self.pick(ordinary, proven)["side"], "BBB")
+
+    def test_G_many_metrics_from_one_team_model_are_one_evidence_family(self):
+        few = cand(price=-115, model=0.58, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=2)
+        many = cand(price=-115, model=0.58, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=7)
+        self.assertEqual(ep.quality(few)["support"], ep.quality(many)["support"])
+        self.assertEqual(few["balance"]["supporting_families"], many["balance"]["supporting_families"])
+
+    def test_H_a_stale_price_can_never_win_the_ranking(self):
+        stale = {"status": "STALE", "reason": "442 minutes old", "category": "MARKET_DATA_QUALITY"}
+        great_but_stale = cand(side="AAA", opponent="XXX", price=105, model=0.60, mkt=0.45, trust="DISAGREEMENT_HAS_SIGNAL", drivers=5, fresh=stale, moved=0.05, rest={"AAA": 3, "XXX": 1})
+        weak_fresh = cand(side="BBB", opponent="YYY", price=-110, model=0.50, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=0)
+        self.assertEqual(self.pick(great_but_stale, weak_fresh)["side"], "BBB")
+
+    def test_price_is_a_bounded_preference_smaller_than_one_moderate_reason(self):
+        w = ep.POLICY["ranking"]["quality_weights"]
+        self.assertLess(abs(w["outside_preferred"]), w["moderate"])
+
+    def test_the_ranking_order_is_stated(self):
+        order = ep.POLICY["ranking"]["order"]
+        self.assertTrue(order[0].startswith("unusable market") and "major evidence AGAINST" in order[1] and "edge thesis" in order[2] and "QUALITY" in order[3])
+
+    def test_every_ranked_candidate_carries_its_explanation(self):
+        d = ep.decide([cand(side="AAA", opponent="XXX", price=-110, model=0.56, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=3), cand(side="BBB", opponent="YYY", price=-110, model=0.50, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=0)], now=self.NOW)
+        t = d["top_three"][0]
+        for k in ("movement_classification", "evidence_families", "hockey_support", "major_evidence_against", "quality", "confidence_if_chosen", "why_ranked_above_the_next", "other_market_same_team", "edge_thesis", "trust_state"):
+            self.assertIn(k, t)
+        self.assertIn("betting-quality score", t["why_ranked_above_the_next"])
+
+
+class TestMovementMethodology(unittest.TestCase):
+    def test_the_profile_is_measured_from_prices_only_before_the_replay_window(self):
+        prof = ep.movement_profile()
+        self.assertEqual(prof["snapshots_before"], "2026-10-22")
+        self.assertGreaterEqual(prof["games"], 100)
+        body = (ep.REPO / "deploy" / "build_eggy_movement_profile.py").read_text().split("from __future__", 1)[1]
+        for banned in ("home_score", "away_score", "FROM games", "game_state"):
+            self.assertNotIn(banned, body)                                                              # no score, game or result is read
+        ch = sorted(prof["abs_changes"])
+        self.assertEqual(prof["percentiles"]["p75"], ch[int(round(0.75 * (len(ch) - 1)))])               # the thresholds ARE the data's percentiles, not chosen numbers
+
+    def test_a_move_is_classified_by_its_percentile_against_ordinary_same_day_moves(self):
+        pr = ep.movement_profile()["percentiles"]
+        self.assertEqual(ep.classify_move(pr["p50"] / 2, 9, 2)[0], "NOISE")
+        self.assertEqual(ep.classify_move((pr["p50"] + pr["p75"]) / 2, 9, 2)[0], "MODEST")
+        self.assertEqual(ep.classify_move((pr["p75"] + pr["p90"]) / 2, 9, 2)[0], "NOTABLE")
+        self.assertEqual(ep.classify_move(pr["p90"] * 1.5, 9, 2)[0], "EXCEPTIONAL")
+        self.assertEqual(ep.classify_move(pr["p90"] * 1.5, 1.0, 2)[0], "UNRELIABLE")
+        self.assertEqual(ep.classify_move(pr["p90"] * 1.5, 9, 1)[0], "UNRELIABLE")
+
+    def test_only_a_notable_move_counts_as_an_edge_family_and_a_modest_one_is_shown_never_counted(self):
+        pr = ep.movement_profile()["percentiles"]
+        modest = cand(price=-110, model=0.56, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=3, moved=(pr["p50"] + pr["p75"]) / 2)
+        self.assertEqual(modest["edge_families"]["present"], [])
+        notable = cand(price=-110, model=0.56, mkt=0.53, trust="INSUFFICIENT_EVIDENCE", drivers=3, moved=pr["p75"] + 0.001)
+        self.assertEqual([e["family"] for e in notable["edge_families"]["present"]], ["MARKET_PRICE"])
+
+    def test_the_policy_carries_the_profile_percentiles_and_labels_the_convention(self):
+        m = ep.POLICY["movement"]
+        self.assertEqual(m["profile"]["p75"], ep.movement_profile()["percentiles"]["p75"])
+        self.assertIn("CONVENTION", m["status"])
+
+    def test_the_replay_freezes_every_decision_before_any_result_is_read(self):
+        from deploy import replay_eggy_pick as rp
+        self.assertNotIn("final", inspect.signature(rp.decide_day).parameters)
+        src = inspect.getsource(rp.main)
+        self.assertLess(src.index("hashlib.sha256(frozen_blob"), src.index("mode=ro"))
+        self.assertNotIn("home_score", inspect.getsource(rp.decide_day))
 
 
 class TestTheBlockers(unittest.TestCase):
@@ -322,7 +435,7 @@ class TestTheCaseForAndAgainst(unittest.TestCase):
         c = cand(moved=0.03)
         mvi = [x for x in c["case_for"] if x["kind"] == "PRICE_MOVEMENT"][0]
         self.assertIn("not called sharp money", mvi["text"])
-        self.assertIn("not yet been validated", mvi["text"])
+        self.assertIn("not yet validated", mvi["text"])
 
     def test_the_goalie_and_the_margin_are_stated_as_limits(self):
         txt = " ".join(x["text"] for x in cand()["case_against"])
@@ -368,16 +481,14 @@ class TestTheDecision(unittest.TestCase):
         mc = d["pick"]["card"]["why_this_market"]
         self.assertIsNotNone(mc["other"])
         self.assertEqual(mc["chosen"]["bet"], "DAL ML -120")
-        self.assertNotIn("payout", mc["why"].replace("a bigger payout or a higher hit rate alone never decides it", ""))
+        self.assertIn("Not chosen for a bigger payout or a higher hit rate alone", mc["why"])
         self.assertEqual(d["pick"]["market"], "MONEYLINE")
         self.assertEqual(ep.decide([ml, cand(market="PUCK_LINE", line=-1.5, price=105, model=0.58, mkt=0.50, trust="DISAGREEMENT_HAS_SIGNAL", drivers=3, unc=0.01)], now=self.NOW)["pick"]["market"], "PUCK_LINE")   # a proven edge on the puck line wins on the merits
 
-    def test_extreme_prices_are_ranked_behind_near_even_ones_and_cap_confidence_at_low(self):
-        fav = cand(side="EDM", opponent="CGY", price=-300, model=0.80, mkt=0.74, drivers=4, moved=0.05, rest={"EDM": 3, "CGY": 1})
-        near = cand(side="DAL", price=-110, model=0.50, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=1)
-        d = ep.decide([fav, near], now=self.NOW)
-        self.assertEqual(d["pick"]["side"], "DAL")
+    def test_extreme_prices_are_penalised_and_cap_confidence_at_low(self):
+        fav = cand(side="EDM", opponent="CGY", price=-300, model=0.80, mkt=0.74, drivers=4)
         self.assertEqual(ep.decide([fav], now=self.NOW)["pick"]["confidence"], "LOW")
+        self.assertEqual(ep.quality(fav)["price"], ep.POLICY["ranking"]["quality_weights"]["extreme"])
 
     def test_exactly_one_pick_never_a_list_and_the_best_structure_and_price_come_first(self):
         a, b = cand(side="DAL", model=0.55, mkt=0.47, price=105, drivers=3), cand(side="FLA", opponent="CHI", price=-190, model=0.64, mkt=0.55, drivers=3)
@@ -490,7 +601,7 @@ class TestTheRecordAndPostmortem(unittest.TestCase):
 
     def test_every_evidence_structure_price_range_market_and_confidence_category_is_tracked_as_a_signal(self):
         for k in ("SUPPORTED_MARKET_GAP", "CONSENSUS_QUALITY", "MARKET_SITUATIONAL_OPPORTUNITY", "PRICE_IN_PREFERRED", "PRICE_OUTSIDE_PREFERRED", "QUALIFYING_MONEYLINE", "QUALIFYING_PUCK_LINE", "ML_MODEL_GAP_3PLUS",
-                  "PL_MODEL_GAP_3PLUS", "ML_MOVED_TOWARD_1PT", "ML_MOVED_AWAY_1PT", "REST_ADVANTAGE", "CONFIDENCE_HIGH", "CONFIDENCE_MEDIUM", "CONFIDENCE_LOW"):
+                  "PL_MODEL_GAP_3PLUS", "MOVE_TOWARD_NOTABLE", "MOVE_AWAY_NOTABLE", "REST_ADVANTAGE", "CONFIDENCE_HIGH", "CONFIDENCE_MEDIUM", "CONFIDENCE_LOW"):
             self.assertIn(k, epl.SIGNALS)
         a = cand(model=0.56, mkt=0.47, drivers=3)
         a["confidence"] = "HIGH"

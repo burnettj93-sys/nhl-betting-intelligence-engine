@@ -55,7 +55,7 @@ def observation(cands: list[dict], game: dict, decided_at: str, structure_state:
         mv = c.get("movement") or {}
         sides.append({"side": c["side"], "market": c["market"], "line": c["line"], "price": c["price"], "market_p": c["market_probability_market"], "model_p": c["model_probability"], "gap": c["gap"],
                       "supported_p": c["supported_probability"], "edge": c["edge"], "conservative_edge": c["conservative_edge"], "structure": c["structure"], "qualifies": c["qualifies"], "price_class": c["price_class"],
-                      "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
+                      "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "move_class": mv.get("class"), "move_percentile": mv.get("percentile"), "edge_family_names": [e["family"] for e in c["edge_families"]["present"]], "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
                       "trust_state": c["trust_state"], "calibration": c.get("calibration"), "consensus": c["edge_thesis"]["consensus_quality"], "edge_families": c["edge_thesis"]["families"]})
     return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "home": game["home"], "away": game["away"], "start_utc": game.get("start_utc"),
             "decided_at_utc": decided_at, "sides": sides}
@@ -173,8 +173,15 @@ SIGNALS = {
     "MARKET_SITUATIONAL_OPPORTUNITY": "evidence structure: sound hockey picture plus measured market / situational facts (Type C)",
     "ML_MODEL_GAP_3PLUS": "the moneyline side the hockey model rates 3+ points above the market",
     "PL_MODEL_GAP_3PLUS": "the puck-line side the model's goal-margin mapping rates 3+ points above the market",
-    "ML_MOVED_TOWARD_1PT": "the moneyline side the market moved toward by 1+ point since the day's first capture",
-    "ML_MOVED_AWAY_1PT": "the moneyline side the market moved away from by 1+ point since the day's first capture",
+    "MOVE_TOWARD_NOTABLE": "the moneyline side the price moved toward by a NOTABLE or EXCEPTIONAL amount (upper quartile of ordinary same-day moves or more)",
+    "MOVE_AWAY_NOTABLE": "the moneyline side the price moved away from by a NOTABLE or EXCEPTIONAL amount",
+    "FAMILY_PROVEN_SIGNAL": "sides with a proven model-market signal present (evidence family)",
+    "FAMILY_MARKET_PRICE": "sides with supported market movement present (evidence family)",
+    "FAMILY_SITUATIONAL": "sides with a situational advantage present (evidence family)",
+    "PICK_MONEYLINE": "daily bets that were moneylines",
+    "PICK_PUCK_LINE": "daily bets that were puck lines",
+    "PICK_IN_PREFERRED_PRICE": "daily bets priced inside the preferred near-even region",
+    "PICK_OUTSIDE_PREFERRED_PRICE": "daily bets priced outside the preferred region",
     "REST_ADVANTAGE": "the side that is rested when its opponent is on a back-to-back",
     "PRICE_IN_PREFERRED": "a qualifying side priced inside the preferred near-even region",
     "PRICE_OUTSIDE_PREFERRED": "a qualifying side priced outside the preferred region",
@@ -208,14 +215,16 @@ def signal_bets(o: dict):
         if (s.get("gap") or 0) >= ei.EDGE_MIN:
             out.append(("ML_MODEL_GAP_3PLUS" if s["market"] == "MONEYLINE" else "PL_MODEL_GAP_3PLUS", p, y))
         if s["market"] == "MONEYLINE":
-            if (s.get("moved") or 0) >= 0.01:
-                out.append(("ML_MOVED_TOWARD_1PT", p, y))
-            if (s.get("moved") or 0) <= -0.01:
-                out.append(("ML_MOVED_AWAY_1PT", p, y))
+            if s.get("move_class") in ("NOTABLE", "EXCEPTIONAL"):
+                out.append(("MOVE_TOWARD_NOTABLE" if (s.get("moved") or 0) > 0 else "MOVE_AWAY_NOTABLE", p, y))
         if s.get("rest_advantage") and s["market"] == "MONEYLINE":
             out.append(("REST_ADVANTAGE", p, y))
+        for fam in s.get("edge_family_names") or []:
+            out.append(("FAMILY_" + fam, p, y))
         if s.get("picked"):
             out.append(("EGGY_PICK", p, y))
+            out.append(("PICK_MONEYLINE" if s["market"] == "MONEYLINE" else "PICK_PUCK_LINE", p, y))
+            out.append(("PICK_IN_PREFERRED_PRICE" if s["price_class"] == "IN_PREFERRED_REGION" else "PICK_OUTSIDE_PREFERRED_PRICE", p, y))
             out.append(("PICK_EDGE_THESIS" if s.get("qualifies") else "PICK_BEST_AVAILABLE", p, y))
             if s.get("confidence"):
                 out.append(("CONFIDENCE_" + s["confidence"], p, y)) if not s.get("qualifies") else None
@@ -273,7 +282,7 @@ def record(events: list[dict] | None = None) -> dict:
         row = {"date": e["date"], "decision": d["decision"], "decided_at_utc": d["decided_at_utc"]}
         if d["decision"] == "PICK":
             p = d["pick"]
-            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class", "structure", "supported_probability", "pick_basis")}, card=p.get("card"), edge_thesis=p.get("edge_thesis"), late_price=(o or {}).get("late_price"), grade=g,
+            row.update(pick={k: p[k] for k in ("matchup", "side", "market", "line", "price", "model_probability", "market_probability_market", "gap", "trust_state", "edge", "confidence", "price_class", "structure", "supported_probability", "pick_basis")}, card=p.get("card"), edge_thesis=p.get("edge_thesis"), label=p.get("label"), evidence_families=(p.get("edge_thesis") or {}).get("families"), late_price=(o or {}).get("late_price"), grade=g,
                        result=(o or {}).get("result", "PENDING"), final=None if not o else f"{o['home_score']}-{o['away_score']}")
             if o:
                 grid[(g["label"], o["result"])] += 1

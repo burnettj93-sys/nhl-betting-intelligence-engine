@@ -63,6 +63,9 @@ JUSTIFIED_EXCEPTIONS = {
     # deploy/analyze_price_freshness.py measures, over the moneyline snapshots already stored, how far a price moves between two captures that are a given number of hours apart (the evidence for how old a
     # price may be and still be current). It is an offline analysis of price HISTORY: it never answers "what was known at time T" for a prediction, feeds no probability, and writes only its own report.
     ("deploy/analyze_price_freshness.py", "odds_snapshots"),
+    # deploy/build_eggy_movement_profile.py measures, over the moneyline snapshots captured before a cutoff date, how far a price normally moves between the morning and pregame pulls (prices only: no score or result is read).
+    # It is an offline analysis of price HISTORY, feeds no probability, and writes only its own profile file.
+    ("deploy/build_eggy_movement_profile.py", "odds_snapshots"),
     # operational/board_scorecard.py grades the Slate Board's pregame-FROZEN cards AFTER their games are FINAL (goals, shots, saves, score of a finished game) to measure how the card's earlier, frozen
     # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
     ("operational/board_scorecard.py", "player_game_stats"),

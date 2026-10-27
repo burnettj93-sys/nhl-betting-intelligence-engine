@@ -1,12 +1,13 @@
 {
- "generated_at_utc": "2026-10-26T23:43:44Z",
- "policy_digest": "6dde066ce7e9c653",
+ "generated_at_utc": "2026-10-26T23:55:51Z",
+ "policy_digest": "753a7b16824038bc",
+ "decisions_frozen_sha256": "98460ed1e410e1318413f6fc91157bca13b55d5f7809681ebc82f2470154de86",
+ "protocol": "phase 1 made and hashed every decision with no results connection; phase 2 read results afterwards",
  "days": {
   "2026-10-22": {
    "decision_time_utc": "2026-10-22T21:39:20Z",
    "games_open": 12,
    "candidate_sides": 48,
-   "in_preferred_region": 14,
    "fresh_prices": 48,
    "blend_estimate_before_the_day": {
     "games": 89,
@@ -16,8 +17,7 @@
      1.8
     ]
    },
-   "qualifying_sides": 0,
-   "structures_qualifying": {},
+   "edge_thesis_candidates": 1,
    "decision": "PICK",
    "pass_reason": null,
    "pick": {
@@ -26,12 +26,42 @@
     "market": "MONEYLINE",
     "line": null,
     "price": -108.0,
-    "structure": "NONE",
-    "pick_basis": "BEST_AVAILABLE",
+    "structure": "MARKET_SITUATIONAL_OPPORTUNITY",
+    "pick_basis": "EDGE_THESIS",
+    "label": "EDGE THESIS \u2014 LOW CONFIDENCE",
+    "confidence": "LOW",
     "supported_probability": 0.5292,
     "edge": 0.01,
-    "confidence": "LOW",
-    "result_shadow_only": "WIN"
+    "bet": "PIT ML -108",
+    "why_number_one": "EDGE THESIS (market situational opportunity): FLA is on a back-to-back and PIT is rested. Why it ranks above the next side: PIT ML -108 has an edge thesis (market situational opportunity) and NYR ML -112 has none.",
+    "why_this_market": {
+     "chosen": {
+      "bet": "PIT ML -108",
+      "win_probability_market": 0.4957,
+      "win_probability_evidence_weighted": 0.5292,
+      "model_probability": 0.5915,
+      "price": -108.0,
+      "break_even": 0.5192,
+      "conservative_edge": 0.0008,
+      "probability_uncertainty": 0.0092,
+      "price_class": "IN_PREFERRED_REGION",
+      "case_net": 2
+     },
+     "other": {
+      "bet": "PIT -1.5 +230",
+      "win_probability_market": 0.2905,
+      "win_probability_evidence_weighted": 0.296,
+      "model_probability": 0.3063,
+      "price": 230.0,
+      "break_even": 0.303,
+      "conservative_edge": -0.0536,
+      "probability_uncertainty": 0.0466,
+      "price_class": "EXTREME",
+      "case_net": 1
+     },
+     "why": "PIT ML -108 has an edge thesis (market situational opportunity) and PIT -1.5 +230 has none. Compared on: outright win probability 49.6% market / 52.9% evidence-weighted for the moneyline, against 29.0% / 29.6% for the puck line; price -108 vs +230; probability uncertainty 0.9 vs 4.7 pts; calibration HIGH vs MEDIUM. Not chosen for a bigger payout or a higher hit rate alone."
+    },
+    "result_shadow_only_after_freeze": "WIN"
    },
    "top_three": [
     {
@@ -51,8 +81,8 @@
      "conservative_edge": 0.0008,
      "probability_uncertainty": 0.0092,
      "price_class": "IN_PREFERRED_REGION",
-     "structure": "NONE",
-     "qualifies": false,
+     "structure": "MARKET_SITUATIONAL_OPPORTUNITY",
+     "qualifies": true,
      "eligible": true,
      "edge_thesis": {
       "families": [
@@ -64,10 +94,7 @@
       "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
       "consensus_quality": false
      },
-     "not_qualifying_because": [
-      "the model's +9.6-pt gap is unproven (insufficient evidence): context only",
-      "an independent family argues against: the price moved AWAY from the side by 1.5 pts"
-     ],
+     "not_qualifying_because": [],
      "balance": {
       "for_strong": 0,
       "for_moderate": 2,
@@ -94,7 +121,10 @@
       "direction": "AWAY",
       "magnitude_points": 1.5,
       "largest_step_at_utc": "2026-10-22T21:37:20Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 9.6,
+      "class": "MODEST",
+      "percentile": 0.708
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -103,16 +133,46 @@
       "the model gives 59.2% against the market's 49.6% (+9.6 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick",
       "FLA is on a back-to-back and PIT is rested"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "-108 is inside the preferred near-even region",
       "the evidence-weighted probability (52.9%) is above the break-even (51.9%) by +1.0 pts"
      ],
      "case_against": [
-      "the price moved away PIT by 1.5 pts (-115 at 12:00Z to -108 at 21:37Z; movement is market information, not called sharp money, and has not yet been validated)",
+      "the team's moneyline price moved away PIT by 1.5 pts (-115 at 12:00Z to -108 at 21:37Z): a MODEST move, larger than 71% of ordinary same-day moves; market information, not called sharp money, and not yet validated as predictive",
       "the bookmaker's margin costs about 2.4 points of break-even on this side"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "MODEST",
+     "movement_direction": "AWAY",
+     "movement_percentile": 0.708,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "SITUATIONAL"
+     ],
+     "quality": {
+      "total": 1.92,
+      "support": 2.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": 0.02,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "PIT -1.5 +230",
+      "market_probability": 0.2905,
+      "model_probability": 0.3063,
+      "conservative_edge": -0.0536,
+      "probability_uncertainty": 0.0466,
+      "quality": -3.04
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "PIT ML -108 has an edge thesis (market situational opportunity) and NYR ML -112 has none",
+     "rank": 1,
+     "result_shadow_only_after_freeze": "WIN"
     },
     {
      "matchup": "NYR @ TOR",
@@ -172,7 +232,10 @@
       "direction": "FLAT",
       "magnitude_points": 0.0,
       "largest_step_at_utc": "2026-10-22T21:37:20Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 9.6,
+      "class": "NOISE",
+      "percentile": 0.369
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -180,6 +243,7 @@
       "the team model rates NYR the better team (55.8%, a negligible gap); drivers: goal differential (decayed), expected-goal differential",
       "the model gives 55.8% against the market's 50.4% (+5.3 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "the market (no-vig 50.4%) leans to this side",
       "-112 is inside the preferred near-even region"
@@ -188,8 +252,36 @@
       "the bookmaker's margin costs about 2.4 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "NOISE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.62,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": -0.29,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "NYR -1.5 +220",
+      "market_probability": 0.2998,
+      "model_probability": 0.2807,
+      "conservative_edge": -0.066,
+      "probability_uncertainty": 0.0466,
+      "quality": -4.29
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
+     "why_ranked_above_the_next": "NYR ML -112 has the higher betting-quality score (+0.62 vs +0.49: conservative_edge -0.29 vs -0.42)",
+     "rank": 2,
+     "result_shadow_only_after_freeze": "LOSS"
     },
     {
      "matchup": "VGK @ STL",
@@ -250,7 +342,10 @@
       "direction": "TOWARD",
       "magnitude_points": 1.0,
       "largest_step_at_utc": "2026-10-22T21:37:20Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 9.6,
+      "class": "MODEST",
+      "percentile": 0.523
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -259,99 +354,46 @@
       "the market (54.3%) and the hockey model (57.3%) are independent reads and agree within 3.0 points",
       "the model gives 57.3% against the market's 54.3% (+3.0 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "the market (no-vig 54.3%) leans to this side",
-      "the price moved toward VGK by 1.0 pts (-125 at 12:00Z to -130 at 21:37Z; movement is market information, not called sharp money, and has not yet been validated)",
+      "the team's moneyline price moved toward VGK by 1.0 pts (-125 at 12:00Z to -130 at 21:37Z): a MODEST move, larger than 52% of ordinary same-day moves; market information, not called sharp money, and not yet validated as predictive",
       "-130 is inside the preferred near-even region"
      ],
      "case_against": [
       "the bookmaker's margin costs about 2.2 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "MODEST",
+     "movement_direction": "TOWARD",
+     "movement_percentile": 0.523,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.49,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": -0.42,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "VGK -1.5 +200",
+      "market_probability": 0.3194,
+      "model_probability": 0.2922,
+      "conservative_edge": -0.07,
+      "probability_uncertainty": 0.0466,
+      "quality": -4.12
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
-    }
-   ],
-   "consensus_quality_sides": [
-    {
-     "matchup": "VGK @ STL",
-     "side": "VGK",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -130.0,
-     "model_probability": 0.573,
-     "model_probability_raw": 0.573,
-     "market_probability_market": 0.5427,
-     "gap": 0.0303,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "model_weight": 0.35,
-     "supported_probability": 0.5533,
-     "edge": -0.0119,
-     "conservative_edge": -0.0211,
-     "probability_uncertainty": 0.0092,
-     "price_class": "IN_PREFERRED_REGION",
-     "structure": "NONE",
-     "qualifies": false,
-     "eligible": true,
-     "edge_thesis": {
-      "families": [
-       "HOCKEY_MODEL"
-      ],
-      "independent": false,
-      "thesis": "none: the market and the hockey model agree this is a good side, which is confirmation of probability, not a reason the price is attractive",
-      "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
-      "consensus_quality": true
-     },
-     "not_qualifying_because": [
-      "the case for does not materially exceed the case against (for_strong 0, for_moderate 1, against_strong 0, against_moderate 0, materially_outweighs False; independent families supporting ['HOCKEY_MODEL'])",
-      "the model's +3.0-pt gap is unproven (insufficient evidence): context only",
-      "NO EDGE THESIS: market and hockey model agree, which describes probability, not an attractive price",
-      "the price is 1.2 pts worse than the evidence supports (limit 1)"
-     ],
-     "balance": {
-      "for_strong": 0,
-      "for_moderate": 1,
-      "against_strong": 0,
-      "against_moderate": 0,
-      "supporting_categories": [
-       "HOCKEY_MODEL"
-      ],
-      "supporting_families": [
-       "HOCKEY_MODEL"
-      ],
-      "materially_outweighs": false
-     },
-     "movement": {
-      "earliest_price": -125,
-      "earliest_at_utc": "2026-10-22T12:00:04Z",
-      "current_price": -130,
-      "current_at_utc": "2026-10-22T21:37:20Z",
-      "earliest_no_vig": 0.5325,
-      "current_no_vig": 0.5427,
-      "change": 0.0103,
-      "direction": "TOWARD",
-      "magnitude_points": 1.0,
-      "largest_step_at_utc": "2026-10-22T21:37:20Z",
-      "captures": 2
-     },
-     "calibration": "HIGH",
-     "calibration_note": null,
-     "hockey_case": [
-      "the team model rates VGK the better team (57.3%, a slight gap); drivers: goal differential (decayed), expected-goal differential",
-      "the market (54.3%) and the hockey model (57.3%) are independent reads and agree within 3.0 points",
-      "the model gives 57.3% against the market's 54.3% (+3.0 pts); not yet proven (state: insufficient evidence), so it carries weight 0.35, not the pick"
-     ],
-     "market_price_case": [
-      "the market (no-vig 54.3%) leans to this side",
-      "the price moved toward VGK by 1.0 pts (-125 at 12:00Z to -130 at 21:37Z; movement is market information, not called sharp money, and has not yet been validated)",
-      "-130 is inside the preferred near-even region"
-     ],
-     "case_against": [
-      "the bookmaker's margin costs about 2.2 points of break-even on this side",
-      "starting goalies are not confirmed by an approved source (not available to Eggy)"
-     ],
-     "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
+     "why_ranked_above_the_next": "VGK ML -130 has the higher betting-quality score (+0.49 vs -0.14: support +1.00 vs +2.00, against +0.00 vs +1.00, uncertainty -0.09 vs -0.10, conservative_edge -0.42 vs -0.29, price +0.00 vs -0.75)",
+     "rank": 3,
+     "result_shadow_only_after_freeze": "LOSS"
     }
    ]
   },
@@ -359,7 +401,6 @@
    "decision_time_utc": "2026-10-23T23:10:38Z",
    "games_open": 2,
    "candidate_sides": 8,
-   "in_preferred_region": 2,
    "fresh_prices": 8,
    "blend_estimate_before_the_day": {
     "games": 101,
@@ -369,8 +410,7 @@
      1.45
     ]
    },
-   "qualifying_sides": 0,
-   "structures_qualifying": {},
+   "edge_thesis_candidates": 0,
    "decision": "PICK",
    "pass_reason": null,
    "pick": {
@@ -381,10 +421,40 @@
     "price": -125.0,
     "structure": "NONE",
     "pick_basis": "BEST_AVAILABLE",
+    "label": "BEST AVAILABLE \u2014 LOW CONFIDENCE",
+    "confidence": "LOW",
     "supported_probability": 0.5325,
     "edge": -0.0231,
-    "confidence": "LOW",
-    "result_shadow_only": "WIN"
+    "bet": "COL ML -125",
+    "why_number_one": "BEST AVAILABLE, not a proven edge: no independent edge family cleared the bar on today's slate, so this is the strongest all-round bet on the board (hockey, market, calibration, uncertainty and price together), at LOW confidence. Why it ranks above the next side: COL ML -125 has the higher betting-quality score (+0.23 vs -0.58: support +1.00 vs +2.00, against +0.00 vs +1.00, conservative_edge -0.67 vs -0.72, price +0.00 vs -0.75).",
+    "why_this_market": {
+     "chosen": {
+      "bet": "COL ML -125",
+      "win_probability_market": 0.5325,
+      "win_probability_evidence_weighted": 0.5325,
+      "model_probability": 0.601,
+      "price": -125.0,
+      "break_even": 0.5556,
+      "conservative_edge": -0.0335,
+      "probability_uncertainty": 0.0104,
+      "price_class": "IN_PREFERRED_REGION",
+      "case_net": 1
+     },
+     "other": {
+      "bet": "COL -1.5 +195",
+      "win_probability_market": 0.325,
+      "win_probability_evidence_weighted": 0.325,
+      "model_probability": 0.3355,
+      "price": 195.0,
+      "break_even": 0.339,
+      "conservative_edge": -0.0388,
+      "probability_uncertainty": 0.0248,
+      "price_class": "OUTSIDE_PREFERRED",
+      "case_net": -1
+     },
+     "why": "COL ML -125 has the higher betting-quality score (+0.23 vs -3.27: against +0.00 vs +2.00, calibration +0.00 vs -0.50, uncertainty -0.10 vs -0.25, conservative_edge -0.67 vs -0.78, price +0.00 vs -0.75). Compared on: outright win probability 53.2% market / 53.2% evidence-weighted for the moneyline, against 32.5% / 32.5% for the puck line; price -125 vs +195; probability uncertainty 1.0 vs 2.5 pts; calibration HIGH vs MEDIUM. Not chosen for a bigger payout or a higher hit rate alone."
+    },
+    "result_shadow_only_after_freeze": "WIN"
    },
    "top_three": [
     {
@@ -446,7 +516,10 @@
       "direction": "FLAT",
       "magnitude_points": 0.0,
       "largest_step_at_utc": "2026-10-23T23:08:38Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 11.1,
+      "class": "NOISE",
+      "percentile": 0.369
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -454,6 +527,7 @@
       "the team model rates COL the better team (60.1%, a slight gap); drivers: home ice, goal differential (decayed), expected-goal differential",
       "the model gives 60.1% against the market's 53.2% (+6.9 pts); not yet proven (state: insufficient evidence), so it carries weight 0.00, not the pick"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "the market (no-vig 53.2%) leans to this side",
       "-125 is inside the preferred near-even region"
@@ -462,8 +536,36 @@
       "the bookmaker's margin costs about 2.3 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "NOISE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.23,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.1,
+      "conservative_edge": -0.67,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "COL -1.5 +195",
+      "market_probability": 0.325,
+      "model_probability": 0.3355,
+      "conservative_edge": -0.0388,
+      "probability_uncertainty": 0.0248,
+      "quality": -3.27
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "COL ML -125 has the higher betting-quality score (+0.23 vs -0.58: support +1.00 vs +2.00, against +0.00 vs +1.00, conservative_edge -0.67 vs -0.72, price +0.00 vs -0.75)",
+     "rank": 1,
+     "result_shadow_only_after_freeze": "WIN"
     },
     {
      "matchup": "MTL @ CHI",
@@ -491,7 +593,7 @@
        "MARKET_PRICE"
       ],
       "independent": true,
-      "thesis": "the price moved toward the side by 3.2 pts (-148 to -170); prospective, not yet validated, not called sharp money",
+      "thesis": "the price moved toward the side by 3.2 pts (-148 to -170), a EXCEPTIONAL move (91% percentile of ordinary same-day moves); prospective, not yet validated, not called sharp money",
       "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
       "consensus_quality": false
      },
@@ -526,7 +628,10 @@
       "direction": "TOWARD",
       "magnitude_points": 3.2,
       "largest_step_at_utc": "2026-10-23T23:08:38Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 11.1,
+      "class": "EXCEPTIONAL",
+      "percentile": 0.908
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -535,15 +640,45 @@
       "the market (60.4%) and the hockey model (63.8%) are independent reads and agree within 3.4 points",
       "the model gives 63.8% against the market's 60.4% (+3.4 pts); not yet proven (state: insufficient evidence), so it carries weight 0.00, not the pick"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "the market (no-vig 60.4%) rates this side a clear favourite",
-      "the price moved toward MTL by 3.2 pts (-148 at 12:00Z to -170 at 23:08Z; movement is market information, not called sharp money, and has not yet been validated)"
+      "the team's moneyline price moved toward MTL by 3.2 pts (-148 at 12:00Z to -170 at 23:08Z): a EXCEPTIONAL move, larger than 91% of ordinary same-day moves; market information, not called sharp money, and not yet validated as predictive"
      ],
      "case_against": [
       "-170 is outside the preferred near-even region (heuristic preference)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "EXCEPTIONAL",
+     "movement_direction": "TOWARD",
+     "movement_percentile": 0.908,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "MARKET_PRICE"
+     ],
+     "quality": {
+      "total": -0.58,
+      "support": 2.0,
+      "against": 1.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.1,
+      "conservative_edge": -0.72,
+      "price": -0.75
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "MTL -1.5 +150",
+      "market_probability": 0.3836,
+      "model_probability": 0.3654,
+      "conservative_edge": -0.0412,
+      "probability_uncertainty": 0.0248,
+      "quality": -2.32
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "MTL ML -170 has the higher betting-quality score (-0.58 vs -2.32: against +1.00 vs +2.00, calibration +0.00 vs -0.50, uncertainty -0.10 vs -0.25, conservative_edge -0.72 vs -0.82)",
+     "rank": 2,
+     "result_shadow_only_after_freeze": "WIN"
     },
     {
      "matchup": "MTL @ CHI",
@@ -571,7 +706,7 @@
        "MARKET_PRICE"
       ],
       "independent": true,
-      "thesis": "the price moved toward the side by 2.8 pts (+170 to +150); prospective, not yet validated, not called sharp money",
+      "thesis": "the price moved toward the side by 3.2 pts (-148 to -170), a EXCEPTIONAL move (91% percentile of ordinary same-day moves); prospective, not yet validated, not called sharp money",
       "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
       "consensus_quality": false
      },
@@ -595,41 +730,72 @@
       "materially_outweighs": false
      },
      "movement": {
-      "earliest_price": 170,
+      "earliest_price": -148,
       "earliest_at_utc": "2026-10-23T12:00:05Z",
-      "current_price": 150,
+      "current_price": -170,
       "current_at_utc": "2026-10-23T23:08:38Z",
-      "earliest_no_vig": 0.3553,
-      "current_no_vig": 0.3836,
-      "change": 0.0283,
+      "earliest_no_vig": 0.5721,
+      "current_no_vig": 0.6038,
+      "change": 0.0317,
       "direction": "TOWARD",
-      "magnitude_points": 2.8,
+      "magnitude_points": 3.2,
       "largest_step_at_utc": "2026-10-23T23:08:38Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 11.1,
+      "class": "EXCEPTIONAL",
+      "percentile": 0.908
      },
      "calibration": "MEDIUM",
      "calibration_note": "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
      "hockey_case": [
       "the team model rates MTL the better team (63.8%, a clear gap); drivers: goal differential (decayed), expected-goal differential"
      ],
+     "hockey_support": true,
      "market_price_case": [
-      "the price moved toward MTL by 2.8 pts (+170 at 12:00Z to +150 at 23:08Z; movement is market information, not called sharp money, and has not yet been validated)"
+      "the team's moneyline price moved toward MTL by 3.2 pts (-148 at 12:00Z to -170 at 23:08Z): a EXCEPTIONAL move, larger than 91% of ordinary same-day moves; market information, not called sharp money, and not yet validated as predictive"
      ],
      "case_against": [
       "+150 is outside the preferred near-even region (heuristic preference)",
       "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction; its uncertainty is 2.5 points and its agreement with the puck-line MARKET has no prospective record yet"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "EXCEPTIONAL",
+     "movement_direction": "TOWARD",
+     "movement_percentile": 0.908,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "MARKET_PRICE"
+     ],
+     "quality": {
+      "total": -2.32,
+      "support": 2.0,
+      "against": 2.0,
+      "calibration": -0.5,
+      "data": 0.0,
+      "uncertainty": -0.25,
+      "conservative_edge": -0.82,
+      "price": -0.75
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "MTL ML -170",
+      "market_probability": 0.6038,
+      "model_probability": 0.6376,
+      "conservative_edge": -0.0362,
+      "probability_uncertainty": 0.0104,
+      "quality": -0.58
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "MTL -1.5 +150 has the higher betting-quality score (-2.32 vs -3.27: support +2.00 vs +1.00, conservative_edge -0.82 vs -0.78)",
+     "rank": 3,
+     "result_shadow_only_after_freeze": "WIN"
     }
-   ],
-   "consensus_quality_sides": []
+   ]
   },
   "2026-10-24": {
    "decision_time_utc": "2026-10-24T15:34:17Z",
    "games_open": 12,
    "candidate_sides": 48,
-   "in_preferred_region": 13,
    "fresh_prices": 48,
    "blend_estimate_before_the_day": {
     "games": 103,
@@ -639,24 +805,165 @@
      1.6
     ]
    },
-   "qualifying_sides": 0,
-   "structures_qualifying": {},
+   "edge_thesis_candidates": 0,
    "decision": "PICK",
    "pass_reason": null,
    "pick": {
-    "matchup": "NYR @ OTT",
-    "side": "OTT",
+    "matchup": "TBL @ UTA",
+    "side": "UTA",
     "market": "MONEYLINE",
     "line": null,
-    "price": -125.0,
+    "price": -142.0,
     "structure": "NONE",
     "pick_basis": "BEST_AVAILABLE",
-    "supported_probability": 0.5456,
-    "edge": -0.01,
+    "label": "BEST AVAILABLE \u2014 LOW CONFIDENCE",
     "confidence": "LOW",
-    "result_shadow_only": "WIN"
+    "supported_probability": 0.5659,
+    "edge": -0.0209,
+    "bet": "UTA ML -142",
+    "why_number_one": "BEST AVAILABLE, not a proven edge: no independent edge family cleared the bar on today's slate, so this is the strongest all-round bet on the board (hockey, market, calibration, uncertainty and price together), at LOW confidence. Why it ranks above the next side: UTA ML -142 has the higher betting-quality score (+0.56 vs +0.49: support +3.00 vs +1.00, against +1.00 vs +0.00, uncertainty -0.09 vs -0.10, conservative_edge -0.60 vs -0.41, price -0.75 vs +0.00).",
+    "why_this_market": {
+     "chosen": {
+      "bet": "UTA ML -142",
+      "win_probability_market": 0.5635,
+      "win_probability_evidence_weighted": 0.5659,
+      "model_probability": 0.5797,
+      "price": -142.0,
+      "break_even": 0.5868,
+      "conservative_edge": -0.0301,
+      "probability_uncertainty": 0.0092,
+      "price_class": "OUTSIDE_PREFERRED",
+      "case_net": 2
+     },
+     "other": {
+      "bet": "UTA -1.5 +160",
+      "win_probability_market": 0.3691,
+      "win_probability_evidence_weighted": 0.3583,
+      "model_probability": 0.2972,
+      "price": 160.0,
+      "break_even": 0.3846,
+      "conservative_edge": -0.0729,
+      "probability_uncertainty": 0.0466,
+      "price_class": "OUTSIDE_PREFERRED",
+      "case_net": -1
+     },
+     "why": "UTA ML -142 has the higher betting-quality score (+0.56 vs -4.17: support +3.00 vs +2.00, against +1.00 vs +3.00, calibration +0.00 vs -0.50, uncertainty -0.09 vs -0.47, conservative_edge -0.60 vs -1.46). Compared on: outright win probability 56.4% market / 56.6% evidence-weighted for the moneyline, against 36.9% / 35.8% for the puck line; price -142 vs +160; probability uncertainty 0.9 vs 4.7 pts; calibration HIGH vs MEDIUM. Not chosen for a bigger payout or a higher hit rate alone."
+    },
+    "result_shadow_only_after_freeze": "WIN"
    },
    "top_three": [
+    {
+     "matchup": "TBL @ UTA",
+     "side": "UTA",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -142.0,
+     "model_probability": 0.5797,
+     "model_probability_raw": 0.5797,
+     "market_probability_market": 0.5635,
+     "gap": 0.0162,
+     "trust_state": "MODEL_AND_MARKET_AGREE",
+     "model_weight": 0.15,
+     "supported_probability": 0.5659,
+     "edge": -0.0209,
+     "conservative_edge": -0.0301,
+     "probability_uncertainty": 0.0092,
+     "price_class": "OUTSIDE_PREFERRED",
+     "structure": "NONE",
+     "qualifies": false,
+     "eligible": true,
+     "edge_thesis": {
+      "families": [
+       "HOCKEY_MODEL",
+       "SITUATIONAL"
+      ],
+      "independent": true,
+      "thesis": "TBL is on a back-to-back and UTA is rested",
+      "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
+      "consensus_quality": false
+     },
+     "not_qualifying_because": [
+      "the price is 2.1 pts worse than the evidence supports (limit 1)"
+     ],
+     "balance": {
+      "for_strong": 0,
+      "for_moderate": 3,
+      "against_strong": 0,
+      "against_moderate": 1,
+      "supporting_categories": [
+       "HOCKEY_MODEL",
+       "MARKET_PRICE",
+       "SITUATIONAL"
+      ],
+      "supporting_families": [
+       "HOCKEY_MODEL",
+       "MARKET_PRICE",
+       "SITUATIONAL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -142,
+      "earliest_at_utc": "2026-10-24T12:00:05Z",
+      "current_price": -142,
+      "current_at_utc": "2026-10-24T15:32:17Z",
+      "earliest_no_vig": 0.5635,
+      "current_no_vig": 0.5635,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-24T15:32:17Z",
+      "captures": 2,
+      "span_hours": 3.5,
+      "class": "UNRELIABLE",
+      "percentile": 0.369
+     },
+     "calibration": "HIGH",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates UTA the better team (58.0%, a slight gap); drivers: home ice, high-danger chances (offsets xGD), back-to-back",
+      "the market (56.4%) and the hockey model (58.0%) are independent reads and agree within 1.6 points",
+      "TBL is on a back-to-back and UTA is rested"
+     ],
+     "hockey_support": true,
+     "market_price_case": [
+      "the market (no-vig 56.4%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "-142 is outside the preferred near-even region (heuristic preference)"
+     ],
+     "major_evidence_against": false,
+     "movement_classification": "UNRELIABLE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "SITUATIONAL"
+     ],
+     "quality": {
+      "total": 0.56,
+      "support": 3.0,
+      "against": 1.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": -0.6,
+      "price": -0.75
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "UTA -1.5 +160",
+      "market_probability": 0.3691,
+      "model_probability": 0.2972,
+      "conservative_edge": -0.0729,
+      "probability_uncertainty": 0.0466,
+      "quality": -4.17
+     },
+     "price_freshness": "FRESH",
+     "why_ranked_above_the_next": "UTA ML -142 has the higher betting-quality score (+0.56 vs +0.49: support +3.00 vs +1.00, against +1.00 vs +0.00, uncertainty -0.09 vs -0.10, conservative_edge -0.60 vs -0.41, price -0.75 vs +0.00)",
+     "rank": 1,
+     "result_shadow_only_after_freeze": "WIN"
+    },
     {
      "matchup": "NYR @ OTT",
      "side": "OTT",
@@ -715,7 +1022,10 @@
       "direction": "FLAT",
       "magnitude_points": 0.0,
       "largest_step_at_utc": "2026-10-24T15:32:17Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 3.5,
+      "class": "UNRELIABLE",
+      "percentile": 0.369
      },
      "calibration": "HIGH",
      "calibration_note": null,
@@ -723,6 +1033,7 @@
       "the team model rates OTT the better team (62.0%, a slight gap); drivers: home ice, expected-goal differential",
       "the model gives 62.0% against the market's 53.2% (+8.7 pts); not yet proven (state: insufficient evidence), so it carries weight 0.15, not the pick"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "the market (no-vig 53.2%) leans to this side",
       "-125 is inside the preferred near-even region"
@@ -731,8 +1042,36 @@
       "the bookmaker's margin costs about 2.3 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "UNRELIABLE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.49,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.1,
+      "conservative_edge": -0.41,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "OTT -1.5 +200",
+      "market_probability": 0.3194,
+      "model_probability": 0.3506,
+      "conservative_edge": -0.034,
+      "probability_uncertainty": 0.0248,
+      "quality": -3.18
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "OTT ML -125 has the higher betting-quality score (+0.49 vs +0.39: uncertainty -0.10 vs -0.09, conservative_edge -0.41 vs -0.52)",
+     "rank": 2,
+     "result_shadow_only_after_freeze": "WIN"
     },
     {
      "matchup": "ANA @ PHI",
@@ -792,13 +1131,17 @@
       "direction": "FLAT",
       "magnitude_points": 0.0,
       "largest_step_at_utc": "2026-10-24T15:32:17Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 3.5,
+      "class": "UNRELIABLE",
+      "percentile": 0.369
      },
      "calibration": "HIGH",
      "calibration_note": null,
      "hockey_case": [
       "the team model rates ANA the better team (50.0%, a negligible gap); drivers: expected-goal differential, high-danger chances (offsets xGD)"
      ],
+     "hockey_support": true,
      "market_price_case": [
       "+102 is inside the preferred near-even region"
      ],
@@ -806,96 +1149,43 @@
       "the bookmaker's margin costs about 2.1 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "UNRELIABLE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.39,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": -0.52,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "ANA +1.5 -258",
+      "market_probability": 0.6908,
+      "model_probability": 0.7132,
+      "conservative_edge": -0.0567,
+      "probability_uncertainty": 0.0302,
+      "quality": -2.94
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
-    },
-    {
-     "matchup": "TOR @ EDM",
-     "side": "EDM",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -180.0,
-     "model_probability": 0.7029,
-     "model_probability_raw": 0.7029,
-     "market_probability_market": 0.6164,
-     "gap": 0.0865,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "model_weight": 0.15,
-     "supported_probability": 0.6294,
-     "edge": -0.0135,
-     "conservative_edge": -0.0294,
-     "probability_uncertainty": 0.0159,
-     "price_class": "OUTSIDE_PREFERRED",
-     "structure": "NONE",
-     "qualifies": false,
-     "eligible": true,
-     "edge_thesis": {
-      "families": [
-       "HOCKEY_MODEL"
-      ],
-      "independent": false,
-      "thesis": "none: no independent reason to prefer this side over the market's own price",
-      "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
-      "consensus_quality": false
-     },
-     "not_qualifying_because": [
-      "data completeness 0.714 / calibration LOW too weak to stand a pick on",
-      "the case for does not materially exceed the case against (for_strong 1, for_moderate 1, against_strong 0, against_moderate 1, materially_outweighs False; independent families supporting ['HOCKEY_MODEL', 'MARKET_PRICE'])",
-      "the model's +8.6-pt gap is unproven (insufficient evidence): context only",
-      "NO EDGE THESIS: no independent edge family (supported market movement or a situational advantage) beside the hockey picture",
-      "the price is 1.4 pts worse than the evidence supports (limit 1)"
-     ],
-     "balance": {
-      "for_strong": 1,
-      "for_moderate": 1,
-      "against_strong": 0,
-      "against_moderate": 1,
-      "supporting_categories": [
-       "HOCKEY_MODEL",
-       "MARKET_PRICE"
-      ],
-      "supporting_families": [
-       "HOCKEY_MODEL",
-       "MARKET_PRICE"
-      ],
-      "materially_outweighs": false
-     },
-     "movement": {
-      "earliest_price": -180,
-      "earliest_at_utc": "2026-10-24T12:00:05Z",
-      "current_price": -180,
-      "current_at_utc": "2026-10-24T15:32:17Z",
-      "earliest_no_vig": 0.6164,
-      "current_no_vig": 0.6164,
-      "change": 0.0,
-      "direction": "FLAT",
-      "magnitude_points": 0.0,
-      "largest_step_at_utc": "2026-10-24T15:32:17Z",
-      "captures": 2
-     },
-     "calibration": "LOW",
-     "calibration_note": null,
-     "hockey_case": [
-      "the team model rates EDM the better team (70.3%, a strong gap); drivers: home ice, goal differential (decayed), expected-goal differential",
-      "the model gives 70.3% against the market's 61.6% (+8.6 pts); not yet proven (state: insufficient evidence), so it carries weight 0.15, not the pick"
-     ],
-     "market_price_case": [
-      "the market (no-vig 61.6%) rates this side a clear favourite"
-     ],
-     "case_against": [
-      "-180 is outside the preferred near-even region (heuristic preference)"
-     ],
-     "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
+     "why_ranked_above_the_next": "ANA ML +102 has the higher betting-quality score (+0.39 vs -0.27: support +1.00 vs +2.00, against +0.00 vs +1.00, uncertainty -0.09 vs -0.10, conservative_edge -0.52 vs -0.41, price +0.00 vs -0.75)",
+     "rank": 3,
+     "result_shadow_only_after_freeze": "WIN"
     }
-   ],
-   "consensus_quality_sides": []
+   ]
   },
   "2026-10-25": {
    "decision_time_utc": "2026-10-25T17:36:51Z",
    "games_open": 5,
    "candidate_sides": 20,
-   "in_preferred_region": 5,
    "fresh_prices": 20,
    "blend_estimate_before_the_day": {
     "games": 115,
@@ -905,102 +1195,53 @@
      1.6
     ]
    },
-   "qualifying_sides": 0,
-   "structures_qualifying": {},
+   "edge_thesis_candidates": 0,
    "decision": "PICK",
    "pass_reason": null,
    "pick": {
-    "matchup": "COL @ NSH",
-    "side": "COL",
-    "market": "PUCK_LINE",
-    "line": -1.5,
-    "price": 105.0,
+    "matchup": "MTL @ WPG",
+    "side": "WPG",
+    "market": "MONEYLINE",
+    "line": null,
+    "price": -102.0,
     "structure": "NONE",
     "pick_basis": "BEST_AVAILABLE",
-    "supported_probability": 0.4665,
-    "edge": -0.0213,
+    "label": "BEST AVAILABLE \u2014 LOW CONFIDENCE",
     "confidence": "LOW",
-    "result_shadow_only": "LOSS"
+    "supported_probability": 0.488,
+    "edge": -0.017,
+    "bet": "WPG ML -102",
+    "why_number_one": "BEST AVAILABLE, not a proven edge: no independent edge family cleared the bar on today's slate, so this is the strongest all-round bet on the board (hockey, market, calibration, uncertainty and price together), at LOW confidence. Why it ranks above the next side: WPG ML -102 has the higher betting-quality score (+0.40 vs +0.33: support +1.00 vs +3.00, against +0.00 vs +1.00, calibration +0.00 vs -0.50, uncertainty -0.09 vs -0.25, conservative_edge -0.52 vs -0.92).",
+    "why_this_market": {
+     "chosen": {
+      "bet": "WPG ML -102",
+      "win_probability_market": 0.4826,
+      "win_probability_evidence_weighted": 0.488,
+      "model_probability": 0.5042,
+      "price": -102.0,
+      "break_even": 0.505,
+      "conservative_edge": -0.0258,
+      "probability_uncertainty": 0.0088,
+      "price_class": "IN_PREFERRED_REGION",
+      "case_net": 1
+     },
+     "other": {
+      "bet": "WPG +1.5 -258",
+      "win_probability_market": 0.6908,
+      "win_probability_evidence_weighted": 0.697,
+      "model_probability": 0.7158,
+      "price": -258.0,
+      "break_even": 0.7207,
+      "conservative_edge": -0.0539,
+      "probability_uncertainty": 0.0302,
+      "price_class": "EXTREME",
+      "case_net": 1
+     },
+     "why": "WPG ML -102 has the higher betting-quality score (+0.40 vs -2.88: support +1.00 vs +2.00, against +0.00 vs +1.00, calibration +0.00 vs -0.50, uncertainty -0.09 vs -0.30, conservative_edge -0.52 vs -1.08). Compared on: outright win probability 48.3% market / 48.8% evidence-weighted for the moneyline, against 69.1% / 69.7% for the puck line; price -102 vs -258; probability uncertainty 0.9 vs 3.0 pts; calibration HIGH vs MEDIUM. Not chosen for a bigger payout or a higher hit rate alone."
+    },
+    "result_shadow_only_after_freeze": "LOSS"
    },
    "top_three": [
-    {
-     "matchup": "COL @ NSH",
-     "side": "COL",
-     "market": "PUCK_LINE",
-     "line": -1.5,
-     "price": 105.0,
-     "model_probability": 0.4633,
-     "model_probability_raw": 0.4881,
-     "market_probability_market": 0.4675,
-     "gap": -0.0042,
-     "trust_state": "INSUFFICIENT_EVIDENCE",
-     "model_weight": 0.25,
-     "supported_probability": 0.4665,
-     "edge": -0.0213,
-     "conservative_edge": -0.0461,
-     "probability_uncertainty": 0.0248,
-     "price_class": "IN_PREFERRED_REGION",
-     "structure": "NONE",
-     "qualifies": false,
-     "eligible": true,
-     "edge_thesis": {
-      "families": [
-       "HOCKEY_MODEL",
-       "SITUATIONAL"
-      ],
-      "independent": true,
-      "thesis": "NSH is on a back-to-back and COL is rested",
-      "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
-      "consensus_quality": false
-     },
-     "not_qualifying_because": [
-      "the case for does not materially exceed the case against (for_strong 1, for_moderate 1, against_strong 0, against_moderate 1, materially_outweighs False; independent families supporting ['HOCKEY_MODEL', 'SITUATIONAL'])",
-      "the price is 2.1 pts worse than the evidence supports (limit 1)"
-     ],
-     "balance": {
-      "for_strong": 1,
-      "for_moderate": 1,
-      "against_strong": 0,
-      "against_moderate": 1,
-      "supporting_categories": [
-       "HOCKEY_MODEL",
-       "SITUATIONAL"
-      ],
-      "supporting_families": [
-       "HOCKEY_MODEL",
-       "SITUATIONAL"
-      ],
-      "materially_outweighs": false
-     },
-     "movement": {
-      "earliest_price": 110,
-      "earliest_at_utc": "2026-10-25T12:00:15Z",
-      "current_price": 105,
-      "current_at_utc": "2026-10-25T17:34:51Z",
-      "earliest_no_vig": 0.4573,
-      "current_no_vig": 0.4675,
-      "change": 0.0103,
-      "direction": "TOWARD",
-      "magnitude_points": 1.0,
-      "largest_step_at_utc": "2026-10-25T17:34:51Z",
-      "captures": 2
-     },
-     "calibration": "MEDIUM",
-     "calibration_note": "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
-     "hockey_case": [
-      "the team model rates COL the better team (74.1%, a strong gap); drivers: goal differential (decayed), expected-goal differential, back-to-back",
-      "NSH is on a back-to-back and COL is rested"
-     ],
-     "market_price_case": [
-      "the price moved toward COL by 1.0 pts (+110 at 12:00Z to +105 at 17:34Z; movement is market information, not called sharp money, and has not yet been validated)",
-      "+105 is inside the preferred near-even region"
-     ],
-     "case_against": [
-      "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction; its uncertainty is 2.5 points and its agreement with the puck-line MARKET has no prospective record yet"
-     ],
-     "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
-    },
     {
      "matchup": "MTL @ WPG",
      "side": "WPG",
@@ -1056,106 +1297,284 @@
       "earliest_no_vig": 0.4739,
       "current_no_vig": 0.4826,
       "change": 0.0087,
-      "direction": "FLAT",
+      "direction": "TOWARD",
       "magnitude_points": 0.9,
       "largest_step_at_utc": "2026-10-25T17:34:51Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 5.6,
+      "class": "MODEST",
+      "percentile": 0.508
      },
      "calibration": "HIGH",
      "calibration_note": null,
      "hockey_case": [
       "the team model rates WPG the better team (50.4%, a negligible gap); drivers: home ice, expected-goal differential"
      ],
+     "hockey_support": true,
      "market_price_case": [
+      "the team's moneyline price moved toward WPG by 0.9 pts (+102 at 12:00Z to -102 at 17:34Z): a MODEST move, larger than 51% of ordinary same-day moves; market information, not called sharp money, and not yet validated as predictive",
       "-102 is inside the preferred near-even region"
      ],
      "case_against": [
       "the bookmaker's margin costs about 2.2 points of break-even on this side",
       "starting goalies are not confirmed by an approved source (not available to Eggy)"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "MODEST",
+     "movement_direction": "TOWARD",
+     "movement_percentile": 0.508,
+     "evidence_families": [
+      "HOCKEY_MODEL"
+     ],
+     "quality": {
+      "total": 0.4,
+      "support": 1.0,
+      "against": 0.0,
+      "calibration": 0.0,
+      "data": 0.0,
+      "uncertainty": -0.09,
+      "conservative_edge": -0.52,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "WPG +1.5 -258",
+      "market_probability": 0.6908,
+      "model_probability": 0.7158,
+      "conservative_edge": -0.0539,
+      "probability_uncertainty": 0.0302,
+      "quality": -2.88
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "LOSS"
+     "why_ranked_above_the_next": "WPG ML -102 has the higher betting-quality score (+0.40 vs +0.33: support +1.00 vs +3.00, against +0.00 vs +1.00, calibration +0.00 vs -0.50, uncertainty -0.09 vs -0.25, conservative_edge -0.52 vs -0.92)",
+     "rank": 1,
+     "result_shadow_only_after_freeze": "LOSS"
     },
     {
-     "matchup": "FLA @ CHI",
-     "side": "FLA",
-     "market": "MONEYLINE",
-     "line": null,
-     "price": -185.0,
-     "model_probability": 0.6806,
-     "model_probability_raw": 0.6806,
-     "market_probability_market": 0.6225,
-     "gap": 0.0581,
+     "matchup": "COL @ NSH",
+     "side": "COL",
+     "market": "PUCK_LINE",
+     "line": -1.5,
+     "price": 105.0,
+     "model_probability": 0.4633,
+     "model_probability_raw": 0.4881,
+     "market_probability_market": 0.4675,
+     "gap": -0.0042,
      "trust_state": "INSUFFICIENT_EVIDENCE",
      "model_weight": 0.25,
-     "supported_probability": 0.637,
-     "edge": -0.0121,
-     "conservative_edge": -0.0247,
-     "probability_uncertainty": 0.0126,
-     "price_class": "OUTSIDE_PREFERRED",
+     "supported_probability": 0.4665,
+     "edge": -0.0213,
+     "conservative_edge": -0.0461,
+     "probability_uncertainty": 0.0248,
+     "price_class": "IN_PREFERRED_REGION",
      "structure": "NONE",
      "qualifies": false,
      "eligible": true,
      "edge_thesis": {
       "families": [
-       "HOCKEY_MODEL"
+       "HOCKEY_MODEL",
+       "SITUATIONAL"
       ],
-      "independent": false,
-      "thesis": "none: no independent reason to prefer this side over the market's own price",
+      "independent": true,
+      "thesis": "NSH is on a back-to-back and COL is rested",
       "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
       "consensus_quality": false
      },
      "not_qualifying_because": [
-      "the case for does not materially exceed the case against (for_strong 0, for_moderate 2, against_strong 0, against_moderate 1, materially_outweighs False; independent families supporting ['HOCKEY_MODEL', 'MARKET_PRICE'])",
-      "the model's +5.8-pt gap is unproven (insufficient evidence): context only",
-      "NO EDGE THESIS: no independent edge family (supported market movement or a situational advantage) beside the hockey picture",
-      "the price is 1.2 pts worse than the evidence supports (limit 1)"
+      "the case for does not materially exceed the case against (for_strong 1, for_moderate 1, against_strong 0, against_moderate 1, materially_outweighs False; independent families supporting ['HOCKEY_MODEL', 'SITUATIONAL'])",
+      "the price is 2.1 pts worse than the evidence supports (limit 1)"
      ],
      "balance": {
-      "for_strong": 0,
-      "for_moderate": 2,
+      "for_strong": 1,
+      "for_moderate": 1,
       "against_strong": 0,
       "against_moderate": 1,
       "supporting_categories": [
        "HOCKEY_MODEL",
-       "MARKET_PRICE"
+       "SITUATIONAL"
       ],
       "supporting_families": [
        "HOCKEY_MODEL",
-       "MARKET_PRICE"
+       "SITUATIONAL"
       ],
       "materially_outweighs": false
      },
      "movement": {
-      "earliest_price": -180,
+      "earliest_price": -230,
       "earliest_at_utc": "2026-10-25T12:00:15Z",
-      "current_price": -185,
+      "current_price": -230,
       "current_at_utc": "2026-10-25T17:34:51Z",
-      "earliest_no_vig": 0.6164,
-      "current_no_vig": 0.6225,
-      "change": 0.006,
+      "earliest_no_vig": 0.669,
+      "current_no_vig": 0.669,
+      "change": 0.0,
       "direction": "FLAT",
-      "magnitude_points": 0.6,
+      "magnitude_points": 0.0,
       "largest_step_at_utc": "2026-10-25T17:34:51Z",
-      "captures": 2
+      "captures": 2,
+      "span_hours": 5.6,
+      "class": "NOISE",
+      "percentile": 0.369
      },
-     "calibration": "HIGH",
-     "calibration_note": null,
+     "calibration": "MEDIUM",
+     "calibration_note": "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction",
      "hockey_case": [
-      "the team model rates FLA the better team (68.1%, a clear gap); drivers: goal differential (decayed), expected-goal differential",
-      "the model gives 68.1% against the market's 62.3% (+5.8 pts); not yet proven (state: insufficient evidence), so it carries weight 0.25, not the pick"
+      "the team model rates COL the better team (74.1%, a strong gap); drivers: goal differential (decayed), expected-goal differential, back-to-back",
+      "NSH is on a back-to-back and COL is rested"
      ],
+     "hockey_support": true,
      "market_price_case": [
-      "the market (no-vig 62.3%) rates this side a clear favourite"
+      "+105 is inside the preferred near-even region"
      ],
      "case_against": [
-      "-185 is outside the preferred near-even region (heuristic preference)"
+      "the goal-margin calibration over-predicted by +2.5 points in this probability bucket out of time; the cover probability is lowered by any over-prediction; its uncertainty is 2.5 points and its agreement with the puck-line MARKET has no prospective record yet"
      ],
+     "major_evidence_against": false,
+     "movement_classification": "NOISE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "SITUATIONAL"
+     ],
+     "quality": {
+      "total": 0.33,
+      "support": 3.0,
+      "against": 1.0,
+      "calibration": -0.5,
+      "data": 0.0,
+      "uncertainty": -0.25,
+      "conservative_edge": -0.92,
+      "price": 0.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "COL ML -230",
+      "market_probability": 0.669,
+      "model_probability": 0.741,
+      "conservative_edge": -0.0259,
+      "probability_uncertainty": 0.0159,
+      "quality": 0.32
+     },
      "price_freshness": "FRESH",
-     "result_if_bet_shadow_only": "WIN"
+     "why_ranked_above_the_next": "COL -1.5 +105 has the higher betting-quality score (+0.33 vs +0.32: support +3.00 vs +4.00, against +1.00 vs +0.00, calibration -0.50 vs -1.00, uncertainty -0.25 vs -0.16, conservative_edge -0.92 vs -0.52)",
+     "rank": 2,
+     "result_shadow_only_after_freeze": "LOSS"
+    },
+    {
+     "matchup": "COL @ NSH",
+     "side": "COL",
+     "market": "MONEYLINE",
+     "line": null,
+     "price": -230.0,
+     "model_probability": 0.741,
+     "model_probability_raw": 0.741,
+     "market_probability_market": 0.669,
+     "gap": 0.072,
+     "trust_state": "INSUFFICIENT_EVIDENCE",
+     "model_weight": 0.25,
+     "supported_probability": 0.687,
+     "edge": -0.01,
+     "conservative_edge": -0.0259,
+     "probability_uncertainty": 0.0159,
+     "price_class": "EXTREME",
+     "structure": "MARKET_SITUATIONAL_OPPORTUNITY",
+     "qualifies": false,
+     "eligible": true,
+     "edge_thesis": {
+      "families": [
+       "HOCKEY_MODEL",
+       "SITUATIONAL"
+      ],
+      "independent": true,
+      "thesis": "NSH is on a back-to-back and COL is rested",
+      "expected_value_claim": "no positive expected value is claimed: the bookmaker's margin is the cost of the bet",
+      "consensus_quality": false
+     },
+     "not_qualifying_because": [
+      "price -230 is extreme: Eggy does not hunt prices beyond -200 / +200 (heuristic)",
+      "data completeness 0.714 / calibration LOW too weak to stand a pick on"
+     ],
+     "balance": {
+      "for_strong": 1,
+      "for_moderate": 2,
+      "against_strong": 0,
+      "against_moderate": 0,
+      "supporting_categories": [
+       "HOCKEY_MODEL",
+       "MARKET_PRICE",
+       "SITUATIONAL"
+      ],
+      "supporting_families": [
+       "HOCKEY_MODEL",
+       "MARKET_PRICE",
+       "SITUATIONAL"
+      ],
+      "materially_outweighs": true
+     },
+     "movement": {
+      "earliest_price": -230,
+      "earliest_at_utc": "2026-10-25T12:00:15Z",
+      "current_price": -230,
+      "current_at_utc": "2026-10-25T17:34:51Z",
+      "earliest_no_vig": 0.669,
+      "current_no_vig": 0.669,
+      "change": 0.0,
+      "direction": "FLAT",
+      "magnitude_points": 0.0,
+      "largest_step_at_utc": "2026-10-25T17:34:51Z",
+      "captures": 2,
+      "span_hours": 5.6,
+      "class": "NOISE",
+      "percentile": 0.369
+     },
+     "calibration": "LOW",
+     "calibration_note": null,
+     "hockey_case": [
+      "the team model rates COL the better team (74.1%, a strong gap); drivers: goal differential (decayed), expected-goal differential, back-to-back",
+      "the model gives 74.1% against the market's 66.9% (+7.2 pts); not yet proven (state: insufficient evidence), so it carries weight 0.25, not the pick",
+      "NSH is on a back-to-back and COL is rested"
+     ],
+     "hockey_support": true,
+     "market_price_case": [
+      "the market (no-vig 66.9%) rates this side a clear favourite"
+     ],
+     "case_against": [
+      "the bookmaker's margin costs about 2.8 points of break-even on this side",
+      "starting goalies are not confirmed by an approved source (not available to Eggy)"
+     ],
+     "major_evidence_against": false,
+     "movement_classification": "NOISE",
+     "movement_direction": "FLAT",
+     "movement_percentile": 0.369,
+     "evidence_families": [
+      "HOCKEY_MODEL",
+      "SITUATIONAL"
+     ],
+     "quality": {
+      "total": 0.32,
+      "support": 4.0,
+      "against": 0.0,
+      "calibration": -1.0,
+      "data": 0.0,
+      "uncertainty": -0.16,
+      "conservative_edge": -0.52,
+      "price": -2.0
+     },
+     "confidence_if_chosen": "LOW",
+     "other_market_same_team": {
+      "bet": "COL -1.5 +105",
+      "market_probability": 0.4675,
+      "model_probability": 0.4633,
+      "conservative_edge": -0.0461,
+      "probability_uncertainty": 0.0248,
+      "quality": 0.33
+     },
+     "price_freshness": "FRESH",
+     "why_ranked_above_the_next": "COL ML -230 has the higher betting-quality score (+0.32 vs -0.37: support +4.00 vs +2.00, against +0.00 vs +1.00, calibration -1.00 vs +0.00, uncertainty -0.16 vs -0.13, conservative_edge -0.52 vs -0.49)",
+     "rank": 3,
+     "result_shadow_only_after_freeze": "LOSS"
     }
-   ],
-   "consensus_quality_sides": []
+   ]
   }
  }
 }

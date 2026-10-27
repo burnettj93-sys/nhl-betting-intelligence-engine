@@ -35,6 +35,7 @@ OFFICIAL_POLICY = {"policy_id": "EGGY_SIDE_PICK_V2", "unit": "SIDE", "max_output
                    "supported_probability": "the hockey model's only where the prospective record proves the disagreement; otherwise the market's no-vig probability",
                    "learning_engine": "separate and unchanged: up to 10 unpriced learning parlays a day (operational/learning_cohort.py); its strongest GOOD ticket is displayed as the 'strongest learning ticket', not as Eggy's pick",
                    "decision_policy_digest": __import__("operational.eggy_pick", fromlist=["x"]).policy_digest(),
+                   "movement_profile_sha256": __import__("hashlib").sha256((__import__("pathlib").Path(__file__).resolve().parent.parent / "docs" / "validation" / "eggy_movement_profile.json").read_bytes()).hexdigest()[:16],
                    "puck_line_calibration_sha256": __import__("hashlib").sha256((__import__("pathlib").Path(__file__).resolve().parent.parent / "docs" / "validation" / "eggy_pick_calibration.json").read_bytes()).hexdigest()[:16],
                    "replaces_as_official_output": {"flagship_parlay_policy_id": "EGGY_FLAGSHIP_PARLAY_V1", "flagship_parlay_digest": "af5ed8907d646212", "primary_slip_policy_digest": "1fad3ba03503cf94"}}
 
