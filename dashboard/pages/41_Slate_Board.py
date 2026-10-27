@@ -43,7 +43,7 @@ st.caption(f"Board built {ui.et_time(board.get('generated_at_utc'), True)} for E
 
 # ---------------------------------------------------------------- the primary parlay
 primary = board.get("primary") or {}
-st.subheader("Eggy's Parlay Pick of the Day")
+st.subheader("Eggy Pick of the Day")
 pol = board.get("policy") or {}
 _official = bool((board.get("eggy") or {}).get("official_policy"))          # the parlay product: Eggy's output is the flagship parlay or PASS, not the retired primary slip
 if _official:

@@ -93,8 +93,11 @@ class TestEggyFlagshipUnchanged(eo.TestOfficialOutput):
         p.start()
         self.addCleanup(p.stop)
 
-    def test_the_digest_is_unchanged_by_this_retirement(self):
-        self.assertEqual(ec.official_policy_digest(), "af5ed8907d646212")
+    def test_the_retired_flagship_parlay_and_primary_slip_digests_are_recorded_as_replaced_and_are_not_the_official_digest(self):
+        rep = ec.OFFICIAL_POLICY["replaces_as_official_output"]
+        self.assertEqual(rep["flagship_parlay_digest"], "af5ed8907d646212")
+        self.assertEqual(rep["primary_slip_policy_digest"], "1fad3ba03503cf94")
+        self.assertNotIn(ec.official_policy_digest(), ("af5ed8907d646212", "1fad3ba03503cf94"))
 
 
 class TestPostmortemAndSettlementAreAutomatic(unittest.TestCase):

@@ -126,6 +126,10 @@ def learning_experiment() -> dict:
     return _optional("learning_experiment")
 
 
+def eggy_pick() -> dict:
+    return _optional("eggy_pick")
+
+
 def product_meta() -> dict:
     return _optional("product_meta")
 

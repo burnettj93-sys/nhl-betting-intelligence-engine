@@ -1,0 +1,62 @@
+{
+ "method": "python3 deploy/build_eggy_pick_calibration.py --out docs/validation/eggy_pick_calibration.json",
+ "model": "eggy-matchup-v1 pregame probabilities, expanding window",
+ "fit_seasons": "2017-2024",
+ "test_season": "2025",
+ "rows_fit": 20952,
+ "rows_test": 2788,
+ "win_by_2plus_base_rate_fit": 0.2967,
+ "coefficients_live": {
+  "intercept": -0.91012,
+  "slope_on_logit_win_probability": 0.82039,
+  "fit": "all of 2017-2025 (the out-of-time check below used 2017-2024 only)"
+ },
+ "coefficients_out_of_time_check": {
+  "intercept": -0.90462,
+  "slope": 0.83265
+ },
+ "out_of_time_2025": {
+  "log_loss_model": 0.58533,
+  "log_loss_constant_base_rate": 0.59683,
+  "calibration_by_team_win_probability": [
+   {
+    "team_win_probability": "0.00-0.40",
+    "n": 561,
+    "predicted_win_by_2plus": 0.1875,
+    "observed": 0.1996
+   },
+   {
+    "team_win_probability": "0.40-0.45",
+    "n": 390,
+    "predicted_win_by_2plus": 0.2402,
+    "observed": 0.2641
+   },
+   {
+    "team_win_probability": "0.45-0.50",
+    "n": 443,
+    "predicted_win_by_2plus": 0.2717,
+    "observed": 0.2415
+   },
+   {
+    "team_win_probability": "0.50-0.55",
+    "n": 443,
+    "predicted_win_by_2plus": 0.3053,
+    "observed": 0.3002
+   },
+   {
+    "team_win_probability": "0.55-0.60",
+    "n": 390,
+    "predicted_win_by_2plus": 0.3415,
+    "observed": 0.2949
+   },
+   {
+    "team_win_probability": "0.60-1.00",
+    "n": 561,
+    "predicted_win_by_2plus": 0.4187,
+    "observed": 0.3939
+   }
+  ]
+ },
+ "note": "Hockey outcome calibration only. No historical puck-line prices exist: nothing here is value, edge or profit. Whether the market's puck-line price disagrees with this in a way that pays is measured prospectively (operational/eggy_pick_ledger.py).",
+ "elapsed_seconds": 3
+}

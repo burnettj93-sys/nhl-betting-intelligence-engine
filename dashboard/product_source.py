@@ -106,6 +106,14 @@ def learning_experiment() -> dict:
     return learning_postmortem.snapshot_section()
 
 
+def eggy_pick() -> dict:
+    """Eggy's daily side pick (a moneyline or puck-line PICK, or PASS), its record and signal trust. Local mode reads the engine's own ledger."""
+    if _cloud():
+        return _wrap(cloud_snapshot.eggy_pick)
+    from operational import eggy_pick_ledger
+    return eggy_pick_ledger.snapshot_section()
+
+
 def day_status() -> dict:
     """The day's capture timeline (refresh, analysis, league pulls, waves, budget). Local mode reads the engine's own file."""
     if _cloud():
