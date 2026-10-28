@@ -57,8 +57,10 @@ def observation(cands: list[dict], game: dict, decided_at: str, structure_state:
                       "supported_p": c["supported_probability"], "edge": c["edge"], "conservative_edge": c["conservative_edge"], "structure": c["structure"], "qualifies": c["qualifies"], "price_class": c["price_class"],
                       "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "move_class": mv.get("class"), "move_percentile": mv.get("percentile"), "edge_family_names": [e["family"] for e in c["edge_families"]["present"]], "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
                       "trust_state": c["trust_state"], "calibration": c.get("calibration"), "consensus": c["edge_thesis"]["consensus_quality"], "edge_families": c["edge_thesis"]["families"]})
+    gv = next((c.get("goalies") for c in cands if c.get("goalies")), None) or {}
     return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "home": game["home"], "away": game["away"], "start_utc": game.get("start_utc"),
-            "decided_at_utc": decided_at, "sides": sides}
+            "decided_at_utc": decided_at, "goalie_state": gv.get("state") or "UNKNOWN_GOALIE", "late_goalie_change": bool(gv.get("late_change")),
+            "goalies": {k: {x: v.get(x) for x in ("goalie", "status", "freshness", "source", "source_at_utc", "conflict")} for k, v in (gv.get("sides") or {}).items()}, "sides": sides}
 
 
 def late_price(pick: dict) -> dict | None:
@@ -193,6 +195,11 @@ SIGNALS = {
     "EGGY_PICK": "Eggy's daily bets (the whole record of the product)",
     "PICK_EDGE_THESIS": "daily bets that carried an edge thesis",
     "PICK_BEST_AVAILABLE": "daily bets chosen as the best available with no edge thesis (LOW confidence)",
+    "PICK_GOALIES_BOTH_CONFIRMED": "daily bets where both starting goalies were CONFIRMED at decision time",
+    "PICK_GOALIES_ONE_PROBABLE": "daily bets where a starting goalie was only PROBABLE (the other confirmed or probable) at decision time",
+    "PICK_GOALIES_UNKNOWN": "daily bets where a starting goalie was UNKNOWN (no listing, or a stale one) at decision time",
+    "PICK_GOALIES_SOURCE_CONFLICT": "daily bets where the goalie sources disagreed at decision time",
+    "PICK_GOALIE_LATE_CHANGE": "daily bets in games where a listed starter changed after it was first seen",
 }
 
 
@@ -226,6 +233,11 @@ def signal_bets(o: dict):
             out.append(("PICK_MONEYLINE" if s["market"] == "MONEYLINE" else "PICK_PUCK_LINE", p, y))
             out.append(("PICK_IN_PREFERRED_PRICE" if s["price_class"] == "IN_PREFERRED_REGION" else "PICK_OUTSIDE_PREFERRED_PRICE", p, y))
             out.append(("PICK_EDGE_THESIS" if s.get("qualifies") else "PICK_BEST_AVAILABLE", p, y))
+            gs_ = o.get("goalie_state")
+            if gs_:
+                out.append(({"BOTH_CONFIRMED": "PICK_GOALIES_BOTH_CONFIRMED", "SOURCE_CONFLICT": "PICK_GOALIES_SOURCE_CONFLICT", "UNKNOWN_GOALIE": "PICK_GOALIES_UNKNOWN"}.get(gs_, "PICK_GOALIES_ONE_PROBABLE"), p, y))
+            if o.get("late_goalie_change"):
+                out.append(("PICK_GOALIE_LATE_CHANGE", p, y))
             if s.get("confidence"):
                 out.append(("CONFIDENCE_" + s["confidence"], p, y)) if not s.get("qualifies") else None
         if s.get("consensus"):
@@ -361,9 +373,16 @@ def run_cycle(nhl_conn, now: dt.datetime) -> dict:
     trust_pl = puck_line_trust(events)
     structure_state = signal_trust(events)
     blend = ep.blend_estimate(_prospective_rows())
+    from operational import goalie_sources as gsrc
+    try:                                                                    # personnel refresh BEFORE the ranking: forced when the last fetch is older than the late-pregame interval
+        gstate = gsrc.refresh(nhl_conn, now, force=((gsrc._age_min(gsrc.load_state().get("fetched_at_utc"), now) or 1e9) > gsrc.NEAR_INTERVAL_MIN))
+    except Exception:                                                       # noqa: BLE001 - a goalie-feed failure is UNKNOWN goalies, never a stopped product
+        gstate = {}
+    ghist = gsrc.read_history()
     cands, by_game = [], defaultdict(list)
     for g in upcoming:
-        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl, blend, structure_state):
+        gview = gsrc.game_view(gstate, g["game_id"], g["home"], g["away"], now, ghist)
+        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl, blend, structure_state, goalies=gview):
             cands.append(c)
             by_game[g["game_id"]].append(c)
     doc = ep.decide(cands, now=now, structure_state=structure_state)

@@ -54,7 +54,7 @@ POLICY = {"policy_id": "EGGY_SIDE_PICK_V2", "unit": "SIDE", "max_outputs_per_day
           "consensus_quality": "a STATE (market and hockey agree this is a strong, well-priced side), never a pick on its own: it needs an independent edge family beside it",
           "evidence_families": {"HOCKEY_MODEL": "one family: team probability, xG / goal differential, high-danger, home ice and every other input of the same team model",
                                 "MARKET_PRICE": "one family: the price, its movement, direction and size (the same market fact expressed twice counts once)",
-                                "SITUATIONAL": "rest advantage, back-to-back, schedule (only where independent of the team model)", "MATCHUP_PERSONNEL": "NOT AVAILABLE: no reliable independent data (no confirmed goalies or lineups)",
+                                "SITUATIONAL": "rest advantage, back-to-back, schedule (only where independent of the team model)", "MATCHUP_PERSONNEL": "PERSONNEL / AVAILABILITY, one family: starting-goalie identity and status (CONFIRMED / PROBABLE / UNKNOWN / SOURCE CONFLICT, from GoaliePost with GameDayTweets corroboration). Injuries and lineups are NOT AVAILABLE yet. Goalie status is context and uncertainty, never a win-probability adjustment (the project found goalie lift insufficient); the goalie facts of one game are one family, counted once",
                                 "PROVEN_SIGNAL": "a model-market disagreement that has earned prospective trust"},
           "edge_thesis": "every pick must say why this side at this price beats accepting the market as correct: a PROVEN_SIGNAL, or the hockey family together with at least one independent EDGE family (supported market movement or a situational advantage); the hockey model and the market agreeing is a description of probability, not an edge",
           "movement_cap": "until the movement regime itself shows signal, movement may support a thesis but cannot produce a HIGH-confidence pick",
@@ -82,7 +82,7 @@ STRUCTURES = ("SUPPORTED_MARKET_GAP", "MARKET_SITUATIONAL_OPPORTUNITY")
 PRIORITY = {"SUPPORTED_MARKET_GAP": 0, "MARKET_SITUATIONAL_OPPORTUNITY": 1}
 KIND_FAMILY = {"MARKET_BASELINE": "MARKET_PRICE", "PRICE_MOVEMENT": "MARKET_PRICE", "PRICE_REGION": "MARKET_PRICE", "PRICE_QUALITY": "MARKET_PRICE", "MARGIN": "MARKET_PRICE", "STALE_PRICE": "MARKET_PRICE",
                "HOCKEY_STRENGTH": "HOCKEY_MODEL", "HOCKEY_FAVOURS_OPPONENT": "HOCKEY_MODEL", "INDEPENDENT_READS_AGREE": "HOCKEY_MODEL", "MODEL_EDGE": "HOCKEY_MODEL", "MARKET_STRONGER": "HOCKEY_MODEL",
-               "MODEL_OVERCONFIDENT": "HOCKEY_MODEL", "PUCK_LINE_CALIBRATION": "HOCKEY_MODEL", "REST_ADVANTAGE": "SITUATIONAL", "REST_DISADVANTAGE": "SITUATIONAL", "DATA_COMPLETENESS": "DATA", "GOALIE": "DATA"}
+               "MODEL_OVERCONFIDENT": "HOCKEY_MODEL", "PUCK_LINE_CALIBRATION": "HOCKEY_MODEL", "REST_ADVANTAGE": "SITUATIONAL", "REST_DISADVANTAGE": "SITUATIONAL", "DATA_COMPLETENESS": "DATA", "GOALIE_CONFIRMED": "MATCHUP_PERSONNEL", "GOALIE_UNCERTAIN": "MATCHUP_PERSONNEL", "GOALIE_UNKNOWN": "MATCHUP_PERSONNEL", "GOALIE_CONFLICT": "MATCHUP_PERSONNEL"}
 
 
 def policy_digest() -> str:
@@ -95,7 +95,7 @@ AVAILABILITY = {
                   "authoritative hockey probability (eggy-matchup-v1), expected-goal / goal / high-danger indicators with league ranks, rest and back-to-back, special teams, recent games",
                   "the prospective model-versus-market record (one observation per game)", "price freshness"],
     "NOT AVAILABLE": ["ticket percentages", "handle / money percentages", "ticket-versus-handle divergence", "reverse line movement and market resistance (they need the splits)", "cross-book disagreement (one book only)",
-                      "the true opening line and the closing line (only the captures the engine took)", "confirmed starting goalies (no approved confirmation source feeds Eggy today)", "reliable lineup and injury information (no approved source)", "game total / scoring environment (only moneyline and puck-line markets are captured)", "a validated expected-goal-margin or variance estimate beyond the goal-margin calibration of the win probability"],
+                      "the true opening line and the closing line (only the captures the engine took)", "injury and lineup information (no approved free source yet; the goalie feed covers starters only)", "game total / scoring environment (only moneyline and puck-line markets are captured)", "a validated expected-goal-margin or variance estimate beyond the goal-margin calibration of the win probability"],
     "note": "The Odds API (the only odds source) returns prices, not betting splits; scraping a splits site would be a terms-of-service risk and is not done. Price movement is market information; it is not called sharp money."}
 
 
@@ -280,7 +280,7 @@ def price_class(american: float) -> str:
     return "OUTSIDE_PREFERRED" if elo <= american <= ehi else "EXTREME"
 
 
-def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, capture_ctx: dict | None = None, trust_pl: dict | None = None, blend: dict | None = None, structure_state: dict | None = None) -> list[dict]:
+def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, capture_ctx: dict | None = None, trust_pl: dict | None = None, blend: dict | None = None, structure_state: dict | None = None, goalies: dict | None = None) -> list[dict]:
     """Every candidate side of one game: both teams in both markets, with the hockey and market facts, the evidence-weighted probability, the price quality, the cases and the evidence structure."""
     gid, home, away = str(game["game_id"]), game["home"], game["away"]
     ev_now = next((c["events"][eid] for c in reversed(captures) for eid in c["events"] if c["events"][eid]["home"] == home and c["events"][eid]["away"] == away), None)
@@ -305,7 +305,7 @@ def evaluate_game(ctx, game: dict, captures: list[dict], now: dt.datetime, captu
         base = {"game_id": gid, "matchup": f"{away} @ {home}", "side": team, "opponent": opp, "home": home, "away": away, "start_utc": game.get("start_utc"), "capture_at_utc": at_now.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "price_freshness": fresh, "model_win_probability": round(p_model, 4), "hockey_view": {k: mv.get(k) for k in ("favourite", "p_favourite", "gap", "drivers")}, "calibration": (card.get("calibration_confidence") or {}).get("level"),
                 "data_completeness": (card.get("data_completeness") or {}).get("fraction"), "flags": [f["name"] for f in (card.get("contradiction") or {}).get("flags", [])], "card_thesis": (card.get("thesis") or {}).get("type"),
-                "rest_days": {t: ((mv.get("indicators") or {}).get(t) or {}).get("rest_days") for t in (home, away)}, "model_trust_overall": (ctx.moneyline_trust or {}).get("state"), "blend": blend}
+                "rest_days": {t: ((mv.get("indicators") or {}).get(t) or {}).get("rest_days") for t in (home, away)}, "model_trust_overall": (ctx.moneyline_trust or {}).get("state"), "blend": blend, "goalies": goalies}
         out.append({**base, "market": "MONEYLINE", "line": None, "price": float(price), "implied_with_margin": round(_implied(price), 4), "market_probability_market": round(m_nv, 4), "model_probability": round(p_model, 4),
                     "model_probability_raw": round(p_model, 4), "probability_uncertainty": round(float(ml_se), 4), "calibration_note": None, "trust_state": trust_state, "movement": movement(captures, home, away, team, "MONEYLINE")})
         pl = ev_now["pl"].get(team), ev_now["pl"].get(opp)
@@ -423,8 +423,39 @@ def cases(c: dict) -> dict:
         a.append(_item("PUCK_LINE_CALIBRATION", "MODEL", "MODERATE", (c.get("calibration_note") or "the puck-line probability is mapped from the win probability through a goal-margin calibration") + f"; its uncertainty is {c['probability_uncertainty'] * 100:.1f} points and its agreement with the puck-line MARKET has no prospective record yet"))
     if (c.get("data_completeness") or 1) < 0.7:
         a.append(_item("DATA_COMPLETENESS", "DATA", "MODERATE", f"data completeness is {c.get('data_completeness')}"))
-    a.append(_item("GOALIE", "DATA", "WEAK", "starting goalies are not confirmed by an approved source (not available to Eggy)"))
+    it = goalie_item(c)
+    if it:
+        (f if it["kind"] == "GOALIE_CONFIRMED" else a).append(it)
     return {"case_for": f, "case_against": a}
+
+
+def _goalie_lines(pick: dict) -> dict:
+    g = pick.get("goalies")
+    if not g:
+        return {}
+    from operational import goalie_sources
+    return {**goalie_sources.describe(g), "state": g["state"], "retrieved_at_utc": g.get("retrieved_at_utc")}
+
+
+def goalie_item(c: dict) -> dict | None:
+    """ONE personnel reason for the game's starting goalies, however many facts lie behind it (probable + not confirmed + unknown is still one reason). Context and uncertainty only: WEAK, so it never
+    carries a pick and never counts toward the balance; a source conflict or an unknown goalie also caps confidence (see confidence)."""
+    g = c.get("goalies")
+    if not g:
+        return _item("GOALIE_UNKNOWN", "DATA", "WEAK", "starting goalies are unknown: no goalie feed was available at decision time")
+    sides = g["sides"]
+    names = {t: (sides[k]["goalie"] or "no goalie reported") for k, t in (("AWAY", g["away"]), ("HOME", g["home"]))}
+    detail = "; ".join(f"{t} {names[t]} {sides[k]['status']}" for k, t in (("AWAY", g["away"]), ("HOME", g["home"])))
+    chg = " A listed starter changed after it was first seen." if g.get("late_change") else ""
+    st = g["state"]
+    if st == "BOTH_CONFIRMED":
+        return _item("GOALIE_CONFIRMED", "DATA", "WEAK", f"both starting goalies are confirmed ({detail}): goalie uncertainty is removed.{chg}")
+    if st == "SOURCE_CONFLICT":
+        why = next((sides[k]["conflict"] for k in sides if sides[k]["conflict"]), "sources disagree")
+        return _item("GOALIE_CONFLICT", "DATA", "WEAK", f"SOURCE CONFLICT on a starting goalie ({why}); uncertainty is retained ({detail}).{chg}")
+    if st == "UNKNOWN_GOALIE":
+        return _item("GOALIE_UNKNOWN", "DATA", "WEAK", f"a starting goalie is unknown or the listing is stale ({detail}); uncertainty is retained.{chg}")
+    return _item("GOALIE_UNCERTAIN", "DATA", "WEAK", f"a starting goalie is only probable, not confirmed ({detail}).{chg}")
 
 
 def balance(f: list[dict], a: list[dict]) -> dict:
@@ -543,6 +574,8 @@ def confidence(c: dict, structure_state: dict | None = None) -> str:
     moved_proven = ((structure_state or {}).get("MOVE_TOWARD_NOTABLE") or {}).get("decision_state") == "DISAGREEMENT_HAS_SIGNAL"
     if not proven and not moved_proven and lvl == "HIGH":               # movement may support a thesis; until its own regime shows signal it cannot make a HIGH-confidence pick
         lvl = "MEDIUM"
+    if (c.get("goalies") or {}).get("state") in ("SOURCE_CONFLICT", "UNKNOWN_GOALIE"):      # personnel uncertainty: an unknown starter or a source conflict costs one category (a PROBABLE starter does not)
+        lvl = {"LOW": "LOW", "MEDIUM": "LOW", "HIGH": "MEDIUM"}[lvl]
     return lvl
 
 
@@ -666,7 +699,7 @@ def decide(candidates: list[dict], *, now: dt.datetime, why_no_prices: str | Non
         pick["label"] = "BEST AVAILABLE — LOW CONFIDENCE" if pick["pick_basis"] == "BEST_AVAILABLE" else f"EDGE THESIS — {pick['confidence']} CONFIDENCE"
         mc = market_choice(pick, candidates)
         pick["card"] = {"bet": bet_label(pick), "confidence": pick["confidence"], "label": pick["label"], "why_number_one": why_number_one(pick, ranked), "hockey_case": [x["text"] for x in pick["case_for"] if x["family"] in ("HOCKEY_MODEL", "PROVEN_SIGNAL", "SITUATIONAL")],
-                        "market_case": [x["text"] for x in pick["case_for"] + pick["case_against"] if x["family"] == "MARKET_PRICE" and x["kind"] != "MARGIN"], "why_this_market": mc,
+                        "market_case": [x["text"] for x in pick["case_for"] + pick["case_against"] if x["family"] == "MARKET_PRICE" and x["kind"] != "MARGIN"], "why_this_market": mc, "starting_goalies": _goalie_lines(pick),
                         "case_against": [x["text"] for x in pick["case_against"] if x["strength"] != "WEAK"] or [x["text"] for x in pick["case_against"][:2]]}
         return {**base, "decision": "PICK", "pick": pick, "ranked": [summarize(c, candidates, structure_state) for c in ranked[:5]], "top_three": top, "candidates_examined": len(candidates)}
     reason = ("a technical / data failure: no side could be evaluated" if not candidates else "no side of the slate has a FRESH current price, so no legitimate bet can be evaluated: "

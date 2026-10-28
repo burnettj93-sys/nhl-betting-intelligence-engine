@@ -1146,6 +1146,9 @@ def eggy_side_pick_card(doc: dict | None) -> None:
             st.markdown("**MARKET CASE:** " + esc("; ".join(card.get("market_case") or []) or "no meaningful movement since the day's first capture; public ticket and handle data are NOT AVAILABLE"))
             wm = card.get("why_this_market") or {}
             st.markdown("**WHY THIS MARKET:** " + esc(wm.get("why") or "") + (f" (other market: {esc((wm.get('other') or {}).get('bet', ''))})" if wm.get("other") else ""))
+            sg = card.get("starting_goalies") or {}
+            if sg:
+                st.markdown("**STARTING GOALIES:** " + esc(" | ".join(f"{k}: {v}" for k, v in sg.items() if k not in ("state", "retrieved_at_utc"))) + f" · {esc(sg.get('state', 'UNKNOWN_GOALIE').replace('_', ' ').lower())}; retrieved {esc(sg.get('retrieved_at_utc') or 'never')}")
             st.markdown("**CASE AGAINST:** " + esc("; ".join(card.get("case_against") or [])))
             st.markdown(f"**MODEL VS MARKET:** model {p['model_probability']:.1%} · market no-vig {p['market_probability_market']:.1%} · gap {p['gap'] * 100:+.1f} pts · trust state: {esc(p['trust_state'].replace('_', ' ').lower())} (weight {p.get('model_weight', 0):.2f}) · evidence-weighted probability {p['supported_probability']:.1%}")
             st.markdown(f"**PRICE:** {p['price']:+.0f} ({esc(p['price_freshness']['status'])}, DraftKings, captured {esc(p['capture_at_utc'])}); break-even {p['implied_with_margin']:.1%}; evidence-weighted edge {p['edge'] * 100:+.1f} pts"
