@@ -69,6 +69,9 @@ JUSTIFIED_EXCEPTIONS = {
     # operational/goalie_sources.py reads goalie_game_stats only to list which goalies have played for the two teams of a game, so a reporter post that names a goalie can be matched to a player id.
     # It is a roster identification aid: it never answers "what was known at time T", feeds no probability, and the starter status itself comes from the two public pages, not from this table.
     ("operational/goalie_sources.py", "goalie_game_stats"),
+    # operational/personnel.py classes a reported player MATERIAL / MODERATE / DEPTH from the team's ten most recent FINISHED games (time on ice and points per game) when Eggy is about to decide.
+    # It is a live decision-time importance aid over completed games only (nothing later exists to read), never a historical "what was known at time T" lookup, and it feeds no probability.
+    ("operational/personnel.py", "player_game_stats"),
     # operational/board_scorecard.py grades the Slate Board's pregame-FROZEN cards AFTER their games are FINAL (goals, shots, saves, score of a finished game) to measure how the card's earlier, frozen
     # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
     ("operational/board_scorecard.py", "player_game_stats"),

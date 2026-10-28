@@ -13,7 +13,7 @@ than a same-day GoaliePost entry.
 
 Access: ordinary HTTP GETs of the two public pages, no login, no headless browser, no private endpoint; a descriptive User-Agent; at most one
 fetch per page every 20 minutes (10 when a game is within three hours); robots.txt of both sites permits it and neither publishes a term
-against automated reading, but neither grants permission either (docs/GOALIE_SOURCES.md). NHL_ENGINE_GOALIE_SOURCES=OFF stops every request.
+against automated reading, but neither grants permission either, so under docs/SOURCE_POLICY.md the feed is OFF by default and makes no request until the owner sets NHL_ENGINE_GOALIE_SOURCES=ON.
 A test run never reaches either site. This module never writes goalie_status_events, so it cannot open the saves gate by itself.
 """
 from __future__ import annotations
@@ -57,7 +57,8 @@ AS_EXPECTED = re.compile(r",?\s*as\s+expected", re.I)
 # ------------------------------------------------------------------ small helpers ----
 
 def enabled() -> bool:
-    return (os.environ.get(SWITCH_ENV, "ON").strip().upper() != "OFF")
+    """OFF unless the owner opted in (NHL_ENGINE_GOALIE_SOURCES=ON): public + robots-allowed + silent terms is AMBIGUOUS under the project's source rule (docs/SOURCE_POLICY.md), and ambiguous is OFF."""
+    return os.environ.get(SWITCH_ENV, "OFF").strip().upper() == "ON"
 
 
 def _iso(t: dt.datetime) -> str:

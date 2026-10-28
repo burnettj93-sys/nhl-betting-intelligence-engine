@@ -168,7 +168,7 @@ class TestCorroborationAndConflict(unittest.TestCase):
 class TestRefreshHistoryAndFreshness(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.env = mock.patch.dict(os.environ, {"NHL_ENGINE_STATE_DIR": self.tmp.name})
+        self.env = mock.patch.dict(os.environ, {"NHL_ENGINE_STATE_DIR": self.tmp.name, gs.SWITCH_ENV: "ON"})
         self.env.start()
         self.pages = {gs.GP_URL: gp_page(game_obj(2026020199, "WSH", "PHI", [entry(8479292, "Charlie Lindgren", "PROBABLE", 2)], [entry(8479361, "Joseph Woll", "LIKELY", 2)])),
                       gs.GDT_URL: gdt_page([("PHI", "WSH", [], [])])}
@@ -180,10 +180,15 @@ class TestRefreshHistoryAndFreshness(unittest.TestCase):
     def fetch(self, url):
         return self.pages[url]
 
-    def test_a_test_run_never_reaches_the_sites_and_the_off_switch_stops_everything(self):
+    def test_a_test_run_never_reaches_the_sites_and_the_feed_is_off_unless_the_owner_opts_in(self):
         self.assertEqual(gs.refresh(None, NOW)["status"], "DISABLED")
         with mock.patch.dict(os.environ, {gs.SWITCH_ENV: "OFF"}):
             self.assertEqual(gs.refresh(None, NOW, fetch=self.fetch)["status"], "DISABLED")
+        env = {k: v for k, v in os.environ.items() if k != gs.SWITCH_ENV}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertFalse(gs.enabled())                                  # the default: ambiguous permission is OFF
+            self.assertEqual(gs.refresh(None, NOW, fetch=self.fetch)["status"], "DISABLED")
+            self.assertFalse(gs.read_history())                             # not a single page was read or stored
 
     def test_refresh_stores_status_source_time_and_retrieval_time_and_never_touches_goalie_status_events(self):
         st = gs.refresh(None, NOW, fetch=self.fetch)
