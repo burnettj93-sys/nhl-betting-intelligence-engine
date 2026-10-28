@@ -72,6 +72,8 @@ JUSTIFIED_EXCEPTIONS = {
     # operational/personnel.py classes a reported player MATERIAL / MODERATE / DEPTH from the team's ten most recent FINISHED games (time on ice and points per game) when Eggy is about to decide.
     # It is a live decision-time importance aid over completed games only (nothing later exists to read), never a historical "what was known at time T" lookup, and it feeds no probability.
     ("operational/personnel.py", "player_game_stats"),
+    # operational/personnel.py also looks a reported name up in goalie_game_stats only to recognise a goalie and refuse the report (goalies belong to the goalie feed); an identity lookup, never a result or a probability input.
+    ("operational/personnel.py", "goalie_game_stats"),
     # operational/board_scorecard.py grades the Slate Board's pregame-FROZEN cards AFTER their games are FINAL (goals, shots, saves, score of a finished game) to measure how the card's earlier, frozen
     # probabilities did: the same outcome-only pattern as score_selection_shadow.py above. It reads results, never "what was known at time T", never feeds a prediction, and writes only its own scorecard file.
     ("operational/board_scorecard.py", "player_game_stats"),

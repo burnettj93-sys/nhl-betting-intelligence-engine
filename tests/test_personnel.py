@@ -14,12 +14,13 @@ from operational import eggy_pick_ledger as epl
 from operational import personnel as pe
 from tests.test_eggy_pick import cand
 
+W = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
 Z = dt.timezone.utc
 NOW = dt.datetime(2026, 10, 28, 21, 20, tzinfo=Z)
 AGO = lambda h: (NOW - dt.timedelta(hours=h)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def rep(pid="1", name="Star Forward", team="DAL", pos="F", status="OUT", hours=2.0, source="NHL.com", authority="OFFICIAL", **kw):
+def rep(pid="1", name="Skater Fwdone", team="DAL", pos="F", status="OUT", hours=2.0, source="NHL.com", authority="OFFICIAL", **kw):
     return {"type": "REPORT", "player_id": pid, "player_name": name, "team": team, "position": pos, "status": status, "designation": kw.get("designation"), "expected_return": kw.get("expected_return"),
             "source_name": source, "source_url": "https://example.com/x", "source_at_utc": AGO(hours), "authority": authority, "recorded_at_utc": AGO(hours - 0.1)}
 
@@ -31,14 +32,14 @@ def nhl_db():
     db.execute("CREATE TABLE players (player_id TEXT PRIMARY KEY, full_name TEXT, position TEXT)")
     db.execute("CREATE TABLE player_game_stats (game_id INTEGER, player_id TEXT, team_id TEXT, toi_minutes REAL, goals INTEGER, assists INTEGER, played INTEGER DEFAULT 1)")
     for i in range(1, 13):
-        db.execute("INSERT INTO players VALUES (?,?,?)", (f"f{i}", f"Forward {i}", "F"))
+        db.execute("INSERT INTO players VALUES (?,?,?)", (f"f{i}", f"Skater Fwd{W[i]}", "F"))
     for i in range(1, 8):
-        db.execute("INSERT INTO players VALUES (?,?,?)", (f"d{i}", f"Defender {i}", "D"))
+        db.execute("INSERT INTO players VALUES (?,?,?)", (f"d{i}", f"Skater Def{W[i]}", "D"))
     for pre, team in (("", "DAL"), ("w", "WPG")):
         for i in range(1, 13):
-            db.execute("INSERT OR IGNORE INTO players VALUES (?,?,?)", (f"{pre}f{i}", f"{pre}Forward {i}", "F"))
+            db.execute("INSERT OR IGNORE INTO players VALUES (?,?,?)", (f"{pre}f{i}", f"Skater {pre}Fwd{W[i]}", "F"))
         for i in range(1, 8):
-            db.execute("INSERT OR IGNORE INTO players VALUES (?,?,?)", (f"{pre}d{i}", f"{pre}Defender {i}", "D"))
+            db.execute("INSERT OR IGNORE INTO players VALUES (?,?,?)", (f"{pre}d{i}", f"Skater {pre}Def{W[i]}", "D"))
         for g in range(1, 11):
             for i in range(1, 13):
                 db.execute("INSERT INTO player_game_stats VALUES (?,?,?,?,?,?,1)", (g, f"{pre}f{i}", team, 20.0 - i, 1 if i <= 2 else 0, 1 if i <= 3 else 0))
@@ -58,7 +59,7 @@ class TestAttributableOnly(unittest.TestCase):
         self.tmp.cleanup()
 
     def ok(self, **kw):
-        a = dict(player_id="8478402", player_name="Star Forward", team="DAL", position="F", status="OUT", source_name="NHL.com", source_url="https://www.nhl.com/news/x", source_at_utc=AGO(1), now=NOW)
+        a = dict(player_id="8478402", player_name="Skater Fwdone", team="DAL", position="F", status="OUT", source_name="NHL.com", source_url="https://www.nhl.com/news/x", source_at_utc=AGO(1), now=NOW)
         a.update(kw)
         return pe.record_report(**a)
 
@@ -144,11 +145,11 @@ class TestImportance(unittest.TestCase):
 
     def test_a_depth_player_is_never_decision_relevant_and_a_fresh_active_player_is_not_either(self):
         db = nhl_db()
-        st = pe.resolve_all(db, NOW, [rep("f12", "Forward 12", status="OUT"), rep("f1", "Forward 1", status="ACTIVE_CLEARED", hours=1), rep("f2", "Forward 2", status="OUT")])
+        st = pe.resolve_all(db, NOW, [rep("f12", "Skater Fwdtwelve", status="OUT"), rep("f1", "Skater Fwdone", status="ACTIVE_CLEARED", hours=1), rep("f2", "Skater Fwdtwo", status="OUT")])
         v = pe.team_view(st, "DAL")
-        self.assertEqual([p["name"] for p in v["relevant"]], ["Forward 2"])
+        self.assertEqual([p["name"] for p in v["relevant"]], ["Skater Fwdtwo"])
         self.assertEqual(v["coverage"], "REPORTS_ONLY")                                         # reports but no sweep: silence is not health
-        self.assertIn("no full sweep", pe.describe(pe.team_view(pe.resolve_all(db, NOW, [rep("f12", "Forward 12", status="OUT")]), "DAL")))
+        self.assertIn("no full sweep", pe.describe(pe.team_view(pe.resolve_all(db, NOW, [rep("f12", "Skater Fwdtwelve", status="OUT")]), "DAL")))
 
     def test_a_fresh_sweep_lets_silence_mean_no_material_absence_and_a_stale_one_does_not(self):
         db = nhl_db()
@@ -160,9 +161,9 @@ class TestImportance(unittest.TestCase):
 
     def test_a_material_return_and_the_new_today_flag(self):
         db = nhl_db()
-        st = pe.resolve_all(db, NOW, [rep("f1", "Forward 1", status="OUT", hours=20), rep("f1", "Forward 1", status="EXPECTED_TO_RETURN", hours=2)])
+        st = pe.resolve_all(db, NOW, [rep("f1", "Skater Fwdone", status="OUT", hours=20), rep("f1", "Skater Fwdone", status="EXPECTED_TO_RETURN", hours=2)])
         v = pe.team_view(st, "DAL")
-        self.assertEqual([p["name"] for p in v["material_returns"]], ["Forward 1"])
+        self.assertEqual([p["name"] for p in v["material_returns"]], ["Skater Fwdone"])
         self.assertEqual(v["relevant"], [])                                                     # the absence concern is removed
 
 
@@ -184,22 +185,22 @@ class TestEggyConsumesPersonnel(unittest.TestCase):
         return [(i["kind"], i["strength"], "for") for i in cs["case_for"] if i["family"] == "MATCHUP_PERSONNEL"] + [(i["kind"], i["strength"], "against") for i in cs["case_against"] if i["family"] == "MATCHUP_PERSONNEL"]
 
     def test_the_sides_own_material_absence_is_evidence_against_and_the_opponents_is_evidence_for(self):
-        own = with_personnel([rep("f1", "Forward 1", status="OUT")])
+        own = with_personnel([rep("f1", "Skater Fwdone", status="OUT")])
         self.assertIn(("PERSONNEL_AVAILABILITY_AGAINST", "MODERATE", "against"), self.items(own))
-        opp = with_personnel(opp_reports=[rep("f1", "Forward 1", status="OUT")])
+        opp = with_personnel(opp_reports=[rep("f1", "Skater Fwdone", status="OUT")])
         self.assertIn(("PERSONNEL_ABSENCE_OPPONENT", "MODERATE", "for"), self.items(opp))
 
     def test_several_material_absences_make_one_reason_stronger_not_several_reasons(self):
-        c = with_personnel([rep("f1", "Forward 1", status="OUT"), rep("f2", "Forward 2", status="IR", hours=5), rep("d1", "Defender 1", status="OUT")])
+        c = with_personnel([rep("f1", "Skater Fwdone", status="OUT"), rep("f2", "Skater Fwdtwo", status="IR", hours=5), rep("d1", "Skater Defone", status="OUT")])
         against = [i for i in self.items(c) if i[2] == "against" and i[0] == "PERSONNEL_AVAILABILITY_AGAINST"]
         self.assertEqual(against, [("PERSONNEL_AVAILABILITY_AGAINST", "STRONG", "against")])
 
     def test_the_same_underlying_absence_is_one_reason_however_many_reports_describe_it(self):
-        c = with_personnel([rep("f1", "Forward 1", status="OUT", hours=30), rep("f1", "Forward 1", status="IR", hours=3, source="Team"), rep("f1", "Forward 1", status="OUT", hours=2, source="Reporter", authority="REPORTER")])
+        c = with_personnel([rep("f1", "Skater Fwdone", status="OUT", hours=30), rep("f1", "Skater Fwdone", status="IR", hours=3, source="Team"), rep("f1", "Skater Fwdone", status="OUT", hours=2, source="Reporter", authority="REPORTER")])
         self.assertEqual(len([i for i in self.items(c) if i[0].startswith("PERSONNEL_")]), 1)
 
     def test_a_depth_absence_is_not_shown_and_nothing_known_for_either_team_is_a_weak_data_note(self):
-        d = with_personnel([rep("f12", "Forward 12", status="OUT")])
+        d = with_personnel([rep("f12", "Skater Fwdtwelve", status="OUT")])
         self.assertEqual([i for i in self.items(d) if i[0].startswith("PERSONNEL_")], [])
         none = with_personnel()
         self.assertEqual([i for i in self.items(none) if i[0].startswith("PERSONNEL_")], [("PERSONNEL_UNKNOWN", "WEAK", "against")])
@@ -207,8 +208,8 @@ class TestEggyConsumesPersonnel(unittest.TestCase):
     def test_a_player_in_doubt_or_a_source_conflict_is_weak_uncertainty_and_costs_one_confidence_category(self):
         base = cand()
         keep = ep.confidence(base)
-        for reports in ([rep("f1", "Forward 1", status="GAME_TIME_DECISION", hours=3)],
-                        [rep("f1", "Forward 1", status="OUT", hours=2, source="Reporter A", authority="REPORTER"), rep("f1", "Forward 1", status="EXPECTED_TO_PLAY", hours=2.05, source="Reporter B", authority="REPORTER")]):
+        for reports in ([rep("f1", "Skater Fwdone", status="GAME_TIME_DECISION", hours=3)],
+                        [rep("f1", "Skater Fwdone", status="OUT", hours=2, source="Reporter A", authority="REPORTER"), rep("f1", "Skater Fwdone", status="EXPECTED_TO_PLAY", hours=2.05, source="Reporter B", authority="REPORTER")]):
             c = with_personnel(reports)
             self.assertEqual([i[1] for i in self.items(c) if i[0] == "PERSONNEL_AVAILABILITY_AGAINST"], ["WEAK"])
             self.assertLessEqual(["LOW", "MEDIUM", "HIGH"].index(ep.confidence(c)), max(0, ["LOW", "MEDIUM", "HIGH"].index(keep) - 1))
@@ -217,13 +218,13 @@ class TestEggyConsumesPersonnel(unittest.TestCase):
         goalie = {"state": "UNKNOWN_GOALIE", "sides": {}, "home": "DAL", "away": "WPG"}
         g_only = cand()
         g_only["goalies"] = goalie
-        both = with_personnel([rep("f1", "Forward 1", status="GAME_TIME_DECISION", hours=3)])
+        both = with_personnel([rep("f1", "Skater Fwdone", status="GAME_TIME_DECISION", hours=3)])
         both["goalies"] = goalie
         self.assertEqual(ep.confidence(both), ep.confidence(g_only))
 
     def test_personnel_never_changes_a_probability_a_price_or_the_edge(self):
         plain = cand()
-        c = with_personnel([rep("f1", "Forward 1", status="OUT")], [rep("f2", "Forward 2", status="OUT")])
+        c = with_personnel([rep("f1", "Skater Fwdone", status="OUT")], [rep("f2", "Skater Fwdtwo", status="OUT")])
         for k in ("model_probability", "supported_probability", "edge", "conservative_edge", "price", "market_probability_market"):
             self.assertEqual(plain[k], c[k], k)
 
@@ -234,20 +235,20 @@ class TestEggyConsumesPersonnel(unittest.TestCase):
         self.assertFalse(ep.personnel_uncertain(c))
 
     def test_personnel_alone_cannot_make_a_best_available_bet_an_edge_thesis(self):
-        c = with_personnel(opp_reports=[rep("f1", "Forward 1", status="OUT"), rep("f2", "Forward 2", status="OUT")], model=0.50, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=0)
+        c = with_personnel(opp_reports=[rep("f1", "Skater Fwdone", status="OUT"), rep("f2", "Skater Fwdtwo", status="OUT")], model=0.50, mkt=0.50, trust="INSUFFICIENT_EVIDENCE", drivers=0)
         self.assertEqual(c["structure"], "NONE")
         self.assertEqual(ep.confidence(c), "LOW")
 
 
 class TestDecisionTimeRecord(unittest.TestCase):
     def test_the_observation_stores_what_eggy_knew_and_the_signals_are_prospective_only(self):
-        c = with_personnel([rep("f1", "Forward 1", status="OUT")], [rep("f1", "Forward 9", status="GAME_TIME_DECISION", hours=3)])
+        c = with_personnel([rep("f1", "Skater Fwdone", status="OUT")], [rep("f1", "Skater Fwdnine", status="GAME_TIME_DECISION", hours=3)])
         o = {"type": "OBSERVATION", "date": "2026-10-28", "game_id": "1", "personnel": epl._personnel_record([c]), "goalie_state": "BOTH_CONFIRMED",
              "sides": [{"side": "DAL", "market": "MONEYLINE", "line": None, "picked": True, "qualifies": False, "market_p": 0.5, "price_class": "IN_PREFERRED_REGION", "confidence": "LOW", "structure": "NONE",
                         "edge_family_names": [], "gap": 0.0}]}
         rec = o["personnel"]["DAL"]
         self.assertEqual(rec["coverage"], "REPORTS_ONLY")
-        self.assertEqual([p["name"] for p in rec["relevant"]], ["Forward 1"])
+        self.assertEqual([p["name"] for p in rec["relevant"]], ["Skater Fwdone"])
         self.assertEqual({k for k in rec["relevant"][0]}, set(epl._PERSON_FIELDS))
         self.assertIn("source_at_utc", rec["relevant"][0])
         self.assertIn("recorded_at_utc", rec["relevant"][0])

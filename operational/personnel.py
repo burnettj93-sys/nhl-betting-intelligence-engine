@@ -1,17 +1,16 @@
 """Injury / player-availability intelligence for Eggy, from ATTRIBUTABLE reports only.
 
-No injury page is read by the engine: NHL.com, CBS Sports and FOX Sports each prohibit automated reading in their written terms (docs/SOURCE_POLICY.md,
-docs/PERSONNEL_SOURCES.md), and ESPN, Daily Faceoff and RotoWire stay off. What this module provides is the structure that a permitted acquisition step fills: a person (or an agent
-session working like a person) records a specific, attributable status -- named player, named team, explicit status, a named source with its link and its own timestamp -- with
-`python -m operational.personnel record ...`, and records a sweep ("checked team X at time T, no material absence") the same way. Nothing vague, anonymous or unsourced is accepted, and a
-status is never inferred from a roster absence.
+No injury page is read by the engine's own code: NHL.com, CBS Sports and FOX Sports each prohibit automated reading in their written terms (docs/SOURCE_POLICY.md,
+docs/PERSONNEL_SOURCES.md), and ESPN, Daily Faceoff and RotoWire stay off. The reports come from a scheduled research agent that uses general web search for tonight's teams
+(operational/personnel_research.py: plan -> search -> ingest) and passes every finding through the validator below: a named player, a named team, an explicit status, a named source with its link, the
+source's own time and the exact supporting statement. A person may also record one by hand. Nothing vague, anonymous or unsourced is accepted, and a status is never inferred from a roster absence.
 
 States: OUT, IR, DAY_TO_DAY, QUESTIONABLE, GAME_TIME_DECISION, EXPECTED_TO_PLAY, EXPECTED_TO_RETURN, ACTIVE_CLEARED, and UNKNOWN (no usable report). Each report keeps the player id and name, team, position,
 source, source link, the source's own time and the engine's recording time (separate clocks), the designation and expected return, the previous status, whether it is new today and its freshness
 (CURRENT / RECENT / STALE; stale reports are kept for history and never drive Eggy). Two sources that disagree and cannot be ordered by time and authority are a SOURCE CONFLICT, never resolved toward a
 preferred bet.
 
-Impact is measured from the engine's own data (time on ice and points per game over the team's last ten games, position-aware) and classed MATERIAL / MODERATE / DEPTH / UNRATED -- no probability penalty
+Impact is measured from the engine's own data (time on ice and points per game over each player's last ten appearances for the team, position-aware) and classed MATERIAL / MODERATE / DEPTH / UNRATED -- no probability penalty
 is invented. Goalies belong to the goalie feed, not here. This module never writes roster_status_events, so no other part of the product reads these reports.
 """
 from __future__ import annotations
@@ -32,12 +31,14 @@ CLASS_OF = {"OUT": ABSENT, "IR": ABSENT, "DAY_TO_DAY": UNCERTAIN, "QUESTIONABLE"
 AUTHORITY = {"OFFICIAL": 3, "REPORTER": 2, "AGGREGATOR": 1}          # team / league statement > a named beat reporter > a secondary aggregation
 CURRENT, RECENT, STALE = "CURRENT", "RECENT", "STALE"
 # (CURRENT up to, RECENT up to) in hours, by the kind of status: a long-term absence stays current for days; a game-time decision is current only hours.
-FRESHNESS_H = {"LONG_TERM": (168.0, 504.0), "OUT": (36.0, 72.0), "UNCERTAIN": (24.0, 48.0), "GAME_TIME_DECISION": (6.0, 12.0), "AVAILABLE": (24.0, 48.0), "SWEEP": (12.0, 24.0)}
+FRESHNESS_H = {"LONG_TERM": (168.0, 504.0), "OUT": (36.0, 72.0), "UNCERTAIN": (24.0, 48.0), "GAME_TIME_DECISION": (6.0, 12.0), "AVAILABLE": (24.0, 48.0), "EXPECTED": (10.0, 20.0), "SWEEP": (12.0, 24.0)}
 LONG_TERM_DAYS = 14
 FUTURE_TOLERANCE_MIN = 5.0
 SAME_TIME_MIN = 15.0                                                 # reports this close in source time are "the same moment" for ordering
 WINDOW_GAMES = 10
+ROSTER_GAMES = 20                                                  # a player who dressed for the team in its last 20 games is on the current roster for ranking
 MATERIAL, MODERATE, DEPTH, UNRATED = "MATERIAL", "MODERATE", "DEPTH", "UNRATED"
+PROHIBITED_HOSTS = ("nhl.com", "cbssports.com", "foxsports.com", "espn.com", "dailyfaceoff.com", "rotowire.com", "fox.com", "paramount.com")     # written terms prohibit automated reading, or the project keeps them off
 TEAMS = {"ANA", "BOS", "BUF", "CGY", "CAR", "CHI", "COL", "CBJ", "DAL", "DET", "EDM", "FLA", "LAK", "MIN", "MTL", "NSH", "NJD", "NYI", "NYR", "OTT", "PHI", "PIT", "SEA", "SJS", "STL", "TBL", "TOR", "UTA", "VAN", "VGK", "WSH", "WPG"}
 
 
@@ -97,8 +98,9 @@ def _check_source(name, url, at, now: dt.datetime) -> str | None:
 
 
 def record_report(*, player_id, player_name, team, position, status, source_name, source_url, source_at_utc, authority="REPORTER", designation=None,
-                  expected_return=None, now: dt.datetime | None = None) -> dict:
-    """Validates and appends one attributable status. Raises ValueError (nothing is stored) for anything vague, unsourced, unsupported or about a goalie."""
+                  expected_return=None, statement=None, origin="MANUAL", phase=None, time_precision="TIME", now: dt.datetime | None = None) -> dict:
+    """Validates and appends one attributable status. Raises ValueError (nothing is stored) for anything vague, unsourced, unsupported or about a goalie. A RESEARCH report must also carry the exact supporting
+    statement, and that statement must name the player and come from a source that is not on the prohibited list."""
     now = now or dt.datetime.now(dt.timezone.utc)
     status = (status or "").strip().upper().replace("-", "_").replace(" ", "_")
     team = (team or "").strip().upper()
@@ -116,9 +118,22 @@ def record_report(*, player_id, player_name, team, position, status, source_name
     bad = _check_source(source_name, source_url, source_at_utc, now)
     if bad:
         raise ValueError(bad)
+    statement = (statement or "").strip()
+    if origin == "RESEARCH":
+        if len(statement) < 15 or len(statement) > 600:
+            raise ValueError("the exact supporting statement (15-600 characters) is required")
+        last = re.sub(r"[^a-z]", "", (player_name or "").lower().split()[-1]) if (player_name or "").split() else ""
+        if not last or last not in re.sub(r"[^a-z ]", "", statement.lower()).replace(" ", ""):
+            raise ValueError("the supporting statement must name the player")
+    host = re.sub(r"^https?://(www\.)?", "", source_url.strip().lower()).split("/")[0]
+    if origin == "RESEARCH" and any(host == d or host.endswith("." + d) for d in PROHIBITED_HOSTS):
+        raise ValueError(f"{host} prohibits automated reading in its terms (docs/SOURCE_POLICY.md): not an accepted source")
     row = {"type": "REPORT", "player_id": str(player_id), "player_name": player_name.strip(), "team": team, "position": (position or "").upper() or None, "status": status,
            "designation": (designation or None), "expected_return": (expected_return or None), "source_name": source_name.strip(), "source_url": source_url.strip(),
-           "source_at_utc": _iso(_parse(source_at_utc)), "authority": authority, "recorded_at_utc": _iso(now)}
+           "source_at_utc": _iso(_parse(source_at_utc)), "authority": authority, "recorded_at_utc": _iso(now),
+           "statement": statement or None, "origin": origin, "phase": phase, "time_precision": time_precision}
+    if origin == "RESEARCH" and freshness(row, now) == STALE:
+        raise ValueError("the report is not current enough for its status (an old injury note is history, not tonight's availability)")
     _append(row)
     return row
 
@@ -153,8 +168,8 @@ def freshness(r: dict, now: dt.datetime) -> str:
     h = _hours(r.get("source_at_utc"), now)
     if h is None or h < -FUTURE_TOLERANCE_MIN / 60.0:
         return STALE
-    kind = "SWEEP" if r["type"] == "SWEEP" else ("LONG_TERM" if _long_term(r) else ("GAME_TIME_DECISION" if r["status"] == "GAME_TIME_DECISION" else
-                                                                                     ("OUT" if r["status"] == "OUT" else ("UNCERTAIN" if CLASS_OF[r["status"]] == UNCERTAIN else "AVAILABLE"))))
+    kind = "SWEEP" if r["type"] in ("SWEEP", "RESEARCH") else ("LONG_TERM" if _long_term(r) else ("GAME_TIME_DECISION" if r["status"] == "GAME_TIME_DECISION" else
+                                                                                     ("OUT" if r["status"] == "OUT" else ("UNCERTAIN" if CLASS_OF[r["status"]] == UNCERTAIN else ("EXPECTED" if r["status"] in ("EXPECTED_TO_PLAY", "EXPECTED_TO_RETURN") else "AVAILABLE")))))
     cur, rec = FRESHNESS_H[kind]
     return CURRENT if h <= cur else (RECENT if h <= rec else STALE)
 
@@ -205,12 +220,16 @@ def impact_of(nhl, player_id: str, team: str, position: str | None) -> dict:
     if nhl is None:
         return {"impact": UNRATED, "basis": "no engine data"}
     try:
-        games = [r[0] for r in nhl.execute("SELECT DISTINCT game_id FROM player_game_stats WHERE team_id = ? ORDER BY game_id DESC LIMIT ?", (team, WINDOW_GAMES))]
-        if not games:
+        recent = [r[0] for r in nhl.execute("SELECT DISTINCT game_id FROM player_game_stats WHERE team_id = ? ORDER BY game_id DESC LIMIT ?", (team, ROSTER_GAMES))]
+        if not recent:
             return {"impact": UNRATED, "basis": "no recent games for the team"}
-        q = ",".join("?" * len(games))
-        rows = nhl.execute(f"SELECT s.player_id, p.position, AVG(s.toi_minutes) AS toi, COUNT(*) AS gp, SUM(COALESCE(s.goals,0) + COALESCE(s.assists,0)) AS pts FROM player_game_stats s LEFT JOIN players p ON p.player_id = s.player_id "
-                           f"WHERE s.team_id = ? AND s.game_id IN ({q}) AND COALESCE(s.played, 1) = 1 AND s.toi_minutes IS NOT NULL AND COALESCE(p.position, '') <> 'G' GROUP BY s.player_id", (team, *games)).fetchall()
+        q = ",".join("?" * len(recent))
+        # each player's own last WINDOW_GAMES appearances for the team (an injured star's form is measured from before the injury); the comparison group is the players who dressed in the team's recent games
+        rows = nhl.execute(f"WITH w AS (SELECT s.player_id, s.toi_minutes, COALESCE(s.goals,0) + COALESCE(s.assists,0) AS pts, ROW_NUMBER() OVER (PARTITION BY s.player_id ORDER BY s.game_id DESC) AS rn "
+                           f"FROM player_game_stats s WHERE s.team_id = ? AND COALESCE(s.played, 1) = 1 AND s.toi_minutes IS NOT NULL) "
+                           f"SELECT w.player_id, p.position, AVG(w.toi_minutes) AS toi, COUNT(*) AS gp, SUM(w.pts) AS pts FROM w LEFT JOIN players p ON p.player_id = w.player_id "
+                           f"WHERE w.rn <= ? AND COALESCE(p.position, '') <> 'G' AND (w.player_id = ? OR w.player_id IN (SELECT player_id FROM player_game_stats WHERE team_id = ? AND game_id IN ({q}))) "
+                           f"GROUP BY w.player_id", (team, WINDOW_GAMES, str(player_id), team, *recent)).fetchall()
     except Exception:                                                      # noqa: BLE001 - unrated is honest when the data cannot be read
         return {"impact": UNRATED, "basis": "engine data unavailable"}
     me = next((r for r in rows if str(r["player_id"]) == str(player_id)), None)
@@ -241,7 +260,7 @@ def resolve_all(nhl, now: dt.datetime, reports: list[dict] | None = None) -> dic
     today_et = _et_date(now)
     by_team: dict[str, dict] = {}
     for r in reports:
-        by_team.setdefault(r["team"], {"reports": [], "sweeps": []})["sweeps" if r["type"] == "SWEEP" else "reports"].append(r)
+        by_team.setdefault(r["team"], {"reports": [], "sweeps": [], "research": []})["reports" if r["type"] == "REPORT" else ("research" if r["type"] == "RESEARCH" else "sweeps")].append(r)
     out = {}
     for team, d in by_team.items():
         by_player: dict[str, list[dict]] = {}
@@ -257,11 +276,12 @@ def resolve_all(nhl, now: dt.datetime, reports: list[dict] | None = None) -> dic
             players.append({"player_id": pid, "name": st["player_name"], "team": team, "position": st.get("position"), "status": st["current_status"], "class": st["class"], "freshness": st["freshness"],
                             "designation": st.get("designation"), "expected_return": st.get("expected_return"), "source": st["source_name"], "source_url": st["source_url"], "authority": st["authority"],
                             "source_at_utc": st["source_at_utc"], "recorded_at_utc": st["recorded_at_utc"], "previous_status": st["previous_status"], "new_today": bool(first_today) and st["previous_status"] is None,
-                            "conflict": st["conflict"], **imp})
+                            "conflict": st["conflict"], "statement": st.get("statement"), "origin": st.get("origin"), "phase": st.get("phase"), "time_precision": st.get("time_precision"), **imp})
         fresh_sweeps = [s for s in d["sweeps"] if freshness(s, now) != STALE]
         swept = max((s["source_at_utc"] for s in fresh_sweeps), default=None)
+        researched = max((x["source_at_utc"] for x in d.get("research", []) if freshness(x, now) == CURRENT), default=None)
         live = [p for p in players if p["freshness"] != STALE]
-        out[team] = {"coverage": "SWEPT" if swept else ("REPORTS_ONLY" if live else "NONE"), "swept_at_utc": swept, "players": players}
+        out[team] = {"coverage": "SWEPT" if swept else ("RESEARCHED" if researched else ("REPORTS_ONLY" if live else "NONE")), "swept_at_utc": swept, "researched_at_utc": researched, "players": players}
     return out
 
 
@@ -279,13 +299,36 @@ def decision_relevant(p: dict) -> bool:
 
 
 def team_view(state: dict | None, team: str) -> dict:
-    t = (state or {}).get(team) or {"coverage": "NONE", "swept_at_utc": None, "players": []}
+    t = (state or {}).get(team) or {"coverage": "NONE", "swept_at_utc": None, "researched_at_utc": None, "players": []}
     rel = [p for p in t["players"] if decision_relevant(p)]
     material = [p for p in rel if p["impact"] == MATERIAL]
-    return {"team": team, "coverage": t["coverage"], "swept_at_utc": t["swept_at_utc"], "relevant": rel,
+    return {"team": team, "coverage": t["coverage"], "swept_at_utc": t["swept_at_utc"], "researched_at_utc": t.get("researched_at_utc"), "relevant": rel,
             "material_absent": [p for p in material if p["class"] == ABSENT], "material_uncertain": [p for p in material if p["class"] == UNCERTAIN],
             "moderate_absent": [p for p in rel if p["impact"] == MODERATE and p["class"] == ABSENT], "conflicts": [p for p in rel if p["conflict"]],
             "material_returns": [p for p in t["players"] if p["freshness"] != STALE and p["impact"] == MATERIAL and p["class"] == AVAILABLE and p["previous_status"] in ("OUT", "IR")]}
+
+
+def unresolved(state: dict | None) -> list[dict]:
+    """Players whose availability is still open and who matter: MATERIAL or MODERATE and in doubt (day-to-day / questionable / game-time decision), only EXPECTED to play or return, or in a source conflict.
+    These are re-checked close to the decision."""
+    out = []
+    for t in (state or {}).values():
+        for p in t["players"]:
+            if p["freshness"] == STALE or p["impact"] not in (MATERIAL, MODERATE):
+                continue
+            if p["class"] == UNCERTAIN or p["status"] in ("EXPECTED_TO_PLAY", "EXPECTED_TO_RETURN") or p["conflict"]:
+                out.append(p)
+    return out
+
+
+def research_runs(reports: list[dict], now: dt.datetime) -> list[dict]:
+    """The research runs of the last 24 hours, for the decision-time record: phase, when stored, which teams."""
+    runs: dict[tuple, dict] = {}
+    for r in reports:
+        if r["type"] == "RESEARCH" and (_hours(r["recorded_at_utc"], now) or 99) <= 24:
+            run = runs.setdefault((r.get("phase"), r["recorded_at_utc"]), {"phase": r.get("phase"), "recorded_at_utc": r["recorded_at_utc"], "teams": []})
+            run["teams"].append(r["team"])
+    return sorted(runs.values(), key=lambda x: x["recorded_at_utc"])
 
 
 def describe(v: dict) -> str:
@@ -293,6 +336,8 @@ def describe(v: dict) -> str:
     if v["coverage"] == "NONE":
         return f"{v['team']} - injury information NOT AVAILABLE (no attributable report recorded)"
     if not v["relevant"]:
+        if v["coverage"] == "RESEARCHED":
+            return f"{v['team']} - no material absence found in the research run of {v['researched_at_utc'][11:16]}Z (a search result, not a medical clearance)"
         return f"{v['team']} - no material current absence identified" + ("" if v["coverage"] == "SWEPT" else " in the reports recorded (no full sweep)")
     bits = []
     for p in v["relevant"]:
@@ -304,7 +349,10 @@ def describe(v: dict) -> str:
 # ------------------------------------------------------------------ command line (the permitted acquisition step) ----
 
 def _find(nhl, team: str, name: str) -> tuple[str, str | None]:
-    rows = nhl.execute("SELECT DISTINCT p.player_id, p.position FROM players p JOIN player_game_stats s ON s.player_id = p.player_id WHERE s.team_id = ? AND LOWER(p.full_name) = LOWER(?)", (team, name)).fetchall()
+    rows = nhl.execute("SELECT DISTINCT p.player_id, p.position FROM players p WHERE LOWER(p.full_name) = LOWER(?) AND (p.player_id IN (SELECT player_id FROM player_game_stats WHERE team_id = ?) "
+                       "OR p.player_id IN (SELECT player_id FROM goalie_game_stats WHERE team_id = ?))", (name, team, team)).fetchall()
+    if len(rows) == 1 and (rows[0][1] or "").upper() == "G":
+        raise ValueError("a goalie: starting-goalie status belongs to the goalie feed, not to personnel reports")
     if len(rows) != 1:
         raise ValueError(f"could not identify '{name}' on {team} from the engine's player data ({len(rows)} matches); pass --player-id")
     return str(rows[0][0]), rows[0][1]

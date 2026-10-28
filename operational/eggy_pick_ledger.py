@@ -64,7 +64,7 @@ def observation(cands: list[dict], game: dict, decided_at: str, structure_state:
             "personnel": _personnel_record(cands), "sides": sides}
 
 
-_PERSON_FIELDS = ("player_id", "name", "position", "status", "freshness", "impact", "designation", "expected_return", "source", "source_url", "authority", "source_at_utc", "recorded_at_utc", "previous_status", "new_today", "conflict")
+_PERSON_FIELDS = ("player_id", "name", "position", "status", "freshness", "impact", "designation", "expected_return", "source", "source_url", "authority", "source_at_utc", "recorded_at_utc", "previous_status", "new_today", "conflict", "statement", "origin", "phase", "time_precision")
 
 
 def _personnel_record(cands: list[dict]) -> dict | None:
@@ -72,7 +72,11 @@ def _personnel_record(cands: list[dict]) -> dict | None:
     c = next((x for x in cands if x.get("personnel")), None)
     if c is None:
         return None
-    out = {}
+    from operational import personnel as pers
+    try:
+        out = {"_research_runs": pers.research_runs(pers.read_reports(), dt.datetime.now(dt.timezone.utc))}
+    except Exception:                                                      # noqa: BLE001
+        out = {"_research_runs": []}
     for v in (c["personnel"]["side"], c["personnel"]["opponent"]):
         if v:
             out[v["team"]] = {"coverage": v["coverage"], "swept_at_utc": v["swept_at_utc"], "relevant": [{k: p.get(k) for k in _PERSON_FIELDS} for p in v["relevant"]],
@@ -218,6 +222,7 @@ SIGNALS = {
     "PICK_OWN_MATERIAL_ABSENCE": "daily bets where the picked team was missing a MATERIAL player (fresh attributable report) at decision time",
     "PICK_OPPONENT_MATERIAL_ABSENCE": "daily bets where the opponent was missing a MATERIAL player (fresh attributable report) at decision time",
     "PICK_MATERIAL_PLAYER_IN_DOUBT": "daily bets where a MATERIAL player on either team was questionable / day-to-day / a game-time decision at decision time",
+    "PICK_UNRESOLVED_GAME_TIME_DECISION": "daily bets where a MATERIAL player on either team was still a game-time decision when the pick was made",
     "PICK_MATERIAL_PLAYER_RETURN": "daily bets where a MATERIAL player had just returned from an absence on either team at decision time",
     "PICK_INJURY_SOURCE_CONFLICT": "daily bets where injury sources disagreed about a MATERIAL player at decision time",
     "PICK_NO_MATERIAL_PERSONNEL_ISSUE": "daily bets with injury coverage on record and no material absence, doubt or conflict at decision time",
@@ -268,6 +273,7 @@ def signal_bets(o: dict):
                 out.append(("PICK_GOALIE_LATE_CHANGE", p, y))
             pv = o.get("personnel")
             if pv is not None:
+                pv = {k: v for k, v in pv.items() if not k.startswith("_")}
                 teams = list(pv.values())
                 rel = [x for t in teams for x in t["relevant"]]
                 material = [x for x in rel if x["impact"] == "MATERIAL"]
@@ -278,6 +284,8 @@ def signal_bets(o: dict):
                 if any(x["impact"] == "MATERIAL" and x["status"] in ("OUT", "IR") for t in opp_teams for x in t["relevant"]):
                     out.append(("PICK_OPPONENT_MATERIAL_ABSENCE", p, y))
                 doubt = any(x["status"] not in ("OUT", "IR") for x in material)
+                if any(x["status"] == "GAME_TIME_DECISION" for x in material):
+                    out.append(("PICK_UNRESOLVED_GAME_TIME_DECISION", p, y))
                 conflict = any(x["conflict"] for x in material)
                 if doubt:
                     out.append(("PICK_MATERIAL_PLAYER_IN_DOUBT", p, y))
