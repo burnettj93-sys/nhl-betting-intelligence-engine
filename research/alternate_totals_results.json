@@ -1,0 +1,149 @@
+{
+  "by_season": {
+    "20242025": {
+      "game_total": {
+        "O3.5": {
+          "empirical_brier": 0.12276,
+          "event_rate": 0.8567,
+          "frac_resamples_poisson_improved": 0.198,
+          "n_events": 1124,
+          "poisson_brier": 0.12303
+        },
+        "O4.5": {
+          "empirical_brier": 0.18441,
+          "event_rate": 0.7561,
+          "frac_resamples_poisson_improved": 0.4525,
+          "n_events": 992,
+          "poisson_brier": 0.18443
+        },
+        "O5.5": {
+          "empirical_brier": 0.24861,
+          "event_rate": 0.5373,
+          "frac_resamples_poisson_improved": 0.009,
+          "n_events": 705,
+          "poisson_brier": 0.25254
+        },
+        "O6.5": {
+          "empirical_brier": 0.24407,
+          "event_rate": 0.423,
+          "frac_resamples_poisson_improved": 0.2465,
+          "n_events": 555,
+          "poisson_brier": 0.24438
+        },
+        "O7.5": {
+          "empirical_brier": 0.18519,
+          "event_rate": 0.2454,
+          "frac_resamples_poisson_improved": 0.0175,
+          "n_events": 322,
+          "poisson_brier": 0.18787
+        }
+      },
+      "n": 1312,
+      "team_total_home": {
+        "O1.5": {
+          "empirical_brier": 0.14358,
+          "event_rate": 0.8262,
+          "frac_resamples_poisson_improved": 0.345,
+          "n_events": 1084,
+          "poisson_brier": 0.14366
+        },
+        "O2.5": {
+          "empirical_brier": 0.23456,
+          "event_rate": 0.6242,
+          "frac_resamples_poisson_improved": 0.42,
+          "n_events": 819,
+          "poisson_brier": 0.2346
+        },
+        "O3.5": {
+          "empirical_brier": 0.23941,
+          "event_rate": 0.3971,
+          "frac_resamples_poisson_improved": 0.334,
+          "n_events": 521,
+          "poisson_brier": 0.23954
+        },
+        "O4.5": {
+          "empirical_brier": 0.17802,
+          "event_rate": 0.2317,
+          "frac_resamples_poisson_improved": 0.4595,
+          "n_events": 304,
+          "poisson_brier": 0.17803
+        }
+      }
+    },
+    "20252026": {
+      "game_total": {
+        "O3.5": {
+          "empirical_brier": 0.11108,
+          "event_rate": 0.8727,
+          "frac_resamples_poisson_improved": 0.481,
+          "n_events": 1145,
+          "poisson_brier": 0.11108
+        },
+        "O4.5": {
+          "empirical_brier": 0.15612,
+          "event_rate": 0.8064,
+          "frac_resamples_poisson_improved": 0.0115,
+          "n_events": 1058,
+          "poisson_brier": 0.15906
+        },
+        "O5.5": {
+          "empirical_brier": 0.24465,
+          "event_rate": 0.5732,
+          "frac_resamples_poisson_improved": 0.166,
+          "n_events": 752,
+          "poisson_brier": 0.24537
+        },
+        "O6.5": {
+          "empirical_brier": 0.24902,
+          "event_rate": 0.4688,
+          "frac_resamples_poisson_improved": 0.161,
+          "n_events": 615,
+          "poisson_brier": 0.24982
+        },
+        "O7.5": {
+          "empirical_brier": 0.18788,
+          "event_rate": 0.2508,
+          "frac_resamples_poisson_improved": 0.023,
+          "n_events": 329,
+          "poisson_brier": 0.19003
+        }
+      },
+      "n": 1312,
+      "team_total_home": {
+        "O1.5": {
+          "empirical_brier": 0.14556,
+          "event_rate": 0.8232,
+          "frac_resamples_poisson_improved": 0.3095,
+          "n_events": 1080,
+          "poisson_brier": 0.1457
+        },
+        "O2.5": {
+          "empirical_brier": 0.23494,
+          "event_rate": 0.6227,
+          "frac_resamples_poisson_improved": 0.4025,
+          "n_events": 817,
+          "poisson_brier": 0.235
+        },
+        "O3.5": {
+          "empirical_brier": 0.24135,
+          "event_rate": 0.407,
+          "frac_resamples_poisson_improved": 0.491,
+          "n_events": 534,
+          "poisson_brier": 0.24135
+        },
+        "O4.5": {
+          "empirical_brier": 0.17345,
+          "event_rate": 0.2233,
+          "frac_resamples_poisson_improved": 0.4065,
+          "n_events": 293,
+          "poisson_brier": 0.17347
+        }
+      }
+    }
+  },
+  "caveat": "Single league-wide Poisson mean fit ONCE on warmup seasons only (not re-fit per game-date, not team-specific, no xG context) -- a real, disclosed simplification given this block's scope, NOT the same rigor as the SOG/Blocks/Saves/Team-SOG walk-forward models elsewhere in this registry. Report this as PRELIMINARY, not on par with those.",
+  "corpus_n": 5248,
+  "league_mean_home_goals_train": 3.248,
+  "league_mean_total_goals_train": 6.292,
+  "train_n": 2624
+}
