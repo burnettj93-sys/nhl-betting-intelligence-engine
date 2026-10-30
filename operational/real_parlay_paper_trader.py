@@ -160,6 +160,13 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             df_summary = {"status": "ERROR", "last_error": f"{exc.__class__.__name__}: {exc}", "written": 0}
 
+        # Starting-goalie status from two free public pages (GoaliePost primary, GameDayTweets corroboration); rate-limited inside the module, and a failure is UNKNOWN goalies, never a stopped cycle.
+        try:
+            from operational import goalie_sources
+            goalie_summary = goalie_sources.run_cycle(nhl_conn, now)
+        except Exception as exc:  # noqa: BLE001
+            goalie_summary = {"status": "ERROR", "last_error": f"{exc.__class__.__name__}: {exc}"}
+
         # One candidate-leg pool serves the automatic selector (the only writer of model tickets).
         collected = daily_tickets.collect_candidate_legs(nhl_conn, now)
         try:                                       # evidence queue only (goalie confirmations, Ontario checks, path checks): nothing here can stake anything
@@ -199,7 +206,7 @@ def run(now: dt.datetime | None = None) -> dict:
 
     result = {"stake_result": stake_summary, "settlement_summary": settlement_summary,
               "revalidation_summary": revalidation_summary, "price_refresh": price_refresh, "board_scorecard": scorecard_summary,
-              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary, "learning_cohort": learning_summary, "eggy_pick": eggy_summary}
+              "evidence_queue": manual_summary, "league_pull": league_summary, "morning_refresh": refresh_summary, "keep_awake": keep_awake_summary, "official_rosters": {k: v for k, v in roster_summary.items() if v not in ("CURRENT", "FETCHED")} or {"checked": len(roster_summary)}, "builder_pool": builder_summary, "product_state": product_summary, "slate_board": board_summary, "starter_feed": df_summary, "goalie_sources": goalie_summary, "learning_cohort": learning_summary, "eggy_pick": eggy_summary}
     from operational import ingestion_health
     ingestion_health.record_run("real_parlay_paper_trader", {
         "eastern_date": today_et, "newly_staked": stake_summary["newly_recorded"],

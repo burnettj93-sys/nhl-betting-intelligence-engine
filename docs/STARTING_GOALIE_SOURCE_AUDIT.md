@@ -1,5 +1,9 @@
 # Starting-Goalie Source Audit
 
+## Addendum 2026-10-28: GoaliePost + GameDayTweets are now the goalie feed
+
+See `docs/GOALIE_SOURCES.md`: the free, no-login public pages GoaliePost (primary) and GameDayTweets (corroboration) were audited live, read by ordinary GET, and integrated as `operational/goalie_sources.py`. Daily Faceoff, ESPN and RotoWire stay OFF/unused.
+
 ## Addendum 2026-10-08 — Daily Faceoff: reachable, policy-governed, and OFF until the owner opts in
 
 The original audit (kept below for the record) found Daily Faceoff blocked by Cloudflare. That is no longer true technically, but a second finding now matters more.

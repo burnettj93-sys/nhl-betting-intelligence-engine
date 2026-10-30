@@ -57,8 +57,31 @@ def observation(cands: list[dict], game: dict, decided_at: str, structure_state:
                       "supported_p": c["supported_probability"], "edge": c["edge"], "conservative_edge": c["conservative_edge"], "structure": c["structure"], "qualifies": c["qualifies"], "price_class": c["price_class"],
                       "confidence": ep.confidence(c, structure_state) if c["qualifies"] else None, "moved": mv.get("change"), "move_class": mv.get("class"), "move_percentile": mv.get("percentile"), "edge_family_names": [e["family"] for e in c["edge_families"]["present"]], "rest_advantage": any(i["kind"] == "REST_ADVANTAGE" for i in c["case_for"]),
                       "trust_state": c["trust_state"], "calibration": c.get("calibration"), "consensus": c["edge_thesis"]["consensus_quality"], "edge_families": c["edge_thesis"]["families"]})
+    gv = next((c.get("goalies") for c in cands if c.get("goalies")), None) or {}
     return {"type": "OBSERVATION", "date": game["date"], "game_id": str(game["game_id"]), "matchup": f"{game['away']} @ {game['home']}", "home": game["home"], "away": game["away"], "start_utc": game.get("start_utc"),
-            "decided_at_utc": decided_at, "sides": sides}
+            "decided_at_utc": decided_at, "goalie_state": gv.get("state") or "UNKNOWN_GOALIE", "late_goalie_change": bool(gv.get("late_change")),
+            "goalies": {k: {x: v.get(x) for x in ("goalie", "status", "freshness", "source", "source_at_utc", "conflict")} for k, v in (gv.get("sides") or {}).items()},
+            "personnel": _personnel_record(cands), "sides": sides}
+
+
+_PERSON_FIELDS = ("player_id", "name", "position", "status", "freshness", "impact", "designation", "expected_return", "source", "source_url", "authority", "source_at_utc", "recorded_at_utc", "previous_status", "new_today", "conflict", "statement", "origin", "phase", "time_precision")
+
+
+def _personnel_record(cands: list[dict]) -> dict | None:
+    """Exactly what Eggy knew about player availability at decision time, per team: coverage, the sweep time, every decision-relevant player with source and times, the returns and the conflicts."""
+    c = next((x for x in cands if x.get("personnel")), None)
+    if c is None:
+        return None
+    from operational import personnel as pers
+    try:
+        out = {"_research_runs": pers.research_runs(pers.read_reports(), dt.datetime.now(dt.timezone.utc))}
+    except Exception:                                                      # noqa: BLE001
+        out = {"_research_runs": []}
+    for v in (c["personnel"]["side"], c["personnel"]["opponent"]):
+        if v:
+            out[v["team"]] = {"coverage": v["coverage"], "swept_at_utc": v["swept_at_utc"], "relevant": [{k: p.get(k) for k in _PERSON_FIELDS} for p in v["relevant"]],
+                              "returns": [{k: p.get(k) for k in _PERSON_FIELDS} for p in v["material_returns"]], "conflicts": [p["name"] for p in v["conflicts"]]}
+    return out
 
 
 def late_price(pick: dict) -> dict | None:
@@ -193,6 +216,23 @@ SIGNALS = {
     "EGGY_PICK": "Eggy's daily bets (the whole record of the product)",
     "PICK_EDGE_THESIS": "daily bets that carried an edge thesis",
     "PICK_BEST_AVAILABLE": "daily bets chosen as the best available with no edge thesis (LOW confidence)",
+    "PICK_GOALIES_BOTH_CONFIRMED": "daily bets where both starting goalies were CONFIRMED at decision time",
+    "PICK_GOALIES_ONE_PROBABLE": "daily bets where a starting goalie was only PROBABLE (the other confirmed or probable) at decision time",
+    "PICK_GOALIES_UNKNOWN": "daily bets where a starting goalie was UNKNOWN (no listing, or a stale one) at decision time",
+    "PICK_OWN_MATERIAL_ABSENCE": "daily bets where the picked team was missing a MATERIAL player (fresh attributable report) at decision time",
+    "PICK_OPPONENT_MATERIAL_ABSENCE": "daily bets where the opponent was missing a MATERIAL player (fresh attributable report) at decision time",
+    "PICK_MATERIAL_PLAYER_IN_DOUBT": "daily bets where a MATERIAL player on either team was questionable / day-to-day / a game-time decision at decision time",
+    "PICK_UNRESOLVED_GAME_TIME_DECISION": "daily bets where a MATERIAL player on either team was still a game-time decision when the pick was made",
+    "PICK_MATERIAL_PLAYER_RETURN": "daily bets where a MATERIAL player had just returned from an absence on either team at decision time",
+    "PICK_INJURY_SOURCE_CONFLICT": "daily bets where injury sources disagreed about a MATERIAL player at decision time",
+    "PICK_NO_MATERIAL_PERSONNEL_ISSUE": "daily bets with injury coverage on record and no material absence, doubt or conflict at decision time",
+    "PICK_INJURY_COVERAGE_NONE": "daily bets where no attributable injury report existed for either team at decision time (absences unknown)",
+    "PICK_EDGE_THESIS_CLEAN_PERSONNEL": "edge-thesis bets with no goalie or material injury uncertainty at decision time",
+    "PICK_EDGE_THESIS_PERSONNEL_ISSUE": "edge-thesis bets with a goalie or material injury uncertainty at decision time",
+    "PICK_BEST_AVAILABLE_CLEAN_PERSONNEL": "best-available bets with no goalie or material injury uncertainty at decision time",
+    "PICK_BEST_AVAILABLE_PERSONNEL_ISSUE": "best-available bets with a goalie or material injury uncertainty at decision time",
+    "PICK_GOALIES_SOURCE_CONFLICT": "daily bets where the goalie sources disagreed at decision time",
+    "PICK_GOALIE_LATE_CHANGE": "daily bets in games where a listed starter changed after it was first seen",
 }
 
 
@@ -226,6 +266,40 @@ def signal_bets(o: dict):
             out.append(("PICK_MONEYLINE" if s["market"] == "MONEYLINE" else "PICK_PUCK_LINE", p, y))
             out.append(("PICK_IN_PREFERRED_PRICE" if s["price_class"] == "IN_PREFERRED_REGION" else "PICK_OUTSIDE_PREFERRED_PRICE", p, y))
             out.append(("PICK_EDGE_THESIS" if s.get("qualifies") else "PICK_BEST_AVAILABLE", p, y))
+            gs_ = o.get("goalie_state")
+            if gs_:
+                out.append(({"BOTH_CONFIRMED": "PICK_GOALIES_BOTH_CONFIRMED", "SOURCE_CONFLICT": "PICK_GOALIES_SOURCE_CONFLICT", "UNKNOWN_GOALIE": "PICK_GOALIES_UNKNOWN"}.get(gs_, "PICK_GOALIES_ONE_PROBABLE"), p, y))
+            if o.get("late_goalie_change"):
+                out.append(("PICK_GOALIE_LATE_CHANGE", p, y))
+            pv = o.get("personnel")
+            if pv is not None:
+                pv = {k: v for k, v in pv.items() if not k.startswith("_")}
+                teams = list(pv.values())
+                rel = [x for t in teams for x in t["relevant"]]
+                material = [x for x in rel if x["impact"] == "MATERIAL"]
+                own_t = pv.get(s["side"]) or {"relevant": [], "coverage": "NONE"}
+                opp_teams = [t for k, t in pv.items() if k != s["side"]]
+                if any(x["impact"] == "MATERIAL" and x["status"] in ("OUT", "IR") for x in own_t["relevant"]):
+                    out.append(("PICK_OWN_MATERIAL_ABSENCE", p, y))
+                if any(x["impact"] == "MATERIAL" and x["status"] in ("OUT", "IR") for t in opp_teams for x in t["relevant"]):
+                    out.append(("PICK_OPPONENT_MATERIAL_ABSENCE", p, y))
+                doubt = any(x["status"] not in ("OUT", "IR") for x in material)
+                if any(x["status"] == "GAME_TIME_DECISION" for x in material):
+                    out.append(("PICK_UNRESOLVED_GAME_TIME_DECISION", p, y))
+                conflict = any(x["conflict"] for x in material)
+                if doubt:
+                    out.append(("PICK_MATERIAL_PLAYER_IN_DOUBT", p, y))
+                if any(t["returns"] for t in teams):
+                    out.append(("PICK_MATERIAL_PLAYER_RETURN", p, y))
+                if conflict:
+                    out.append(("PICK_INJURY_SOURCE_CONFLICT", p, y))
+                covered = any(t["coverage"] != "NONE" for t in teams)
+                if not covered:
+                    out.append(("PICK_INJURY_COVERAGE_NONE", p, y))
+                elif not (material or conflict):
+                    out.append(("PICK_NO_MATERIAL_PERSONNEL_ISSUE", p, y))
+                issue = bool(doubt or conflict or any(x["status"] in ("OUT", "IR") for x in material) or gs_ in ("SOURCE_CONFLICT", "UNKNOWN_GOALIE"))
+                out.append((("PICK_EDGE_THESIS_" if s.get("qualifies") else "PICK_BEST_AVAILABLE_") + ("PERSONNEL_ISSUE" if issue else "CLEAN_PERSONNEL"), p, y))
             if s.get("confidence"):
                 out.append(("CONFIDENCE_" + s["confidence"], p, y)) if not s.get("qualifies") else None
         if s.get("consensus"):
@@ -361,9 +435,22 @@ def run_cycle(nhl_conn, now: dt.datetime) -> dict:
     trust_pl = puck_line_trust(events)
     structure_state = signal_trust(events)
     blend = ep.blend_estimate(_prospective_rows())
+    from operational import goalie_sources as gsrc
+    try:                                                                    # personnel refresh BEFORE the ranking: forced when the last fetch is older than the late-pregame interval
+        gstate = gsrc.refresh(nhl_conn, now, force=((gsrc._age_min(gsrc.load_state().get("fetched_at_utc"), now) or 1e9) > gsrc.NEAR_INTERVAL_MIN))
+    except Exception:                                                       # noqa: BLE001 - a goalie-feed failure is UNKNOWN goalies, never a stopped product
+        gstate = {}
+    ghist = gsrc.read_history()
+    from operational import personnel as pers
+    try:                                                                    # attributable injury reports as they stand at this moment (nothing is fetched: see docs/PERSONNEL_SOURCES.md)
+        pstate = pers.resolve_all(nhl_conn, now)
+        pviews = {t: pers.team_view(pstate, t) for g in upcoming for t in (g["home"], g["away"])}
+    except Exception:                                                       # noqa: BLE001 - unreadable reports are unknown injuries, never a stopped product
+        pviews = None
     cands, by_game = [], defaultdict(list)
     for g in upcoming:
-        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl, blend, structure_state):
+        gview = None if gstate.get("status") == "DISABLED" else gsrc.game_view(gstate, g["game_id"], g["home"], g["away"], now, ghist)    # a feed the owner has not enabled is "no feed", not "unknown goalies"
+        for c in ep.evaluate_game(ctx, g, captures, now, cap, trust_pl, blend, structure_state, goalies=gview, personnel=pviews):
             cands.append(c)
             by_game[g["game_id"]].append(c)
     doc = ep.decide(cands, now=now, structure_state=structure_state)

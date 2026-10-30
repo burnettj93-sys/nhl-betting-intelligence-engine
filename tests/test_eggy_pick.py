@@ -439,7 +439,7 @@ class TestTheCaseForAndAgainst(unittest.TestCase):
 
     def test_the_goalie_and_the_margin_are_stated_as_limits(self):
         txt = " ".join(x["text"] for x in cand()["case_against"])
-        self.assertIn("not confirmed by an approved source", txt)
+        self.assertIn("starting goalies are unknown: no goalie feed was available at decision time", txt)
         self.assertIn("bookmaker's margin", txt)
 
     def test_the_puck_line_calibration_is_a_reason_against_with_its_uncertainty(self):
