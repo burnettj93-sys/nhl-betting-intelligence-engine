@@ -167,6 +167,11 @@ def run(now: dt.datetime | None = None) -> dict:
         except Exception as exc:  # noqa: BLE001
             goalie_summary = {"status": "ERROR", "last_error": f"{exc.__class__.__name__}: {exc}"}
 
+        try:                                       # Eggy's own daily side pick (moneyline or puck line, or PASS), run BEFORE the heavy parlay work so a slow or failing parlay step can never delay its deadline: its own ledger and postmortem, independent of the learning parlays
+            from operational import eggy_pick_ledger
+            eggy_summary = eggy_pick_ledger.run_cycle(nhl_conn, now)
+        except Exception as exc:  # noqa: BLE001 - never stops the model book or the learning cohort
+            eggy_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
         # One candidate-leg pool serves the automatic selector (the only writer of model tickets).
         collected = daily_tickets.collect_candidate_legs(nhl_conn, now)
         try:                                       # evidence queue only (goalie confirmations, Ontario checks, path checks): nothing here can stake anything
@@ -181,11 +186,6 @@ def run(now: dt.datetime | None = None) -> dict:
             learning_summary = learning_cohort.run_cycle(nhl_conn, now, collected, collector=lambda: daily_tickets.collect_candidate_legs(nhl_conn, now, advisory_price_age=True))
         except Exception as exc:  # noqa: BLE001 - never stops the model book
             learning_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
-        try:                                       # Eggy's own daily side pick (moneyline or puck line, or PASS): its own ledger and postmortem, independent of the learning parlays
-            from operational import eggy_pick_ledger
-            eggy_summary = eggy_pick_ledger.run_cycle(nhl_conn, now)
-        except Exception as exc:  # noqa: BLE001 - never stops the model book or the learning cohort
-            eggy_summary = {"status": "ERROR", "error": f"{exc.__class__.__name__}: {exc}"}
         if settlement_summary.get("settled"):
             daily_tickets.refresh_state_only(bankroll_conn, now)
         try:

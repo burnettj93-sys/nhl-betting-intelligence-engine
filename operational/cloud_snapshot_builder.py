@@ -136,7 +136,7 @@ def _data_status() -> dict:
     cache = dv.load_readiness_cache()
     # `sources` is the page's evidence (timestamps, rebuilt at every publication from the sources themselves and re-aged where it is shown);
     # the once-a-day readiness cache and the job health stay for Diagnostics only.
-    return {"sources": source_status.build(), "readiness_cache": cache, "ingestion_health": ingestion_health.load_health()}
+    return {"sources": source_status.build(), "readiness_cache": cache, "ingestion_health": schema.redact_news_credit(ingestion_health.load_health())}
 
 
 def _health() -> dict:
@@ -145,7 +145,7 @@ def _health() -> dict:
     for key, item in sh.build_system_health().items():
         entry = {"key": key, "label": item.get("label"), "status": item.get("status")}
         if item.get("status") not in ("OK", "NOT_REQUIRED"):
-            entry["message"] = item.get("message")   # volatile ages only appear on non-OK items
+            entry["message"] = schema.redact_news_credit(item.get("message"))   # volatile ages only appear on non-OK items
         items.append(entry)
     summary = {k: {"status": v.get("status")} for k, v in sh.production_health_summary(include_yahoo=False).items()}
     # `last_updated_utc` is the time of the latest 15-minute prop sweep -- it changes on every firing and says

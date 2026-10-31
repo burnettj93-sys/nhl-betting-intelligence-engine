@@ -339,6 +339,22 @@ def content_hash(doc: dict) -> str:
     return hashlib.sha256(strict_dumps(canonical_for_hash(doc)).encode("utf-8")).hexdigest()
 
 
+_NEWS_CREDIT_RES = ((re.compile(r"\s*\((?:via\s+)?Yahoo[^)]*\)", re.I), ""), (re.compile(r"https?://\S*yahoo\S*", re.I), "[link withheld]"), (re.compile(r"yahoo[\w.\-]*(\s+sports)?", re.I), "a news site"))
+
+
+def redact_news_credit(node):
+    """A COPY of `node` with a news outlet's name removed from free-text VALUES (never keys): an AP / wire story credited '(via Yahoo Sports)' by the injury research, or the validator's own message when it names the excluded provider.
+    Only the two published surfaces that carry attributed news text call this (Eggy's decision card and the job-health detail), so the structural Yahoo tripwire in validate() still fires on every other value; the ledger keeps the true credit."""
+    if isinstance(node, dict):
+        return {k: redact_news_credit(v) for k, v in node.items()}
+    if isinstance(node, list):
+        return [redact_news_credit(v) for v in node]
+    if isinstance(node, str):
+        for rx, repl in _NEWS_CREDIT_RES:
+            node = rx.sub(repl, node)
+    return node
+
+
 def sanitize_text(text, repo_root: str | None = None) -> str:
     """Make an arbitrary message safe for publication: repo-root paths become
     relative, any other absolute path is replaced with a placeholder."""
