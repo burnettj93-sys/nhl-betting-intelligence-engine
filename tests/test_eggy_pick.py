@@ -67,7 +67,7 @@ class TestThePolicy(unittest.TestCase):
         self.assertNotEqual(ec.official_policy_digest(), "af5ed8907d646212")                       # the flagship-parlay digest is retired as Eggy's output
 
     def test_the_learning_engine_is_untouched(self):
-        self.assertEqual(lc.policy_digest(), "aea7cf0fbcbc632f")                                     # the cohort policy digest the owner approved: not changed by this product
+        self.assertEqual(lc.policy_digest(), "7a0821172921b822")                                     # the cohort policy digest: 2026-10-31 it intentionally changed (aea7cf0fbcbc632f -> this) with the early-recording timing rule (commit 38ad078), pending the owner's re-approval; Eggy itself does not change it
         self.assertEqual(lc.PARLAY_DAILY_MAX, 10)
         from operational import real_parlay_paper_trader as t
         src = inspect.getsource(t)
