@@ -5,14 +5,17 @@ Oct 31: Eggy decided COL ML pregame (15:43Z, 77 minutes before the first game) b
 so every later publication failed too."""
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from operational import cloud_snapshot_schema as schema
 from operational import eggy_pick_ledger as epl
+from operational import learning_cohort as lc
 from tests.test_eggy_pick import Z, game_db
 
 CREDIT = "CGY is missing Samuel Honzek (F, OUT; Associated Press (via Yahoo Sports), 10-30 04:00Z): evidence for COL"
@@ -128,6 +131,92 @@ class TestTheEggyStepRunsBeforeTheHeavyParlayWork(unittest.TestCase):
         from operational import real_parlay_paper_trader as t
         src = inspect.getsource(t)
         self.assertLess(src.index("eggy_pick_ledger.run_cycle"), src.index("daily_tickets.collect_candidate_legs(nhl_conn, now)"))
+
+
+class TestHeldTicketsSurviveANarrowMissedWindow(unittest.TestCase):
+    """The parlay engine: a ticket with a lesser leg waited for its first game's last 25 minutes, and EVERY recorded ticket to date (75 of 75) was recorded there, so one sleeping host in that window lost a whole day (Oct 30).
+    The wait exists so that 'no better price or candidate for THIS game can still arrive'. Where the capture schedule has no newer capture due for any leg, that is already true and the ticket records."""
+    pass
+
+
+def _build():
+    from tests.test_learning_parlays import TestTheCohortRecordsParlaysNotStraightBets as T
+    from tests.test_learning_cohort import Base, D1, leg                 # noqa: F401
+
+    class Held(T):
+        GAME_START = dt.datetime(2026, 10, 20, 23, 0, tzinfo=Z)
+
+        def lesser(self):
+            for pid in range(8470001, 8470007):
+                self.cards[str(pid)] = {"action": "LOWER_PRIORITY", "thesis": "FAIR_PRICED"}
+
+        def legs3(self):
+            return self.legs()
+
+        def at(self, minutes_before_drop, quote_age_min=9, legs=None):
+            now = self.GAME_START - dt.timedelta(minutes=minutes_before_drop)
+            legs = legs or self.legs()
+            stamp = lambda m: (now - dt.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            legs = [dataclasses.replace(l, quote_updated_utc=stamp(quote_age_min + 1), retrieved_at_utc=stamp(quote_age_min), captured_at_utc=stamp(quote_age_min)) for l in legs]
+            return lc.run_cycle(self.nhl, now, {"legs": legs, "sources": {}}, conn=self.conn)
+
+        def test_A_an_awake_host_records_a_settled_ticket_early_and_the_old_wait_would_not_have(self):
+            self.lesser()
+            out = self.at(75)                                              # 21:45Z: the wave capture (target 21:30Z) is in, no newer capture is due for any leg
+            self.assertTrue(self.parlays())
+            sf = out["recording"]["shortfall"]
+            self.assertGreater(sf["parlays_recorded_before_the_final_window_no_newer_price_due"], 0)
+            self.assertEqual(sf["parlays_waiting_for_their_final_window"], 0)
+
+        def test_F_the_same_tickets_record_at_the_final_window_as_before_when_nothing_is_settled_early(self):
+            self.lesser()
+            self.at(75, quote_age_min=75)                                  # the price is from BEFORE the wave's capture: a capture is still due, so the ticket waits as before
+            self.assertEqual(self.parlays(), [])
+            self.at(20, quote_age_min=9)
+            self.assertTrue(self.parlays())
+
+        def test_a_ticket_recorded_early_is_the_ticket_the_final_window_would_have_recorded(self):
+            self.lesser()
+            self.at(75)
+            early = {r["idempotency_key"] for r in self.parlays()}
+            self.assertTrue(early)
+            self.at(20)                                                    # later cycles add nothing different: the ledger is idempotent
+            self.assertTrue(early <= {r["idempotency_key"] for r in self.parlays()})
+
+        def test_B_a_host_that_wakes_inside_the_last_minutes_still_records_a_fresh_ticket(self):
+            self.lesser()
+            self.at(8, quote_age_min=9)
+            self.assertTrue(self.parlays())
+
+        def test_C_a_host_that_wakes_after_puck_drop_records_nothing(self):
+            self.lesser()
+            out = self.at(-5)
+            self.assertEqual(self.parlays(), [])
+
+        def test_C2_even_a_leg_wrongly_flagged_not_started_cannot_be_recorded_after_puck_drop(self):
+            self.lesser()
+            now = self.GAME_START + dt.timedelta(minutes=5)
+            stamp = lambda m: (now - dt.timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            legs = [dataclasses.replace(l, quote_updated_utc=stamp(10), retrieved_at_utc=stamp(9), captured_at_utc=stamp(9), event_not_started=True) for l in self.legs()]
+            out = lc.run_cycle(self.nhl, now, {"legs": legs, "sources": {}}, conn=self.conn)
+            self.assertEqual(self.parlays(), [])
+
+        def test_D_a_held_price_that_went_stale_is_not_recorded_without_a_newer_capture(self):
+            self.lesser()
+            self.at(8, quote_age_min=125)                                  # the only price is from the morning: a newer capture was due at 21:30Z and does not exist
+            self.assertEqual(self.parlays(), [])
+
+        def test_the_predicate_needs_a_known_schedule_and_fresh_prices(self):
+            c = {"card": {"market_data_quality": {"status": "FRESH", "newer_capture_due_at_utc": None}}, "leg": SimpleNamespace(game_id="1")}
+            self.assertTrue(lc._no_newer_price_due([c], {"by_game": {"1": 1}}))
+            self.assertFalse(lc._no_newer_price_due([c], {"by_game": {}}))                                         # schedule unknown
+            self.assertFalse(lc._no_newer_price_due([{**c, "card": {"market_data_quality": {"status": "STALE", "newer_capture_due_at_utc": None}}}], {"by_game": {"1": 1}}))
+            self.assertFalse(lc._no_newer_price_due([{**c, "card": {"market_data_quality": {"status": "FRESH", "newer_capture_due_at_utc": "2026-10-20T21:30:00Z"}}}], {"by_game": {"1": 1}}))
+
+    return Held
+
+
+Held = _build()
 
 
 if __name__ == "__main__":
