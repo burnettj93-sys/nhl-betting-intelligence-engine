@@ -1,0 +1,82 @@
+{
+ "days_that_reached_the_target": {
+  "2026-10-22": {
+   "distinct_legs": 18,
+   "tickets": 10
+  },
+  "2026-10-24": {
+   "distinct_legs": 22,
+   "tickets": 10
+  },
+  "2026-10-27": {
+   "distinct_legs": 22,
+   "tickets": 10
+  },
+  "2026-10-29": {
+   "distinct_legs": 20,
+   "tickets": 10
+  }
+ },
+ "derived_on": "2026-10-31",
+ "distinct_legs_needed": 22,
+ "eligible_legs_per_shots_game": {
+  "by_day": {
+   "2026-10-22": {
+    "eligible": 27,
+    "games_captured": 3,
+    "per_game": 9.0
+   },
+   "2026-10-23": {
+    "eligible": 13,
+    "games_captured": 2,
+    "per_game": 6.5
+   },
+   "2026-10-24": {
+    "eligible": 18,
+    "games_captured": 2,
+    "per_game": 9.0
+   },
+   "2026-10-25": {
+    "eligible": 15,
+    "games_captured": 3,
+    "per_game": 5.0
+   },
+   "2026-10-26": {
+    "eligible": 14,
+    "games_captured": 1,
+    "per_game": 14.0
+   },
+   "2026-10-27": {
+    "eligible": 31,
+    "games_captured": 3,
+    "per_game": 10.33
+   },
+   "2026-10-28": {
+    "eligible": 27,
+    "games_captured": 3,
+    "per_game": 9.0
+   },
+   "2026-10-29": {
+    "eligible": 40,
+    "games_captured": 3,
+    "per_game": 13.33
+   },
+   "2026-10-30": {
+    "eligible": 13,
+    "games_captured": 1,
+    "per_game": 13.0
+   },
+   "2026-10-31": {
+    "eligible": 28,
+    "games_captured": 2,
+    "per_game": 14.0
+   }
+  },
+  "percentile": 0.1,
+  "value": 6.35
+ },
+ "floor_games": 4,
+ "method": "floor_games = ceil(distinct_legs_needed / eligible_legs_per_shots_game at the stated low percentile)",
+ "purpose": "operations requirement (data coverage), not a betting threshold",
+ "ticket_target": 10
+}

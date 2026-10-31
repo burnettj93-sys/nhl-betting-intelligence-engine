@@ -1,4 +1,4 @@
-"""The credit plan (version 4): wave timeline, budget from the real balance, wave-fair game choice, reservations, and the pieces that obey it."""
+"""The credit plan (version 5, shots first): wave timeline, budget from the real balance, wave-fair game choice, reservations, and the pieces that obey it."""
 from __future__ import annotations
 
 import datetime as dt
@@ -283,12 +283,13 @@ class TestPlanRebuiltAfterWindowsClosed(Isolated):
 class TestLightSlateFloor(Isolated):
     AHEAD = {f"2026-10-{d}": n for d, n in zip(range(19, 32), (4, 11, 2, 12, 2, 12, 5, 3, 11, 4, 11, 3, 10))}
 
-    def test_a_two_game_day_still_gets_one_full_bundle_and_the_second_game_shots(self):
+    def test_a_two_game_day_prices_shots_on_both_games_before_any_other_market(self):
         plan = cp.build_day_plan(at(8, day=18), "2026-10-18", {"a": at(18, day=18), "b": at(20, day=18)}, remaining=187, counts_ahead=self.AHEAD)
         self.assertEqual(plan["games_priced"], ["a", "b"])
-        self.assertEqual(plan["game_markets"]["a"], [cp.SHOTS_KEY, cp.GOALS_KEY, cp.SAVES_KEY])      # saves are priced even on a light day
-        self.assertEqual(plan["game_markets"]["b"], [cp.SHOTS_KEY])
-        self.assertGreaterEqual(plan["budget"]["player_today"], 3.0)
+        for g in ("a", "b"):
+            self.assertEqual(plan["game_markets"][g][0], cp.SHOTS_KEY)                                 # shots are the first thing every game gets
+        self.assertGreaterEqual(plan["budget"]["player_today"], 2.0)                                   # the coverage floor: shots on both games of a two-game day
+        self.assertTrue(plan["coverage"]["met"])
 
     def test_the_floor_is_carved_out_of_the_pool_so_the_days_still_sum_to_it(self):
         days = {"2026-10-18": 2, **self.AHEAD}
@@ -298,13 +299,13 @@ class TestLightSlateFloor(Isolated):
             if d == "2026-10-18":
                 pool, w_total = b["player_pool"], b["weight_total"]
                 first = b["player_today"]
-        n = len(days)
         weights = {d: min(c, cp.DAY_WEIGHT_CAP) for d, c in days.items()}
-        total = sum(3.0 + (pool - 3.0 * n) * w / sum(weights.values()) for w in weights.values())
+        floors = {d: float(min(c, cp.coverage_floor()["floor_games"])) for d, c in days.items()}
+        total = sum(floors[d] + (pool - sum(floors.values())) * w / sum(weights.values()) for d, w in weights.items())
         self.assertAlmostEqual(total, pool, places=6)                                                  # every day's share, added up, is exactly the pool: nothing is created
         self.assertGreater(first, pool * weights["2026-10-18"] / sum(weights.values()))
 
-    def test_when_the_pool_cannot_give_every_game_day_a_bundle_the_floor_is_not_applied(self):
+    def test_when_the_pool_cannot_give_every_game_day_its_floor_the_floor_is_not_applied(self):
         b = cp.cycle_budget(at(8, day=18), 60, 0.0, {"2026-10-18": 2, **self.AHEAD}, "2026-10-18", league_cost=2, league_cost_observed=False)
         w = min(2, cp.DAY_WEIGHT_CAP)
         self.assertAlmostEqual(b["player_today"], b["player_pool"] * w / b["weight_total"], places=6)
@@ -350,3 +351,72 @@ class TestPointsFirstClassSwitch(Isolated):
         self.assertEqual(p["goals_games"], [])
         self.assertEqual(p["allowance"][cp.GOALS], 0.0)
         self.assertEqual(p["allowance"][cp.POINTS_ADDON], float(len(p["points_games"]) * cp.POINTS_COST))
+
+
+class TestShotsFirst(Isolated):
+    """Version 5: shots across the slate first, points next, league pulls, saves last; a data coverage floor derived from the engine's own history. Only what is bought changes."""
+    AHEAD = {"2026-10-31": 10}
+
+    def oct30(self, remaining=49, **kw):
+        s = {"214": dt.datetime(2026, 10, 30, 22, 10, tzinfo=U), "215": dt.datetime(2026, 10, 30, 23, 10, tzinfo=U), "216": dt.datetime(2026, 10, 31, 0, 10, tzinfo=U)}
+        with mock.patch.dict("os.environ", {cp.POINTS_FIRST_CLASS_ENV: "on"}):
+            return cp.build_day_plan(dt.datetime(2026, 10, 30, 4, 8, tzinfo=U), "2026-10-30", s, remaining=remaining, counts_ahead=self.AHEAD, **kw)
+
+    def test_the_oct_30_slate_prices_shots_and_points_on_all_three_games_and_saves_on_none(self):
+        p = self.oct30()
+        self.assertEqual(sorted(p["games_priced"]), ["214", "215", "216"])                             # the old bundle plan reached two of the three
+        self.assertEqual(p["games_not_priced"], [])
+        for g in p["games_priced"]:
+            self.assertEqual(p["game_markets"][g], [cp.SHOTS_KEY, cp.POINTS_KEY])
+        self.assertEqual(p["saves_games"], [])
+        self.assertTrue(p["coverage"]["met"])
+        self.assertEqual((p["coverage"]["credits_for_shots"], p["coverage"]["credits_for_points_or_goals"]), (3.0, 3.0))
+
+    def test_a_thin_share_spends_every_credit_on_shots_before_any_game_gets_points(self):
+        p = self.oct30(remaining=26)                                                                   # 6 usable: a 2-day cycle share of about 3
+        shots = [g for g in p["games_priced"] if cp.SHOTS_KEY in p["game_markets"][g]]
+        self.assertEqual(shots, p["games_priced"])
+        if len(p["games_priced"]) < 3:
+            self.assertEqual(p["points_games"], [])                                                    # no points while an eligible game still lacks shots
+            self.assertEqual(p["saves_games"], [])
+
+    def test_the_layers_are_strictly_ordered_at_every_balance(self):
+        for remaining in range(22, 140, 3):
+            p = self.oct30(remaining=remaining)
+            eligible_n = 3
+            chosen = p["games_priced"]
+            second = [g for g in chosen if cp.POINTS_KEY in p["game_markets"][g]]
+            if second:
+                self.assertEqual(len(chosen), eligible_n, remaining)                                   # points only once every eligible game has shots
+            if p["saves_games"]:
+                self.assertEqual(len(second), len(chosen), remaining)                                  # saves only once every priced game has points
+            for g in chosen:
+                self.assertEqual(p["game_markets"][g][0], cp.SHOTS_KEY, remaining)
+
+    def test_the_coverage_floor_is_derived_from_the_history_and_names_its_source(self):
+        f = cp.coverage_floor()
+        self.assertTrue(f["derived"], f)
+        import json
+        doc = json.loads((cp.state_paths.REPO_ROOT / "docs" / "validation" / cp.COVERAGE_FLOOR_NAME).read_text())
+        import math
+        self.assertEqual(f["floor_games"], int(math.ceil(doc["distinct_legs_needed"] / doc["eligible_legs_per_shots_game"]["value"])))
+        self.assertGreaterEqual(doc["distinct_legs_needed"], 18)                                       # every day that reached ten tickets used at least this many distinct legs
+
+    def test_a_day_share_is_floored_at_the_coverage_floor_when_the_pool_allows(self):
+        b = cp.cycle_budget(at(8, day=18), 187, 0.0, {"2026-10-18": 14, "2026-10-19": 4}, "2026-10-18", league_cost=2, league_cost_observed=False)
+        self.assertGreaterEqual(b["player_today"], float(cp.coverage_floor()["floor_games"]))
+        self.assertEqual(b["coverage_floor_credits_today"], float(cp.coverage_floor()["floor_games"]))
+
+    def test_a_short_share_says_the_floor_was_not_met(self):
+        p = self.oct30(remaining=24)
+        if not p["coverage"]["met"]:
+            self.assertTrue(any("COVERAGE FLOOR NOT MET" in n for n in p["notes"]))
+
+    def test_a_large_slate_spreads_shots_across_waves_and_a_small_one_goes_deeper(self):
+        big = {f"g{i}": at(13 + (i // 3) * 2, 0, day=17) for i in range(12)}
+        with mock.patch.dict("os.environ", {cp.POINTS_FIRST_CLASS_ENV: "on"}):
+            pb = cp.build_day_plan(at(8), "2026-10-17", big, remaining=300, counts_ahead={"2026-10-18": 4})
+            ps = cp.build_day_plan(at(8), "2026-10-17", {"a": at(19), "b": at(19, 30)}, remaining=300, counts_ahead={"2026-10-18": 4})
+        self.assertGreaterEqual(len(pb["games_priced"]), cp.coverage_floor()["floor_games"])
+        self.assertGreaterEqual(len({w["index"] for w in pb["waves"] if w["selected"]}), 2)
+        self.assertEqual(sorted(ps["points_games"]), ["a", "b"])                                       # two games: shots AND points on both

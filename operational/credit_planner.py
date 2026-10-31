@@ -1,5 +1,5 @@
 """
-The Odds API credit plan (version 4, 2026-10-17): one place that decides what the allowance buys, so no job can spend the cycle ahead of the others.
+The Odds API credit plan (version 5, 2026-10-31): one place that decides what the allowance buys, so no job can spend the cycle ahead of the others.
 
 WHAT IT PLANS FROM (never a fresh 500): the provider's own remaining-credit header, the schedule still to come in this billing cycle, and the reset date. The reset date is NOT provider-confirmed;
 it is an assumption (the 1st: the counter fell from 182 used to 0 between 2026-09-30 23:55 UTC and 2026-10-01, seen once) and every plan says so. Until the owner sets NHL_ENGINE_ODDS_RESET_DAY the plan
@@ -20,6 +20,12 @@ the next day's share is computed from the actual balance. Inside the day, the sh
 the best remaining games by data quality; an early afternoon game never starves the evening and the evening never absorbs everything.
 
 The plan is built once per Eastern day and kept (nothing is reshuffled by a later cycle), except that a plan written by an older version is rebuilt once on deployment.
+
+VERSION 5 (2026-10-31), SHOTS FIRST. The unit of spending is no longer a fixed three-credit bundle per game. Credits are spent in a strict priority, each layer only after the one above it has covered every
+eligible game the day's share can reach: (1) the shots ladder, one credit a game, across as much of the slate as the share allows; (2) player points, then (3) anything optional (surplus league pulls), then (4) goalie
+saves. A day's share is first floored at the DATA COVERAGE FLOOR (docs/validation/capture_coverage_floor.json: the number of shots-priced games the engine's own history says a ten-parlay day needs), carved out of the
+pool before the weighted split, so a thin or late-month balance cannot leave the learning engine with too few shooters to review. This changes only what is bought; no probability, threshold, eligibility, classification, reuse
+or portfolio rule reads it.
 
 Spending is RESERVED before a call and SETTLED to the actual charge afterwards (reserve / settle): concurrent jobs see each other's pending reservations under a file lock, so one allocation is never spent twice.
 """
@@ -61,7 +67,23 @@ RECOVERY_PER_30_DAYS = 20
 LEAGUE_PULLS_PER_DAY = 2                                       # morning + one shared pregame pull
 LEAGUE_COST_ASSUMED = 2                                        # h2h + spreads, markets x regions; replaced by the observed charge once a spreads pull has been recorded
 DAY_WEIGHT_CAP = 8
-ALLOC_VERSION = 4
+ALLOC_VERSION = 5
+COVERAGE_FLOOR_NAME = "capture_coverage_floor.json"
+COVERAGE_FLOOR_FALLBACK_GAMES = 4                              # used only if the derivation file is missing; the file (derived from the ledger and the cohort database) is the source
+
+
+def coverage_floor() -> dict:
+    """The data coverage floor: how many shots-priced games a ten-parlay day needs, as derived by deploy/derive_capture_floor.py from the engine's own history. An operations requirement, not a betting threshold."""
+    try:
+        doc = json.loads((state_paths.REPO_ROOT / "docs" / "validation" / COVERAGE_FLOOR_NAME).read_text())
+        n = int(doc["floor_games"])
+        if n >= 1:
+            return {"floor_games": n, "source": "docs/validation/" + COVERAGE_FLOOR_NAME, "derived": True}
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return {"floor_games": COVERAGE_FLOOR_FALLBACK_GAMES, "source": "built-in fallback (derivation file missing)", "derived": False}
+
+
 RESET_EVIDENCE = "the counter fell from 182 used to 0 between 2026-09-30 23:55 UTC and 2026-10-01 (observed once); the provider publishes no reset date"
 
 
@@ -299,17 +321,19 @@ def cycle_budget(now: dt.datetime, remaining: int | None, spent_all_today: float
     weights = {d: min(counts_by_day.get(d, 0), DAY_WEIGHT_CAP) for d in days}
     w_total = sum(weights.values())
     w_today = weights.get(today, 0)
-    # Every game day gets at least one FULL bundle (shots + goals + saves) when the pool can give one to every remaining game day: a light slate would otherwise be handed a fraction of a bundle
-    # (two games = 2 of 73 weight units = under 3 credits) and no goalie-saves price at all. The floor is carved out of the same pool before the weighted split, so the total is unchanged.
-    floor = float(len(bundle_markets()))
+    # Every game day gets at least its coverage floor of SHOTS credits (one a game, up to the floor's game count) when the pool can give that to every remaining game day. The floor is carved out of the same
+    # pool before the weighted split, so the total is unchanged; a light or late-cycle share can no longer be spent on a few three-market bundles that leave most of the slate unpriced.
+    floor_games = coverage_floor()["floor_games"]
+    floors = {d: float(min(counts_by_day.get(d, 0), floor_games)) for d in game_days}
     n_game_days = len(game_days)
-    if w_total and n_game_days and w_today and player_pool >= floor * n_game_days:
-        player_today = floor + (player_pool - floor * n_game_days) * (w_today / w_total)
+    floor_total = sum(floors.values())
+    if w_total and n_game_days and w_today and player_pool >= floor_total:
+        player_today = floors.get(today, 0.0) + (player_pool - floor_total) * (w_today / w_total)
     else:
         player_today = player_pool * (w_today / w_total) if w_total else 0.0
     return {**base, "reason": "OK", "remaining_header": remaining, "spent_today_at_plan": round(spent_all_today, 1), "usable_at_start_of_day": round(usable, 1),
             "league_total": round(league_total, 1), "recovery_pool": recovery, "player_pool": round(player_pool, 1), "weight_today": w_today, "weight_total": w_total,
-            "player_today": round(player_today, 2), "game_days_remaining": len(game_days), "D": round(usable / max(len(game_days), 1), 2)}
+            "player_today": round(player_today, 2), "coverage_floor_games": floor_games, "coverage_floor_credits_today": floors.get(today, 0.0), "game_days_remaining": len(game_days), "D": round(usable / max(len(game_days), 1), 2)}
 
 
 def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *, remaining: int | None, counts_ahead: dict[str, int] | None = None,
@@ -328,31 +352,35 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     quality = quality or {}
     spent_player = sum(spent.get(k, 0.0) for k in (PROPS, GOALS, SAVES, POINTS_ADDON, MORNING, REFRESH))
     avail = max(budget["player_today"] - spent_player, 0.0)
+    # PRIORITY, strictly in this order, each layer only once the one above covers every eligible game the share can reach (version 5):
+    #   1 SHOTS  one credit a game, across as much of the slate as the share allows (the workhorse of the learning cohort)
+    #   2 POINTS (or anytime goals when points are not first class), one credit a game, on the games that have shots
+    #   3 league-wide pulls for later waves, then 4 goalie SAVES (the last layer: it gets only what the layers above leave)
     bundle_set = bundle_markets()
-    bundle = len(bundle_set)
-    k = int(avail // bundle)
-    chosen = select_games(wave_list, quality, eligible, min(k, len(eligible)))
-    markets = {g: list(bundle_set) for g in chosen}
-    left = avail - bundle * len(chosen)
-    partial = None
-    if left >= 1 and len(chosen) < len(eligible):                 # a remainder buys a partial bundle (shots first, then goals) for the next best game
-        extra = select_games(wave_list, quality, eligible - set(chosen), 1)
-        if extra:
-            partial = extra[0]
-            markets[partial] = [SHOTS_KEY, POINTS_KEY if POINTS_KEY in bundle_set else GOALS_KEY][:int(left)]
-            left -= len(markets[partial])
-            chosen = sorted(chosen + [partial], key=lambda g: (next(w.first_start for w in wave_list if g in w.games), g))
-    points_games, extra_pulls = [], 0
-    if len(chosen) >= len(eligible) and left >= 1:                # surplus: every eligible game already has a full bundle
-        if points_addon_enabled() and POINTS_KEY not in bundle_set:
-            k_p = int(left // POINTS_COST)
-            points_games = chosen[:k_p]
-            for g in points_games:
-                markets[g] = markets[g] + [POINTS_KEY]
-            left -= len(points_games) * POINTS_COST
-        later_waves = max(len([w for w in wave_list if any(g in eligible or g in done for g in w.games) and w.last_chance > now]) - 1, 0)
-        extra_pulls = min(later_waves, int(left // max(lc, 1)))
-        left -= extra_pulls * lc
+    second = POINTS_KEY if POINTS_KEY in bundle_set else GOALS_KEY
+    n_shots = min(len(eligible), int(avail // max(BASE_COST, 1)))
+    chosen = select_games(wave_list, quality, eligible, n_shots)
+    markets = {g: [SHOTS_KEY] for g in chosen}
+    left = avail - BASE_COST * len(chosen)
+    extra_pulls = 0
+    if len(chosen) >= len(eligible):                              # every eligible game has shots: only now do the optional layers get anything
+        k2 = min(len(chosen), int(left // (POINTS_COST if second == POINTS_KEY else GOALS_COST)))
+        for g in chosen[:k2]:
+            markets[g] = markets[g] + [second]
+        left -= k2 * (POINTS_COST if second == POINTS_KEY else GOALS_COST)
+        if k2 >= len(chosen):
+            if points_addon_enabled() and POINTS_KEY not in bundle_set:
+                k_p = min(len(chosen), int(left // POINTS_COST))
+                for g in chosen[:k_p]:
+                    markets[g] = markets[g] + [POINTS_KEY]
+                left -= k_p * POINTS_COST
+            later_waves = max(len([w for w in wave_list if any(g in eligible or g in done for g in w.games) and w.last_chance > now]) - 1, 0)
+            extra_pulls = min(later_waves, int(left // max(lc, 1)))
+            left -= extra_pulls * lc
+            k_s = min(len(chosen), int(left // SAVES_COST))
+            for g in chosen[:k_s]:
+                markets[g] = markets[g] + [SAVES_KEY]
+            left -= k_s * SAVES_COST
     shots_c = sum(1 for g in chosen if SHOTS_KEY in markets[g])
     points_games = [g for g in chosen if POINTS_KEY in markets[g]]                 # first-class points ride in the bundle; the surplus add-on appended its games above
     goals_games = [g for g in chosen if GOALS_KEY in markets[g]]
@@ -369,13 +397,21 @@ def build_day_plan(now: dt.datetime, day: str, starts: dict[str, dt.datetime], *
     wave_docs = [{"index": w.index, "first_start_utc": w.first_start.strftime("%Y-%m-%dT%H:%M:%SZ"), "target_utc": w.target.strftime("%Y-%m-%dT%H:%M:%SZ"),
                   "deadline_utc": w.deadline.strftime("%Y-%m-%dT%H:%M:%SZ"), "last_chance_utc": w.last_chance.strftime("%Y-%m-%dT%H:%M:%SZ"), "games": list(w.games),
                   "selected": [g for g in chosen if g in w.games]} for w in wave_list]
+    cov = coverage_floor()
+    floor_n = min(len(starts), cov["floor_games"])
+    captured_n = len(chosen) + len(done)
+    coverage = {"floor_games": cov["floor_games"], "floor_source": cov["source"], "floor_derived": cov["derived"], "required_today": floor_n, "shots_games_planned": len(chosen), "shots_games_already_captured": len(done),
+                "met": captured_n >= floor_n, "credits_today": round(budget["player_today"], 2), "credits_for_shots": float(len(chosen) * BASE_COST),
+                "credits_for_points_or_goals": float(sum(1 for g in chosen if second in markets[g])), "credits_for_saves": float(sum(1 for g in chosen if SAVES_KEY in markets[g]))}
     notes = []
+    if not coverage["met"]:
+        notes.append(f"DATA COVERAGE FLOOR NOT MET: {captured_n} of the {floor_n} shots-priced games the history says a full learning day needs (today's share is {budget['player_today']} credits).")
     if not budget.get("reset_verified"):
         notes.append(budget["reset_assumption"])
     if not budget.get("league_cost_observed"):
         notes.append(f"A league pull is assumed to cost {lc} credits (moneyline + spreads); the first recorded charge replaces the assumption.")
     return {"day": day, "made_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "alloc_version": ALLOC_VERSION, "budget": budget, "waves": wave_docs, "prep": {k_: v.strftime("%Y-%m-%dT%H:%M:%SZ") for k_, v in prep.items()},
-            "games_today": len(starts), "games_priced": chosen, "games_not_priced": [g for g in starts if g not in chosen and g not in done], "game_markets": markets,
+            "games_today": len(starts), "coverage": coverage, "games_priced": chosen, "games_not_priced": [g for g in starts if g not in chosen and g not in done], "game_markets": markets,
             "goals_games": goals_games, "saves_games": saves_games, "points_games": points_games, "morning_games": [], "morning_markets": [],
             "league_pulls": {"planned": league_planned, "cost_each": lc, "cost_observed": observed, "extra_for_later_waves": extra_pulls}, "allowance": allowance,
             "confirmed_games": sorted(confirmed_games or []), "surplus_credits": round(max(left, 0.0), 2), "notes": notes}

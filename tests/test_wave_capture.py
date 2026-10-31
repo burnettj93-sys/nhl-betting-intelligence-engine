@@ -76,7 +76,7 @@ class Isolated(unittest.TestCase):
             self.addCleanup(p.stop)
         (d / "archive").mkdir()
         starts = {"1": at(13), "2": at(19), "3": at(19, 20)}
-        self.plan = cp.build_day_plan(at(8), DAY, starts, remaining=52, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4})
+        self.plan = cp.build_day_plan(at(8), DAY, starts, remaining=140, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4})
 
     def capture(self, now, client):
         with mock.patch.object(cp, "latest_remaining", create=True):
@@ -128,6 +128,8 @@ class TestTheCapture(Isolated):
         self.assertEqual(out["slots"]["wave0"]["state"], "CLOSED")
 
     def test_a_game_the_plan_did_not_select_is_never_captured(self):
+        thin = cp.build_day_plan(at(8), DAY, {"1": at(13), "2": at(19), "3": at(19, 20)}, remaining=31, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4})     # a thin share reaches two of the three games
+        self.plan = thin
         unselected = [g for g in ("2", "3") if g not in self.plan["games_priced"]]
         self.assertTrue(unselected)
         c = FakeClient()
@@ -301,7 +303,7 @@ class TestReviewFixes(Isolated):
         cp.record(cp.GOALS, 1, at(11, 35), game_id="1")
         cp.record(cp.SAVES, 1, at(11, 35), game_id="1")
         starts = {"1": at(13), "2": at(19), "3": at(19, 20)}
-        rebuilt = cp.build_day_plan(at(12), DAY, starts, remaining=49, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4}, done_games={"1"})
+        rebuilt = cp.build_day_plan(at(12), DAY, starts, remaining=140, counts_ahead={"2026-10-18": 4}, quality={"1": 5, "2": 7, "3": 4}, done_games={"1"})
         self.assertGreaterEqual(rebuilt["allowance"][cp.PROPS], 1.0 + sum(1 for g in rebuilt["games_priced"] if cp.SHOTS_KEY in rebuilt["game_markets"][g]))
         self.assertNotIn("1", rebuilt["games_not_priced"])                                           # a game already captured is not reported as excluded by the budget
         self.assertTrue(cp.reserve(cp.PROPS, 1, at(17, 35), plan=rebuilt, remaining=49)["allow"])
