@@ -96,6 +96,7 @@ POLICY = {
     "behaviour": {"relax_min": RELAX_MIN, "relaxed_reserve_max": RELAXED_RESERVE_MAX, "wave_span_min": WAVE_SPAN_MIN, "price_bands": [b[2] for b in PRICE_BANDS], "code_version": CODE_VERSION,
                   "exclusions": "one side of a game's moneyline; one threshold per player and statistic (PLAYER_SOG and PLAYER_SOG_ALTERNATE are the same statistic); the engine's leg gate (leg_is_eligible) applies unchanged",
                   "honours_owner_recording_pause": True,
+                  "lesser_ticket_timing": "a ticket with a lesser leg records in its first game's last RELAX_MIN minutes, OR earlier once every leg's price is FRESH / AGING and the capture schedule has no newer capture due for any of its games (the wait's own purpose is then already served)",
                   "edge_classes": {"POSITIVE_EDGE": f"edge >= +{EDGE_BAND} with calibration at least MEDIUM", "NEUTRAL_UNCERTAIN_EDGE": f"edge within {EDGE_BAND} of zero, or positive on an estimate nobody can vouch for",
                                    "LEARNING_SAMPLE_NEGATIVE_EDGE": f"edge <= -{EDGE_BAND}"}},
     "integrity_gates": ["real current event", "real sportsbook market with a verified contract", "a real DraftKings price observation with a valid, non-future time (its AGE is recorded, never a gate)",
@@ -499,6 +500,27 @@ def _own_final_window(leg, now: dt.datetime) -> bool:
         return False
     start = best_bets.effective_start(raw, leg.game_start_utc)
     return (start - now).total_seconds() / 60.0 <= RELAX_MIN
+
+
+def _has_started(leg, now: dt.datetime) -> bool:
+    """True when this leg's game has reached puck drop (the provider's start where it differs): nothing is ever recorded for a game that has begun, whatever the leg's own flag says."""
+    from operational import best_bets
+    raw = leg.provider_start_utc or leg.game_start_utc
+    return bool(raw) and best_bets.effective_start(raw, leg.game_start_utc) <= now
+
+
+def _no_newer_price_due(cands, capture) -> bool:
+    """True when NO scheduled capture can still improve any leg of this ticket: every leg's price is FRESH or AGING and the schedule (operational/price_freshness.py) has no newer capture due for it, for a game whose
+    wave is known. That is exactly what the final-25-minute wait exists to find out ('no better price or candidate for THIS game can still arrive'); once it is already so, waiting adds nothing but exposure to a
+    sleeping host. Unknown schedule, a stale / missing price or a capture still to come all return False (the ticket then waits for its final window exactly as before)."""
+    by_game = (capture or {}).get("by_game") or {}
+    for c in cands:
+        mdq = c["card"].get("market_data_quality") or {}
+        if mdq.get("status") not in (price_freshness.FRESH, price_freshness.AGING) or mdq.get("newer_capture_due_at_utc") is not None:
+            return False
+        if by_game.get(str(c["leg"].game_id)) is None:
+            return False
+    return True
 
 
 def day_waves(nhl_conn, et_date: str) -> tuple[dict, int, dict]:
@@ -916,13 +938,18 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
     already = [{"key": r["idempotency_key"], "leg_keys": json.loads(r["leg_keys"]), "view": lp.view_of_row(r)} for r in rows]
     out = lp.build(cands, already, slots=daily_cap())
     recorded_now, rank = [], len(rows)
-    waiting = 0
+    waiting = early = 0
     for p in out["parlays"]:
         first = min(p["legs"], key=lambda l: l.game_start_utc or "")
+        if any(_has_started(l, now) for l in p["legs"]):
+            reasons["a leg's game has started: nothing is recorded after puck drop"] += 1
+            continue
         sure = all(c["action"] == "RECORD" for c in p["cands"])
         if not sure and not _own_final_window(first, now):
-            waiting += 1                                                           # a ticket with a lesser leg waits for its first game's last 25 minutes: no better price can still arrive
-            continue
+            if not _no_newer_price_due(p["cands"], capture):
+                waiting += 1                                                       # a ticket with a lesser leg waits for its first game's last 25 minutes: a scheduled capture may still bring a better price
+                continue
+            early += 1                                                             # nothing better can still arrive: the wait would only expose the ticket to a missed window (host asleep), so it records now
         w = game_wave.get(str(first.game_id))
         cap = min(strict_caps.get(w, daily_cap()), daily_cap()) if w is not None else daily_cap()
         if sum(1 for r in rows if r["wave_index"] is not None and r["wave_index"] <= (w if w is not None else 99)) + sum(1 for r in recorded_now if (r["wave"] or 0) <= (w or 0)) >= cap and w is not None:
@@ -943,7 +970,7 @@ def _record_parlays(conn, now, ph, collected, legs, game_wave, strict_caps, reas
             rank -= 1
     conn.commit()
     reasons[f"legs not eligible for a parlay: {sum(out['legs_not_eligible'].values())}"] += 0
-    extra = {"parlay_legs_eligible": out["eligible_legs"], "parlay_legs_not_eligible": out["legs_not_eligible"], "parlays_constructed": out["constructed"], "parlays_waiting_for_their_final_window": waiting,
+    extra = {"parlay_legs_eligible": out["eligible_legs"], "parlay_legs_not_eligible": out["legs_not_eligible"], "parlays_constructed": out["constructed"], "parlays_waiting_for_their_final_window": waiting, "parlays_recorded_before_the_final_window_no_newer_price_due": early,
              "unit": "PARLAY (unpriced learning parlays: no stake, no return, no ROI)"}
     if stale:
         extra["stale_price_legs"] = {"count": len(stale), "reason": price_freshness.REASON, "legs": stale[:12], "note": "reviewed legs whose price is not current: their hockey estimates are unchanged; they are not admitted to a parlay"}

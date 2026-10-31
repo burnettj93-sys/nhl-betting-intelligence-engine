@@ -163,12 +163,6 @@ JUSTIFIED_EXCEPTIONS = [
         "reason": "stable ordering of game ids in the odds-credit day plan's JSON document. It plans which games to buy prices for; it never gates what any model may learn.",
     },
     {
-        "file": "operational/credit_planner.py",
-        "kind": "sorted_by_game_id",
-        "marker": "key=lambda g: (next(w.first_start",
-        "reason": "orders the games chosen for a capture wave by start time (game id is only the tie-break) when planning which games to price. No model reads it.",
-    },
-    {
         "file": "operational/pregame_archive.py",
         "kind": "sorted_by_game_id",
         "marker": "meta[day] = sorted(set(",

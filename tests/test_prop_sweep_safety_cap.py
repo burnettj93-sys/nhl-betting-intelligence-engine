@@ -98,7 +98,9 @@ class TestDailyCapByMode(unittest.TestCase):
         self.assertEqual(gate["budget"], pd.DISCOVERY_DAILY_BUDGET)
 
     def test_verified_production_uses_the_larger_but_still_hard_budget(self):
-        with _verified_only():
+        # hermetic: credits_spent_today() sums the REAL archive of provider responses, and this host's archive holds the real 2026-09-29 spend (507 credits), which tripped the soft pace budget
+        # (DAILY_SOFT_BUDGET) instead of the per-mode cap under test. A clean checkout has no such archive, which is why it only failed on the production host.
+        with _verified_only(), mock.patch("operational.odds_quota.credits_spent_today", return_value=0):
             pd.record_spend(pd.DISCOVERY_DAILY_BUDGET, D(), self.tmp)  # 6 spent -- would exceed DISCOVERY's own cap
             gate = pd.may_spend(D(), path=self.tmp, remaining=999)
         # 6 spent < 40 VERIFIED_PRODUCTION budget -- allowed (the point: a

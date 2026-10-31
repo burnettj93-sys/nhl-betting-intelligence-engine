@@ -11,6 +11,7 @@ import json
 import math
 from collections import Counter, defaultdict
 
+from operational import cloud_snapshot_schema as schema
 from operational import eastern_time as et
 from operational import eggy_intelligence as ei
 from operational import eggy_pick as ep
@@ -375,8 +376,94 @@ def snapshot_section(today: str | None = None) -> dict:
     today = today or et.eastern_today(dt.datetime.now(dt.timezone.utc))
     cur = next((e for e in reversed(events) if e["type"] == "DECISION" and e["date"] == today), None)
     sig = signal_trust(events)
-    return {"policy": {k: ep.POLICY[k] for k in ("policy_id", "markets", "price_policy", "max_outputs_per_day")} | {"digest": ep.policy_digest()}, "date_et": today, "today": None if not cur else cur["decision_doc"],
+    return {"policy": {k: ep.POLICY[k] for k in ("policy_id", "markets", "price_policy", "max_outputs_per_day")} | {"digest": ep.policy_digest()}, "date_et": today, "today": None if not cur else schema.redact_news_credit(cur["decision_doc"]),
             "record": record(events), "signals": sig, "observed_games": sum(1 for e in events if e["type"] == "OBSERVATION"), "settled_games": len(_settled_observations(events)), "availability": ep.AVAILABILITY}
+
+
+# ------------------------------------------------------------------------------------------------ the decision deadline and its guard
+DECISION_DEADLINE_MIN = 30      # the OPERATIONAL deadline: the day's decision is recorded no later than this long before the first game (normal days decide ~75 min before). Past it the guard raises EGGY PICK NOT RECORDED BY DEADLINE; a late pull is still accepted until LAST_CHANCE_MIN (recovery), then the day is an honest PASS.
+GUARD_NAME = "eggy_pick_guard.json"
+
+
+def decision_deadline(first_start):
+    return None if first_start is None else first_start - dt.timedelta(minutes=DECISION_DEADLINE_MIN)
+
+
+def deadline_guard(nhl_conn, now: dt.datetime, *, events=None) -> dict:
+    """EGGY PICK NOT RECORDED BY DEADLINE. A production failure, reported by the trader cycle itself (every 10 minutes) and the watchdog, never discovered hours later.
+    state: NO_SLATE | WAITING (before the deadline) | RECORDED | RECORDED_NOT_PUBLISHED | MISSING_AT_DEADLINE. Read-only."""
+    today = et.eastern_today(now)
+    rows = nhl_conn.execute("SELECT game_id, scheduled_start_utc FROM games WHERE game_date = ? AND scheduled_start_utc IS NOT NULL ORDER BY scheduled_start_utc", (today,)).fetchall()
+    starts = []
+    for r in rows:
+        t = dt.datetime.fromisoformat(r["scheduled_start_utc"].replace("Z", "+00:00"))
+        starts.append(t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc))
+    base = {"date": today, "slate_games": len(starts), "checked_at_utc": now.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    if not starts:
+        return {**base, "state": "NO_SLATE"}
+    first = min(starts)
+    deadline = decision_deadline(first)
+    events = read() if events is None else events
+    dec = next((e for e in reversed(events) if e["type"] == "DECISION" and e["date"] == today), None)
+    caps = ep.league_captures(today, now)
+    base.update(first_game_utc=first.strftime("%Y-%m-%dT%H:%M:%SZ"), decision_deadline_utc=deadline.strftime("%Y-%m-%dT%H:%M:%SZ"), latest_side_price_capture_utc=caps[-1]["at"].strftime("%Y-%m-%dT%H:%M:%SZ") if caps else None)
+    try:
+        from operational import ingestion_health
+        base["latest_trader_run_utc"] = (ingestion_health.load_health().get("real_parlay_paper_trader") or {}).get("last_success_utc")
+        pub = (ingestion_health.load_health().get("cloud_snapshot_publish") or {}).get("last_success_utc")
+    except Exception:                                                       # noqa: BLE001 - the guard never fails the cycle
+        pub = None
+    if dec is not None:
+        doc = dec["decision_doc"]
+        base.update(decision=doc.get("decision"), decided_at_utc=doc.get("decided_at_utc"), decided_before_deadline=(doc.get("decided_at_utc") or "") <= deadline.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        if doc.get("decision") == "PASS":
+            base["reason"] = doc.get("pass_reason")
+        if pub is not None and doc.get("decided_at_utc") and et_parse(pub) < et_parse(doc["decided_at_utc"]) and now >= et_parse(doc["decided_at_utc"]) + dt.timedelta(minutes=PUBLISH_GRACE_MIN):
+            return {**base, "state": "RECORDED_NOT_PUBLISHED", "reason": f"the decision is in the ledger but the last successful publication ({pub}) predates it by more than {PUBLISH_GRACE_MIN} minutes: the hosted page does not show it"}
+        return {**base, "state": "RECORDED"}
+    if now < deadline:
+        return {**base, "state": "WAITING"}
+    why = "no decision row exists for the slate day"
+    if not caps:
+        why += "; no league side-price capture was observed today"
+    elif caps[-1]["at"] < first - dt.timedelta(minutes=ct_target_plus()):
+        why += "; the latest side-price capture is older than the pregame target"
+    return {**base, "state": "MISSING_AT_DEADLINE", "headline": "EGGY PICK NOT RECORDED BY DEADLINE", "reason": why}
+
+
+PUBLISH_GRACE_MIN = 45
+
+
+def et_parse(stamp: str) -> dt.datetime:
+    return dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+
+
+def ct_target_plus() -> int:
+    from operational import capture_timeline as ct
+    return ct.CAPTURE_TARGET_MIN + 10
+
+
+def run_guard(nhl_conn, now: dt.datetime) -> dict:
+    """The guard as the trader runs it: evaluate, persist the state for the watchdog and the dashboard, and raise ONE local notification per (date, failing state)."""
+    g = deadline_guard(nhl_conn, now)
+    p = state_paths.path(GUARD_NAME)
+    try:
+        prior = json.loads(p.read_text())
+    except (OSError, ValueError):
+        prior = {}
+    failing = g["state"] in ("MISSING_AT_DEADLINE", "RECORDED_NOT_PUBLISHED")
+    g["notified"] = bool(failing and prior.get("date") == g["date"] and prior.get("state") == g["state"] and prior.get("notified"))
+    if failing and not g["notified"]:
+        try:
+            from operational import notify as _n
+            g["notified"] = bool(_n.send("NHL engine: Eggy", f"{g.get('headline') or 'EGGY PICK NOT PUBLISHED'} ({g['date']}): {g.get('reason', '')}"[:200]))
+        except Exception:                                                   # noqa: BLE001
+            pass
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(g, sort_keys=True, indent=1))
+    tmp.replace(p)
+    return g
 
 
 # ------------------------------------------------------------------------------------------------ the cycle
@@ -389,6 +476,16 @@ def _prospective_rows() -> list[dict]:
 
 
 def run_cycle(nhl_conn, now: dt.datetime) -> dict:
+    out = _run_cycle(nhl_conn, now)
+    try:
+        g = run_guard(nhl_conn, now)
+        out["guard"] = {k: g.get(k) for k in ("state", "decision_deadline_utc", "headline", "reason")}
+    except Exception as exc:                                               # noqa: BLE001 - the guard reports; it never stops the cycle
+        out["guard"] = {"state": "GUARD_ERROR", "reason": f"{type(exc).__name__}: {exc}"[:120]}
+    return out
+
+
+def _run_cycle(nhl_conn, now: dt.datetime) -> dict:
     """One trader cycle: settle what is final, and (once a day, when the pregame pull is in and before the first game) make and lock the day's decision."""
     from operational import learning_cohort as lc
     out = {"settlement": settle(nhl_conn, now)}
@@ -429,6 +526,13 @@ def run_cycle(nhl_conn, now: dt.datetime) -> dict:
     ctx = ei.build_context(nhl_conn, now, live_overlay=True)
     ok, why = ei.usable(ctx)
     if not ok:
+        if last_chance is not None and now >= last_chance:                  # the core hockey data is missing and the last chance is here: an honest, recorded PASS (a technical failure), never a silent absence
+            doc = ep.decide([], now=now, why_no_prices=f"a technical / data failure at the decision deadline: the hockey intelligence was unusable ({why})")
+            doc["pass_kind"] = "TECHNICAL_OR_DATA_FAILURE"
+            _append([{"type": "DECISION", "date": today, "decision_doc": doc}])
+            out["status"] = "PASS_TECHNICAL_AT_DEADLINE"
+            _write_postmortem(read())
+            return out
         out["status"] = "INTELLIGENCE_UNAVAILABLE"
         out["reason"] = why
         return out

@@ -684,6 +684,22 @@ def check_missed_windows(now: dt.datetime) -> dict:
                       "They are not bought late: a price taken after the window is not a pregame price." + advice}
 
 
+def check_eggy_pick(now: dt.datetime) -> dict:
+    """EGGY PICK NOT RECORDED BY DEADLINE is a production FAIL (operational/eggy_pick_ledger.deadline_guard): the day's decision must exist by DECISION_DEADLINE_MIN before the first game, and once it exists it must reach the hosted page."""
+    import sqlite3
+    from operational import eggy_pick_ledger as epl
+    import db
+    conn = sqlite3.connect(f"file:{db.resolve_db_path()}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        g = epl.deadline_guard(conn, now)
+    finally:
+        conn.close()
+    bad = g["state"] in ("MISSING_AT_DEADLINE", "RECORDED_NOT_PUBLISHED")
+    keys = ("date", "slate_games", "first_game_utc", "decision_deadline_utc", "latest_side_price_capture_utc", "latest_trader_run_utc", "decision", "decided_at_utc", "reason")
+    return {"name": "eggy_pick", "status": FAIL if bad else OK, "detail": (g.get("headline") or g["state"]) + ": " + json.dumps({k: g.get(k) for k in keys if g.get(k) is not None}, sort_keys=True)}
+
+
 def check_publishing_enabled() -> dict:
     """Publication to the hosted app must be ON. A demonstration that turned it off and was never restored is a FAIL, not a quiet gap."""
     try:
@@ -749,7 +765,7 @@ def run(now: dt.datetime | None = None, *, runner=_run, notify=True, deep=True) 
     checks.append(check_learning_cohort())
     checks.append(check_prediction_log(now))
     checks.append(check_morning_update(now))
-    for fn in (check_jobs_ran, check_missed_windows, check_power, check_daily_chain):
+    for fn in (check_jobs_ran, check_missed_windows, check_power, check_daily_chain, check_eggy_pick):
         try:
             checks.append(fn(now))
         except Exception as exc:  # noqa: BLE001 - one broken check must not stop the watchdog from writing its state
