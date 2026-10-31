@@ -260,7 +260,7 @@ class TestDecisionTimeRecord(unittest.TestCase):
             self.assertIn(name, epl.SIGNALS)
 
     def test_the_cycle_wires_personnel_before_ranking_and_a_disabled_goalie_feed_is_no_feed(self):
-        src = inspect.getsource(epl.run_cycle)
+        src = inspect.getsource(epl._run_cycle)          # run_cycle wraps it with the deadline guard
         self.assertLess(src.index("pers.resolve_all"), src.rindex("ep.decide("))
         self.assertIn('gstate.get("status") == "DISABLED"', src)
 
