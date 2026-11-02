@@ -1,9 +1,9 @@
 {
- "bytes": 3854855,
- "content_hash": "65f1aa1a2b3318dd16d21e854f75192495bd82cc280d00058b70e5bd4b03c764",
- "data_as_of": "2026-11-02T00:50:26Z",
- "generated_at": "2026-11-02T00:50:48.800143+00:00",
- "publication_seq": 2869,
+ "bytes": 3839119,
+ "content_hash": "99626fdee26fbb4f0c8dd3822c60b1a0e9d79f35e7b3accff03b75062672aab0",
+ "data_as_of": "2026-11-02T01:00:56Z",
+ "generated_at": "2026-11-02T01:01:13.238084+00:00",
+ "publication_seq": 2870,
  "schema_version": 2,
  "sections_omitted": []
 }
